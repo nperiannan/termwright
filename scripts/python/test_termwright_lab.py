@@ -45,6 +45,13 @@ class Fake(BaseHTTPRequestHandler):
                 return self.reply(200, {"oid": "1.3.6.1.2.1.2.2.1.8", "name": "ifOperStatus"})
             if self.path == "/api/v1/snmp/traps":
                 return self.reply(200, {"state": {"on": False, "port": 0, "count": 0}, "traps": []})
+        if self.path.startswith("/api/v1/http"):
+            if self.path == "/api/v1/http/send":
+                return self.reply(200, {"status": 200, "body": '{"ok": true}', "ms": 3})
+            if self.path == "/api/v1/http/collections/Lab%20checks/run":
+                return self.reply(200, {"passed": 2, "failed": 0, "steps": []})
+            if self.path == "/api/v1/http/import":
+                return self.reply(201, {"id": "x", "requests": [{}]})
         if path == "/traffic/ports" and m == "POST":
             v["testers"].append({"id": "p%d" % (len(v["testers"]) + 1), "name": "Test port %d" % (len(v["testers"]) + 1)})
             return self.reply(201, v)
@@ -234,6 +241,17 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(self.lab.snmp.mib_search("ifOper")[0]["module"], "IF-MIB")
         self.assertEqual(self.lab.snmp.mib("IF-MIB::ifOperStatus")["name"], "ifOperStatus")
         self.assertFalse(self.lab.snmp.traps()["state"]["on"])
+
+    def test_http(self):
+        r = self.lab.http.post("/vlans", {"id": 10}, session="APIs/rest", params={"dry": 1})
+        self.assertTrue(tw.HTTP.json(r)["ok"])
+        self.assertEqual(self.lab.http.run("Lab checks", iterations=2)["passed"], 2)
+        self.lab.http.import_("curl https://x/y")
+        calls = {p: b for _, p, b in Fake.state["calls"]}
+        self.assertEqual(calls["/api/v1/http/send"], {"request": {"method": "POST", "url": "/vlans", "params": [{"key": "dry", "value": "1"}],
+                                                                  "body": {"mode": "json", "raw": '{"id": 10}'}}, "session": "APIs/rest"})
+        self.assertEqual(calls["/api/v1/http/collections/Lab%20checks/run"], {"iterations": 2})
+        self.assertEqual(calls["/api/v1/http/import"], {"text": "curl https://x/y"})
 
     def test_pps_for(self):
         self.assertEqual(tw.pps_for(1000, 64), 1488095)

@@ -80,17 +80,24 @@ func (a *App) SNMPSetSecrets(in SNMPSecretsIn) error {
 }
 
 // snmpMoveSecrets follows a session that was renamed (del) or copied.
+// snmpMoveSecrets moves (or copies, or deletes when to is "") a session's SNMP and REST API secrets.
 func snmpMoveSecrets(from, to string, del bool) {
+	var keys []func(string) string
 	for _, k := range snmpSecretKinds {
-		if v, ok := secrets.Lookup(snmpKey(k, from)); ok {
+		keys = append(keys, func(p string) string { return snmpKey(k, p) })
+	}
+	keys = append(keys, httpSecretKey, httpVarsKey)
+	for _, key := range keys {
+		if v, ok := secrets.Lookup(key(from)); ok {
 			if to != "" {
-				_ = secrets.Set(snmpKey(k, to), v)
+				_ = secrets.Set(key(to), v)
 			}
 			if del {
-				_ = secrets.Delete(snmpKey(k, from))
+				_ = secrets.Delete(key(from))
 			}
 		}
 	}
+	httpTokens.DropPrefix(from + "|")
 }
 
 // SNMPTarget is an agent and its credentials given directly (not a saved session); secrets are not kept.

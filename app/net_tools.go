@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/termwright/termwright/internal/apiclient"
 )
 
 // Network tools (SNMP now; the API client and syslog join them): one implementation for the in-app AI
@@ -32,6 +34,24 @@ var netTools = []mcpTool{
 			"max":       map[string]any{"type": "integer", "description": "walk: at most this many values (default 2000 here)"},
 			"query":     map[string]any{"type": "string", "description": "mib_search: a name, module or OID; mib_info: one object"},
 		}, "action")},
+	{"http", "The REST API client with saved API sessions (Protocol API: base URL, authentication - API key, bearer token, login, basic, OAuth 2.0 - and {{variables}}; secrets stay in the credential store) and collections. send sends one request (a path goes after the session's base URL; the login token is fetched and renewed by itself) or a saved one (collection + request); POST, PUT, PATCH and DELETE on a production session are asked first. run runs a collection's requests with their tests; collections / collection list them; save adds or replaces a request in a collection (made when missing); import reads a cURL command, a Postman collection or an OpenAPI document into a collection; history lists the last requests.",
+		mcpSchema(map[string]any{
+			"action":     map[string]any{"type": "string", "enum": []string{"send", "run", "collections", "collection", "save", "import", "history"}, "description": "what to do"},
+			"session":    map[string]any{"type": "string", "description": "an API session's path (list_sessions shows protocol API)"},
+			"env":        map[string]any{"type": "string", "enum": []string{"", "production"}, "description": "production uses the variables' production values"},
+			"method":     map[string]any{"type": "string", "description": "send: GET (default), POST, PUT, PATCH, DELETE, HEAD, OPTIONS"},
+			"url":        map[string]any{"type": "string", "description": "send: a path (/rest/restconf/data/openconfig-interfaces:interfaces) or a full URL; {{variables}} work"},
+			"headers":    map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}, "description": "send: extra headers"},
+			"query":      map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}, "description": "send: query parameters"},
+			"body":       map[string]any{"description": "send: a JSON value (sent as JSON) or text"},
+			"collection": map[string]any{"type": "string", "description": "a collection's id or name"},
+			"request":    map[string]any{"description": "send / run: a saved request's id or name; save: the request object {name, folder, method, url, params, headers, body {mode, raw}, tests}"},
+			"folder":     map[string]any{"type": "string", "description": "run: only this folder"},
+			"iterations": map[string]any{"type": "integer", "description": "run: how many times"},
+			"data":       map[string]any{"type": "string", "description": "run: CSV with a header line or a JSON array; one iteration per row"},
+			"text":       map[string]any{"type": "string", "description": "import: the cURL command, Postman collection or OpenAPI document"},
+			"name":       map[string]any{"type": "string", "description": "import / save: the collection's name"},
+		}, "action")},
 }
 
 // isNetTool: the name is one of the network tools.
@@ -47,6 +67,8 @@ func (a *App) netToolRun(ctx context.Context, name string, args map[string]any, 
 	switch name {
 	case "snmp":
 		return a.snmpTool(ctx, args, ask)
+	case "http":
+		return a.httpTool(ctx, args, ask)
 	}
 	return "", fmt.Errorf("no tool %s", name)
 }
@@ -151,7 +173,14 @@ func (a *App) snmpTool(ctx context.Context, args map[string]any, ask netAsker) (
 
 // netWrites: the tool call changes something (asked per the rules above).
 func netWrites(name string, args map[string]any) bool {
-	return name == "snmp" && strings.EqualFold(argStr(args, "action"), "set")
+	switch name {
+	case "snmp":
+		return strings.EqualFold(argStr(args, "action"), "set")
+	case "http":
+		act := strings.ToLower(argStr(args, "action"))
+		return act == "run" || act == "send" && apiclient.Changes(strings.ToUpper(argStr(args, "method")))
+	}
+	return false
 }
 
 // NetAgentTool runs a network tool for the in-app AI chat. mode is the chat's permission mode ("" changes
@@ -211,6 +240,9 @@ func netAgentText(tools []string) string {
 	}
 	if b.Len() > 0 && slices.Contains(tools, "snmp") {
 		b.WriteString(`For example: snmp {"action":"walk","session":"Lab/core-sw1","oids":["IF-MIB::ifOperStatus"]} or snmp {"action":"get","session":"Lab/core-sw1","oids":["sysDescr.0","sysUpTime.0"]}. Find the session with find first. A set on a production session is asked; the result says when it was refused.` + "\n")
+	}
+	if b.Len() > 0 && slices.Contains(tools, "http") {
+		b.WriteString(`For example: http {"action":"send","session":"APIs/Lab switches REST","url":"/rest/restconf/data/openconfig-interfaces:interfaces"} or http {"action":"run","collection":"EXOS RESTCONF"}. A path goes after the session's base URL and the session logs in by itself; never ask the user for tokens or passwords. Changes (POST, PUT, PATCH, DELETE) on a production session are asked.` + "\n")
 	}
 	return b.String()
 }

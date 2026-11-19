@@ -1376,6 +1376,37 @@ The community and passwords are kept in the computer's credential store (Keychai
 
 **AI assistant, MCP and scripts.** Turn on the **SNMP** tool in the agent's tool list and ask, for example, *"which ports of core-sw1 are down?"*: the agent walks `IF-MIB::ifOperStatus` with the session's credentials. Reads always run; a Set follows the agent's permission and always asks on production sessions. The same `snmp` tool is offered to MCP apps (Claude Desktop, Cursor, VS Code…), and the local API has `POST /api/v1/snmp` and `GET /api/v1/snmp/mib`, `/snmp/mib/{object}`, `/snmp/traps` (see the [API guide](API.md)); in Python, `Lab().snmp.walk("IF-MIB::ifOperStatus", session="Lab/core-sw1")`.
 
+## 9d. API client
+
+A REST client in the spirit of Postman, free and open source, with the logins kept in the Session Manager.
+
+**An API session.** **API → New API Session…** (or New Session → Protocol → More… → *REST API*):
+
+- **Base URL**: `https://10.0.0.1`; request paths go after it, and it is the `{{baseUrl}}` variable.
+- **Authentication**: *None*, *API key* (its name, sent in a header or the query), *Bearer token*, *Login* (a login request such as `POST /auth/token` with the user and password as JSON; the token is found in the answer, or give its place such as `data.token`, and sent as `Authorization: Bearer` or in a header you name such as `X-Auth-Token`), *Basic*, *OAuth 2.0* (token URL, client id and secret, scope; with a user it uses the password grant). Login and OAuth tokens are held in memory only and renewed before they expire, and once more after a 401.
+- **Test (send GET)** tries the settings before you save.
+- **Variables & TLS**: `{{name}}` variables, each with a Production value (used when the client's environment is Production) and a *Secret* box; *Accept any certificate* for lab devices; a CA file to trust.
+
+The password, key, token, client secret and the values of secret variables are kept in the computer's credential store, never in the session file, an export or a collection, and are shown as •••••••• wherever a request is shown.
+
+**Send.** Double-click the API session (or right-click → **Open in API Client**, or **API → API Client**). Choose the method, type a path or a full URL and press **Send** (or Enter). The chips under the URL show the session, its authentication and TLS. **Params**, **Headers**, **Body** (JSON with Beautify, text, XML, URL-encoded, multipart with `@/path/to/file`, GraphQL), **Auth** (the session's or none), **Scripts** and **Code** (cURL, Python, JavaScript, PowerShell; secrets become environment variables). The answer has **Body** (pretty or raw), **Headers**, **Cookies** (kept per session), **Tests** and **Timeline** (DNS, connect, TLS, first byte, total, and the request as sent). Dynamic variables: `{{$guid}}`, `{{$timestamp}}`, `{{$isoTimestamp}}`, `{{$randomInt}}`.
+
+**Production.** On a production session, or with the environment set to Production, POST, PUT, PATCH and DELETE ask before they are sent (the runner and the AI assistant too); GET always runs.
+
+**Tests and scripts.** The Scripts tab has **Tests** (run on the answer) and a **Pre-request script**, in Postman's style: `pm.test("ok", () => pm.response.to.have.status(200))`, `pm.expect(pm.response.json().items).to.have.lengthOf(3)`, `pm.variables.set("id", pm.response.json().id)` (used as `{{id}}` by the next requests), `console.log(...)`. *Add a snippet…* writes common ones.
+
+**Collections.** **Save** keeps a request in a collection (a new one, or an existing one, in a folder). Collections are plain JSON files in Termwright's data folder (`api/collections`): keep them in git or send them to a colleague; they never hold secrets. Right-click a collection: **Run Collection…**, New Request, Rename, Use the Chosen Session, **Export…** (Termwright JSON) or **Export for Postman…**, Delete. Right-click a request: Open, Run, Rename, Duplicate, Delete.
+
+**Run a collection.** Choose the session and environment, the iterations, a delay, *Stop at the first failure*, and optionally data: CSV with a header line or a JSON array of objects; each row is one iteration and its columns are variables (`pm.iterationData.get("name")` or `{{name}}`). The results list every request with its status, time and failed tests.
+
+**Import.** **Import** (or **API → Import Postman, OpenAPI or cURL…**) takes pasted text or a file:
+
+- a **Postman collection** (v2.0 / v2.1): folders, parameters, headers, bodies, bearer and basic auth, collection variables, pre-request and test scripts;
+- an **OpenAPI 3 or Swagger 2** document, YAML or JSON (such as `openapi.yaml`): one request per operation, in folders by tag, `{{baseUrl}}` from the servers, path parameters as variables, example bodies made from the schemas;
+- one or more **cURL** commands (as copied from a browser's developer tools).
+
+**AI assistant, MCP and scripts.** Turn on the **API client** tool in the agent's tool list and ask, for example, *"list the interfaces of the lab switches through RESTCONF"*: the agent sends with the session's login (it never asks you for tokens). Changes follow the agent's permission and always ask on production sessions. MCP apps get the same `http` tool, the local API has `POST /api/v1/http/send` and the `/http/collections…` routes (see the [API guide](API.md)), and Python has `Lab().http` ([Python guide](PYTHON.md)).
+
 ## 10. Automation: logon actions, triggers, scripts
 
 **Logon Actions** (Session Options → Logon Actions & Triggers):

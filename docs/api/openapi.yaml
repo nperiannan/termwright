@@ -51,8 +51,10 @@ tags:
       description: RFC 2544, RFC 2889 learning and convergence tests, and their runs.
     - name: SNMP
       description: 'SNMP v1, v2c and v3 with the saved sessions'' settings: get, walk, set, the MIBs and traps.'
+    - name: API client
+      description: 'The REST API client: send requests with saved API sessions, collections, runs, imports.'
     - name: Network tools
-      description: The network tools the AI assistant and the Claude connector use (snmp), as JSON.
+      description: The network tools the AI assistant and the Claude connector use (snmp, http), as JSON.
     - name: API
       description: This description.
 paths:
@@ -1202,6 +1204,302 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /http/send:
+        post:
+            operationId: httpSend
+            tags:
+                - API client
+            summary: Send a request
+            description: 'Sends a request with a saved API session (Protocol API: base URL, authentication - API key, bearer token, login request, basic, OAuth 2.0 - and {{variables}}; the secrets come from the credential store and are masked in the answer) or as it is. A path goes after the session''s base URL; a login or OAuth token is fetched, kept in memory and renewed by itself. The request''s pre-request script and tests (a pm.* subset) run. Through the API a change on a production session is not asked (the scripts are the user''s own).'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HTTPSendRequest'
+                        examples:
+                            path:
+                                summary: GET a path of a saved API session (it logs in by itself)
+                                value:
+                                    session: APIs/Lab switches REST
+                                    request:
+                                        method: GET
+                                        url: /rest/restconf/data/openconfig-interfaces:interfaces
+                            patch:
+                                summary: PATCH with a JSON body and a test
+                                value:
+                                    session: APIs/Lab switches REST
+                                    request:
+                                        method: PATCH
+                                        url: /rest/restconf/data/openconfig-interfaces:interfaces/interface={{port}}/config
+                                        body:
+                                            mode: json
+                                            raw: '{"openconfig-interfaces:config": {"description": "uplink"}}'
+                                        tests: pm.test('ok', () => pm.response.to.be.ok)
+                                    vars:
+                                        port: "1:1"
+                            url:
+                                summary: Any URL, no session
+                                value:
+                                    request:
+                                        method: GET
+                                        url: https://example.com/api/health
+                                        headers:
+                                            - key: Accept
+                                              value: application/json
+            responses:
+                200:
+                    description: The answer (also when the server answered an error status; error says why nothing came back).
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HTTPResponse'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /http/collections:
+        get:
+            operationId: listCollections
+            tags:
+                - API client
+            summary: The collections
+            description: The API client's collections.
+            responses:
+                200:
+                    description: The collections.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/HTTPCollectionInfo'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+        post:
+            operationId: createCollection
+            tags:
+                - API client
+            summary: Add a collection
+            description: Saves a new collection (its id is made from its name).
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HTTPCollection'
+            responses:
+                201:
+                    description: The collection with its id.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HTTPCollection'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /http/collections/{collection}:
+        get:
+            operationId: getCollection
+            tags:
+                - API client
+            summary: A collection
+            description: A collection with its requests; ?format=postman gives it as a Postman v2.1 collection.
+            parameters:
+                - name: collection
+                  in: path
+                  required: true
+                  description: The collection's id or name.
+                  schema:
+                    type: string
+                - name: format
+                  in: query
+                  description: 'postman: as a Postman v2.1 collection.'
+                  schema:
+                    type: string
+                    enum:
+                        - termwright
+                        - postman
+            responses:
+                200:
+                    description: The collection.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HTTPCollection'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+        put:
+            operationId: putCollection
+            tags:
+                - API client
+            summary: Replace a collection
+            description: Replaces a collection (it keeps its id).
+            parameters:
+                - name: collection
+                  in: path
+                  required: true
+                  description: The collection's id or name.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HTTPCollection'
+            responses:
+                200:
+                    description: The collection.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HTTPCollection'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+        delete:
+            operationId: deleteCollection
+            tags:
+                - API client
+            summary: Delete a collection
+            description: Deletes a collection's file.
+            parameters:
+                - name: collection
+                  in: path
+                  required: true
+                  description: The collection's id or name.
+                  schema:
+                    type: string
+            responses:
+                204:
+                    description: Deleted.
+                404:
+                    $ref: '#/components/responses/NotFound'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /http/collections/{collection}/run:
+        post:
+            operationId: runCollection
+            tags:
+                - API client
+            summary: Run a collection
+            description: Runs a collection's requests in order (all, some, or one folder), iterations times or once per data row, with their scripts and tests; variables set by scripts carry to the next requests.
+            parameters:
+                - name: collection
+                  in: path
+                  required: true
+                  description: The collection's id or name.
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HTTPRunRequest'
+            responses:
+                200:
+                    description: Every request with its status and tests.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HTTPRunResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /http/import:
+        post:
+            operationId: importCollection
+            tags:
+                - API client
+            summary: Import
+            description: 'Reads one or more cURL commands, a Postman v2.0/v2.1 collection (folders, scripts, variables) or an OpenAPI 3 / Swagger 2 document (JSON or YAML: an example request for every operation) and saves it as a collection.'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HTTPImportIn'
+            responses:
+                201:
+                    description: The new collection.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HTTPCollection'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /http/history:
+        get:
+            operationId: httpHistory
+            tags:
+                - API client
+            summary: Requests sent
+            description: The last 300 requests sent, newest first (no answer bodies; secrets masked).
+            responses:
+                200:
+                    description: The requests.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/HTTPHistoryItem'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /snmp:
         post:
             operationId: snmp
@@ -1355,7 +1653,7 @@ paths:
             tags:
                 - Network tools
             summary: The network tools
-            description: 'The network tools (snmp; the API client and syslog join them) with their arguments (JSON Schema): the same tools the in-app AI assistant and the Claude connector use. Each one is POST /tools/{name}.'
+            description: 'The network tools (snmp, http; syslog joins them) with their arguments (JSON Schema): the same tools the in-app AI assistant and the Claude connector use. Each one is POST /tools/{name}.'
             responses:
                 200:
                     description: The tools.
@@ -1435,6 +1733,99 @@ paths:
                                         - "1"
                                         - 2c
                                         - "3"
+                                    type: string
+                            required:
+                                - action
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /tools/http:
+        post:
+            operationId: net_http
+            tags:
+                - Network tools
+            summary: The http tool
+            description: 'The REST API client with saved API sessions (Protocol API: base URL, authentication - API key, bearer token, login, basic, OAuth 2.0 - and {{variables}}; secrets stay in the credential store) and collections. send sends one request (a path goes after the session''s base URL; the login token is fetched and renewed by itself) or a saved one (collection + request); POST, PUT, PATCH and DELETE on a production session are asked first. run runs a collection''s requests with their tests; collections / collection list them; save adds or replaces a request in a collection (made when missing); import reads a cURL command, a Postman collection or an OpenAPI document into a collection; history lists the last requests. Through the API it runs without asking.'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    description: what to do
+                                    enum:
+                                        - send
+                                        - run
+                                        - collections
+                                        - collection
+                                        - save
+                                        - import
+                                        - history
+                                    type: string
+                                body:
+                                    description: 'send: a JSON value (sent as JSON) or text'
+                                collection:
+                                    description: a collection's id or name
+                                    type: string
+                                data:
+                                    description: 'run: CSV with a header line or a JSON array; one iteration per row'
+                                    type: string
+                                env:
+                                    description: production uses the variables' production values
+                                    enum:
+                                        - ""
+                                        - production
+                                    type: string
+                                folder:
+                                    description: 'run: only this folder'
+                                    type: string
+                                headers:
+                                    additionalProperties:
+                                        type: string
+                                    description: 'send: extra headers'
+                                    type: object
+                                iterations:
+                                    description: 'run: how many times'
+                                    type: integer
+                                method:
+                                    description: 'send: GET (default), POST, PUT, PATCH, DELETE, HEAD, OPTIONS'
+                                    type: string
+                                name:
+                                    description: 'import / save: the collection''s name'
+                                    type: string
+                                query:
+                                    additionalProperties:
+                                        type: string
+                                    description: 'send: query parameters'
+                                    type: object
+                                request:
+                                    description: 'send / run: a saved request''s id or name; save: the request object {name, folder, method, url, params, headers, body {mode, raw}, tests}'
+                                session:
+                                    description: an API session's path (list_sessions shows protocol API)
+                                    type: string
+                                text:
+                                    description: 'import: the cURL command, Postman collection or OpenAPI document'
+                                    type: string
+                                url:
+                                    description: 'send: a path (/rest/restconf/data/openconfig-interfaces:interfaces) or a full URL; {{variables}} work'
                                     type: string
                             required:
                                 - action
@@ -4943,6 +5334,517 @@ components:
                 - loss
                 - latAvg
                 - latMax
+        HTTPBody:
+            type: object
+            properties:
+                mode:
+                    description: 'Mode: "" (none), json, text, xml, urlencoded, form (multipart), graphql.'
+                    type: string
+                raw:
+                    description: 'Raw: the text of json, text, xml and the GraphQL query.'
+                    type: string
+                form:
+                    description: 'Form: the fields of urlencoded and form.'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPKeyValue'
+                graphqlVars:
+                    description: 'GraphQLVars: the GraphQL variables as JSON.'
+                    type: string
+        HTTPCollection:
+            type: object
+            description: 'A collection of requests, kept as a JSON file (plain text: keep it in git, share it).'
+            properties:
+                id:
+                    description: 'ID: the file name without .json.'
+                    type: string
+                name:
+                    description: Name shown.
+                    type: string
+                session:
+                    description: 'Session: the API session it uses unless another is chosen.'
+                    type: string
+                vars:
+                    description: 'Vars: collection variables ({{name}}); no secrets.'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPKeyValue'
+                requests:
+                    description: Requests in order.
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPRequestDef'
+                description:
+                    description: 'Description: what it is for.'
+                    type: string
+            required:
+                - id
+                - name
+                - requests
+        HTTPCollectionInfo:
+            type: object
+            description: A collection in a list.
+            properties:
+                id:
+                    description: the collection's id (its file name)
+                    type: string
+                name:
+                    description: its name
+                    type: string
+                session:
+                    description: the API session it uses
+                    type: string
+                requests:
+                    type: integer
+            required:
+                - id
+                - name
+                - requests
+        HTTPCookie:
+            type: object
+            properties:
+                name:
+                    description: cookie name
+                    type: string
+                value:
+                    description: its value
+                    type: string
+                domain:
+                    description: its domain
+                    type: string
+                path:
+                    description: its path
+                    type: string
+                expires:
+                    description: when it expires (RFC 3339)
+                    type: string
+                httpOnly:
+                    description: not readable by scripts in a browser
+                    type: boolean
+                secure:
+                    type: boolean
+            required:
+                - name
+                - value
+        HTTPHistoryItem:
+            type: object
+            description: A request sent (no answer body).
+            properties:
+                at:
+                    description: when it was sent
+                    type: string
+                    format: date-time
+                session:
+                    description: the API session
+                    type: string
+                env:
+                    description: '"" or production'
+                    type: string
+                collection:
+                    description: the collection it came from
+                    type: string
+                request:
+                    $ref: '#/components/schemas/HTTPRequestDef'
+                    description: the request (the body cut at 16 KB)
+                url:
+                    description: the URL sent (secrets masked)
+                    type: string
+                status:
+                    description: 'the answer''s status (0: not sent)'
+                    type: integer
+                ms:
+                    description: how long it took
+                    type: integer
+                size:
+                    description: the answer's size in bytes
+                    type: integer
+                error:
+                    type: string
+            required:
+                - at
+                - request
+                - url
+                - status
+                - ms
+                - size
+        HTTPImportIn:
+            type: object
+            description: A cURL command, Postman collection or OpenAPI document to import.
+            properties:
+                text:
+                    description: 'Text: the cURL command(s), the Postman v2.1 collection or the OpenAPI 3 / Swagger 2 document (JSON or YAML).'
+                    type: string
+                name:
+                    description: 'Name of the collection (default: from the document).'
+                    type: string
+                session:
+                    description: 'Session: the API session the collection uses.'
+                    type: string
+            required:
+                - text
+        HTTPKeyValue:
+            type: object
+            properties:
+                key:
+                    description: 'Key: the name.'
+                    type: string
+                value:
+                    description: 'Value: the value; {{variables}} are replaced when sent.'
+                    type: string
+                off:
+                    description: 'Off: kept but not sent.'
+                    type: boolean
+                desc:
+                    description: 'Desc: a note.'
+                    type: string
+            required:
+                - key
+                - value
+        HTTPRequestDef:
+            type: object
+            description: 'A request: method, URL, parameters, headers, body, pre-request script and tests.'
+            properties:
+                id:
+                    description: 'ID: unique in its collection.'
+                    type: string
+                name:
+                    description: Name shown in the collection.
+                    type: string
+                folder:
+                    description: Folder in the collection ("Interfaces/Ports"), "" = top level.
+                    type: string
+                method:
+                    description: 'Method: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS.'
+                    type: string
+                url:
+                    description: 'URL: absolute, or a path (/rest/...) that goes after the session''s base URL.'
+                    type: string
+                params:
+                    description: 'Params: query parameters added to the URL.'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPKeyValue'
+                headers:
+                    description: Headers sent with it.
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPKeyValue'
+                body:
+                    $ref: '#/components/schemas/HTTPBody'
+                    description: Body sent with it.
+                auth:
+                    description: 'Auth: "" uses the session''s authentication, "none" sends none.'
+                    type: string
+                preScript:
+                    description: PreScript runs before it is sent (pm.variables.set ...).
+                    type: string
+                tests:
+                    description: Tests run on the answer (pm.test("ok", () => pm.response.to.have.status(200))).
+                    type: string
+                description:
+                    description: 'Description: what it does.'
+                    type: string
+            required:
+                - method
+                - url
+        HTTPResponse:
+            type: object
+            description: The answer, with the request as it was sent (secrets masked), timings, cookies and test results.
+            properties:
+                status:
+                    description: Status code (200), 0 when nothing came back.
+                    type: integer
+                statusText:
+                    description: 'StatusText: "200 OK".'
+                    type: string
+                proto:
+                    description: 'Proto: HTTP/1.1, HTTP/2.0.'
+                    type: string
+                headers:
+                    description: Headers of the answer.
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPKeyValue'
+                body:
+                    description: 'Body: text, or base64 when Base64.'
+                    type: string
+                base64:
+                    description: 'Base64: the body is binary.'
+                    type: boolean
+                contentType:
+                    description: ContentType of the body.
+                    type: string
+                size:
+                    description: Size of the body in bytes.
+                    type: integer
+                truncated:
+                    description: 'Truncated: the body was longer than kept (5 MB).'
+                    type: boolean
+                ms:
+                    description: 'Ms: the whole request in milliseconds.'
+                    type: integer
+                timing:
+                    $ref: '#/components/schemas/HTTPTiming'
+                    description: Timing per phase.
+                method:
+                    description: Method sent.
+                    type: string
+                url:
+                    description: URL sent (secret variables masked).
+                    type: string
+                reqHeaders:
+                    description: ReqHeaders as sent (authorization and secret variables masked).
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPKeyValue'
+                reqBody:
+                    description: ReqBody as sent (secret variables masked; first 64 KB).
+                    type: string
+                cookies:
+                    description: Cookies the server set.
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPCookie'
+                tests:
+                    description: 'Tests: the results of the request''s tests.'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPTestResult'
+                logs:
+                    description: 'Logs: console.log of its scripts.'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                vars:
+                    description: Vars set by its scripts (kept for the next requests of a run or the tab).
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
+                error:
+                    description: 'Error: why it could not be sent or what failed (the answer is still shown when there is one).'
+                    type: string
+            required:
+                - status
+                - statusText
+                - headers
+                - body
+                - size
+                - ms
+                - timing
+                - method
+                - url
+                - reqHeaders
+        HTTPRunRequest:
+            type: object
+            description: 'What to run of a collection: requests, folder, iterations, data rows.'
+            properties:
+                collection:
+                    description: 'Collection: id or name.'
+                    type: string
+                session:
+                    description: 'Session: the API session (default: the collection''s).'
+                    type: string
+                env:
+                    description: 'Env: "" or "production".'
+                    type: string
+                requests:
+                    description: 'Requests: ids or names to run, in the collection''s order ("" = all).'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                folder:
+                    description: 'Folder: only the requests in this folder (and below).'
+                    type: string
+                iterations:
+                    description: 'Iterations: how many times (default 1); Data rows override it.'
+                    type: integer
+                data:
+                    description: 'Data: CSV (first line = names) or a JSON array of objects; each row is one iteration''s variables.'
+                    type: string
+                delayMs:
+                    description: DelayMs between requests.
+                    type: integer
+                stopOnFail:
+                    description: 'StopOnFail: stop at the first failing request.'
+                    type: boolean
+                confirmed:
+                    description: 'Confirmed: the person agreed to the changes on a production session.'
+                    type: boolean
+            required:
+                - collection
+        HTTPRunResult:
+            type: object
+            description: 'A collection run: every request with its status and tests.'
+            properties:
+                steps:
+                    description: every request sent, in order
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPRunStep'
+                passed:
+                    description: requests that passed
+                    type: integer
+                failed:
+                    description: requests that failed
+                    type: integer
+                tests:
+                    description: tests run
+                    type: integer
+                ms:
+                    description: the whole run
+                    type: integer
+                stopped:
+                    description: 'Stopped: StopOnFail, or the run was cancelled.'
+                    type: boolean
+            required:
+                - steps
+                - passed
+                - failed
+                - tests
+                - ms
+        HTTPRunStep:
+            type: object
+            properties:
+                iteration:
+                    description: which iteration (1, 2, ...)
+                    type: integer
+                id:
+                    description: the request's id
+                    type: string
+                name:
+                    description: the request's name
+                    type: string
+                method:
+                    description: its method
+                    type: string
+                url:
+                    description: the URL sent
+                    type: string
+                status:
+                    description: 'the answer''s status (0: not sent)'
+                    type: integer
+                ms:
+                    description: how long it took
+                    type: integer
+                tests:
+                    description: its tests
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPTestResult'
+                error:
+                    description: why it failed or was not sent
+                    type: string
+                pass:
+                    description: 'Pass: answered, no 5xx, every test passed.'
+                    type: boolean
+            required:
+                - iteration
+                - id
+                - name
+                - method
+                - url
+                - status
+                - ms
+                - pass
+        HTTPSendRequest:
+            type: object
+            description: A request to send with an API session (its base URL, authentication and variables).
+            properties:
+                session:
+                    description: 'Session: an API session''s path (base URL, authentication, variables); "" sends the request as it is.'
+                    type: string
+                env:
+                    description: 'Env: "" (the session''s own values) or "production" (the variables'' production values).'
+                    type: string
+                collection:
+                    description: 'Collection: its variables are used too (id or name).'
+                    type: string
+                request:
+                    $ref: '#/components/schemas/HTTPRequestDef'
+                    description: Request to send.
+                vars:
+                    description: 'Vars: values that win over the session''s and the collection''s (set by earlier scripts).'
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
+                timeout:
+                    description: Timeout in seconds (default 30).
+                    type: integer
+                noRedirects:
+                    description: 'NoRedirects: answer 3xx instead of following.'
+                    type: boolean
+                confirmed:
+                    description: 'Confirmed: the person agreed to a change on a production session.'
+                    type: boolean
+            required:
+                - request
+        HTTPTestResult:
+            type: object
+            properties:
+                name:
+                    description: the test's name (pm.test)
+                    type: string
+                pass:
+                    description: it passed
+                    type: boolean
+                error:
+                    type: string
+            required:
+                - name
+                - pass
+        HTTPTiming:
+            type: object
+            properties:
+                dns:
+                    description: name lookup
+                    type: number
+                connect:
+                    description: TCP connection
+                    type: number
+                tls:
+                    description: TLS handshake
+                    type: number
+                firstByte:
+                    description: from sending until the first byte of the answer
+                    type: number
+                total:
+                    type: number
+            required:
+                - dns
+                - connect
+                - tls
+                - firstByte
+                - total
         Host:
             type: object
             properties:

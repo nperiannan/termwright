@@ -64,6 +64,12 @@ Settings, and turning one on does not turn on the other.
 | `GET /snmp/mib?q=` | Searches the loaded MIBs by name or OID | 200 `SNMPMibNode[]` |
 | `GET /snmp/mib/{object}` | One object (`IF-MIB::ifOperStatus`, `sysDescr`, an OID): syntax, values, access, description | 200 `SNMPMibNode` |
 | `GET /snmp/traps` | The trap receiver's state and the traps received, newest first | 200 `SNMPTrapsView` |
+| `POST /http/send` | Sends a request with a saved API `session` (base URL, login, variables) or as it is: `{"session": "APIs/rest", "request": {"method": "GET", "url": "/rest/..."}}`; its tests run | 200 `HTTPResponse` |
+| `GET /http/collections`, `POST /http/collections` | The API client's collections; add one | 200 / 201 |
+| `GET`, `PUT`, `DELETE /http/collections/{collection}` | One collection (`?format=postman` for Postman v2.1); replace; delete | 200 / 204 |
+| `POST /http/collections/{collection}/run` | Runs it (requests, folder, iterations, CSV / JSON data) with its tests | 200 `HTTPRunResult` |
+| `POST /http/import` | Imports a Postman collection, an OpenAPI / Swagger document or cURL (`{"text": "..."}`) | 201 `HTTPCollection` |
+| `GET /http/history` | The requests sent, newest first | 200 |
 | `GET /tools` | The network tools (`snmp`) with their arguments (JSON Schema), the same as the MCP connector's | 200 `Tool[]` |
 | `POST /tools/{tool}` | Runs a network tool; the body holds its arguments | 200 `{"result": text}` |
 

@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/termwright/termwright/internal/apiclient"
 	"github.com/termwright/termwright/internal/config"
 	"github.com/termwright/termwright/internal/emu"
 	"gopkg.in/yaml.v3"
@@ -85,6 +86,10 @@ func (a *App) apiHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 		route, arg = "/tools/{tool}", seg[1]
 	} else if len(seg) == 3 && seg[0] == "snmp" && seg[1] == "mib" {
 		route, arg = "/snmp/mib/{object}", seg[2]
+	} else if len(seg) == 3 && seg[0] == "http" && seg[1] == "collections" {
+		route, arg = "/http/collections/{collection}", seg[2]
+	} else if len(seg) == 4 && seg[0] == "http" && seg[1] == "collections" && seg[3] == "run" {
+		route, arg = "/http/collections/{collection}/run", seg[2]
 	}
 	ms, ok := apiRoutes[route]
 	if !ok {
@@ -131,6 +136,94 @@ func (a *App) apiHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 		apiOut(w, http.StatusOK, n, nil)
 	case "/snmp/traps":
 		apiOut(w, http.StatusOK, a.SNMPTraps(), nil)
+	case "/http/send":
+		var req HTTPSendRequest
+		if err := apiDecode(body, &req); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		req.Confirmed = true // the scripts are the user's own
+		res, err := a.httpSend(r.Context(), req)
+		apiOut(w, http.StatusOK, res, err)
+	case "/http/collections":
+		if r.Method == http.MethodGet {
+			apiOut(w, http.StatusOK, a.HTTPCollections(), nil)
+			return
+		}
+		var c apiclient.Collection
+		if err := apiDecode(body, &c); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		c.ID = ""
+		c, err := a.HTTPSaveCollection(c)
+		apiOut(w, http.StatusCreated, c, err)
+	case "/http/collections/{collection}":
+		switch r.Method {
+		case http.MethodGet:
+			c, err := a.HTTPCollection(arg)
+			if err != nil {
+				apiProblem(w, http.StatusNotFound, "not-found", err.Error())
+				return
+			}
+			if r.URL.Query().Get("format") == "postman" {
+				t, err := a.HTTPExportText(c.ID, "postman")
+				if err == nil {
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = w.Write([]byte(t))
+					return
+				}
+			}
+			apiOut(w, http.StatusOK, c, nil)
+		case http.MethodPut:
+			var c apiclient.Collection
+			if err := apiDecode(body, &c); err != nil {
+				apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+				return
+			}
+			old, err := a.HTTPCollection(arg)
+			if err != nil {
+				apiProblem(w, http.StatusNotFound, "not-found", err.Error())
+				return
+			}
+			c.ID = old.ID
+			c, err = a.HTTPSaveCollection(c)
+			apiOut(w, http.StatusOK, c, err)
+		case http.MethodDelete:
+			c, err := a.HTTPCollection(arg)
+			if err != nil {
+				apiProblem(w, http.StatusNotFound, "not-found", err.Error())
+				return
+			}
+			if err := a.HTTPDeleteCollection(c.ID); err != nil {
+				apiOut(w, http.StatusOK, nil, err)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		}
+	case "/http/collections/{collection}/run":
+		var req HTTPRunRequest
+		if err := apiDecode(body, &req); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		req.Collection, req.Confirmed = arg, true
+		res, err := a.httpRun(r.Context(), req)
+		apiOut(w, http.StatusOK, res, err)
+	case "/http/import":
+		var in HTTPImportIn
+		if err := apiDecode(body, &in); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		c, err := a.HTTPImport(in.Text, in.Name, in.Session)
+		if err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		apiOut(w, http.StatusCreated, c, nil)
+	case "/http/history":
+		apiOut(w, http.StatusOK, a.HTTPHistory(), nil)
 	case "/lab/tools/{tool}":
 		a.apiTool(w, "lab_"+arg, body)
 	case "/lab/screen/{id}":
@@ -322,6 +415,18 @@ var apiRoutes = map[string][]string{
 	"/lab/traffic/tests": {"GET", "POST"}, "/lab/traffic/tests/{id}": {"PUT", "DELETE"}, "/lab/traffic/tests/{id}/run": {"POST"},
 	"/lab/traffic/runs": {"GET"}, "/lab/traffic/runs/{id}": {"GET"}, "/lab/traffic/runs/stop": {"POST"},
 	"/tools": {"GET"}, "/tools/{tool}": {"POST"}, "/snmp": {"POST"}, "/snmp/mib": {"GET"}, "/snmp/mib/{object}": {"GET"}, "/snmp/traps": {"GET"},
+	"/http/send": {"POST"}, "/http/collections": {"GET", "POST"}, "/http/collections/{collection}": {"GET", "PUT", "DELETE"},
+	"/http/collections/{collection}/run": {"POST"}, "/http/import": {"POST"}, "/http/history": {"GET"},
+}
+
+// HTTPImportIn imports a cURL command, a Postman collection or an OpenAPI document as a collection.
+type HTTPImportIn struct {
+	// Text: the cURL command(s), the Postman v2.1 collection or the OpenAPI 3 / Swagger 2 document (JSON or YAML).
+	Text string `json:"text"`
+	// Name of the collection (default: from the document).
+	Name string `json:"name,omitempty"`
+	// Session: the API session the collection uses.
+	Session string `json:"session,omitempty"`
 }
 
 // apiOpenAPIYAML is docs/api/openapi.yaml (Use).

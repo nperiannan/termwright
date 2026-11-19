@@ -58,3 +58,25 @@ func TestRouteOff(t *testing.T) {
 		t.Fatalf("jump on again: %+v", got)
 	}
 }
+
+// SNMP and REST API settings are kept in the session file; secret variables keep their name only.
+func TestSNMPAndAPIRoundTrip(t *testing.T) {
+	s := Session{Name: "sw", Protocol: ProtoSSH2, Hostname: "10.0.0.1", SNMPVersion: "3", SNMPPort: 1161, SNMPHost: "10.0.0.2", SNMPUser: "netops",
+		SNMPAuth: "SHA-256", SNMPPriv: "AES-128", SNMPContext: "c1", SNMPWrite: true}
+	got := roundTripForTest(t, s)
+	if got.SNMPVersion != "3" || got.SNMPPort != 1161 || got.SNMPHost != "10.0.0.2" || got.SNMPUser != "netops" || got.SNMPAuth != "SHA-256" ||
+		got.SNMPPriv != "AES-128" || got.SNMPContext != "c1" || !got.SNMPWrite {
+		t.Fatalf("snmp lost: %+v", got)
+	}
+	a := Session{Name: "rest", Protocol: ProtoAPI, APIBaseURL: "https://10.0.0.1", APIAuth: "login", APILogin: "POST /auth/token", APITokenPath: "data.token",
+		APIKeyName: "X-Key", APIKeyIn: "query", APITokenURL: "https://idp/token", APIClientID: "cid", APIScope: "read", APIInsecure: true, APICAFile: "/ca.pem",
+		APIVars: []APIVar{{Name: "site", Value: "lab\tA", Prod: "dc"}, {Name: "key", Value: "s3cret", Secret: true}}}
+	g := roundTripForTest(t, a)
+	if g.Protocol != ProtoAPI || g.APIBaseURL != a.APIBaseURL || g.APIAuth != "login" || g.APILogin != a.APILogin || g.APITokenPath != "data.token" ||
+		g.APIKeyName != "X-Key" || g.APIKeyIn != "query" || g.APITokenURL != a.APITokenURL || g.APIClientID != "cid" || g.APIScope != "read" || !g.APIInsecure || g.APICAFile != "/ca.pem" {
+		t.Fatalf("api lost: %+v", g)
+	}
+	if len(g.APIVars) != 2 || g.APIVars[0] != a.APIVars[0] || g.APIVars[1] != (APIVar{Name: "key", Secret: true}) {
+		t.Fatalf("vars: %+v", g.APIVars)
+	}
+}

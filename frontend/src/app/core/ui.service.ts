@@ -198,11 +198,15 @@ export class Ui {
   /** The side panel, unless the full window was asked for here or chosen in the settings (welcome screen, Options → Appearance). */
   private usePanel(full: boolean) { return !full && this.settings()?.sessionEditor !== 'window'; }
 
-  async newSession(folder = '', full = false) {
+  /** The API client's Import box was asked for (menu): a time stamp. */
+  readonly apiImportAsked = signal(0);
+
+  async newSession(folder = '', full = false, protocol = '') {
     try {
       const s = await this.backend.newSessionDefaults();
       s.folder = folder;
       s.name = '';
+      if (protocol === 'API') { s.protocol = 'API'; s.deviceType = ''; s.username = ''; s.port = 0; }
       if (this.usePanel(full)) { this.panel.set({ session: s, oldPath: '' }); return; }
       this.editing.set({ session: s, oldPath: '' });
       this.dialog.set('sessionEditor');

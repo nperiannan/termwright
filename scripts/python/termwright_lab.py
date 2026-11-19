@@ -99,6 +99,7 @@ class Lab:
         self.timeout = timeout
         self.traffic = Traffic(self)
         self.snmp = SNMP(self)
+        self.http = HTTP(self)
 
     # ---- plain requests ----
     def request(self, method: str, path: str, body: Any = None, timeout: Optional[float] = None, raw: bool = False, binary: bool = False,
@@ -660,6 +661,70 @@ class SNMP:
         return {r["name"]: r["display"] for r in result.get("rows") or []}
 
 
+class HTTP:
+    """The REST API client with saved API sessions (base URL, login and secrets stay in Termwright) and collections."""
+
+    def __init__(self, lab: Lab):
+        self.lab = lab
+
+    def send(self, url: str, method: str = "GET", session: Optional[str] = None, env: str = "", headers: Optional[dict] = None,
+             params: Optional[dict] = None, json_body: Any = None, text: Optional[str] = None, tests: str = "",
+             vars: Optional[dict] = None, collection: Optional[str] = None, timeout: Optional[int] = None) -> dict:
+        """Send a request; a path goes after the session's base URL. Returns status, headers, body, ms, tests..."""
+        req: dict = {"method": method.upper(), "url": url}
+        if headers:
+            req["headers"] = [{"key": k, "value": str(v)} for k, v in headers.items()]
+        if params:
+            req["params"] = [{"key": k, "value": str(v)} for k, v in params.items()]
+        if json_body is not None:
+            req["body"] = {"mode": "json", "raw": json.dumps(json_body)}
+        elif text is not None:
+            req["body"] = {"mode": "text", "raw": text}
+        if tests:
+            req["tests"] = tests
+        body = {"request": req}
+        for k, v in (("session", session), ("env", env), ("vars", vars), ("collection", collection), ("timeout", timeout)):
+            if v:
+                body[k] = v
+        return self.lab.request("POST", "/http/send", body, root=True, timeout=max(self.lab.timeout, (timeout or 30) + 30))
+
+    def get(self, url: str, **kw) -> dict:
+        return self.send(url, "GET", **kw)
+
+    def post(self, url: str, json_body: Any = None, **kw) -> dict:
+        return self.send(url, "POST", json_body=json_body, **kw)
+
+    @staticmethod
+    def json(res: dict) -> Any:
+        """The answer's body as JSON."""
+        return json.loads(res.get("body") or "null")
+
+    def collections(self) -> list:
+        return self.lab.request("GET", "/http/collections", root=True) or []
+
+    def collection(self, name: str) -> dict:
+        return self.lab.request("GET", "/http/collections/" + urllib.parse.quote(name, safe=""), root=True)
+
+    def save_collection(self, collection: dict) -> dict:
+        if collection.get("id"):
+            return self.lab.request("PUT", "/http/collections/" + urllib.parse.quote(collection["id"], safe=""), collection, root=True)
+        return self.lab.request("POST", "/http/collections", collection, root=True)
+
+    def run(self, collection: str, session: Optional[str] = None, env: str = "", requests: Optional[list] = None, folder: str = "",
+            iterations: int = 0, data: str = "", stop_on_fail: bool = False) -> dict:
+        """Run a collection; returns steps, passed, failed, tests."""
+        body = {k: v for k, v in {"session": session, "env": env, "requests": requests, "folder": folder, "iterations": iterations,
+                                  "data": data, "stopOnFail": stop_on_fail}.items() if v}
+        return self.lab.request("POST", "/http/collections/" + urllib.parse.quote(collection, safe="") + "/run", body, root=True, timeout=3600)
+
+    def import_(self, text: str, name: str = "", session: str = "") -> dict:
+        """Import a cURL command, a Postman collection or an OpenAPI document as a collection."""
+        return self.lab.request("POST", "/http/import", {k: v for k, v in {"text": text, "name": name, "session": session}.items() if v}, root=True)
+
+    def history(self) -> list:
+        return self.lab.request("GET", "/http/history", root=True) or []
+
+
 # Every (method, path) the client calls: a test checks them against docs/api/openapi.yaml.
 ENDPOINTS = [
     ("GET", "/lab"), ("GET", "/lab/tools"),
@@ -675,4 +740,6 @@ ENDPOINTS = [
     ("DELETE", "/lab/traffic/tests/{test}"), ("POST", "/lab/traffic/tests/{test}/run"),
     ("GET", "/lab/traffic/runs"), ("GET", "/lab/traffic/runs/{run}"), ("POST", "/lab/traffic/runs/stop"),
     ("POST", "/snmp"), ("GET", "/snmp/mib"), ("GET", "/snmp/mib/{object}"), ("GET", "/snmp/traps"),
+    ("POST", "/http/send"), ("GET", "/http/collections"), ("POST", "/http/collections"), ("GET", "/http/collections/{collection}"),
+    ("PUT", "/http/collections/{collection}"), ("POST", "/http/collections/{collection}/run"), ("POST", "/http/import"), ("GET", "/http/history"),
 ]

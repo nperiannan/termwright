@@ -297,6 +297,12 @@ func buildMenu(app *App, lang string) *menu.Menu {
 	snmpM.AddSeparator()
 	add(snmpM, "Load MIB Files...", "snmp-load-mib")
 
+	apiM := m.AddSubmenu(t("API"))
+	add(apiM, "API Client", "api-client")
+	add(apiM, "New API Session...", "api-new-session")
+	apiM.AddSeparator()
+	add(apiM, "Import Postman, OpenAPI or cURL...", "api-import")
+
 	script := m.AddSubmenu(t("Script"))
 	add(script, "Command Library...", "command-library")
 	add(script, "Command History...", "history")

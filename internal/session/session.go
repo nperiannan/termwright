@@ -20,6 +20,7 @@ const (
 	ProtoVNC     = "VNC"     // opened in Termwright's VNC viewer
 	ProtoConsole = "Console" // a port of a console server (another saved session)
 	ProtoWOL     = "WOL"     // Wake-on-LAN: wakes the device, then watches it (no terminal)
+	ProtoAPI     = "API"     // a REST API: opened in the API client (no terminal)
 )
 
 // Keys used in the interoperable session file format. Keys prefixed with
@@ -133,6 +134,26 @@ const (
 	kNoAutoScroll = "Termwright No Auto Scroll"
 	kLocalEcho    = "Termwright Local Echo"
 	kMosh         = "Termwright Mosh"
+	kSNMPVersion  = "Termwright SNMP Version"
+	kSNMPPort     = "Termwright SNMP Port"
+	kSNMPHost     = "Termwright SNMP Host"
+	kSNMPUser     = "Termwright SNMP User"
+	kSNMPAuth     = "Termwright SNMP Auth"
+	kSNMPPriv     = "Termwright SNMP Priv"
+	kSNMPContext  = "Termwright SNMP Context"
+	kSNMPWrite    = "Termwright SNMP Write"
+	kAPIBase      = "Termwright API Base URL"
+	kAPIAuth      = "Termwright API Auth"
+	kAPIKeyName   = "Termwright API Key Name"
+	kAPIKeyIn     = "Termwright API Key In"
+	kAPILogin     = "Termwright API Login"
+	kAPITokenPath = "Termwright API Token Path"
+	kAPITokenURL  = "Termwright API Token URL"
+	kAPIClientID  = "Termwright API Client ID"
+	kAPIScope     = "Termwright API Scope"
+	kAPIInsecure  = "Termwright API Any Certificate"
+	kAPICAFile    = "Termwright API CA File"
+	kAPIVars      = "Termwright API Variables"
 	kTelnetTLS    = "Termwright Telnet TLS"
 	kTLSAnyCert   = "Termwright TLS Any Certificate"
 )
@@ -298,6 +319,29 @@ type Session struct {
 	SNMPPriv    string `json:"snmpPriv,omitempty"`    // v3: "" (noPriv), DES, AES, AES-192, AES-256
 	SNMPContext string `json:"snmpContext,omitempty"` // v3 context name
 	SNMPWrite   bool   `json:"snmpWrite,omitempty"`   // Set is allowed (production sessions still ask)
+	// REST API (Protocol "API", the API client). The password, API key, token or client secret is in the
+	// credential store (api-secret: + the path), and so are the values of secret variables; never here.
+	APIBaseURL   string   `json:"apiBaseUrl,omitempty"`   // https://10.0.0.1, the {{baseUrl}} variable
+	APIAuth      string   `json:"apiAuth,omitempty"`      // "" none, apikey, bearer, login, basic, oauth2
+	APIKeyName   string   `json:"apiKeyName,omitempty"`   // apikey: header or query parameter name (X-API-Key)
+	APIKeyIn     string   `json:"apiKeyIn,omitempty"`     // apikey: "" header, query
+	APILogin     string   `json:"apiLogin,omitempty"`     // login: the login request, "POST /auth/token"
+	APITokenPath string   `json:"apiTokenPath,omitempty"` // login: where the token is in the answer ("token", "data.access_token"; "" finds it)
+	APITokenURL  string   `json:"apiTokenUrl,omitempty"`  // oauth2: the token endpoint (client credentials, or password with a user)
+	APIClientID  string   `json:"apiClientId,omitempty"`  // oauth2
+	APIScope     string   `json:"apiScope,omitempty"`     // oauth2
+	APIInsecure  bool     `json:"apiInsecure,omitempty"`  // accept any TLS certificate
+	APICAFile    string   `json:"apiCaFile,omitempty"`    // trust this CA (PEM) as well
+	APIVars      []APIVar `json:"apiVars,omitempty"`      // {{name}} variables
+}
+
+// APIVar is a variable of an API session: {{name}} in URLs, headers and bodies. Prod is its value when the
+// client's environment is Production ("" = Value). A secret variable's values are in the credential store.
+type APIVar struct {
+	Name   string `json:"name"`
+	Value  string `json:"value"`
+	Prod   string `json:"prod,omitempty"`
+	Secret bool   `json:"secret,omitempty"`
 }
 
 // Defaults returns a new session with sensible default values.
@@ -431,6 +475,31 @@ func FromFile(path string, f *sessionfile.File) Session {
 	s.SmartCard = f.Str(kSmartCard, "")
 	s.MAC = f.Str(kMAC, "")
 	s.Team = f.Str(kTeam, "")
+	s.SNMPVersion = f.Str(kSNMPVersion, "")
+	s.SNMPPort = int(f.DWord(kSNMPPort, 0))
+	s.SNMPHost = f.Str(kSNMPHost, "")
+	s.SNMPUser = f.Str(kSNMPUser, "")
+	s.SNMPAuth = f.Str(kSNMPAuth, "")
+	s.SNMPPriv = f.Str(kSNMPPriv, "")
+	s.SNMPContext = f.Str(kSNMPContext, "")
+	s.SNMPWrite = f.Bool(kSNMPWrite, false)
+	s.APIBaseURL = f.Str(kAPIBase, "")
+	s.APIAuth = f.Str(kAPIAuth, "")
+	s.APIKeyName = f.Str(kAPIKeyName, "")
+	s.APIKeyIn = f.Str(kAPIKeyIn, "")
+	s.APILogin = f.Str(kAPILogin, "")
+	s.APITokenPath = f.Str(kAPITokenPath, "")
+	s.APITokenURL = f.Str(kAPITokenURL, "")
+	s.APIClientID = f.Str(kAPIClientID, "")
+	s.APIScope = f.Str(kAPIScope, "")
+	s.APIInsecure = f.Bool(kAPIInsecure, false)
+	s.APICAFile = f.Str(kAPICAFile, "")
+	for _, l := range f.List(kAPIVars) {
+		p := strings.SplitN(l, "\t", 4)
+		if len(p) == 4 && p[0] != "" {
+			s.APIVars = append(s.APIVars, APIVar{Name: unescapeTab(p[0]), Secret: p[1] == "1", Value: unescapeTab(p[2]), Prod: unescapeTab(p[3])})
+		}
+	}
 	for _, l := range f.List(kTriggers) {
 		parts := strings.SplitN(l, "\t", 3)
 		if len(parts) == 3 {
@@ -787,6 +856,45 @@ func (s Session) Apply(f *sessionfile.File) {
 	setOptStr(f, kSmartCard, s.SmartCard)
 	setOptStr(f, kMAC, s.MAC)
 	setOptStr(f, kTeam, s.Team)
+	setOptStr(f, kSNMPVersion, s.SNMPVersion)
+	setOptStr(f, kSNMPHost, s.SNMPHost)
+	setOptStr(f, kSNMPUser, s.SNMPUser)
+	setOptStr(f, kSNMPAuth, s.SNMPAuth)
+	setOptStr(f, kSNMPPriv, s.SNMPPriv)
+	setOptStr(f, kSNMPContext, s.SNMPContext)
+	setOptBool(f, kSNMPWrite, s.SNMPWrite)
+	if s.SNMPPort > 0 && s.SNMPPort != 161 {
+		f.SetDWord(kSNMPPort, uint32(s.SNMPPort))
+	} else {
+		f.Delete(kSNMPPort)
+	}
+	setOptStr(f, kAPIBase, s.APIBaseURL)
+	setOptStr(f, kAPIAuth, s.APIAuth)
+	setOptStr(f, kAPIKeyName, s.APIKeyName)
+	setOptStr(f, kAPIKeyIn, s.APIKeyIn)
+	setOptStr(f, kAPILogin, s.APILogin)
+	setOptStr(f, kAPITokenPath, s.APITokenPath)
+	setOptStr(f, kAPITokenURL, s.APITokenURL)
+	setOptStr(f, kAPIClientID, s.APIClientID)
+	setOptStr(f, kAPIScope, s.APIScope)
+	setOptBool(f, kAPIInsecure, s.APIInsecure)
+	setOptStr(f, kAPICAFile, s.APICAFile)
+	if len(s.APIVars) > 0 {
+		var l []string
+		for _, v := range s.APIVars {
+			if v.Name == "" {
+				continue
+			}
+			sec, val, prod := "0", v.Value, v.Prod
+			if v.Secret {
+				sec, val, prod = "1", "", "" // the values are in the credential store
+			}
+			l = append(l, escapeTab(v.Name)+"\t"+sec+"\t"+escapeTab(val)+"\t"+escapeTab(prod))
+		}
+		f.SetList(kAPIVars, l)
+	} else {
+		f.Delete(kAPIVars)
+	}
 	setOptStr(f, kWOLBcast, s.WOLBroadcast)
 	setOptStr(f, kWOLFrom, s.WOLFrom)
 	setOptStr(f, kWOLNet, s.WOLNetwork)

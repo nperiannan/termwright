@@ -37,7 +37,7 @@ when Termwright cannot be reached.
 `lab.snmp` reads devices with the SNMP settings of their saved sessions (the community and v3 passwords stay in the computer's credential store), or an address:
 
 ```python
-from termwright_lab import Lab, SNMP
+from termwright_lab import Lab, SNMP, HTTP
 lab = Lab()
 down = {k: v for k, v in SNMP.table(lab.snmp.walk("IF-MIB::ifOperStatus", session="Lab/core-sw1")).items() if v.startswith("down")}
 print(lab.snmp.get("sysDescr.0", "sysUpTime.0", address="10.0.0.5", community="public"))
@@ -46,6 +46,19 @@ lab.snmp.mib("IF-MIB::ifOperStatus")["description"]; lab.snmp.traps()["traps"]
 ```
 
 `get`, `bulk`, `walk`, `set` and `run(op, ...)` return the rows with `name`, `type`, `value` and `display`.
+
+## API client
+
+`lab.http` sends REST requests with the saved API sessions (Termwright logs in; no secrets in your script) and runs collections:
+
+```python
+r = lab.http.get("/rest/restconf/data/openconfig-interfaces:interfaces", session="APIs/Lab switches REST")
+print(r["status"], HTTP.json(r)["openconfig-interfaces:interfaces"]["interface"][0]["name"])
+lab.http.post("/vlans", {"id": 10, "name": "voice"}, session="APIs/Lab switches REST")
+res = lab.http.run("EXOS RESTCONF", data="port\n1:1\n1:2")       # one iteration per row
+assert res["failed"] == 0, res["steps"]
+lab.http.import_(open("openapi.yaml").read(), session="APIs/Lab switches REST")
+```
 
 ## Traffic
 

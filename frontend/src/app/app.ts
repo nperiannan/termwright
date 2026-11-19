@@ -45,6 +45,7 @@ import { PlayerView } from './components/player-view';
 import { LabWorkspace } from './components/lab-workspace';
 import { NetworkMap } from './components/network-map';
 import { SnmpBrowser } from './components/snmp-browser';
+import { ApiClient } from './components/api-client';
 import { ConsolePorts } from './dialogs/console-ports';
 import { HistoryDialog } from './dialogs/history';
 import { KeySetupDialog } from './dialogs/key-setup-dialog';
@@ -78,7 +79,7 @@ import { FactTeach } from './dialogs/fact-teach';
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionsMenu, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, FilesPanel, WebOpenDialog, RemoteDiagDialog, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, FileServersDialog, NetCheckDialog, NameAfterDialog, LabDialog, LabWizard, ServersIndicator, AIPanel, TeamPushDialog, TeamReserveDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, LabWorkspace, NetworkMap, SnmpBrowser, Moved, HistoryDialog, Overlays, About, Welcome, LabWorkflow, FactTeach, Unlock],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, FileServersDialog, NetCheckDialog, NameAfterDialog, LabDialog, LabWizard, ServersIndicator, AIPanel, TeamPushDialog, TeamReserveDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, LabWorkspace, NetworkMap, SnmpBrowser, ApiClient, Moved, HistoryDialog, Overlays, About, Welcome, LabWorkflow, FactTeach, Unlock],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -557,6 +558,9 @@ export class App implements OnInit {
       case 'lab-overview': case 'lab-traffic': case 'lab-appliances': case 'lab-hosts':
         this.labs.goto.set({ kind: 'emu', page: a.slice(4) as 'overview' | 'traffic' | 'appliances' | 'hosts' }); this.openLab('emu'); break;
       case 'snmp-browser': { const t = this.tabs.active(); void this.tabs.openSnmp(t?.kind === 'terminal' ? t.session.path : '', t?.kind === 'terminal' ? t.session.name : ''); break; }
+      case 'api-client': void this.tabs.openApi(); break;
+      case 'api-new-session': await this.ui.newSession(this.ui.currentFolder(), true, 'API'); break;
+      case 'api-import': await this.tabs.openApi(); this.ui.apiImportAsked.set(Date.now()); break;
       case 'snmp-traps': void this.tabs.openSnmp('', '', 'traps'); break;
       case 'snmp-load-mib': try { const m = await this.backend.snmpLoadMibs(); if (m?.length) this.ui.toast(tr('Loaded {0}', m.join(', ')), 'success'); } catch (e) { this.ui.toast(errText(e), 'error'); } break;
       case 'ai-assistant': void this.openAI(); break;

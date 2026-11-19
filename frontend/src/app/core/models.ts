@@ -20,6 +20,9 @@ export interface Session {
   autoReconnect: boolean; x11Forward: boolean; agentForward: boolean;
   consoleServer?: string; consolePort?: number; consoleMethod?: string; consoleUser?: string; consoleBase?: number; consoleProtocol?: string;
   /** SNMP (the browser, the map and discovery): version '' = v2c, '1', '2c', '3'; the community and v3 passwords are in the credential store. */
+  /** REST API session (protocol 'API'): the secret and secret variables' values are in the credential store. */
+  apiBaseUrl?: string; apiAuth?: string; apiKeyName?: string; apiKeyIn?: string; apiLogin?: string; apiTokenPath?: string; apiTokenUrl?: string;
+  apiClientId?: string; apiScope?: string; apiInsecure?: boolean; apiCaFile?: string; apiVars?: APIVar[];
   snmpVersion?: string; snmpPort?: number; snmpHost?: string; snmpUser?: string; snmpAuth?: string; snmpPriv?: string; snmpContext?: string; snmpWrite?: boolean;
   environment?: string; rdpDomain?: string; rdpFullScreen?: boolean; rdpSize?: string; vncViewOnly?: boolean; keywordSet: string; fontFamily: string; fontSize: number; backspace: '' | 'bs'; logonScript: string; serialDtr: boolean; serialRts: boolean;
   logonArgs: string; useLogonScript: boolean; automateLogon: boolean; initialCr: boolean; loginAgain?: boolean;
@@ -224,7 +227,7 @@ export interface ImportSource { app: string; path: string; what: string; }
 
 export interface FileFilter { displayName: string; pattern: string; }
 
-export const PROTOCOLS = ['SSH2', 'Telnet', 'Serial', 'Local Shell', 'Raw', 'Console', 'RDP', 'VNC', 'WOL'] as const;
+export const PROTOCOLS = ['SSH2', 'Telnet', 'Serial', 'Local Shell', 'Raw', 'Console', 'RDP', 'VNC', 'WOL', 'API'] as const;
 /** Console server access methods (Console sessions). */
 export const CONSOLE_METHODS: { id: string; label: string }[] = [
   { id: 'opengear-ssh', label: 'SSH as user:portNN (Opengear)' },
@@ -298,7 +301,7 @@ export const ACTIONS: Record<string, string> = {
   'layout-tabs': 'Tabbed View', 'layout-tile-v': 'Tile Side by Side', 'layout-tile-h': 'Tile Stacked', 'layout-grid': 'Tile Grid',
   'send-break': 'Send Break', 'send-file': 'Send Text File...', 'save-selection': 'Save Selection As...',
   'xmodem': 'Send XMODEM...', 'xmodem-receive': 'Receive XMODEM...', 'scp-upload': 'SCP Upload File...', 'scp-upload-folder': 'SCP Upload Folder...', 'scp-download': 'SCP Download...',
-  'ymodem-send': 'Send YMODEM...', 'ymodem-receive': 'Receive YMODEM', passwords: 'Passwords & Accounts...', 'check-updates': 'Check for Updates...', 'key-setup': 'Set Up Key Login...', 'remote-desktop': 'Set Up Remote Desktop...', 'quick-open': 'Quick Open...', welcome: 'Welcome...', 'new-session': 'New Session...', 'capture-screen': 'Save Screen As Image...', 'teach-fact': 'Save Selection as Device Fact...', 'toggle-icon-style': 'Tile / Glyph Icons', 'command-library': 'Command Library...', 'net-check': 'Network Check...', 'sim-lab': 'Simulated Lab...', 'lab-emu': 'Emulated Lab', 'lab-sim': 'Simulated Lab', 'lab-overview': 'Lab Overview', 'lab-traffic': 'Traffic Generator', 'lab-appliances': 'Appliances', 'lab-hosts': 'KVM Hosts', 'snmp-browser': 'SNMP Browser', 'snmp-traps': 'SNMP Trap Receiver', 'snmp-load-mib': 'Load MIB Files...', 'connect-ai': 'Connect an AI App...', 'workspaces': 'Workspaces...',
+  'ymodem-send': 'Send YMODEM...', 'ymodem-receive': 'Receive YMODEM', passwords: 'Passwords & Accounts...', 'check-updates': 'Check for Updates...', 'key-setup': 'Set Up Key Login...', 'remote-desktop': 'Set Up Remote Desktop...', 'quick-open': 'Quick Open...', welcome: 'Welcome...', 'new-session': 'New Session...', 'capture-screen': 'Save Screen As Image...', 'teach-fact': 'Save Selection as Device Fact...', 'toggle-icon-style': 'Tile / Glyph Icons', 'command-library': 'Command Library...', 'net-check': 'Network Check...', 'sim-lab': 'Simulated Lab...', 'lab-emu': 'Emulated Lab', 'lab-sim': 'Simulated Lab', 'lab-overview': 'Lab Overview', 'lab-traffic': 'Traffic Generator', 'lab-appliances': 'Appliances', 'lab-hosts': 'KVM Hosts', 'snmp-browser': 'SNMP Browser', 'snmp-traps': 'SNMP Trap Receiver', 'snmp-load-mib': 'Load MIB Files...', 'api-client': 'API Client', 'api-new-session': 'New API Session...', 'api-import': 'Import Postman, OpenAPI or cURL...', 'connect-ai': 'Connect an AI App...', 'workspaces': 'Workspaces...',
   'save-workspace': 'Save Workspace...', 'compare': 'Compare Outputs...',
   'zoom-in': 'Zoom In', 'zoom-out': 'Zoom Out', 'global-options': 'Global Options', 'session-options': 'Session Options',
 };
@@ -535,3 +538,21 @@ export interface SNMPSecretState { community: boolean; auth: boolean; priv: bool
 export interface SNMPTrapState { on: boolean; port: number; error?: string; count: number; }
 export interface SNMPTrapView { at: string; from: string; version: string; community?: string; user?: string; kind: string; trapOid: string; uptime: number; note?: string; name: string; rows: SNMPRow[]; session?: string; }
 export interface SNMPTrapsView { state: SNMPTrapState; traps: SNMPTrapView[]; }
+
+/** API client (internal/apiclient, app/http_app.go). */
+export interface APIVar { name: string; value: string; prod?: string; secret?: boolean; }
+export interface HKV { key: string; value: string; off?: boolean; desc?: string; }
+export interface HBody { mode?: string; raw?: string; form?: HKV[]; graphqlVars?: string; }
+export interface HRequest { id?: string; name?: string; folder?: string; method: string; url: string; params?: HKV[]; headers?: HKV[]; body?: HBody; auth?: string; preScript?: string; tests?: string; description?: string; }
+export interface HCollection { id: string; name: string; session?: string; vars?: HKV[]; requests: HRequest[]; description?: string; }
+export interface HCollectionInfo { id: string; name: string; session?: string; requests: number; }
+export interface HTestResult { name: string; pass: boolean; error?: string; }
+export interface HCookie { name: string; value: string; domain?: string; path?: string; expires?: string; httpOnly?: boolean; secure?: boolean; }
+export interface HResponse { status: number; statusText: string; proto?: string; headers: HKV[]; body: string; base64?: boolean; contentType?: string; size: number; truncated?: boolean;
+  ms: number; timing: { dns: number; connect: number; tls: number; firstByte: number; total: number }; method: string; url: string; reqHeaders: HKV[]; reqBody?: string;
+  cookies?: HCookie[]; tests?: HTestResult[]; logs?: string[]; vars?: Record<string, string>; error?: string; }
+export interface HSendRequest { session?: string; env?: string; collection?: string; request: HRequest; vars?: Record<string, string>; timeout?: number; noRedirects?: boolean; confirmed?: boolean; }
+export interface HRunStep { iteration: number; id: string; name: string; method: string; url: string; status: number; ms: number; tests?: HTestResult[]; error?: string; pass: boolean; }
+export interface HRunResult { steps: HRunStep[]; passed: number; failed: number; tests: number; ms: number; stopped?: boolean; }
+export interface HRunRequest { collection: string; session?: string; env?: string; requests?: string[]; folder?: string; iterations?: number; data?: string; delayMs?: number; stopOnFail?: boolean; confirmed?: boolean; }
+export interface HHistoryItem { at: string; session?: string; env?: string; collection?: string; request: HRequest; url: string; status: number; ms: number; size: number; error?: string; }

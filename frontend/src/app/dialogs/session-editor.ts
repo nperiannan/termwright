@@ -21,7 +21,7 @@ import { FactTeach } from './fact-teach';
 import { factList, factsAge } from '../core/facts';
 import { testFactRegex } from '../core/fact-regex';
 
-type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' | 'logon' | 'terminal' | 'log' | 'remote' | 'facts' | 'snmp';
+type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' | 'logon' | 'terminal' | 'log' | 'remote' | 'facts' | 'snmp' | 'apivars';
 
 /** Saves a session (and its password when one was typed or cleared),
  *  refreshes the Session Manager, selects it and updates its open tabs. */
@@ -69,6 +69,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
           @if (s.protocol === 'SSH2' || s.protocol === 'Telnet') {
             <a class="sub" [class.on]="page() === 'facts'" (click)="page.set('facts')" style="order: 7"><app-icon name="device" [size]="15" />Device Facts</a>
           }
+          @if (s.protocol === 'API') { <a class="sub" [class.on]="page() === 'apivars'" (click)="page.set('apivars')" style="order: 2"><app-icon name="key" [size]="15" />Variables &amp; TLS</a> }
           @if (snmpOk()) { <a class="sub" [class.on]="page() === 'snmp'" (click)="openSnmpPage()" style="order: 7"><app-icon name="topology" [size]="15" />SNMP</a> }
           @if (s.protocol === 'Serial') { <a class="sub" [class.on]="page() === 'serial'" (click)="page.set('serial')" style="order: 6"><app-icon name="serial" [size]="15" />Serial</a> }
           @if (s.protocol === 'Local Shell') { <a class="sub" [class.on]="page() === 'local'" (click)="page.set('local')" style="order: 7"><app-icon name="shell" [size]="15" />Local Shell</a> }
@@ -146,12 +147,12 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   <div class="seg">
                     @for (p of mainProtos; track p) { <button type="button" [class.on]="s.protocol === p" (click)="s.protocol = p; protocolChanged()">{{ p === 'SSH2' ? 'SSH' : p }}</button> }
                     <select name="otherp" [ngModel]="mainProtos.includes(s.protocol) ? '' : s.protocol" (ngModelChange)="$event && (s.protocol = $event) && protocolChanged()">
-                      <option value="">More…</option>@for (p of otherProtos; track p) { <option [value]="p">{{ p === 'WOL' ? 'Wake-on-LAN' : p }}</option> }</select>
+                      <option value="">More…</option>@for (p of otherProtos; track p) { <option [value]="p">{{ p === 'WOL' ? 'Wake-on-LAN' : p === 'API' ? 'REST API' : p }}</option> }</select>
                   </div>
                 
                 </div>
                 <div class="pair o4">
-                @if (!remote() && s.protocol !== 'WOL') {
+                @if (!remote() && s.protocol !== 'WOL' && s.protocol !== 'API') {
                 <div class="f"><label>Device type</label>
                 <select name="devtype" [ngModel]="s.deviceType" (ngModelChange)="s.deviceType = $event; onDeviceType()">
                   <option value="">(none)</option>
@@ -253,6 +254,42 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   <div class="row"><button type="button" (click)="wakeNow()" [disabled]="!s.mac">Wake Now</button>
                     <span class="hint">Double-click the session (or Connect) sends the magic packet and then pings the device, or searches the network for its MAC address and saves the address it finds.</span></div>
                 }
+                @if (s.protocol === 'API') {
+                  <div class="f o3 wide"><label>Base URL</label><input name="apibase" [(ngModel)]="s.apiBaseUrl" placeholder="https://10.0.0.1 (request paths go after it)" spellcheck="false" /></div>
+                  <div class="f o5 wide"><label>Authentication</label>
+                    <div class="seg">@for (a of apiAuths; track a.v) { <button type="button" [class.on]="(s.apiAuth || '') === a.v" (click)="s.apiAuth = a.v">{{ a.l }}</button> }</div></div>
+                  @switch (s.apiAuth || '') {
+                    @case ('apikey') {
+                      <div class="pair o5"><div class="f"><label>Key name</label><input name="apikn" [(ngModel)]="s.apiKeyName" placeholder="X-API-Key" /></div>
+                        <div class="f"><label>Sent in</label><select name="apikin" [(ngModel)]="s.apiKeyIn"><option value="">Header</option><option value="query">Query parameter</option></select></div></div>
+                    }
+                    @case ('login') {
+                      <div class="pair o5"><div class="f"><label>Login request</label><input name="apilogin" [(ngModel)]="s.apiLogin" placeholder="POST /auth/token" spellcheck="false" /></div>
+                        <div class="f"><label>User</label><input name="apiuser" [(ngModel)]="s.username" /></div></div>
+                      <div class="pair o5"><div class="f"><label>Token in the answer</label><input name="apitp" [(ngModel)]="s.apiTokenPath" placeholder="found by itself (token, access_token, data.token…)" /></div>
+                        <div class="f"><label>Token sent in header</label><input name="apith" [(ngModel)]="s.apiKeyName" placeholder="Authorization: Bearer (or X-Auth-Token)" /></div></div>
+                    }
+                    @case ('basic') {
+                      <div class="f o5"><label>User</label><input name="apiuser" [(ngModel)]="s.username" /></div>
+                    }
+                    @case ('oauth2') {
+                      <div class="pair o5"><div class="f"><label>Token URL</label><input name="apitu" [(ngModel)]="s.apiTokenUrl" placeholder="https://idp.example.com/oauth/token" spellcheck="false" /></div>
+                        <div class="f"><label>Client ID</label><input name="apicid" [(ngModel)]="s.apiClientId" /></div></div>
+                      <div class="pair o5"><div class="f"><label>Scope</label><input name="apisc" [(ngModel)]="s.apiScope" /></div>
+                        <div class="f"><label>User (password grant, optional)</label><input name="apiuser" [(ngModel)]="s.username" /></div></div>
+                    }
+                  }
+                  @if (s.apiAuth) {
+                    <div class="f o5 wide"><label>{{ apiSecretLabel() }}</label>
+                      <div class="row"><input name="apisecret" type="password" autocomplete="off" [(ngModel)]="apiSecret" [placeholder]="apiSec().secret ? '•••••••• (saved; type to change)' : ''" />
+                        @if (apiSec().secret) { <span class="vault">🔒 saved</span> }</div>
+                      @if (s.apiAuth === 'login' || s.apiAuth === 'oauth2') { <div class="hint">The token is held in memory only and renewed by itself before it expires.</div> }</div>
+                  }
+                  <div class="f o6 wide"><label>Check</label>
+                    <div class="row"><input name="apitesturl" [(ngModel)]="apiTestUrl" placeholder="/" style="max-width: 220px" spellcheck="false" />
+                      <button type="button" (click)="apiTest()" [disabled]="apiBusy()">{{ apiBusy() ? 'Testing…' : 'Test (send GET)' }}</button>
+                      @if (apiMsg(); as m) { <span [class.ok]="m.ok" [class.bad]="!m.ok" class="snmpmsg">{{ m.text }}</span> }</div></div>
+                }
                 @if (s.protocol === 'RDP') {
                   <label></label><div class="hint">Opens in this computer's Remote Desktop client (Remote Desktop Connection on Windows, Windows App on macOS,
                     FreeRDP or Remmina on Linux). With a jump host or proxy, Termwright opens a local tunnel for it.</div>
@@ -314,7 +351,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                       <button type="button" (click)="ui.open('passwords')">{{ au.account ? 'Edit Account…' : 'Accounts…' }}</button></div>
                   }
                 }
-                @if (s.protocol !== 'WOL' && (s.protocol === 'SSH2' || (!remote() && s.protocol !== 'Local Shell'))) {
+                @if (s.protocol !== 'WOL' && s.protocol !== 'API' && (s.protocol === 'SSH2' || (!remote() && s.protocol !== 'Local Shell'))) {
                   <label class="o5">{{ '' }}</label>
                   <div class="checks o5">
                     @if (!remote() && s.protocol !== 'Local Shell') {
@@ -526,6 +563,27 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
               </table>
               <button type="button" (click)="s.portForwards.push({ type: 'local', bindAddr: '', bindPort: 0, destHost: '', destPort: 0, name: '' })">Add forward</button>
               }
+            }
+            @case ('apivars') {
+              <div class="hint" style="margin-bottom: 10px">Use as {{ varEx }} in URLs, headers and bodies. The Production value is used when the API client's environment is Production (empty: the same value). Secret values are kept in the computer's credential store and masked wherever a request is shown.</div>
+              <table class="apivars"><thead><tr><th>Name</th><th>Value</th><th>Production value</th><th>Secret</th><th></th></tr></thead><tbody>
+                @for (v of s.apiVars ?? []; track $index) {
+                  <tr><td><input [name]="'avn' + $index" [(ngModel)]="v.name" spellcheck="false" /></td>
+                    @if (v.secret) {
+                      <td><input type="password" autocomplete="off" [name]="'avv' + $index" [(ngModel)]="apiVarSecOf(v.name).value" [placeholder]="apiVarSaved(v.name) ? '•••••••• saved' : ''" /></td>
+                      <td><input type="password" autocomplete="off" [name]="'avp' + $index" [(ngModel)]="apiVarSecOf(v.name).prod" [placeholder]="apiVarSaved(v.name, true) ? '•••••••• saved' : ''" /></td>
+                    } @else {
+                      <td><input [name]="'avv' + $index" [(ngModel)]="v.value" spellcheck="false" /></td>
+                      <td><input [name]="'avp' + $index" [(ngModel)]="v.prod" spellcheck="false" /></td>
+                    }
+                    <td><input type="checkbox" [name]="'avs' + $index" [(ngModel)]="v.secret" /></td>
+                    <td><button type="button" class="x" (click)="s.apiVars!.splice($index, 1)" title="Remove">✕</button></td></tr>
+                }
+              </tbody></table>
+              <button type="button" (click)="addApiVar()">+ Add Variable</button>
+              <h3 class="sec">TLS</h3>
+              <div class="checks"><label><input type="checkbox" name="apiins" [(ngModel)]="s.apiInsecure" /> Accept any certificate (lab devices with self-signed certificates)</label></div>
+              <div class="f" style="margin-top: 8px"><label>Also trust this CA (PEM file)</label><input name="apica" [(ngModel)]="s.apiCaFile" placeholder="/path/to/ca.pem" spellcheck="false" /></div>
             }
             @case ('snmp') {
               <div class="hint" style="margin-bottom: 10px">Used by the SNMP Browser, the AI assistant and scripts. The community and the v3 passwords are kept in the computer's credential store, never in the session file or an export.</div>
@@ -753,7 +811,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
         @if (error()) { <span class="err">{{ error() }}</span> }
         <span class="spacer"></span>
         <button type="button" (click)="ui.close()">Cancel</button>
-        <button type="button" (click)="save(true)">{{ s.protocol === 'WOL' ? 'Save &amp; Wake' : 'Save &amp; Connect' }}</button>
+        <button type="button" (click)="save(true)">{{ s.protocol === 'WOL' ? 'Save &amp; Wake' : s.protocol === 'API' ? 'Save &amp; Open' : 'Save &amp; Connect' }}</button>
         <button type="submit" class="primary">Save</button>
       </div>
     </form>
@@ -801,6 +859,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
   }
   `,
   styles: [`
+    .apivars { width: 100%; border-collapse: collapse; margin-bottom: 8px; } .apivars th { text-align: left; font-weight: 500; color: var(--muted); padding: 4px; } .apivars td { padding: 3px 4px; } .apivars input:not([type=checkbox]) { width: 100%; box-sizing: border-box; } .apivars .x { padding: 2px 8px; } h3.sec { margin: 18px 0 8px; font-size: 13px; }
     .vault { color: var(--ok); font-size: 12px; white-space: nowrap; } .snmpmsg { font-size: 12px; } .snmpmsg.ok { color: var(--ok); } .snmpmsg.bad { color: var(--danger); }
     .rt { border: 1px solid var(--line, var(--border)); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px;
       .rth { display: flex; gap: 12px; align-items: center; } .tx { flex: 1; display: flex; flex-direction: column; line-height: 1.4; small { color: var(--muted); } }
@@ -883,9 +942,9 @@ export class SessionEditor implements OnInit {
 
   wakeNow() { if (this.s) void this.tabs.wake(structuredClone(this.s), '', 'none'); }
   /** Who logs in (Account). */
-  canLogin() { return !!this.s && !['Local Shell', 'VNC', 'WOL'].includes(this.s.protocol); }
+  canLogin() { return !!this.s && !['Local Shell', 'VNC', 'WOL', 'API'].includes(this.s.protocol); }
   ownFields() {
-    if (!this.s || this.s.protocol === 'WOL') return false;
+    if (!this.s || this.s.protocol === 'WOL' || this.s.protocol === 'API') return false;
     if (!this.canLogin()) return true;
     const c = accountChoice(this.s);
     return c === '-' || (c === '' && defaultLogin(this.ui.settings(), this.s).kind === 'own');
@@ -1117,6 +1176,7 @@ export class SessionEditor implements OnInit {
       this.backend.sessionPasswordState(e.oldPath).then(st => { this.pwState.set(st); this.noPw = st === 'empty'; this.cdr.markForCheck(); }).catch(() => {});
     }
     this.tabId = e.tabId;
+    this.loadApiSecrets();
     const pg = this.ui.editorPage();
     if (pg) { if (pg === 'snmp') this.openSnmpPage(); else this.page.set(pg as Page); this.ui.editorPage.set(''); }
     if (e.pw) { this.pw = e.pw; }
@@ -1124,19 +1184,19 @@ export class SessionEditor implements OnInit {
 
   remote() { return this.s?.protocol === 'RDP' || this.s?.protocol === 'VNC'; }
   /** Sessions without a terminal (remote desktops, Wake-on-LAN). */
-  noTerm() { return this.remote() || this.s?.protocol === 'WOL'; }
+  noTerm() { return this.remote() || this.s?.protocol === 'WOL' || this.s?.protocol === 'API'; }
   readonly mainProtos = ['SSH2', 'Telnet', 'Serial', 'RDP', 'VNC'];
   readonly otherProtos = PROTOCOLS.filter(p => !['SSH2', 'Telnet', 'Serial', 'RDP', 'VNC'].includes(p));
   devKind() { return this.s?.protocol === 'WOL' ? null : deviceKindOf(this.s?.deviceType); }
   protoKind(): SessionKind {
-    const m: Record<string, SessionKind> = { Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc', WOL: 'wol' };
+    const m: Record<string, SessionKind> = { Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc', WOL: 'wol', API: 'api' };
     return m[this.s?.protocol ?? ''] ?? (this.s?.openAs === 'sftp' ? 'sftp' : 'ssh');
   }
   /** Under the title (modern layout): folder, protocol and where it connects. */
   subtitle() {
     const s = this.s;
     if (!s) return '';
-    const where = s.protocol === 'Serial' ? [s.comPort, s.baudRate].filter(Boolean).join(' ') : s.protocol === 'Local Shell' ? '' : (s.username ? s.username + '@' : '') + (s.hostname || '');
+    const where = s.protocol === 'API' ? (s.apiBaseUrl ?? '') : s.protocol === 'Serial' ? [s.comPort, s.baudRate].filter(Boolean).join(' ') : s.protocol === 'Local Shell' ? '' : (s.username ? s.username + '@' : '') + (s.hostname || '');
     return [s.folder ? s.folder.split('/').join(' / ') : (this.oldPath ? 'Top level' : 'New session'), s.protocol, where].filter(Boolean).join(' · ');
   }
   // ---- SNMP page ----
@@ -1147,7 +1207,32 @@ export class SessionEditor implements OnInit {
   readonly snmpSec = signal({ community: false, auth: false, priv: false });
   readonly snmpBusy = signal(false);
   readonly snmpMsg = signal<{ ok: boolean; text: string } | null>(null);
-  snmpOk() { const p = this.s?.protocol ?? ''; return !!p && !['RDP', 'VNC', 'Local Shell', 'WOL', 'Serial'].includes(p); }
+  snmpOk() { const p = this.s?.protocol ?? ''; return !!p && !['RDP', 'VNC', 'Local Shell', 'WOL', 'Serial', 'API'].includes(p); }
+
+  // ---- REST API session ----
+  readonly varEx = '{{name}}';
+  readonly apiAuths = [{ v: '', l: 'None' }, { v: 'apikey', l: 'API key' }, { v: 'bearer', l: 'Bearer token' }, { v: 'login', l: 'Login' }, { v: 'basic', l: 'Basic' }, { v: 'oauth2', l: 'OAuth 2.0' }];
+  apiSecret = ''; apiTestUrl = '';
+  /** Typed values of secret variables (only what was typed is saved). */
+  apiVarSec: Record<string, { value: string; prod: string }> = {};
+  readonly apiSec = signal<{ secret: boolean; vars: string[] }>({ secret: false, vars: [] });
+  readonly apiBusy = signal(false);
+  readonly apiMsg = signal<{ ok: boolean; text: string } | null>(null);
+  apiSecretLabel() { return ({ apikey: 'API key', bearer: 'Token', login: 'Password', basic: 'Password', oauth2: this.s?.username ? 'Password' : 'Client secret' } as Record<string, string>)[this.s?.apiAuth ?? ''] ?? 'Secret'; }
+  loadApiSecrets() { if (this.oldPath && this.s?.protocol === 'API') this.backend.httpSecrets(this.oldPath).then(v => this.apiSec.set(v)).catch(() => {}); }
+  apiVarSaved(name: string, prod = false) { return this.apiSec().vars.includes(prod ? name + '@prod' : name); }
+  apiVarSecOf(name: string) { return this.apiVarSec[name] ??= { value: '', prod: '' }; }
+  addApiVar() { if (this.s) this.s.apiVars = [...(this.s.apiVars ?? []), { name: '', value: '' }]; }
+  async apiTest() {
+    const s = this.s;
+    if (!s) return;
+    this.apiBusy.set(true); this.apiMsg.set(null);
+    try {
+      const r = await this.backend.httpTest(structuredClone(s), this.oldPath, this.apiSecret, this.apiTestUrl.trim() || '/');
+      this.apiMsg.set(r.status ? { ok: r.status < 400, text: (r.status < 400 ? '✓ ' : '') + r.statusText + ' · ' + r.ms + ' ms' + (r.error ? ' · ' + r.error : '') } : { ok: false, text: r.error || 'No answer' });
+    } catch (e) { this.apiMsg.set({ ok: false, text: errText(e) }); }
+    this.apiBusy.set(false);
+  }
   openSnmpPage() {
     this.page.set('snmp');
     if (this.oldPath) this.backend.snmpSecrets(this.oldPath).then(v => this.snmpSec.set(v)).catch(() => {});
@@ -1187,7 +1272,7 @@ export class SessionEditor implements OnInit {
 
   pageName() {
     const p = this.page();
-    const m: Record<string, string> = { snmp: 'SNMP', connection: 'Connection', auth: 'Authentication', firewall: 'Jump Host / Proxy', forward: 'Port Forwarding', serial: 'Serial', local: 'Local Shell', logon: 'Logon Actions & Triggers', terminal: 'Terminal', log: 'Log File', facts: 'Device Facts', remote: this.s?.protocol === 'RDP' ? 'Remote Desktop' : 'VNC' };
+    const m: Record<string, string> = { snmp: 'SNMP', apivars: 'Variables & TLS', connection: 'Connection', auth: 'Authentication', firewall: 'Jump Host / Proxy', forward: 'Port Forwarding', serial: 'Serial', local: 'Local Shell', logon: 'Logon Actions & Triggers', terminal: 'Terminal', log: 'Log File', facts: 'Device Facts', remote: this.s?.protocol === 'RDP' ? 'Remote Desktop' : 'VNC' };
     return m[p] ?? '';
   }
   readonly consoleMethods = CONSOLE_METHODS;
@@ -1241,6 +1326,7 @@ export class SessionEditor implements OnInit {
     if (!this.s) return;
     if (this.remote() && ['logon', 'terminal', 'log', 'forward', 'auth', 'serial', 'local'].includes(this.page())) this.page.set('connection');
     this.s.port = defaultPort(this.s.protocol) || this.s.port;
+    if (this.s.protocol === 'API') { this.s.deviceType = ''; this.page.set('connection'); this.loadApiSecrets(); }
     if (this.s.protocol === 'WOL') { this.s.deviceType = ''; if (this.page() !== 'firewall') this.page.set('connection'); if (!this.s.wolNetwork && /^\d+\.\d+\.\d+\.\d+$/.test(this.s.hostname)) this.s.wolNetwork = this.s.hostname.replace(/\.\d+$/, '.0/24'); }
     if (this.s.protocol === 'Console' && !this.s.consoleMethod) { this.s.consoleMethod = 'opengear-ssh'; this.s.initialCr = true; }
   }
@@ -1356,6 +1442,12 @@ export class SessionEditor implements OnInit {
     if (!s) return;
     this.error.set('');
     if (!s.name.trim()) { this.page.set('connection'); this.error.set('Please enter a session name.'); return; }
+    if (s.protocol === 'API') {
+      s.apiVars = (s.apiVars ?? []).filter(v => v.name.trim()).map(v => ({ ...v, name: v.name.trim() }));
+      if (!s.apiBaseUrl?.trim()) { this.page.set('connection'); this.error.set('Please enter the base URL (https://…).'); return; }
+      s.apiBaseUrl = s.apiBaseUrl.trim();
+      try { s.hostname = new URL(s.apiBaseUrl.replace(/\{\{[^}]*\}\}/g, 'x')).host; } catch { /* shown as it is */ }
+    }
     if (['SSH2', 'Telnet', 'Raw'].includes(s.protocol) && !s.hostname.trim()) {
       this.page.set('connection'); this.error.set('Please enter a hostname.'); return;
     }
@@ -1384,6 +1476,11 @@ export class SessionEditor implements OnInit {
         { pw: this.pw, noPw: this.noPw, wasEmpty: this.pwState() === 'empty' });
       const [comm, ap, pp] = this.snmpSecrets();
       if (comm !== null || ap !== null || pp !== null) await this.backend.snmpSetSecrets(saved.path, comm, ap, pp);
+      if (s.protocol === 'API') {
+        const secretVars = (s.apiVars ?? []).filter(v => v.secret).map(v => v.name);
+        const vars = secretVars.map(n => ({ name: n, value: this.apiVarSec[n]?.value || null, prod: this.apiVarSec[n]?.prod || null }));
+        await this.backend.httpSetSecrets(saved.path, this.apiSecret || (s.apiAuth ? null : ''), vars, secretVars);
+      }
       if (install) this.ui.keyInstallAtLogin.set(saved.path, s.identityFile.trim());
       this.ui.close();
       if (connect) await this.tabs.openSession(saved.path);

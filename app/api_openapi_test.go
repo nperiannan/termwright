@@ -18,6 +18,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/termwright/termwright/internal/apiclient"
 	"github.com/termwright/termwright/internal/emu"
 )
 
@@ -72,7 +73,7 @@ func (o om) MarshalYAML() (any, error) {
 // fieldDocs reads the field comments of the API's Go types: "Type.jsonName" → text.
 func fieldDocs(t *testing.T) map[string]string {
 	out := map[string]string{}
-	for _, dir := range []string{".", "../internal/emu"} {
+	for _, dir := range []string{".", "../internal/emu", "../internal/apiclient"} {
 		fs := token.NewFileSet()
 		pkgs, err := parser.ParseDir(fs, dir, func(fi os.FileInfo) bool { return !strings.HasSuffix(fi.Name(), "_test.go") }, parser.ParseComments)
 		if err != nil {
@@ -80,7 +81,7 @@ func fieldDocs(t *testing.T) map[string]string {
 		}
 		pre := ""
 		if dir != "." {
-			pre = "emu."
+			pre = filepath.Base(dir) + "."
 		}
 		for _, p := range pkgs {
 			for _, f := range p.Files {
@@ -125,6 +126,9 @@ var oasNames = map[string]string{
 	"app.EmuView": "Lab", "app.EmuDevice": "Device", "app.EmuLinkView": "Cable", "app.EmuEvent": "Event",
 	"app.EmuTrafficView": "TrafficView", "app.EmuStreamResult": "StreamResult", "emu.Tester": "TestPort", "emu.Stream": "Stream", "emu.Mod": "FieldChange",
 	"app.apiToolInfo": "Tool", "emu.TrafficTest": "TrafficTest", "app.EmuTestRun": "TestRun", "app.EmuTestRow": "TestRow",
+	"apiclient.Request": "HTTPRequestDef", "apiclient.Response": "HTTPResponse", "apiclient.KV": "HTTPKeyValue", "apiclient.Body": "HTTPBody",
+	"apiclient.Cookie": "HTTPCookie", "apiclient.Timing": "HTTPTiming", "apiclient.TestResult": "HTTPTestResult", "apiclient.Collection": "HTTPCollection",
+	"apiclient.CollectionInfo": "HTTPCollectionInfo", "apiclient.RunResult": "HTTPRunResult", "apiclient.RunStep": "HTTPRunStep", "session.Session": "Session",
 }
 
 type schemaGen struct {
@@ -245,30 +249,39 @@ func (g *schemaGen) object(t reflect.Type) om {
 }
 
 var oasTypeDocs = map[string]string{
-	"Lab":           "The emulated lab as Termwright shows it: its switches, cables, KVM hosts, images and Events. The open topology only; topologies in the background are not in it.",
-	"Device":        "A switch (VM) of the lab and its state.",
-	"Cable":         "A cable between two switch ports, with the LAGs on its ends.",
-	"Event":         "A line of the lab's Events log.",
-	"TrafficView":   "The traffic generator: its test ports, streams and their results now (live while a run goes on).",
-	"TestPort":      "A test port: a sender and counter on a free switch port (no VM). It answers ARP, neighbour solicitations and ping at its addresses.",
-	"Stream":        "Frames from one test port to another, to every other one (broadcast), to an address or to a multicast group.",
-	"FieldChange":   "A field of a stream's frames that changes from frame to frame: its value plus 0, step, 2·step… (count values, then again), or one of them at random.",
-	"StreamResult":  "A stream's counters, added up over every KVM host, and its verdict.",
-	"Engines":       "What sends the streams: the KVM hosts' engine (built in or fast) and the TRex servers whose ports are test ports.",
-	"EngineHost":    "A KVM host's traffic engine.",
-	"Trex":          "A TRex server (stateless mode) and what Termwright last found there: its version and ports.",
-	"TrexPort":      "A TRex port; one that is used is a test port.",
-	"HostNIC":       "A network card of a KVM host, and whether it can be a test port (a spare card with no address, not in a bridge).",
-	"SessionResult": "A session stream's TCP sessions: tried, connected, refused, timed out, their setup time and rate.",
-	"EmuSession":    "A session stream's TCP sessions: how many, how fast, what they send and what should happen to them.",
-	"Tool":          "A lab tool: the same tools the Claude connector and the in-app AI agent use.",
-	"TrafficTest":   "A saved traffic test, run by Termwright as a series of trials on the traffic generator: RFC 2544 throughput, latency, frame-loss and back-to-back, RFC 2889 address learning, or convergence (traffic while a cable is pulled or a switch stops or restarts); or iperf3 between two host VMs of the lab.",
-	"TestRun":       "A run of a test: its progress while it runs, then its results.",
-	"TestRow":       "A line of a test run's results: per frame size and direction (and load, for frame-loss).",
-	"SNMPRequest":   "One SNMP operation against a saved session or a target.",
-	"SNMPResult":    "The values an SNMP operation returned, with the MIB's names.",
-	"SNMPMibNode":   "An object of the loaded MIBs.",
-	"SNMPTrapsView": "The trap receiver and the notifications it got.",
+	"Lab":                "The emulated lab as Termwright shows it: its switches, cables, KVM hosts, images and Events. The open topology only; topologies in the background are not in it.",
+	"Device":             "A switch (VM) of the lab and its state.",
+	"Cable":              "A cable between two switch ports, with the LAGs on its ends.",
+	"Event":              "A line of the lab's Events log.",
+	"TrafficView":        "The traffic generator: its test ports, streams and their results now (live while a run goes on).",
+	"TestPort":           "A test port: a sender and counter on a free switch port (no VM). It answers ARP, neighbour solicitations and ping at its addresses.",
+	"Stream":             "Frames from one test port to another, to every other one (broadcast), to an address or to a multicast group.",
+	"FieldChange":        "A field of a stream's frames that changes from frame to frame: its value plus 0, step, 2·step… (count values, then again), or one of them at random.",
+	"StreamResult":       "A stream's counters, added up over every KVM host, and its verdict.",
+	"Engines":            "What sends the streams: the KVM hosts' engine (built in or fast) and the TRex servers whose ports are test ports.",
+	"EngineHost":         "A KVM host's traffic engine.",
+	"Trex":               "A TRex server (stateless mode) and what Termwright last found there: its version and ports.",
+	"TrexPort":           "A TRex port; one that is used is a test port.",
+	"HostNIC":            "A network card of a KVM host, and whether it can be a test port (a spare card with no address, not in a bridge).",
+	"SessionResult":      "A session stream's TCP sessions: tried, connected, refused, timed out, their setup time and rate.",
+	"EmuSession":         "A session stream's TCP sessions: how many, how fast, what they send and what should happen to them.",
+	"Tool":               "A lab tool: the same tools the Claude connector and the in-app AI agent use.",
+	"TrafficTest":        "A saved traffic test, run by Termwright as a series of trials on the traffic generator: RFC 2544 throughput, latency, frame-loss and back-to-back, RFC 2889 address learning, or convergence (traffic while a cable is pulled or a switch stops or restarts); or iperf3 between two host VMs of the lab.",
+	"TestRun":            "A run of a test: its progress while it runs, then its results.",
+	"TestRow":            "A line of a test run's results: per frame size and direction (and load, for frame-loss).",
+	"SNMPRequest":        "One SNMP operation against a saved session or a target.",
+	"SNMPResult":         "The values an SNMP operation returned, with the MIB's names.",
+	"SNMPMibNode":        "An object of the loaded MIBs.",
+	"SNMPTrapsView":      "The trap receiver and the notifications it got.",
+	"HTTPSendRequest":    "A request to send with an API session (its base URL, authentication and variables).",
+	"HTTPRequestDef":     "A request: method, URL, parameters, headers, body, pre-request script and tests.",
+	"HTTPResponse":       "The answer, with the request as it was sent (secrets masked), timings, cookies and test results.",
+	"HTTPCollection":     "A collection of requests, kept as a JSON file (plain text: keep it in git, share it).",
+	"HTTPCollectionInfo": "A collection in a list.",
+	"HTTPRunRequest":     "What to run of a collection: requests, folder, iterations, data rows.",
+	"HTTPRunResult":      "A collection run: every request with its status and tests.",
+	"HTTPImportIn":       "A cURL command, Postman collection or OpenAPI document to import.",
+	"HTTPHistoryItem":    "A request sent (no answer body).",
 }
 
 func TestOpenAPIDoc(t *testing.T) {
@@ -321,7 +334,9 @@ func TestOpenAPIDoc(t *testing.T) {
 	// every field of what the traffic API sends and takes is described
 	g := &schemaGen{docs: fieldDocs(t), comps: map[string]om{}}
 	for _, ty := range []reflect.Type{reflect.TypeOf(emu.Stream{}), reflect.TypeOf(emu.Tester{}), reflect.TypeOf(emu.Mod{}), reflect.TypeOf(EmuStreamResult{}), reflect.TypeOf(EmuTrafficView{}), reflect.TypeOf(emu.TrafficTest{}), reflect.TypeOf(EmuTestRun{}), reflect.TypeOf(EmuTestRow{}),
-		reflect.TypeOf(EmuEngines{}), reflect.TypeOf(EmuEngineHost{}), reflect.TypeOf(EmuTrex{}), reflect.TypeOf(EmuTrexPort{}), reflect.TypeOf(EmuHostNIC{}), reflect.TypeOf(EmuSessionResult{}), reflect.TypeOf(emu.Session{}), reflect.TypeOf(SNMPRequest{}), reflect.TypeOf(SNMPResult{}), reflect.TypeOf(SNMPRow{}), reflect.TypeOf(SNMPTarget{}), reflect.TypeOf(SNMPValue{})} {
+		reflect.TypeOf(EmuEngines{}), reflect.TypeOf(EmuEngineHost{}), reflect.TypeOf(EmuTrex{}), reflect.TypeOf(EmuTrexPort{}), reflect.TypeOf(EmuHostNIC{}), reflect.TypeOf(EmuSessionResult{}), reflect.TypeOf(emu.Session{}), reflect.TypeOf(SNMPRequest{}), reflect.TypeOf(SNMPResult{}), reflect.TypeOf(SNMPRow{}), reflect.TypeOf(SNMPTarget{}), reflect.TypeOf(SNMPValue{}),
+		reflect.TypeOf(HTTPSendRequest{}), reflect.TypeOf(HTTPRunRequest{}), reflect.TypeOf(HTTPImportIn{}), reflect.TypeOf(apiclient.Request{}), reflect.TypeOf(apiclient.Response{}),
+		reflect.TypeOf(apiclient.Collection{}), reflect.TypeOf(apiclient.Body{}), reflect.TypeOf(apiclient.KV{}), reflect.TypeOf(apiclient.RunResult{}), reflect.TypeOf(apiclient.RunStep{})} {
 		tn := strings.TrimPrefix(ty.String(), "app.")
 		for i := 0; i < ty.NumField(); i++ {
 			name := strings.Split(ty.Field(i).Tag.Get("json"), ",")[0]
@@ -367,7 +382,8 @@ func op(id, tag, summary, desc string, extra ...kv) om {
 
 func openAPIDoc(t *testing.T) om {
 	g := &schemaGen{docs: fieldDocs(t), comps: map[string]om{}}
-	for _, ty := range []any{EmuView{}, EmuTrafficView{}, emu.Stream{}, emu.Tester{}, apiToolInfo{}, emu.TrafficTest{}, EmuTestRun{}, EmuEngines{}, EmuHostNIC{}, SNMPRequest{}, SNMPResult{}, SNMPMibNode{}, SNMPTrapsView{}} {
+	for _, ty := range []any{EmuView{}, EmuTrafficView{}, emu.Stream{}, emu.Tester{}, apiToolInfo{}, emu.TrafficTest{}, EmuTestRun{}, EmuEngines{}, EmuHostNIC{}, SNMPRequest{}, SNMPResult{}, SNMPMibNode{}, SNMPTrapsView{},
+		HTTPSendRequest{}, apiclient.Response{}, apiclient.Collection{}, apiclient.CollectionInfo{}, HTTPRunRequest{}, apiclient.RunResult{}, HTTPImportIn{}, HTTPHistoryItem{}} {
 		g.schema(reflect.TypeOf(ty))
 	}
 	std := append([]kv{}, errs("401", "403", "405")...)
@@ -512,7 +528,43 @@ func openAPIDoc(t *testing.T) om {
 		{"v3", ex("An address and SNMPv3 credentials (not a saved session)", om{{"target", om{{"address", "10.0.0.1"}, {"version", "3"}, {"user", "netops"}, {"auth", "SHA-256"}, {"authPass", "…"}, {"priv", "AES"}, {"privPass", "…"}}}, {"op", "get"}, {"oids", []string{"sysDescr.0"}}})},
 		{"set", ex("Write: shut a port down", om{{"session", "Lab/core-sw1"}, {"op", "set"}, {"values", []om{{{"oid", "ifAdminStatus.5"}, {"value", "down"}}}}})},
 	}
+	httpEx := om{
+		{"path", ex("GET a path of a saved API session (it logs in by itself)", om{{"session", "APIs/Lab switches REST"}, {"request", om{{"method", "GET"}, {"url", "/rest/restconf/data/openconfig-interfaces:interfaces"}}}})},
+		{"patch", ex("PATCH with a JSON body and a test", om{{"session", "APIs/Lab switches REST"}, {"request", om{{"method", "PATCH"}, {"url", "/rest/restconf/data/openconfig-interfaces:interfaces/interface={{port}}/config"},
+			{"body", om{{"mode", "json"}, {"raw", "{\"openconfig-interfaces:config\": {\"description\": \"uplink\"}}"}}}, {"tests", "pm.test('ok', () => pm.response.to.be.ok)"}}}, {"vars", om{{"port", "1:1"}}}})},
+		{"url", ex("Any URL, no session", om{{"request", om{{"method", "GET"}, {"url", "https://example.com/api/health"}, {"headers", []om{{{"key", "Accept"}, {"value", "application/json"}}}}}}})},
+	}
+	coll := om{{"name", "collection"}, {"in", "path"}, {"required", true}, {"description", "The collection's id or name."}, {"schema", om{{"type", "string"}}}}
 	paths = append(paths,
+		kv{"/http/send", om{{"post", op("httpSend", "API client", "Send a request", "Sends a request with a saved API session (Protocol API: base URL, authentication - API key, bearer token, login request, basic, OAuth 2.0 - and {{variables}}; the secrets come from the credential store and are masked in the answer) or as it is. A path goes after the session's base URL; a login or OAuth token is fetched, kept in memory and renewed by itself. The request's pre-request script and tests (a pm.* subset) run. Through the API a change on a production session is not asked (the scripts are the user's own).",
+			kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", om{{"$ref", "#/components/schemas/HTTPSendRequest"}}}, {"examples", httpEx}}}}}}},
+			kv{"responses", append(om{{"200", resp("The answer (also when the server answered an error status; error says why nothing came back).", "HTTPResponse")}}, append(errs("400", "422"), std...)...)})}}},
+		kv{"/http/collections", om{
+			{"get", op("listCollections", "API client", "The collections", "The API client's collections.",
+				kv{"responses", append(om{{"200", om{{"description", "The collections."}, {"content", om{{"application/json", om{{"schema", om{{"type", "array"}, {"items", om{{"$ref", "#/components/schemas/HTTPCollectionInfo"}}}}}}}}}}}}, std...)})},
+			{"post", op("createCollection", "API client", "Add a collection", "Saves a new collection (its id is made from its name).",
+				kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", om{{"$ref", "#/components/schemas/HTTPCollection"}}}}}}}}},
+				kv{"responses", append(om{{"201", resp("The collection with its id.", "HTTPCollection")}}, append(errs("400", "422"), std...)...)})}}},
+		kv{"/http/collections/{collection}", om{
+			{"get", op("getCollection", "API client", "A collection", "A collection with its requests; ?format=postman gives it as a Postman v2.1 collection.",
+				kv{"parameters", []om{coll, {{"name", "format"}, {"in", "query"}, {"description", "postman: as a Postman v2.1 collection."}, {"schema", om{{"type", "string"}, {"enum", []string{"termwright", "postman"}}}}}}},
+				kv{"responses", append(om{{"200", resp("The collection.", "HTTPCollection")}}, append(errs("404"), std...)...)})},
+			{"put", op("putCollection", "API client", "Replace a collection", "Replaces a collection (it keeps its id).",
+				kv{"parameters", []om{coll}},
+				kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", om{{"$ref", "#/components/schemas/HTTPCollection"}}}}}}}}},
+				kv{"responses", append(om{{"200", resp("The collection.", "HTTPCollection")}}, append(errs("400", "404", "422"), std...)...)})},
+			{"delete", op("deleteCollection", "API client", "Delete a collection", "Deletes a collection's file.",
+				kv{"parameters", []om{coll}},
+				kv{"responses", append(om{{"204", om{{"description", "Deleted."}}}}, append(errs("404"), std...)...)})}}},
+		kv{"/http/collections/{collection}/run", om{{"post", op("runCollection", "API client", "Run a collection", "Runs a collection's requests in order (all, some, or one folder), iterations times or once per data row, with their scripts and tests; variables set by scripts carry to the next requests.",
+			kv{"parameters", []om{coll}},
+			kv{"requestBody", om{{"content", om{{"application/json", om{{"schema", om{{"$ref", "#/components/schemas/HTTPRunRequest"}}}}}}}}},
+			kv{"responses", append(om{{"200", resp("Every request with its status and tests.", "HTTPRunResult")}}, append(errs("400", "422"), std...)...)})}}},
+		kv{"/http/import", om{{"post", op("importCollection", "API client", "Import", "Reads one or more cURL commands, a Postman v2.0/v2.1 collection (folders, scripts, variables) or an OpenAPI 3 / Swagger 2 document (JSON or YAML: an example request for every operation) and saves it as a collection.",
+			kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", om{{"$ref", "#/components/schemas/HTTPImportIn"}}}}}}}}},
+			kv{"responses", append(om{{"201", resp("The new collection.", "HTTPCollection")}}, append(errs("400"), std...)...)})}}},
+		kv{"/http/history", om{{"get", op("httpHistory", "API client", "Requests sent", "The last 300 requests sent, newest first (no answer bodies; secrets masked).",
+			kv{"responses", append(om{{"200", om{{"description", "The requests."}, {"content", om{{"application/json", om{{"schema", om{{"type", "array"}, {"items", om{{"$ref", "#/components/schemas/HTTPHistoryItem"}}}}}}}}}}}}, std...)})}}},
 		kv{"/snmp", om{{"post", op("snmp", "SNMP", "Run an SNMP operation", "get, getnext, bulk, walk or set against a saved session's SNMP settings (session properties → SNMP: version, community or v3 user; the community and passwords from the credential store) or a target given here. OIDs can be names from the loaded MIBs (sysDescr.0, IF-MIB::ifTable, ifOperStatus). Values come back with names and readable values. A set needs writes allowed on the session; through the API it is not asked, production sessions too (the scripts are the user's own).",
 			kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", om{{"$ref", "#/components/schemas/SNMPRequest"}}}, {"examples", snmpEx}}}}}}},
 			kv{"responses", append(om{{"200", resp("The values.", "SNMPResult")}}, append(errs("400", "422"), std...)...)})}}},
@@ -524,7 +576,7 @@ func openAPIDoc(t *testing.T) om {
 			kv{"responses", append(om{{"200", resp("The object.", "SNMPMibNode")}}, append(errs("404"), std...)...)})}}},
 		kv{"/snmp/traps", om{{"get", op("listTraps", "SNMP", "Traps received", "The trap receiver's state (start it in SNMP → Traps) and the notifications it got, newest first, with names from the MIBs.",
 			kv{"responses", append(om{{"200", resp("The receiver and its notifications.", "SNMPTrapsView")}}, std...)})}}},
-		kv{"/tools", om{{"get", op("listNetTools", "Network tools", "The network tools", "The network tools (snmp; the API client and syslog join them) with their arguments (JSON Schema): the same tools the in-app AI assistant and the Claude connector use. Each one is POST /tools/{name}.",
+		kv{"/tools", om{{"get", op("listNetTools", "Network tools", "The network tools", "The network tools (snmp, http; syslog joins them) with their arguments (JSON Schema): the same tools the in-app AI assistant and the Claude connector use. Each one is POST /tools/{name}.",
 			kv{"responses", append(om{{"200", om{{"description", "The tools."}, {"content", om{{"application/json", om{{"schema", om{{"type", "array"}, {"items", om{{"$ref", "#/components/schemas/Tool"}}}}}}}}}}}}, std...)})}}},
 	)
 	for _, tl := range netTools {
@@ -650,7 +702,8 @@ func openAPIDoc(t *testing.T) om {
 			{{"name", "Traffic streams"}, {"summary", "Streams"}, {"parent", "Traffic"}, {"description", "Streams between test ports."}},
 			{{"name", "Traffic tests"}, {"summary", "Tests"}, {"parent", "Traffic"}, {"description", "RFC 2544, RFC 2889 learning and convergence tests, and their runs."}},
 			{{"name", "SNMP"}, {"description", "SNMP v1, v2c and v3 with the saved sessions' settings: get, walk, set, the MIBs and traps."}},
-			{{"name", "Network tools"}, {"description", "The network tools the AI assistant and the Claude connector use (snmp), as JSON."}},
+			{{"name", "API client"}, {"description", "The REST API client: send requests with saved API sessions, collections, runs, imports."}},
+			{{"name", "Network tools"}, {"description", "The network tools the AI assistant and the Claude connector use (snmp, http), as JSON."}},
 			{{"name", "API"}, {"description", "This description."}}}},
 		{"paths", paths},
 		{"components", om{
