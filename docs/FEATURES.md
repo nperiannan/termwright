@@ -79,6 +79,7 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **Tests**: RFC 2544 throughput, latency, frame loss and back-to-back; RFC 2889 address learning; convergence while a cable is pulled or a switch restarts; iperf3 between lab computers.
 - **Test ports as hosts**: 802.1X and DHCP clients behind a test port (up to 4,000), multicast groups, LACP, LLDP and spanning tree.
 - **Packet capture** on any switch port, decoded in Termwright.
+- **Emulated Lab workflow picture**: a one-page picture of the nine steps from an empty KVM host to a traffic report, shown when the emulated lab opens (it can be turned off with *Do not show this when the Emulated Lab opens*) and always available from the **?** button in the lab and under Help → Emulated Lab Workflow….
 - **The Lab menu**: *Emulated Lab*, *Simulated Lab*, *Overview*, *Traffic Generator*, *Appliances* and *KVM Hosts*.
 - **Local API, command line and Python**: a REST API on this computer (OpenAPI), `termwright lab …` and a Python client drive the same lab tools - no approval asked, for your own automation.
 - **Simulated lab**: switches simulated on this computer (an SSH server each, no VM) from a device pack (.vm) loaded with consent: models with their port layout, command line with abbreviations, `?` help and Tab, VLANs, ports, IP interfaces, save / reset, ping and LLDP over drawn cables; New Lab wizard with leaf-spine, chain or ring cabling; Lab window with list, topology and cables; sessions in a Simulated Lab folder with live state.
@@ -341,3 +342,5 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **Dialogs**: Escape closes the menu or dialog on top, Tab stays inside the dialog, and dialogs and icon buttons are announced to screen readers.
 - **A shortcut for nearly every menu command** (e.g. Disconnect, Clear Screen, Auto Scroll, Timestamps, Log Session, Open SFTP Tab, Save Screen As Image, Save Selection as Device Fact); Help → Keyboard Shortcuts lists them with a search box.
 - `Mod` = Cmd on macOS, Ctrl+Shift on Windows/Linux: `O` sessions, `Q` quick connect, `L` local shell, `R` reconnect, `W` close tab, `P` SFTP tab, `F` find, `S` save scrollback, `M` session manager, `K` command window, `B` button bar, `E` command library, `Y` command history, `J` recording marker, `G` Quick Open.
+
+- **Network Map**: live topology from your sessions (LLDP, CDP, EDP, STP, LAG; EXOS, VOSS, Cisco, Arista, Junos; CLI or SNMP), auto-arranged, zoom, export to JPEG, PDF or HTML. The labs have the same Arrange styles.

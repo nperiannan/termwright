@@ -1,0 +1,4 @@
+	SysName      : 5520-24T-FabricEngine
+	ModelName          : 5520-24T-FabricEngine
+	BaseMacAddr        : ac:ed:32:c4:64:00
+	MacAddrCapacity    : 1024

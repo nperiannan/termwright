@@ -1,0 +1,6 @@
+Port      Flags               Link       OAM/   Link Num  Num   Num Jumbo QOS     Load
+                              State     MACsec   UPS STP VLAN Proto  Size profile Master
+========================================================================================
+1         Em------e--fMB---x- active    - / -/ -   1   1    1     1  9216 none    
+3         Em-la---e--fMB---x- active    - / -/ -   1   1    1     1  9216 none    4 a
+4         Em-la---e--fMB---x- active    - / -/ -   1   1    1     1  9216 none    4 a

@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import type { TopoRequest, TopoResult, LayoutRequest, LayoutResult } from './models';
 import { EmuEngines, EmuHostNIC, EmuTrex,
   EmuServer, EmuServerView,
   AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange } from './models';
@@ -305,6 +306,10 @@ export class Backend {
   remoteStatus(id: string) { return this.call<number>('RemoteStatus', id); }
   closeRemote(id: string) { return this.call<void>('CloseRemote', id); }
   backupDir() { return this.call<string>('BackupDir'); }
+  topoRead(req: TopoRequest) { return this.call<TopoResult>('TopoRead', req); }
+  topoForget(scope: string) { return this.call<void>('TopoForget', scope); }
+  layoutGraph(req: LayoutRequest) { return this.call<LayoutResult>('LayoutGraph', req); }
+  saveMapPDF(title: string, name: string, jpegBase64: string) { return this.call<string>('SaveMapPDF', title, name, jpegBase64); }
   backupSessions(targets: string[]) { return this.call<string[]>('BackupSessions', targets); }
   backupRun(job: string, targets: string[]) { return this.call<string>('BackupRun', job, targets); }
   backupCancel(runId: string) { return this.call<void>('BackupCancel', runId); }

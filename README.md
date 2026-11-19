@@ -54,6 +54,10 @@ Termwright began as a terminal and session manager for network engineers. Today 
 
 <p align="center"><i>The emulated lab: switches from real images on KVM hosts, cabled on the canvas; the pages above it - Canvas, Overview, Traffic, Appliances, Hosts - are also under the Lab menu.</i></p>
 
+![The emulated lab workflow in nine steps: prerequisites, add a host, pick an appliance, get the disk image, build the topology, create traffic streams, analyse and save the report, capture and replay, and line rate with TRex; the AI assistant can do steps 2 to 9](docs/assets/emulation-workflow-dark.png)
+
+<p align="center"><i>From an empty KVM host to a traffic report in nine steps. The <a href="docs/EMULATOR_GUIDE.md">Emulated Lab Guide</a> walks through each one.</i></p>
+
 - **Real images on your hardware**: switch, router, firewall and server images run in QEMU/KVM on Linux hosts you add over SSH - qcow2 files, GNS3 appliances, a public catalogue, cloud images, or an image you install from the vendor's ISO with its console in the page.
 - **Several hosts, one topology**: a lab spans KVM hosts (cables between hosts are tunnelled), a running switch moves live to another host, and the CPU tab shares or limits each host's cores.
 - **Built for test cases**: draw the topology or let *New Lab…* build it (leaf-spine, mesh, star, LAGs); every device gets its console, an SSH session and its management address; fast start resumes switches in seconds; checkpoints, a change history with Revert, and an Events log of everything Termwright did.
@@ -115,6 +119,7 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
 
 ## Recent releases
 
+- **0.41** - the **Network Map**: the real network drawn from your sessions (LLDP, CDP, EDP, STP, LAG, VLAN) in eight styles, live reading progress, cable and device details; the AI agent's fully autonomous mode asks only on production sessions.
 - **0.40.1** - downloads you can **verify** (`SHA256SUMS` and build provenance), a security policy, contributor guide and issue forms, a [FAQ](docs/FAQ.md), a demo, and the Android build no longer fails when Maven Central rate-limits.
 - **0.40** - **Linux** gets one title bar in Termwright's theme with the menus, window buttons and tabs on their own row; a status bar with the cursor, selection, size, CAP and NUM; the AI chat box as VS Code's; the **Emulated Lab guide**; the source moved into `app/`.
 - **0.39** - the **traffic generator** grows up: quick streams and tests, custom frames, faults and fuzzing, QinQ, MPLS, GRE and VXLAN headers, PEAP, DHCPv6, VRRP and BFD on test ports, real TCP sessions, reports as HTML, PDF and Excel, the fast engine, test ports on real switches and TRex servers.

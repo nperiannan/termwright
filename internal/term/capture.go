@@ -31,6 +31,15 @@ const DefaultPrompt = `[>#$%\]] ?$`
 
 var reMore = regexp.MustCompile(`(?i)(--+ ?more ?--+|<--- more --->|press any key to continue|\(q\)uit|^\s*more\s*$)\s*$`)
 
+type progressKey struct{}
+
+// WithProgress returns a context for Capture/CaptureEach that reports how far a background capture is:
+// fn(0, n) once the login (and the device type's after-login steps) is done, then fn(k, n) after the k-th of
+// the n commands has finished. It is called from the capturing goroutine.
+func WithProgress(ctx context.Context, fn func(done, total int)) context.Context {
+	return context.WithValue(ctx, progressKey{}, fn)
+}
+
 // Capture connects to s in the background (no tab is shown), logs in like a
 // tab would (device type steps, logon actions, saved passwords), runs the
 // commands one after another and returns their output without the command
@@ -196,6 +205,16 @@ func (m *Manager) capture(ctx context.Context, s session.Session, commands []str
 	}
 	loose, exact = false, strings.TrimSpace(promptLine)
 	var res []string
+	total := 0
+	for _, c := range commands {
+		if strings.TrimSpace(c) != "" {
+			total++
+		}
+	}
+	prog, _ := ctx.Value(progressKey{}).(func(done, total int))
+	if prog != nil {
+		prog(0, total)
+	}
 	for _, c := range commands {
 		c = strings.TrimSpace(c)
 		if c == "" {
@@ -210,6 +229,9 @@ func (m *Manager) capture(ctx context.Context, s session.Session, commands []str
 		}
 		txt, _ := snapshot()
 		res = append(res, cleanOutput(txt[len(before):], c, promptLine))
+		if prog != nil {
+			prog(len(res), total)
+		}
 	}
 	return res, nil
 }

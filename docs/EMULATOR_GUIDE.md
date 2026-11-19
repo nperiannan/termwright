@@ -2,6 +2,11 @@
 
 This guide takes you through the emulated lab in the order you do the work: prepare a Linux host, let Termwright set it up, get images, make an image from an ISO, build a topology, spread it over several hosts, send traffic, run a complete test - and then do the same by asking the AI agent. The [User Guide](USER_GUIDE.md#emulated-lab-real-vm-images-on-a-kvm-host) describes every screen in detail; this guide is the path through them.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/emulation-workflow-dark.png">
+  <img src="assets/emulation-workflow-light.png" alt="The emulated lab workflow in nine steps: prerequisites, add a host, pick an appliance, get the disk image, build the topology, create traffic streams, analyse and save the report, capture and replay, and line rate with TRex; the AI assistant can do steps 2 to 9">
+</picture>
+
 **What the emulated lab is.** Termwright boots the network operating systems' own VM images (`.qcow2` and friends) with QEMU/KVM on a Linux server you reach over SSH. The real operating system runs, so its CLI, protocols, APIs and cloud agents behave as on hardware. Your computer only drives the host: Termwright runs on macOS, Windows or Linux and talks to the host over SSH; nothing of Termwright is installed there besides QEMU and a few small scripts in the lab's folder.
 
 ```

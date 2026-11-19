@@ -753,7 +753,7 @@ Off until you choose an AI service in **Settings → AI Assistant**: **Claude** 
 - **Modes.** **Agent** (the default) plans a task of several steps as a checklist, then carries it out; the plan stays above the message box (*Plan · 3 of 5 done*, the step it is on marked) and fills in as it goes. **Plan** looks with read-only commands and writes the plan, and nothing changes until you press **Run the Plan** (it switches to Agent and carries it out, asking as your permissions say). **Ask** answers and explains and runs nothing. The mode you choose is kept.
 - **It knows Termwright.** Asked about Termwright itself - whether it can do something, where a setting is, how a feature works - the AI looks it up in the guides of the version you run (only the sections that match, so it costs little) instead of guessing, and names the menu or page. Asked about Termwright's state now - the version running, the KVM hosts and the VMs on each, the labs, who has which team device open or reserved, the file servers, the open tabs - it reads it. Both only read, so they work in every mode; the chat shows *looked up the Termwright guides* or *read Termwright's state*. The Claude connector has the same two as *termwright_help* and *termwright_status*.
 - **Agent mode** (choose *Agent* in the box): the AI may run commands in your tabs, find saved sessions and connect to them to find a problem - or fix or configure something if you ask - and reads the results itself. Every step shows in the chat (which device, which command, its output). The button next to the mode chooses what it may do without asking (the colour shows the level):
-  - **Fully autonomous** (orange): commands and configuration changes run without asking - for example *Configure MLAG on the EXOS switches in Building B*. Termwright asks you to confirm once when you choose it. Even then, **reboot, reload, erase** and similar always ask.
+  - **Fully autonomous** (orange): commands and configuration changes run without asking - for example *Configure MLAG on the EXOS switches in Building B*. Termwright asks you to confirm once when you choose it. Only **production** sessions still ask (reboot, reload and erase included: on other sessions they run like any change).
   - **Changes ask first** (yellow, the default): commands on the device type's *read-only* list run by themselves; anything else shows a card with the exact command and device - **Run** (you can edit the command first), **Skip** or **Stop**.
   - **Ask before every command** (yellow).
   - **Read only** (white): it never runs anything that is not on the read-only list, and what is on it runs without asking - production sessions too, as nothing can change; changes come back as text for you.
@@ -1226,6 +1226,8 @@ The **Lab** menu - *Emulated Lab*, *Simulated Lab*, and straight to the emulated
 
 > New to the emulated lab? [The Emulated Lab guide](EMULATOR_GUIDE.md) goes step by step from preparing the host to the first test, and the same with the AI agent.
 
+**The workflow picture.** When the emulated lab opens, a one-page picture shows the nine steps from an empty KVM host to a traffic report, in the light or dark version that matches the theme. Tick **Do not show this when the Emulated Lab opens** and *Close* to stop it appearing; the small **?** next to the lab's name or **Help → Emulated Lab Workflow…** shows it again at any time, and unticking the box there turns the automatic showing back on.
+
 The **emulated lab** (Lab window → *Emulated lab (KVM host)* at the top right) boots the vendors' **own VM images** - the free `.qcow2` images several network operating systems offer - with QEMU/KVM on a **Linux server you reach over SSH**. The real operating system runs, so protocols, APIs and cloud agents work as on a real switch. Your computer only drives the host; nothing of Termwright is installed there.
 
 **The lab workspace.** The cube button at the top right (and the flask for the simulated lab) opens the lab as a **tab**:
@@ -1330,6 +1332,24 @@ Most switches and routers fetch software images, licences and configurations *th
 **Safety.** TFTP, FTP and HTTP are not encrypted: files and the FTP password cross the network as they are, so use them on lab and management networks. The servers stop on their own after 30 minutes without transfers (10 minutes to 4 hours, or never) and always when Termwright closes. FTP data connections go only to the address the FTP login came from, so the server cannot be used to reach other machines.
 
 **Ports below 1024 on Linux** (TFTP 69, FTP 21) need permission: choose a port above 1024 for the server, or allow it once with `sudo setcap cap_net_bind_service=+ep /path/to/termwright`. On Windows, the firewall asks the first time a server starts; allow it for the network the devices are on. macOS needs nothing.
+
+## 9b. Network Map
+
+The Network Map draws the real network from your sessions, not a plan.
+
+**Open it.** Right-click a folder in the Session Manager → **Show Topology**: every device in the folder is read and the tab is named after the folder. Right-click a device → **Show Topology (directly connected)**: the device and its neighbours only. The network button at the top right maps the sessions that are open in tabs.
+
+**What it reads.** Termwright signs in with the session (a hidden channel; your open terminal is not used) and runs only read-only `show` commands: LLDP, CDP and EDP neighbours, port state, STP state and LAGs. EXOS and VOSS are tested on real switches; Cisco, Arista and Junos readers follow the documented output formats and are tested on sample output only. **Collect** can use SNMP v2c instead (default community `public`, often turned off on devices; the community is not saved). SNMP gives neighbours, port state, STP and LACP, but no static LAGs, EDP, CDP or neighbour age. Sessions marked Production ask first.
+
+**Reading the picture.** Green is up, amber dashed is STP blocked, red dotted is a port down. A ring on a link is a LAG (thick track, cables fanning in; amber when the two ends disagree). A dashed box is a neighbour that has no session. A cable that moved to another port or device replaces the old one; when LLDP, CDP and EDP disagree the freshest wins. Hover a device for its Session Manager details; click a device or link for the side panel; the Changes list shows what moved.
+
+**Move around.** + / − / fit and the mouse wheel zoom, drag the background to pan, drag a device to pin it. **Arrange** puts the devices in Auto, Layered, Spine-leaf, Tree, Ring, Star, Full mesh, Grid or Organic style; new devices are placed without moving the others. **Export** saves JPEG, PDF or HTML (with the Session Manager details). The look selector switches between **Cards** (default) and **Tiers**: devices in rows with a thin CORE / DISTRIBUTION / ACCESS guide line and right-angle cables. The tier names come from the rows of the Layered, Spine-leaf or Tree arrangement, so they are a guess from the position, not read from the devices.
+
+The Emulated and Simulated Labs have the same styles under **More → Arrange** (selected switches only when several are selected; one Undo).
+
+**Looks and views.** The *Look* box in the toolbar switches between Flow (default), Clean boxes, Soft cards, Focus, Zones and the classic Cards and Tiers. Choose the look a new map starts with on the welcome screen or in **Global Options → Network map style**. Every look keeps all the data: name, address, device type, ports, speeds, LAG, STP and unread devices (the side panel lists each device and why it could not be read). The *View* box colours the cables: **Speed** (10 Mbps–10 Gbps green, 25–100 Gbps blue, above 100 Gbps thick blue), **Health**, **STP**, **LAG** or **VLAN** (pick a VLAN in the box next to it; the cables and devices that carry it stand out, the rest is faded; EXOS and VOSS only). A port blocked by spanning tree is a green dashed cable with an amber dot on the blocking port (it still carries control traffic). Port numbers appear when you zoom in, and each look has its own legend.
+
+**While it reads.** Up to 16 devices are read at the same time; each shows how many of its 5 steps (connect, identify, neighbours, ports/STP/LAG, build map) are done.
 
 ## 10. Automation: logon actions, triggers, scripts
 

@@ -1,0 +1,5 @@
+PORT                               LINK  PORT           PHYSICAL          STATUS
+NUM      INDEX DESCRIPTION         TRAP  LOCK     MTU   ADDRESS           ADMIN  OPERATE
+------------------------------------------------------------------------------------------
+1/1      192   1000BaseTX          true  false    1950  ac:ed:32:c4:64:00 up     up     
+1/3      194   1000BaseTX          true  false    1950  ac:ed:32:c4:64:02 down   down   

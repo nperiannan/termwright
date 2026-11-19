@@ -22,8 +22,8 @@ export const DEVICE_KINDS: Record<DeviceKind, { from: string; to: string; label:
 };
 
 /** Device shapes on a 24 grid: a solid body, cut-outs (filled), lines, status lights. */
-interface Glyph { body: string; cut?: string; cutLine?: string; line?: string; leds?: [number, number][]; }
-const GLYPHS: Record<DeviceKind, Glyph> = {
+export interface Glyph { body: string; cut?: string; cutLine?: string; line?: string; leds?: [number, number][]; }
+export const GLYPHS: Record<DeviceKind, Glyph> = {
   switch: { body: 'M3 8.5A2.5 2.5 0 0 1 5.5 6h13A2.5 2.5 0 0 1 21 8.5v7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 15.5z',
     cut: 'M5.8 12.6h1.8v2H5.8zM8.9 12.6h1.8v2H8.9zM12 12.6h1.8v2H12zM15.1 12.6h1.8v2h-1.8z', cutLine: 'M15 9.2h3', leds: [[6.4, 9.2], [8.4, 9.2]] },
   router: { body: 'M3 13.5A2.5 2.5 0 0 1 5.5 11h13a2.5 2.5 0 0 1 2.5 2.5v3a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5zM6 4.6a1 1 0 1 1 2 0V11H6zM16 4.6a1 1 0 1 1 2 0V11h-2z',

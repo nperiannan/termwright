@@ -109,6 +109,7 @@ var menuRU = map[string]string{
 	"View":                                    "Вид",
 	"Wake Up (Wake-on-LAN)":                   "Включить (Wake-on-LAN)",
 	"Welcome...":                              "Приветствие...",
+	"Emulated Lab Workflow...":                "Рабочий процесс эмулированной лаборатории...",
 	"Workspaces...":                           "Рабочие области...",
 	"Zoom In":                                 "Увеличить",
 	"Zoom Out":                                "Уменьшить",

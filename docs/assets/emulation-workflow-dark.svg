@@ -1,0 +1,359 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1566" width="1600" height="1566" font-family="Inter,'Segoe UI',-apple-system,Helvetica,Arial,sans-serif" role="img" aria-label="Emulated Lab workflow: nine steps from prerequisites to a traffic report, plus the AI assistant">
+<rect width="1600" height="1566" fill="#1e1f22"/>
+<text x="40" y="58" font-size="30" font-weight="750" fill="#dcdde1" text-anchor="start">Emulated Lab Workflow</text>
+<text x="40" y="92" font-size="14.5" font-weight="400" fill="#8b8e96" text-anchor="start">Termwright runs real switch images under QEMU on your own Linux KVM hosts. These are the steps from an empty host to a traffic report,</text>
+<text x="40" y="114" font-size="14.5" font-weight="400" fill="#8b8e96" text-anchor="start">and the AI assistant can do steps 2 to 9 for you.</text>
+<rect x="40" y="140" width="1520" height="338" rx="6" fill="#222327" stroke="#36373d" stroke-width="1.2"/>
+<text x="800" y="178" font-size="19" font-weight="700" fill="#dcdde1" text-anchor="middle">Prepare the host and the image</text>
+<circle cx="81" cy="218" r="11" fill="#4f9cf7"/>
+<text x="81" y="222.5" font-size="12.5" font-weight="800" fill="#fff" text-anchor="middle">1</text>
+<text x="100" y="223" font-size="15.5" font-weight="700" fill="#dcdde1" text-anchor="start">Prerequisites</text>
+<rect x="70" y="240" width="150" height="100" rx="10" fill="#30323a"/>
+<rect x="80" y="252" width="54" height="36" rx="4" fill="#4f9cf7"/>
+<rect x="84" y="256" width="46" height="28" rx="2" fill="#0f1b2e"/>
+<text x="89" y="274" font-size="10" font-weight="700" fill="#4ade80" text-anchor="start" font-family="'SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace">$ _</text>
+<path d="M74 288h66l-5 7H79z" fill="#8b8e96"/>
+<rect x="150" y="250" width="64" height="13" rx="3" fill="#3a3d47"/>
+<circle cx="158" cy="256.5" r="2" fill="#22c55e"/>
+<path d="M168 253.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M176 253.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M184 253.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M192 253.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M200 253.5v6" stroke="#8b8e96" stroke-width="2"/>
+<rect x="150" y="267" width="64" height="13" rx="3" fill="#3a3d47"/>
+<circle cx="158" cy="273.5" r="2" fill="#22c55e"/>
+<path d="M168 270.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M176 270.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M184 270.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M192 270.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M200 270.5v6" stroke="#8b8e96" stroke-width="2"/>
+<rect x="150" y="284" width="64" height="13" rx="3" fill="#3a3d47"/>
+<circle cx="158" cy="290.5" r="2" fill="#22c55e"/>
+<path d="M168 287.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M176 287.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M184 287.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M192 287.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M200 287.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M124 296h30l14 14v24h-44z" fill="#2a2b30" stroke="#3d3f46" stroke-width="1.6" stroke-linejoin="round"/><path d="M154 296v14h14" fill="#cfdcf3" stroke="#3d3f46" stroke-width="1.4" stroke-linejoin="round"/>
+<text x="146.0" y="319.0" font-size="8.5" font-weight="800" fill="#dcdde1" text-anchor="middle">qcow2</text>
+<path d="M242 290H312" stroke="#4f9cf7" stroke-width="2.6"/>
+<path d="M320 290l-12 -7v14z" fill="#4f9cf7"/>
+<circle cx="242" cy="290" r="6" fill="#222327" stroke="#4f9cf7" stroke-width="2.6"/>
+<rect x="371.0" y="261.0" width="58" height="58" rx="13.92" fill="#4f9cf7"/>
+<g transform="translate(382.02 272.02) scale(1.4983333333333333)" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6v4.5H9zM3 16.5h6V21H3zM15 16.5h6V21h-6zM12 7.5V12M6 16.5V12h12v4.5"/></g>
+<text x="70" y="370" font-size="13.5" font-weight="400" fill="#8b8e96" text-anchor="start">Check these before you start.</text>
+<circle cx="74" cy="390" r="3" fill="#4f9cf7"/>
+<text x="86" y="394" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">A Linux host with KVM, reachable over SSH</text>
+<circle cx="74" cy="414" r="3" fill="#4f9cf7"/>
+<text x="86" y="418" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Termwright on your computer</text>
+<circle cx="74" cy="438" r="3" fill="#4f9cf7"/>
+<text x="86" y="442" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">A switch image (.iso or .qcow2), or download one</text>
+<path d="M555 202V454" stroke="#36373d" stroke-width="1.4" stroke-dasharray="4 4"/>
+<circle cx="591" cy="218" r="11" fill="#4f9cf7"/>
+<text x="591" y="222.5" font-size="12.5" font-weight="800" fill="#fff" text-anchor="middle">2</text>
+<text x="610" y="223" font-size="15.5" font-weight="700" fill="#dcdde1" text-anchor="start">Add a lab host</text>
+<rect x="580" y="240" width="150" height="100" rx="10" fill="#30323a"/>
+<rect x="628" y="262" width="54" height="36" rx="4" fill="#4f9cf7"/>
+<rect x="632" y="266" width="46" height="28" rx="2" fill="#0f1b2e"/>
+<text x="637" y="284" font-size="10" font-weight="700" fill="#4ade80" text-anchor="start" font-family="'SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace">$ _</text>
+<path d="M622 298h66l-5 7H627z" fill="#8b8e96"/>
+<path d="M752 290H822" stroke="#4f9cf7" stroke-width="2.6"/>
+<path d="M830 290l-12 -7v14z" fill="#4f9cf7"/>
+<circle cx="752" cy="290" r="6" fill="#222327" stroke="#4f9cf7" stroke-width="2.6"/>
+<rect x="774" y="266" width="34" height="18" rx="9" fill="#4f9cf7"/>
+<text x="791" y="279" font-size="10.5" font-weight="800" fill="#fff" text-anchor="middle">SSH</text>
+<rect x="848" y="266" width="124" height="22" rx="3" fill="#3a3d47"/>
+<path d="M856 272v10" stroke="#8b8e96" stroke-width="2.2"/>
+<path d="M862 272v10" stroke="#8b8e96" stroke-width="2.2"/>
+<path d="M868 272v10" stroke="#8b8e96" stroke-width="2.2"/>
+<path d="M874 272v10" stroke="#8b8e96" stroke-width="2.2"/>
+<path d="M880 272v10" stroke="#8b8e96" stroke-width="2.2"/>
+<path d="M886 272v10" stroke="#8b8e96" stroke-width="2.2"/>
+<path d="M892 272v10" stroke="#8b8e96" stroke-width="2.2"/>
+<path d="M898 272v10" stroke="#8b8e96" stroke-width="2.2"/>
+<path d="M904 272v10" stroke="#8b8e96" stroke-width="2.2"/>
+<path d="M910 272v10" stroke="#8b8e96" stroke-width="2.2"/>
+<circle cx="958" cy="277.0" r="2.6" fill="#22c55e"/>
+<circle cx="946" cy="277.0" r="2.6" fill="#4f9cf7"/>
+<rect x="848" y="294" width="124" height="22" rx="3" fill="#3a3d47"/>
+<path d="M856 300v10" stroke="#8b8e96" stroke-width="2.2"/>
+<path d="M862 300v10" stroke="#8b8e96" stroke-width="2.2"/>
+<path d="M868 300v10" stroke="#8b8e96" stroke-width="2.2"/>
+<path d="M874 300v10" stroke="#8b8e96" stroke-width="2.2"/>
+<path d="M880 300v10" stroke="#8b8e96" stroke-width="2.2"/>
+<path d="M886 300v10" stroke="#8b8e96" stroke-width="2.2"/>
+<path d="M892 300v10" stroke="#8b8e96" stroke-width="2.2"/>
+<path d="M898 300v10" stroke="#8b8e96" stroke-width="2.2"/>
+<path d="M904 300v10" stroke="#8b8e96" stroke-width="2.2"/>
+<path d="M910 300v10" stroke="#8b8e96" stroke-width="2.2"/>
+<circle cx="958" cy="305.0" r="2.6" fill="#22c55e"/>
+<circle cx="946" cy="305.0" r="2.6" fill="#4f9cf7"/>
+<circle cx="970" cy="264" r="13" fill="#34d399" stroke="#222327" stroke-width="3"/>
+<path d="M964 264l4 4 7-8" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="580" y="370" font-size="13.5" font-weight="400" fill="#8b8e96" text-anchor="start">Open the Emulated Lab and add your host in Hosts.</text>
+<circle cx="584" cy="390" r="3" fill="#4f9cf7"/>
+<text x="596" y="394" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Set Up installs QEMU after showing you the commands</text>
+<circle cx="584" cy="414" r="3" fill="#4f9cf7"/>
+<text x="596" y="418" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">No agent or service is needed on the host</text>
+<circle cx="584" cy="438" r="3" fill="#4f9cf7"/>
+<text x="596" y="442" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Add more hosts to spread the lab across them</text>
+<path d="M1065 202V454" stroke="#36373d" stroke-width="1.4" stroke-dasharray="4 4"/>
+<circle cx="1101" cy="218" r="11" fill="#4f9cf7"/>
+<text x="1101" y="222.5" font-size="12.5" font-weight="800" fill="#fff" text-anchor="middle">3</text>
+<text x="1120" y="223" font-size="15.5" font-weight="700" fill="#dcdde1" text-anchor="start">Pick an appliance</text>
+<rect x="1090" y="240" width="150" height="100" rx="10" fill="#30323a"/>
+<path d="M1128 257L1142.79 265.5L1128 274L1113.21 265.5z" fill="#9cc9ff"/><path d="M1113.21 265.5L1128 274V291L1113.21 282.5z" fill="#3f8cf2"/><path d="M1142.79 265.5L1128 274V291L1142.79 282.5z" fill="#1e63d4"/>
+<path d="M1202 257L1216.79 265.5L1202 274L1187.21 265.5z" fill="#9cc9ff"/><path d="M1187.21 265.5L1202 274V291L1187.21 282.5z" fill="#3f8cf2"/><path d="M1216.79 265.5L1202 274V291L1216.79 282.5z" fill="#1e63d4"/>
+<path d="M1128 297L1142.79 305.5L1128 314L1113.21 305.5z" fill="#9cc9ff"/><path d="M1113.21 305.5L1128 314V331L1113.21 322.5z" fill="#3f8cf2"/><path d="M1142.79 305.5L1128 314V331L1142.79 322.5z" fill="#1e63d4"/>
+<path d="M1202 297L1216.79 305.5L1202 314L1187.21 305.5z" fill="#9cc9ff"/><path d="M1187.21 305.5L1202 314V331L1187.21 322.5z" fill="#3f8cf2"/><path d="M1216.79 305.5L1202 314V331L1216.79 322.5z" fill="#1e63d4"/>
+<path d="M1262 290H1332" stroke="#4f9cf7" stroke-width="2.6"/>
+<path d="M1340 290l-12 -7v14z" fill="#4f9cf7"/>
+<circle cx="1262" cy="290" r="6" fill="#222327" stroke="#4f9cf7" stroke-width="2.6"/>
+<path d="M1420 266L1446.1 281.0L1420 296L1393.9 281.0z" fill="#9cc9ff"/><path d="M1393.9 281.0L1420 296V326L1393.9 311.0z" fill="#3f8cf2"/><path d="M1446.1 281.0L1420 296V326L1446.1 311.0z" fill="#1e63d4"/>
+<circle cx="1454" cy="264" r="13" fill="#34d399" stroke="#222327" stroke-width="3"/>
+<path d="M1448 264l4 4 7-8" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="1090" y="370" font-size="13.5" font-weight="400" fill="#8b8e96" text-anchor="start">Choose what your virtual switches will run.</text>
+<circle cx="1094" cy="390" r="3" fill="#4f9cf7"/>
+<text x="1106" y="394" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Ready templates from the public vendor list</text>
+<circle cx="1094" cy="414" r="3" fill="#4f9cf7"/>
+<text x="1106" y="418" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Import a GNS3 appliance file</text>
+<circle cx="1094" cy="438" r="3" fill="#4f9cf7"/>
+<text x="1106" y="442" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Reuse one template for as many switches as you need</text>
+<rect x="40" y="502" width="1520" height="338" rx="6" fill="#222327" stroke="#36373d" stroke-width="1.2"/>
+<text x="800" y="540" font-size="19" font-weight="700" fill="#dcdde1" text-anchor="middle">Build the lab and send traffic</text>
+<circle cx="81" cy="580" r="11" fill="#4f9cf7"/>
+<text x="81" y="584.5" font-size="12.5" font-weight="800" fill="#fff" text-anchor="middle">4</text>
+<text x="100" y="585" font-size="15.5" font-weight="700" fill="#dcdde1" text-anchor="start">Get the disk image</text>
+<rect x="70" y="602" width="150" height="100" rx="10" fill="#30323a"/>
+<circle cx="114" cy="654" r="29" fill="#e4eaf5" stroke="#aab6cb" stroke-width="2"/>
+<circle cx="114" cy="654" r="10" fill="#30323a" stroke="#aab6cb" stroke-width="1.5"/>
+<path d="M114 654L114 625A29 29 0 0 1 143 654z" fill="#4f9cf7" fill-opacity=".85"/>
+<circle cx="114" cy="654" r="10" fill="#30323a" stroke="#aab6cb" stroke-width="1.5"/>
+<g transform="translate(154 624)"><path d="M2 36a12 12 0 0 1 5-22 17 17 0 0 1 32-3 14 14 0 0 1 3 25z" fill="#4f9cf7"/><path d="M22 18v17M15 29l7 7 7-7" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g>
+<path d="M242 652H312" stroke="#4f9cf7" stroke-width="2.6"/>
+<path d="M320 652l-12 -7v14z" fill="#4f9cf7"/>
+<circle cx="242" cy="652" r="6" fill="#222327" stroke="#4f9cf7" stroke-width="2.6"/>
+<path d="M369 612h48l14 14v66h-62z" fill="#2a2b30" stroke="#3d3f46" stroke-width="1.6" stroke-linejoin="round"/><path d="M417 612v14h14" fill="#cfdcf3" stroke="#3d3f46" stroke-width="1.4" stroke-linejoin="round"/>
+<text x="400.0" y="656.0" font-size="13" font-weight="800" fill="#dcdde1" text-anchor="middle">qcow2</text>
+<text x="70" y="732" font-size="13.5" font-weight="400" fill="#8b8e96" text-anchor="start">Every appliance needs a qcow2 disk.</text>
+<circle cx="74" cy="752" r="3" fill="#4f9cf7"/>
+<text x="86" y="756" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Download a ready qcow2 image</text>
+<circle cx="74" cy="776" r="3" fill="#4f9cf7"/>
+<text x="86" y="780" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Or install from your ISO and save a qcow2 disk</text>
+<circle cx="74" cy="800" r="3" fill="#4f9cf7"/>
+<text x="86" y="804" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Reuse one image for many switches</text>
+<path d="M555 564V816" stroke="#36373d" stroke-width="1.4" stroke-dasharray="4 4"/>
+<circle cx="591" cy="580" r="11" fill="#4f9cf7"/>
+<text x="591" y="584.5" font-size="12.5" font-weight="800" fill="#fff" text-anchor="middle">5</text>
+<text x="610" y="585" font-size="15.5" font-weight="700" fill="#dcdde1" text-anchor="start">Build the topology</text>
+<rect x="580" y="602" width="150" height="100" rx="10" fill="#30323a"/>
+<rect x="592" y="618" width="50" height="26" rx="5" fill="#3a3d47"/>
+<circle cx="603.0" cy="631.0" r="2.6" fill="#6b86b5"/>
+<circle cx="617.0" cy="631.0" r="2.6" fill="#6b86b5"/>
+<circle cx="631.0" cy="631.0" r="2.6" fill="#6b86b5"/>
+<circle cx="636" cy="623" r="2" fill="#22c55e"/>
+<rect x="668" y="618" width="50" height="26" rx="5" fill="#3a3d47"/>
+<circle cx="679.0" cy="631.0" r="2.6" fill="#6b86b5"/>
+<circle cx="693.0" cy="631.0" r="2.6" fill="#6b86b5"/>
+<circle cx="707.0" cy="631.0" r="2.6" fill="#6b86b5"/>
+<circle cx="712" cy="623" r="2" fill="#22c55e"/>
+<rect x="592" y="664" width="50" height="22" rx="11.0" fill="#2a2b30" stroke="#34d399" stroke-width="2.2"/>
+<text x="617.0" y="678.96" font-size="11" font-weight="800" fill="#dcdde1" text-anchor="middle">T1</text>
+<rect x="668" y="664" width="50" height="22" rx="11.0" fill="#2a2b30" stroke="#34d399" stroke-width="2.2"/>
+<text x="693.0" y="678.96" font-size="11" font-weight="800" fill="#dcdde1" text-anchor="middle">T2</text>
+<path d="M752 652H822" stroke="#4f9cf7" stroke-width="2.6"/>
+<path d="M830 652l-12 -7v14z" fill="#4f9cf7"/>
+<circle cx="752" cy="652" r="6" fill="#222327" stroke="#4f9cf7" stroke-width="2.6"/>
+<path d="M876 624L944 624" stroke="#4f9cf7" stroke-width="2.4" stroke-linecap="round"/>
+<path d="M876 624L910 650" stroke="#4f9cf7" stroke-width="2.4" stroke-linecap="round"/>
+<path d="M944 624L910 650" stroke="#4f9cf7" stroke-width="2.4" stroke-linecap="round"/>
+<path d="M876 624L864 682" stroke="#4f9cf7" stroke-width="2.4" stroke-linecap="round"/>
+<path d="M944 624L956 682" stroke="#4f9cf7" stroke-width="2.4" stroke-linecap="round"/>
+<rect x="856" y="614" width="40" height="20" rx="5" fill="#3a3d47"/>
+<circle cx="864.8" cy="624.0" r="2.6" fill="#6b86b5"/>
+<circle cx="876.0" cy="624.0" r="2.6" fill="#6b86b5"/>
+<circle cx="887.1999999999999" cy="624.0" r="2.6" fill="#6b86b5"/>
+<circle cx="890" cy="619" r="2" fill="#22c55e"/>
+<rect x="924" y="614" width="40" height="20" rx="5" fill="#3a3d47"/>
+<circle cx="932.8" cy="624.0" r="2.6" fill="#6b86b5"/>
+<circle cx="944.0" cy="624.0" r="2.6" fill="#6b86b5"/>
+<circle cx="955.1999999999999" cy="624.0" r="2.6" fill="#6b86b5"/>
+<circle cx="958" cy="619" r="2" fill="#22c55e"/>
+<rect x="890" y="640" width="40" height="20" rx="5" fill="#3a3d47"/>
+<circle cx="898.8" cy="650.0" r="2.6" fill="#6b86b5"/>
+<circle cx="910.0" cy="650.0" r="2.6" fill="#6b86b5"/>
+<circle cx="921.1999999999999" cy="650.0" r="2.6" fill="#6b86b5"/>
+<circle cx="924" cy="645" r="2" fill="#22c55e"/>
+<rect x="844" y="673" width="40" height="18" rx="9.0" fill="#2a2b30" stroke="#34d399" stroke-width="2.2"/>
+<text x="864.0" y="685.6" font-size="10" font-weight="800" fill="#dcdde1" text-anchor="middle">T1</text>
+<rect x="936" y="673" width="40" height="18" rx="9.0" fill="#2a2b30" stroke="#34d399" stroke-width="2.2"/>
+<text x="956.0" y="685.6" font-size="10" font-weight="800" fill="#dcdde1" text-anchor="middle">T2</text>
+<text x="580" y="732" font-size="13.5" font-weight="400" fill="#8b8e96" text-anchor="start">Draw the network on the canvas.</text>
+<circle cx="584" cy="752" r="3" fill="#4f9cf7"/>
+<text x="596" y="756" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Drag switches onto the canvas and cable their ports</text>
+<circle cx="584" cy="776" r="3" fill="#4f9cf7"/>
+<text x="596" y="780" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Add test ports to send and receive traffic</text>
+<circle cx="584" cy="800" r="3" fill="#4f9cf7"/>
+<text x="596" y="804" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Power everything on and open each console</text>
+<path d="M1065 564V816" stroke="#36373d" stroke-width="1.4" stroke-dasharray="4 4"/>
+<circle cx="1101" cy="580" r="11" fill="#4f9cf7"/>
+<text x="1101" y="584.5" font-size="12.5" font-weight="800" fill="#fff" text-anchor="middle">6</text>
+<text x="1120" y="585" font-size="15.5" font-weight="700" fill="#dcdde1" text-anchor="start">Create traffic streams</text>
+<rect x="1090" y="602" width="150" height="100" rx="10" fill="#30323a"/>
+<rect x="1112" y="616" width="106" height="22" rx="11" fill="#2a2b30" stroke="#38bdf8" stroke-width="2"/>
+<text x="1165" y="631" font-size="11" font-weight="700" fill="#dcdde1" text-anchor="middle">voice EF</text>
+<rect x="1112" y="643" width="106" height="22" rx="11" fill="#2a2b30" stroke="#a78bfa" stroke-width="2"/>
+<text x="1165" y="658" font-size="11" font-weight="700" fill="#dcdde1" text-anchor="middle">video AF41</text>
+<rect x="1112" y="670" width="106" height="22" rx="11" fill="#2a2b30" stroke="#fb923c" stroke-width="2"/>
+<text x="1165" y="685" font-size="11" font-weight="700" fill="#dcdde1" text-anchor="middle">IMIX data</text>
+<path d="M1262 652H1332" stroke="#4f9cf7" stroke-width="2.6"/>
+<path d="M1340 652l-12 -7v14z" fill="#4f9cf7"/>
+<circle cx="1262" cy="652" r="6" fill="#222327" stroke="#4f9cf7" stroke-width="2.6"/>
+<rect x="1352" y="638" width="40" height="28" rx="14.0" fill="#2a2b30" stroke="#34d399" stroke-width="2.2"/>
+<text x="1372.0" y="655.96" font-size="11" font-weight="800" fill="#dcdde1" text-anchor="middle">T1</text>
+<rect x="1448" y="638" width="40" height="28" rx="14.0" fill="#2a2b30" stroke="#34d399" stroke-width="2.2"/>
+<text x="1468.0" y="655.96" font-size="11" font-weight="800" fill="#dcdde1" text-anchor="middle">T2</text>
+<path d="M1396 643H1444" stroke="#38bdf8" stroke-width="2.4"/><path d="M1444 643l-7 -4v8z" fill="#38bdf8"/>
+<path d="M1444 652H1396" stroke="#a78bfa" stroke-width="2.4"/><path d="M1396 652l7 -4v8z" fill="#a78bfa"/>
+<path d="M1396 661H1444" stroke="#fb923c" stroke-width="2.4"/><path d="M1444 661l-7 -4v8z" fill="#fb923c"/>
+<text x="1090" y="732" font-size="13.5" font-weight="400" fill="#8b8e96" text-anchor="start">Send traffic between the lab's test ports.</text>
+<circle cx="1094" cy="752" r="3" fill="#4f9cf7"/>
+<text x="1106" y="756" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Create streams or reuse saved ones</text>
+<circle cx="1094" cy="776" r="3" fill="#4f9cf7"/>
+<text x="1106" y="780" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Voice, video and mixed-size (IMIX) traffic with DSCP</text>
+<circle cx="1094" cy="800" r="3" fill="#4f9cf7"/>
+<text x="1106" y="804" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Watch live rates, loss and latency</text>
+<rect x="40" y="864" width="1520" height="338" rx="6" fill="#222327" stroke="#36373d" stroke-width="1.2"/>
+<text x="800" y="902" font-size="19" font-weight="700" fill="#dcdde1" text-anchor="middle">Analyse, capture and scale up</text>
+<circle cx="81" cy="942" r="11" fill="#4f9cf7"/>
+<text x="81" y="946.5" font-size="12.5" font-weight="800" fill="#fff" text-anchor="middle">7</text>
+<text x="100" y="947" font-size="15.5" font-weight="700" fill="#dcdde1" text-anchor="start">Analyse and save</text>
+<rect x="70" y="964" width="150" height="100" rx="10" fill="#30323a"/>
+<rect x="84" y="976" width="122" height="76" rx="6" fill="#2a2b30" stroke="#3d3f46" stroke-width="1.2"/>
+<path d="M96 994V1042H196" fill="none" stroke="#8b8e96" stroke-width="1.6"/>
+<path d="M98 1002 L118 1006 L138 1004 L158 1008 L178 1006 L196 1010" fill="none" stroke="#38bdf8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M98 1014 L118 1010 L138 1016 L158 1012 L178 1018 L196 1014" fill="none" stroke="#a78bfa" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M98 1022 L118 1020 L138 1024 L158 1016 L178 1012 L196 1002" fill="none" stroke="#fb923c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M242 1014H312" stroke="#4f9cf7" stroke-width="2.6"/>
+<path d="M320 1014l-12 -7v14z" fill="#4f9cf7"/>
+<circle cx="242" cy="1014" r="6" fill="#222327" stroke="#4f9cf7" stroke-width="2.6"/>
+<path d="M356 968h74l14 14v78h-88z" fill="#2a2b30" stroke="#3d3f46" stroke-width="1.6" stroke-linejoin="round"/><path d="M430 968v14h14" fill="#cfdcf3" stroke="#3d3f46" stroke-width="1.4" stroke-linejoin="round"/>
+<text x="366" y="990" font-size="10" font-weight="800" fill="#dcdde1" text-anchor="start">Report</text>
+<rect x="366" y="1004" width="40" height="6" rx="3" fill="#3d3f46"/>
+<rect x="366" y="1004" width="40" height="6" rx="3" fill="#34d399"/>
+<rect x="411" y="1001" width="24" height="11" rx="5.5" fill="#34d399"/>
+<text x="423" y="1009.5" font-size="6.6" font-weight="800" fill="#fff" text-anchor="middle">PASS</text>
+<rect x="366" y="1018" width="40" height="6" rx="3" fill="#3d3f46"/>
+<rect x="366" y="1018" width="40" height="6" rx="3" fill="#34d399"/>
+<rect x="411" y="1015" width="24" height="11" rx="5.5" fill="#34d399"/>
+<text x="423" y="1023.5" font-size="6.6" font-weight="800" fill="#fff" text-anchor="middle">PASS</text>
+<rect x="366" y="1032" width="40" height="6" rx="3" fill="#3d3f46"/>
+<rect x="366" y="1032" width="32.0" height="6" rx="3" fill="#f87171"/>
+<rect x="411" y="1029" width="24" height="11" rx="5.5" fill="#f87171"/>
+<text x="423" y="1037.5" font-size="6.6" font-weight="800" fill="#fff" text-anchor="middle">FAIL</text>
+<text x="70" y="1094" font-size="13.5" font-weight="400" fill="#8b8e96" text-anchor="start">See in one view whether the network passed.</text>
+<circle cx="74" cy="1114" r="3" fill="#4f9cf7"/>
+<text x="86" y="1118" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Pass or fail per stream, with loss, latency and jitter</text>
+<circle cx="74" cy="1138" r="3" fill="#4f9cf7"/>
+<text x="86" y="1142" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Limits such as maximum loss decide the result</text>
+<circle cx="74" cy="1162" r="3" fill="#4f9cf7"/>
+<text x="86" y="1166" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Save the report as an HTML file</text>
+<path d="M555 926V1178" stroke="#36373d" stroke-width="1.4" stroke-dasharray="4 4"/>
+<circle cx="591" cy="942" r="11" fill="#4f9cf7"/>
+<text x="591" y="946.5" font-size="12.5" font-weight="800" fill="#fff" text-anchor="middle">8</text>
+<text x="610" y="947" font-size="15.5" font-weight="700" fill="#dcdde1" text-anchor="start">Capture and replay</text>
+<rect x="580" y="964" width="150" height="100" rx="10" fill="#30323a"/>
+<rect x="625.0" y="984.0" width="60" height="60" rx="14.399999999999999" fill="#4f9cf7"/>
+<g transform="translate(636.4 995.4) scale(1.55)" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6v4.5H9zM3 16.5h6V21H3zM15 16.5h6V21h-6zM12 7.5V12M6 16.5V12h12v4.5"/></g>
+<path d="M762 1014H822" stroke="#4f9cf7" stroke-width="2.6" stroke-dasharray="6 5"/>
+<path d="M830 1014l-12 -7v14z" fill="#4f9cf7"/>
+<path d="M752 1014l12 -7v14z" fill="#4f9cf7"/>
+<path d="M880 976h46l14 14v62h-60z" fill="#2a2b30" stroke="#3d3f46" stroke-width="1.6" stroke-linejoin="round"/><path d="M926 976v14h14" fill="#cfdcf3" stroke="#3d3f46" stroke-width="1.4" stroke-linejoin="round"/>
+<text x="910.0" y="1018.0" font-size="12" font-weight="800" fill="#dcdde1" text-anchor="middle">.pcap</text>
+<path d="M890 1038h8l4-9 6 17 5-12 3 4h10" fill="none" stroke="#4f9cf7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="944" cy="1044" r="13" fill="#4f9cf7" stroke="#222327" stroke-width="3"/>
+<path d="M940 1038l10 6-10 6z" fill="#fff"/>
+<text x="580" y="1094" font-size="13.5" font-weight="400" fill="#8b8e96" text-anchor="start">Record real traffic and play it back.</text>
+<circle cx="584" cy="1114" r="3" fill="#4f9cf7"/>
+<text x="596" y="1118" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Capture packets on any cable (right-click the cable)</text>
+<circle cx="584" cy="1138" r="3" fill="#4f9cf7"/>
+<text x="596" y="1142" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Open the .pcap file in the packet viewer</text>
+<circle cx="584" cy="1162" r="3" fill="#4f9cf7"/>
+<text x="596" y="1166" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Replay a .pcap file into the lab as a stream</text>
+<path d="M1065 926V1178" stroke="#36373d" stroke-width="1.4" stroke-dasharray="4 4"/>
+<circle cx="1101" cy="942" r="11" fill="#4f9cf7"/>
+<text x="1101" y="946.5" font-size="12.5" font-weight="800" fill="#fff" text-anchor="middle">9</text>
+<text x="1120" y="947" font-size="15.5" font-weight="700" fill="#dcdde1" text-anchor="start">Line rate with TRex (optional)</text>
+<rect x="1090" y="964" width="150" height="100" rx="10" fill="#30323a"/>
+<rect x="1130" y="982" width="70" height="13" rx="3" fill="#3a3d47"/>
+<circle cx="1138" cy="988.5" r="2" fill="#22c55e"/>
+<path d="M1148 985.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M1156 985.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M1164 985.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M1172 985.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M1180 985.5v6" stroke="#8b8e96" stroke-width="2"/>
+<rect x="1130" y="999" width="70" height="13" rx="3" fill="#3a3d47"/>
+<circle cx="1138" cy="1005.5" r="2" fill="#22c55e"/>
+<path d="M1148 1002.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M1156 1002.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M1164 1002.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M1172 1002.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M1180 1002.5v6" stroke="#8b8e96" stroke-width="2"/>
+<rect x="1130" y="1016" width="70" height="13" rx="3" fill="#3a3d47"/>
+<circle cx="1138" cy="1022.5" r="2" fill="#22c55e"/>
+<path d="M1148 1019.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M1156 1019.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M1164 1019.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M1172 1019.5v6" stroke="#8b8e96" stroke-width="2"/>
+<path d="M1180 1019.5v6" stroke="#8b8e96" stroke-width="2"/>
+<text x="1165" y="1048" font-size="11" font-weight="700" fill="#8b8e96" text-anchor="middle">TRex server</text>
+<path d="M1262 1014H1332" stroke="#4f9cf7" stroke-width="2.6"/>
+<path d="M1340 1014l-12 -7v14z" fill="#4f9cf7"/>
+<circle cx="1262" cy="1014" r="6" fill="#222327" stroke="#4f9cf7" stroke-width="2.6"/>
+<rect x="1396" y="984" width="48" height="24" rx="12.0" fill="#2a2b30" stroke="#34d399" stroke-width="2.2"/>
+<text x="1420.0" y="1000.32" font-size="12" font-weight="800" fill="#dcdde1" text-anchor="middle">T1</text>
+<rect x="1396" y="1018" width="48" height="24" rx="12.0" fill="#2a2b30" stroke="#34d399" stroke-width="2.2"/>
+<text x="1420.0" y="1034.32" font-size="12" font-weight="800" fill="#dcdde1" text-anchor="middle">T2</text>
+<text x="1420" y="1060" font-size="10.5" font-weight="600" fill="#8b8e96" text-anchor="middle">test ports in the lab</text>
+<text x="1090" y="1094" font-size="13.5" font-weight="400" fill="#8b8e96" text-anchor="start">An optional engine for high-rate testing.</text>
+<circle cx="1094" cy="1114" r="3" fill="#4f9cf7"/>
+<text x="1106" y="1118" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">A TRex server sends the traffic</text>
+<circle cx="1094" cy="1138" r="3" fill="#4f9cf7"/>
+<text x="1106" y="1142" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Its ports appear as test ports in the lab</text>
+<circle cx="1094" cy="1162" r="3" fill="#4f9cf7"/>
+<text x="1106" y="1166" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Use it when the built-in engines are not fast enough</text>
+<rect x="40" y="1226" width="1520" height="298" rx="6" fill="#2a2519" stroke="#4a3f22" stroke-width="1.2"/>
+<text x="800" y="1264" font-size="19" font-weight="700" fill="#dcdde1" text-anchor="middle">Or let the AI assistant do it for you</text>
+<circle cx="81" cy="1304" r="11" fill="#e8a317"/>
+<text x="81" y="1308.5" font-size="12.5" font-weight="800" fill="#fff" text-anchor="middle">AI</text>
+<text x="100" y="1309" font-size="15.5" font-weight="700" fill="#dcdde1" text-anchor="start">Describe the goal</text>
+<rect x="70" y="1326" width="150" height="100" rx="10" fill="#2a2b30"/>
+<circle cx="110" cy="1376" r="23.0" fill="#e8a317"/>
+<g transform="translate(97.12 1363.12) scale(1.0733333333333335)" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3l1.8 5.2L18 10l-5.2 1.8L11 17l-1.8-5.2L4 10l5.2-1.8zM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></g>
+<rect x="140" y="1348" width="64" height="38" rx="10" fill="#2a2b30" stroke="#3d3f46" stroke-width="1.4"/>
+<path d="M150 1386l-6 12 14 -12z" fill="#2a2b30" stroke="#3d3f46" stroke-width="1.4" stroke-linejoin="round"/>
+<rect x="150" y="1356" width="44" height="4" rx="2" fill="#8b8e96"/>
+<rect x="150" y="1365" width="36" height="4" rx="2" fill="#8b8e96"/>
+<rect x="150" y="1374" width="28" height="4" rx="2" fill="#8b8e96"/>
+<path d="M242 1376H312" stroke="#e8a317" stroke-width="2.6" stroke-dasharray="6 5"/>
+<path d="M320 1376l-12 -7v14z" fill="#e8a317"/>
+<circle cx="242" cy="1376" r="6" fill="#222327" stroke="#e8a317" stroke-width="2.6"/>
+<rect x="371.0" y="1347.0" width="58" height="58" rx="13.92" fill="#4f9cf7"/>
+<g transform="translate(382.02 1358.02) scale(1.4983333333333333)" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6v4.5H9zM3 16.5h6V21H3zM15 16.5h6V21h-6zM12 7.5V12M6 16.5V12h12v4.5"/></g>
+<text x="70" y="1456" font-size="13.5" font-weight="400" fill="#8b8e96" text-anchor="start">Ask in plain language, in Termwright or from your own AI app.</text>
+<circle cx="74" cy="1476" r="3" fill="#e8a317"/>
+<text x="86" y="1480" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Works with the built-in assistant and, through MCP, other AI apps</text>
+<circle cx="74" cy="1500" r="3" fill="#e8a317"/>
+<text x="86" y="1504" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">Lab changes don't ask each time, but are recorded and can be reverted</text>
+<path d="M800 1288V1500" stroke="#36373d" stroke-width="1.4" stroke-dasharray="4 4"/>
+<circle cx="841" cy="1304" r="11" fill="#e8a317"/>
+<text x="841" y="1308.5" font-size="12.5" font-weight="800" fill="#fff" text-anchor="middle">AI</text>
+<text x="860" y="1309" font-size="15.5" font-weight="700" fill="#dcdde1" text-anchor="start">For example, you say</text>
+<rect x="830" y="1326" width="690" height="86" rx="12" fill="#2a2b30" stroke="#3d3f46" stroke-width="1.4"/>
+<text x="852" y="1362" font-size="16" font-weight="600" fill="#dcdde1" text-anchor="start">“Build two switches, cable them, send voice and video traffic</text>
+<text x="852" y="1388" font-size="16" font-weight="600" fill="#dcdde1" text-anchor="start">between them and give me the report.”</text>
+<circle cx="834" cy="1476" r="3" fill="#e8a317"/>
+<text x="846" y="1480" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">It builds the topology, powers it on and checks the cabling</text>
+<circle cx="834" cy="1500" r="3" fill="#e8a317"/>
+<text x="846" y="1504" font-size="13.5" font-weight="400" fill="#dcdde1" text-anchor="start">It runs the streams and returns the pass or fail report</text>
+</svg>
