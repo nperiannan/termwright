@@ -155,6 +155,11 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
               }
               @case ('scripts') {
                 <div class="scr">
+                  <div class="aiw"><span class="ai-ic">✦</span>
+                    <input [(ngModel)]="aiAskText" (keydown.enter)="writeWithAI()" [disabled]="aiBusy()" placeholder="Describe the tests or script you want, e.g. every port of 1:1-1:4 is UP and the answer is under 300 ms" />
+                    <select [(ngModel)]="aiTarget" title="Which script"><option value="tests">Tests</option><option value="pre">Pre-request</option></select>
+                    <button type="button" (click)="writeWithAI()" [disabled]="aiBusy() || !aiAskText.trim()">{{ aiBusy() ? 'Writing…' : 'Write with AI' }}</button></div>
+                  @if (aiNote()) { <div class="mut pad0">{{ aiNote() }}</div> }
                   <div class="sh"><b>Tests</b> <span class="mut">run on the answer (pm.test, pm.expect, pm.response, pm.variables)</span><span class="sp"></span>
                     <select [ngModel]="''" (ngModelChange)="$event !== '' && snippet(+$event)"><option value="">Add a snippet…</option>@for (s of snippets; track $index) { <option [value]="$index">{{ s.l }}</option> }</select></div>
                   <textarea class="code" [ngModel]="draft().req.tests" (ngModelChange)="setReq({ tests: $event })" spellcheck="false" translate="no" placeholder="pm.test('ok', () => pm.response.to.have.status(200));"></textarea>
@@ -178,6 +183,10 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
               @if (r.status) { <span class="pill" [class.ok]="r.status < 300" [class.wn]="r.status >= 300 && r.status < 400" [class.bad]="r.status >= 400">{{ r.statusText }}</span> }
               <span class="mut">{{ r.ms }} ms · {{ size(r.size) }}</span>
               @if (resTab() === 'body') {
+                <button type="button" class="mono-btn" [class.on]="mono()" (click)="toggleMono()" [attr.aria-pressed]="mono()"
+                  [title]="mono() ? 'Monochrome on: plain black text (light theme) or white (dark theme). Click for colours.' : 'Monochrome: show the body in plain black (light theme) or white (dark theme) instead of colours'">
+                  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor" /></svg>
+                </button>
                 <select class="pretty" [ngModel]="pretty() ? 'p' : 'r'" (ngModelChange)="pretty.set($event === 'p')"><option value="p">Pretty</option><option value="r">Raw</option></select>
                 <button type="button" (click)="copy(r.body)">Copy</button>
               }
@@ -189,8 +198,8 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
               @switch (resTab()) {
                 @case ('body') {
                   @if (r.base64) { <div class="mut pad">Binary answer ({{ size(r.size) }}, {{ r.contentType }}).</div> }
-                  @else if (pretty() && isJson(r)) { <pre class="out json" translate="no" [innerHTML]="jsonHtml()"></pre> }
-                  @else { <pre class="out" translate="no">{{ r.body }}</pre> }
+                  @else if (pretty() && isJson(r)) { <pre class="out json" [class.mono]="mono()" translate="no" [innerHTML]="jsonHtml()"></pre> }
+                  @else { <pre class="out" [class.mono]="mono()" translate="no">{{ r.body }}</pre> }
                   @if (r.truncated) { <div class="mut pad">Only the first 5 MB are shown.</div> }
                 }
                 @case ('headers') { <table class="kv ro" translate="no"><tbody>@for (h of r.headers; track $index) { <tr><td>{{ h.key }}</td><td>{{ h.value }}</td></tr> }</tbody></table> }
@@ -323,10 +332,16 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
     .modes { display: flex; gap: 12px; align-items: center; padding: 8px 12px; flex-wrap: wrap; } .modes label { display: inline-flex; gap: 4px; align-items: center; color: var(--muted); }
     textarea.code { width: calc(100% - 20px); margin: 0 10px 8px; min-height: 120px; font: 12px var(--mono); box-sizing: border-box; resize: vertical; }
     textarea.code.small { min-height: 60px; }
+    .aiw { display: flex; gap: 8px; align-items: center; margin: 10px 10px 2px; padding: 6px 8px; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: var(--r); background: var(--accent-soft); }
+    .aiw input { flex: 1; } .ai-ic { color: var(--accent); } .pad0 { padding: 4px 12px; }
     .scr .sh { display: flex; align-items: center; gap: 8px; padding: 8px 12px 6px; }
     pre.out { margin: 0; padding: 10px 14px; font: 12px/1.5 var(--mono); white-space: pre-wrap; word-break: break-word; }
     pre.out.small { font-size: 11.5px; background: var(--surface-2); margin: 6px 12px; border-radius: var(--r); }
     pre.json ::ng-deep .k { color: #60a5fa; } pre.json ::ng-deep .s { color: #34d399; } pre.json ::ng-deep .n { color: #f59e0b; } pre.json ::ng-deep .b { color: #c084fc; }
+    .mono-btn { display: inline-flex; align-items: center; justify-content: center; padding: 3px 6px; color: var(--muted); }
+    .mono-btn.on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+    pre.out.mono, pre.json.mono ::ng-deep span { color: #fff !important; }
+    :host-context(.light) pre.out.mono, :host-context(.light) pre.json.mono ::ng-deep span { color: #000 !important; }
     .err { margin: 10px 12px; padding: 8px 10px; border-radius: var(--r); background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); white-space: pre-wrap; }
     .empty { padding: 40px; color: var(--muted); text-align: center; line-height: 1.7; }
     .tr { padding: 6px 14px; border-bottom: 1px solid var(--line); } .tr b { color: var(--ok); margin-right: 6px; } .tr.bad b { color: var(--danger); }
@@ -370,6 +385,9 @@ export class ApiClient implements OnInit, OnDestroy {
   readonly res = signal<HResponse | null>(null);
   readonly busy = signal(false);
   readonly pretty = signal(true);
+  /** The answer's body in plain black / white instead of colours (kept for this viewer). */
+  readonly mono = signal(readMono());
+  toggleMono() { this.mono.update(v => !v); try { localStorage.setItem('tw.api.mono', this.mono() ? '1' : ''); } catch { /* not kept */ } }
   readonly history = signal<HHistoryItem[]>([]);
   readonly lang = signal('curl');
   readonly code = signal('');
@@ -668,6 +686,29 @@ export class ApiClient implements OnInit, OnDestroy {
     this.running.set(false);
   }
 
+  // ---- scripts written by the AI assistant ----
+  aiAskText = ''; aiTarget: 'tests' | 'pre' = 'tests';
+  readonly aiBusy = signal(false);
+  readonly aiNote = signal('');
+  async writeWithAI() {
+    const q = this.aiAskText.trim();
+    if (!q || this.aiBusy()) return;
+    this.aiBusy.set(true); this.aiNote.set('');
+    const d = this.draft().req, r = this.res();
+    const ctx = [`The request: ${d.method} ${d.url}`, d.body?.raw ? 'Its body:\n' + d.body.raw.slice(0, 3000) : '',
+      r ? `The last answer: ${r.statusText}, ${r.ms} ms, Content-Type ${r.contentType ?? ''}\n${r.base64 ? '(binary)' : r.body.slice(0, 6000)}` : 'No answer yet (send the request first for a better script).',
+      `The current ${this.aiTarget === 'pre' ? 'pre-request script' : 'tests'}:\n${(this.aiTarget === 'pre' ? d.preScript : d.tests) || '(none)'}`].filter(Boolean).join('\n\n');
+    try {
+      const a = await this.backend.aiAsk({ kind: this.aiTarget === 'pre' ? 'apiprescript' : 'apiscript', text: ctx, question: q, deviceType: '', protocol: 'HTTP' });
+      const m = /```(?:javascript|js)?\s*\n([\s\S]*?)```/.exec(a.text);
+      const code = (m ? m[1] : a.text).trim();
+      if (this.aiTarget === 'pre') this.setReq({ preScript: code }); else this.setReq({ tests: code });
+      this.aiNote.set(tr('Written by the AI assistant ({0}). Check it, then Send to run it.', a.model) + (a.removed ? ' ' + tr('{0} secrets were removed before sending.', a.removed) : ''));
+      this.aiAskText = '';
+    } catch (e) { this.aiNote.set(errText(e)); }
+    this.aiBusy.set(false);
+  }
+
   async clearHistory() { await this.backend.httpClearHistory().catch(() => {}); this.history.set([]); }
   copy(t: string) { void navigator.clipboard?.writeText(t).then(() => this.ui.toast(tr('Copied'), 'success')).catch(() => {}); }
   size(n: number) { return n < 1024 ? n + ' B' : n < 1 << 20 ? (n / 1024).toFixed(1) + ' KB' : (n / (1 << 20)).toFixed(1) + ' MB'; }
@@ -679,6 +720,8 @@ export class ApiClient implements OnInit, OnDestroy {
     return [{ l: 'DNS', v: t.dns }, { l: 'Connect', v: t.connect }, { l: 'TLS', v: t.tls }, { l: 'First byte', v: t.firstByte }, { l: 'Total', v: t.total }].map(p => ({ ...p, w: Math.min(100, (p.v / total) * 100) }));
   }
 }
+
+function readMono(): boolean { try { return localStorage.getItem('tw.api.mono') === '1'; } catch { return false; } }
 
 function newReq(): HRequest { return { method: 'GET', url: '', params: [], headers: [], body: { mode: '' } }; }
 

@@ -34,7 +34,9 @@ export interface TabView {
   cols: number;
   rows: number;
   locked: boolean;
-  kind: 'terminal' | 'sftp' | 'rdp' | 'vnc' | 'player' | 'lab' | 'map' | 'snmp' | 'api';
+  kind: 'terminal' | 'sftp' | 'rdp' | 'vnc' | 'player' | 'lab' | 'map' | 'snmp' | 'api' | 'syslog';
+  /** Syslog tab: a page to show (send:<time>). */
+  syslogPage?: string;
   /** API client tab: the API session it starts on. */
   apiSession?: string;
   /** SNMP Browser tab: the saved session it starts on ('' = choose one); snmpPage opens a page (results, traps). */
@@ -782,6 +784,20 @@ export class Tabs {
       id, title: '⛓ ' + name, state: 'connected', message: '', info: name,
       session: { ...s, name, path: '' }, logFile: '', cols: 0, rows: 0, locked: false, kind: 'map', parentId: '', home: '', recording: false,
       mapTargets: targets, mapScope: scope, mapTitle: title, mapOpened: opened,
+    };
+    this.tabs.update(l => [...l, tv]);
+    this.activeId.set(tv.id);
+  }
+
+  /** The syslog server's tab (one). page 'send' opens the test message form. */
+  async openSyslog(page = '') {
+    const open = this.tabs().find(t => t.kind === 'syslog');
+    if (open) { if (page) this.patch(open.id, { syslogPage: page + ':' + Date.now() }); this.activeId.set(open.id); return; }
+    const s = await this.backend.newSessionDefaults();
+    const tv: TabView = {
+      id: 'syslog', title: '≋ Syslog', state: 'connected', message: '', info: 'Syslog',
+      session: { ...s, name: 'Syslog', path: '' }, logFile: '', cols: 0, rows: 0, locked: false, kind: 'syslog', parentId: '', home: '', recording: false,
+      syslogPage: page ? page + ':' + Date.now() : '',
     };
     this.tabs.update(l => [...l, tv]);
     this.activeId.set(tv.id);

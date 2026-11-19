@@ -100,6 +100,7 @@ class Lab:
         self.traffic = Traffic(self)
         self.snmp = SNMP(self)
         self.http = HTTP(self)
+        self.syslog = Syslog(self)
 
     # ---- plain requests ----
     def request(self, method: str, path: str, body: Any = None, timeout: Optional[float] = None, raw: bool = False, binary: bool = False,
@@ -725,6 +726,57 @@ class HTTP:
         return self.lab.request("GET", "/http/history", root=True) or []
 
 
+class Syslog:
+    """Termwright's syslog server (UDP, TCP, TLS) and client."""
+
+    def __init__(self, lab: Lab):
+        self.lab = lab
+
+    def status(self) -> dict:
+        return self.lab.request("GET", "/syslog", root=True)
+
+    def start(self, udp: Optional[int] = None, tcp: Optional[int] = None, tls: Optional[int] = None, **settings) -> dict:
+        """Start (or restart) it; no arguments use the saved settings. Ports below 1024 may need administrator rights."""
+        body = {k: v for k, v in {"udp": udp, "tcp": tcp, "tls": tls, **settings}.items() if v is not None}
+        if body:
+            cur = self.status().get("settings") or {}
+            body = {**cur, **body}
+        return self.lab.request("POST", "/syslog/start", body or None, root=True)
+
+    def stop(self) -> dict:
+        return self.lab.request("POST", "/syslog/stop", {}, root=True)
+
+    def messages(self, q: str = "", host: str = "", severity: str = "", minutes: int = 0, after: int = 0, limit: int = 0) -> list:
+        """Messages received, oldest first: words or /regex/ in q, a sender, this severity or worse, the last minutes."""
+        return self.lab.request("GET", "/syslog/messages", root=True, q=q or None, host=host or None, severity=severity or None,
+                                minutes=minutes or None, after=after or None, limit=limit or None) or []
+
+    def wait_for(self, q: str, timeout: float = 60, **kw) -> dict:
+        """Wait until a message matching q arrives (after now); returns it."""
+        start = max([m["id"] for m in self.messages(limit=1)] or [0])
+        end = time.time() + timeout
+        while time.time() < end:
+            got = self.messages(q, after=start, **kw)
+            if got:
+                return got[0]
+            time.sleep(1)
+        raise TimeoutError("no syslog message matching %r" % q)
+
+    def clear(self) -> None:
+        self.lab.request("DELETE", "/syslog/messages", root=True)
+
+    def send(self, target: str, text: str, severity: str = "notice", facility: str = "user", proto: str = "udp", **kw) -> str:
+        """Send a test message to a syslog server; returns it as sent."""
+        body = {"target": target, "text": text, "severity": severity, "facility": facility, "proto": proto, **kw}
+        return self.lab.request("POST", "/syslog/send", body, root=True)["sent"]
+
+    def rules(self) -> list:
+        return self.lab.request("GET", "/syslog/rules", root=True) or []
+
+    def set_rules(self, rules: list) -> list:
+        return self.lab.request("PUT", "/syslog/rules", {"rules": rules}, root=True)
+
+
 # Every (method, path) the client calls: a test checks them against docs/api/openapi.yaml.
 ENDPOINTS = [
     ("GET", "/lab"), ("GET", "/lab/tools"),
@@ -742,4 +794,6 @@ ENDPOINTS = [
     ("POST", "/snmp"), ("GET", "/snmp/mib"), ("GET", "/snmp/mib/{object}"), ("GET", "/snmp/traps"),
     ("POST", "/http/send"), ("GET", "/http/collections"), ("POST", "/http/collections"), ("GET", "/http/collections/{collection}"),
     ("PUT", "/http/collections/{collection}"), ("POST", "/http/collections/{collection}/run"), ("POST", "/http/import"), ("GET", "/http/history"),
+    ("GET", "/syslog"), ("POST", "/syslog/start"), ("POST", "/syslog/stop"), ("GET", "/syslog/messages"), ("DELETE", "/syslog/messages"),
+    ("POST", "/syslog/send"), ("GET", "/syslog/rules"), ("PUT", "/syslog/rules"),
 ]

@@ -66,6 +66,10 @@ export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
       { label: 'API Client', action: 'api-client' }, { label: 'New API Session...', action: 'api-new-session' }, { sep: true },
       { label: 'Import Postman, OpenAPI or cURL...', action: 'api-import' },
     ] },
+    { title: 'Syslog', items: [
+      { label: 'Syslog Server', action: 'syslog-server' }, { label: 'Start / Stop Receiving', action: 'syslog-toggle' }, { sep: true },
+      { label: 'Send Test Message...', action: 'syslog-send' },
+    ] },
     { title: 'Script', items: [
       { label: 'Command Library...', action: 'command-library', keys: k('E') }, { label: 'Command History...', action: 'history', keys: k('Y') }, { sep: true },
       { label: 'Run Script...', action: 'run-script' }, { label: 'Cancel Running Scripts', action: 'cancel-scripts' }, { sep: true },

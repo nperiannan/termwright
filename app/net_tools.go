@@ -34,7 +34,7 @@ var netTools = []mcpTool{
 			"max":       map[string]any{"type": "integer", "description": "walk: at most this many values (default 2000 here)"},
 			"query":     map[string]any{"type": "string", "description": "mib_search: a name, module or OID; mib_info: one object"},
 		}, "action")},
-	{"http", "The REST API client with saved API sessions (Protocol API: base URL, authentication - API key, bearer token, login, basic, OAuth 2.0 - and {{variables}}; secrets stay in the credential store) and collections. send sends one request (a path goes after the session's base URL; the login token is fetched and renewed by itself) or a saved one (collection + request); POST, PUT, PATCH and DELETE on a production session are asked first. run runs a collection's requests with their tests; collections / collection list them; save adds or replaces a request in a collection (made when missing); import reads a cURL command, a Postman collection or an OpenAPI document into a collection; history lists the last requests.",
+	{"http", "The REST API client with saved API sessions (Protocol API: base URL, authentication - API key, bearer token, login, basic, OAuth 2.0 - and {{variables}}; secrets stay in the credential store) and collections. send sends one request (a path goes after the session's base URL; the login token is fetched and renewed by itself) or a saved one (collection + request); POST, PUT, PATCH and DELETE on a production session are asked first. run runs a collection's requests with their tests; collections / collection list them; save adds or replaces a request in a collection (made when missing), with its pre-request script (preScript) and tests in Postman's pm.* style (pm.test, pm.expect, pm.response.json(), pm.variables.set); import reads a cURL command, a Postman collection or an OpenAPI document into a collection; history lists the last requests.",
 		mcpSchema(map[string]any{
 			"action":     map[string]any{"type": "string", "enum": []string{"send", "run", "collections", "collection", "save", "import", "history"}, "description": "what to do"},
 			"session":    map[string]any{"type": "string", "description": "an API session's path (list_sessions shows protocol API)"},
@@ -51,6 +51,22 @@ var netTools = []mcpTool{
 			"data":       map[string]any{"type": "string", "description": "run: CSV with a header line or a JSON array; one iteration per row"},
 			"text":       map[string]any{"type": "string", "description": "import: the cURL command, Postman collection or OpenAPI document"},
 			"name":       map[string]any{"type": "string", "description": "import / save: the collection's name"},
+		}, "action")},
+	{"syslog", "The syslog server in Termwright (receives from devices over UDP, TCP and TLS while Termwright runs; senders are matched to saved sessions) and a syslog client. status: whether it listens, counts per severity, senders. messages: what was received, filtered by words or /regex/, sender, severity and minutes back (newest last). start / stop the server (ports: udp 514, tcp, tls 6514; ports below 1024 may need administrator rights - use 1514 then). send: a test message to a syslog server. clear forgets the messages.",
+		mcpSchema(map[string]any{
+			"action":   map[string]any{"type": "string", "enum": []string{"status", "messages", "start", "stop", "send", "clear"}, "description": "what to do"},
+			"query":    map[string]any{"type": "string", "description": "messages: words that must all be in the message, or /regex/"},
+			"host":     map[string]any{"type": "string", "description": "messages: only from this sender (address or host name)"},
+			"severity": map[string]any{"type": "string", "description": "messages: this severity or worse (emerg, alert, crit, err, warning, notice, info, debug or 0-7); send: the message's severity"},
+			"minutes":  map[string]any{"type": "integer", "description": "messages: only the last minutes"},
+			"limit":    map[string]any{"type": "integer", "description": "messages: at most this many (default 200)"},
+			"udp":      map[string]any{"type": "integer", "description": "start: UDP port (default the saved one, 514)"},
+			"tcp":      map[string]any{"type": "integer", "description": "start: TCP port (0 off)"},
+			"tls":      map[string]any{"type": "integer", "description": "start: TLS port (0 off)"},
+			"target":   map[string]any{"type": "string", "description": "send: the syslog server, host or host:port"},
+			"proto":    map[string]any{"type": "string", "enum": []string{"udp", "tcp", "tls"}, "description": "send: transport (default udp)"},
+			"facility": map[string]any{"type": "string", "description": "send: local7, user, … (default user)"},
+			"text":     map[string]any{"type": "string", "description": "send: the message"},
 		}, "action")},
 }
 
@@ -69,6 +85,8 @@ func (a *App) netToolRun(ctx context.Context, name string, args map[string]any, 
 		return a.snmpTool(ctx, args, ask)
 	case "http":
 		return a.httpTool(ctx, args, ask)
+	case "syslog":
+		return a.syslogTool(args)
 	}
 	return "", fmt.Errorf("no tool %s", name)
 }
@@ -242,7 +260,10 @@ func netAgentText(tools []string) string {
 		b.WriteString(`For example: snmp {"action":"walk","session":"Lab/core-sw1","oids":["IF-MIB::ifOperStatus"]} or snmp {"action":"get","session":"Lab/core-sw1","oids":["sysDescr.0","sysUpTime.0"]}. Find the session with find first. A set on a production session is asked; the result says when it was refused.` + "\n")
 	}
 	if b.Len() > 0 && slices.Contains(tools, "http") {
-		b.WriteString(`For example: http {"action":"send","session":"APIs/Lab switches REST","url":"/rest/restconf/data/openconfig-interfaces:interfaces"} or http {"action":"run","collection":"EXOS RESTCONF"}. A path goes after the session's base URL and the session logs in by itself; never ask the user for tokens or passwords. Changes (POST, PUT, PATCH, DELETE) on a production session are asked.` + "\n")
+		b.WriteString(`For example: http {"action":"send","session":"APIs/Lab switches REST","url":"/rest/restconf/data/openconfig-interfaces:interfaces"} or http {"action":"run","collection":"EXOS RESTCONF"}. A path goes after the session's base URL and the session logs in by itself; never ask the user for tokens or passwords. Changes (POST, PUT, PATCH, DELETE) on a production session are asked. When the user wants tests or scripts, write them into the request with save (its "tests" and "preScript" fields) and run it to check them. ` + pmReference + "\n")
+	}
+	if b.Len() > 0 && slices.Contains(tools, "syslog") {
+		b.WriteString(`For example: syslog {"action":"messages","severity":"warning","minutes":30} or syslog {"action":"messages","host":"10.127.34.33","query":"link down"}.` + "\n")
 	}
 	return b.String()
 }

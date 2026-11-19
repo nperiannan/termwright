@@ -45,6 +45,15 @@ class Fake(BaseHTTPRequestHandler):
                 return self.reply(200, {"oid": "1.3.6.1.2.1.2.2.1.8", "name": "ifOperStatus"})
             if self.path == "/api/v1/snmp/traps":
                 return self.reply(200, {"state": {"on": False, "port": 0, "count": 0}, "traps": []})
+        if self.path.startswith("/api/v1/syslog"):
+            if self.path.startswith("/api/v1/syslog/messages") and m == "GET":
+                return self.reply(200, [{"id": 7, "text": "1/1 link down", "severity": 3}])
+            if self.path == "/api/v1/syslog/send":
+                return self.reply(200, {"sent": "<187>1 ..."})
+            if self.path == "/api/v1/syslog":
+                return self.reply(200, {"on": False, "settings": {"udp": 514, "saveFiles": True}})
+            if self.path == "/api/v1/syslog/start":
+                return self.reply(200, {"on": True})
         if self.path.startswith("/api/v1/http"):
             if self.path == "/api/v1/http/send":
                 return self.reply(200, {"status": 200, "body": '{"ok": true}', "ms": 3})
@@ -252,6 +261,14 @@ class ClientTest(unittest.TestCase):
                                                                   "body": {"mode": "json", "raw": '{"id": 10}'}}, "session": "APIs/rest"})
         self.assertEqual(calls["/api/v1/http/collections/Lab%20checks/run"], {"iterations": 2})
         self.assertEqual(calls["/api/v1/http/import"], {"text": "curl https://x/y"})
+
+    def test_syslog(self):
+        self.assertEqual(self.lab.syslog.messages("link down", severity="err")[0]["id"], 7)
+        self.assertTrue(self.lab.syslog.send("10.0.0.5", "hi", severity="err").startswith("<187>"))
+        self.assertTrue(self.lab.syslog.start(udp=1514)["on"])
+        calls = [(m, p, b) for m, p, b in Fake.state["calls"]]
+        self.assertIn(("GET", "/api/v1/syslog/messages?q=link+down&severity=err", None), calls)
+        self.assertIn(("POST", "/api/v1/syslog/start", {"udp": 1514, "saveFiles": True}), calls)
 
     def test_pps_for(self):
         self.assertEqual(tw.pps_for(1000, 64), 1488095)

@@ -177,6 +177,7 @@ func (a *App) init() error {
 
 func (a *App) shutdown(context.Context) {
 	closeWebPages()
+	a.SyslogStop()
 	fsMgr.StopAll()
 	a.IperfServerStop()
 	a.labShutdown()
@@ -1601,6 +1602,7 @@ func (a *App) ImportAWS(profile, region string, usePublic bool, opt session.Impo
 
 // domReady restores the saved window position.
 func (a *App) domReady(ctx context.Context) {
+	go a.syslogAutoStart()
 	if a.cfg == nil {
 		return
 	}

@@ -21,6 +21,7 @@ import (
 	"github.com/termwright/termwright/internal/apiclient"
 	"github.com/termwright/termwright/internal/config"
 	"github.com/termwright/termwright/internal/emu"
+	"github.com/termwright/termwright/internal/syslog"
 	"gopkg.in/yaml.v3"
 )
 
@@ -224,6 +225,71 @@ func (a *App) apiHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 		apiOut(w, http.StatusCreated, c, nil)
 	case "/http/history":
 		apiOut(w, http.StatusOK, a.HTTPHistory(), nil)
+	case "/syslog":
+		apiOut(w, http.StatusOK, a.SyslogState(), nil)
+	case "/syslog/start":
+		set := a.SyslogSettingsGet()
+		if len(body) > 0 {
+			if err := apiDecode(body, &set); err != nil {
+				apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+				return
+			}
+		}
+		st, err := a.SyslogStart(set)
+		apiOut(w, http.StatusOK, st, err)
+	case "/syslog/stop":
+		a.SyslogStop()
+		apiOut(w, http.StatusOK, a.SyslogState(), nil)
+	case "/syslog/messages":
+		if r.Method == http.MethodDelete {
+			a.SyslogClear()
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		qv := r.URL.Query()
+		q := syslog.Query{Text: qv.Get("q"), Host: qv.Get("host")}
+		fmt.Sscan(qv.Get("after"), &q.After)
+		fmt.Sscan(qv.Get("limit"), &q.Limit)
+		if sv := qv.Get("severity"); sv != "" {
+			n := syslog.SeverityOf(sv)
+			if n < 0 {
+				apiProblem(w, http.StatusBadRequest, "bad-request", "unknown severity "+sv)
+				return
+			}
+			q.MaxSeverity = &n
+		}
+		var mins int
+		if fmt.Sscan(qv.Get("minutes"), &mins); mins > 0 {
+			q.Since = time.Now().Add(-time.Duration(mins) * time.Minute)
+		}
+		l, err := a.SyslogMessages(q)
+		if err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		apiOut(w, http.StatusOK, l, nil)
+	case "/syslog/send":
+		var in SyslogSendIn
+		if err := apiDecode(body, &in); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		msg, err := a.SyslogSend(in)
+		apiOut(w, http.StatusOK, map[string]string{"sent": msg}, err)
+	case "/syslog/rules":
+		if r.Method == http.MethodGet {
+			apiOut(w, http.StatusOK, a.SyslogRules(), nil)
+			return
+		}
+		var in struct {
+			Rules []SyslogRule `json:"rules"`
+		}
+		if err := apiDecode(body, &in); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		err := a.SyslogSetRules(in.Rules)
+		apiOut(w, http.StatusOK, a.SyslogRules(), err)
 	case "/lab/tools/{tool}":
 		a.apiTool(w, "lab_"+arg, body)
 	case "/lab/screen/{id}":
@@ -417,6 +483,7 @@ var apiRoutes = map[string][]string{
 	"/tools": {"GET"}, "/tools/{tool}": {"POST"}, "/snmp": {"POST"}, "/snmp/mib": {"GET"}, "/snmp/mib/{object}": {"GET"}, "/snmp/traps": {"GET"},
 	"/http/send": {"POST"}, "/http/collections": {"GET", "POST"}, "/http/collections/{collection}": {"GET", "PUT", "DELETE"},
 	"/http/collections/{collection}/run": {"POST"}, "/http/import": {"POST"}, "/http/history": {"GET"},
+	"/syslog": {"GET"}, "/syslog/start": {"POST"}, "/syslog/stop": {"POST"}, "/syslog/messages": {"GET", "DELETE"}, "/syslog/send": {"POST"}, "/syslog/rules": {"GET", "PUT"},
 }
 
 // HTTPImportIn imports a cURL command, a Postman collection or an OpenAPI document as a collection.

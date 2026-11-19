@@ -53,8 +53,10 @@ tags:
       description: 'SNMP v1, v2c and v3 with the saved sessions'' settings: get, walk, set, the MIBs and traps.'
     - name: API client
       description: 'The REST API client: send requests with saved API sessions, collections, runs, imports.'
+    - name: Syslog
+      description: 'The syslog server (UDP, TCP, TLS) and client: messages received, rules, test messages.'
     - name: Network tools
-      description: The network tools the AI assistant and the Claude connector use (snmp, http), as JSON.
+      description: The network tools the AI assistant and the Claude connector use (snmp, http, syslog), as JSON.
     - name: API
       description: This description.
 paths:
@@ -1500,6 +1502,253 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /syslog:
+        get:
+            operationId: syslogState
+            tags:
+                - Syslog
+            summary: The syslog server
+            description: Whether Termwright's syslog server listens (UDP, TCP, TLS), its counts per severity and its senders.
+            responses:
+                200:
+                    description: Its state.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SyslogState'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /syslog/start:
+        post:
+            operationId: syslogStart
+            tags:
+                - Syslog
+            summary: Start the syslog server
+            description: Starts (or restarts) it with these settings, saved for the next time; no body uses the saved ones. Ports below 1024 may need administrator rights on macOS and Linux.
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SyslogSettings'
+                        examples:
+                            udp:
+                                summary: UDP 514 and TLS 6514, files per sender
+                                value:
+                                    udp: 514
+                                    tcp: 0
+                                    tls: 6514
+                                    saveFiles: true
+                                    perHost: true
+            responses:
+                200:
+                    description: Its state.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SyslogState'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /syslog/stop:
+        post:
+            operationId: syslogStop
+            tags:
+                - Syslog
+            summary: Stop the syslog server
+            description: Stops listening; the messages are kept until cleared.
+            responses:
+                200:
+                    description: Its state.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SyslogState'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /syslog/messages:
+        get:
+            operationId: syslogMessages
+            tags:
+                - Syslog
+            summary: Messages received
+            description: The messages that match, oldest first (the newest limit). Rules that hide a message leave it out.
+            parameters:
+                - name: q
+                  in: query
+                  description: Words that must all be in the message, its host or program; /regex/ for a regular expression.
+                  schema:
+                    type: string
+                - name: host
+                  in: query
+                  description: Only from this sender (address or host name).
+                  schema:
+                    type: string
+                - name: severity
+                  in: query
+                  description: 'This severity or worse: emerg, alert, crit, err, warning, notice, info, debug or 0-7.'
+                  schema:
+                    type: string
+                - name: minutes
+                  in: query
+                  description: Only the last minutes.
+                  schema:
+                    type: integer
+                - name: after
+                  in: query
+                  description: Only messages with a larger id (to follow new ones).
+                  schema:
+                    type: integer
+                - name: limit
+                  in: query
+                  description: At most this many (default 1000).
+                  schema:
+                    type: integer
+            responses:
+                200:
+                    description: The messages.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/SyslogView'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+        delete:
+            operationId: syslogClear
+            tags:
+                - Syslog
+            summary: Clear the messages
+            description: Forgets the messages received (the files stay).
+            responses:
+                204:
+                    description: Cleared.
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /syslog/send:
+        post:
+            operationId: syslogSend
+            tags:
+                - Syslog
+            summary: Send a test message
+            description: 'Sends a syslog message (RFC 5424 or 3164) over UDP, TCP or TLS to a syslog server: to check that a server receives, or to set off its alerts.'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SyslogSendIn'
+                        examples:
+                            test:
+                                summary: An error to a server
+                                value:
+                                    target: 10.0.0.5
+                                    facility: local7
+                                    severity: err
+                                    text: test from Termwright
+            responses:
+                200:
+                    description: The message as sent.
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    sent:
+                                        type: string
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /syslog/rules:
+        get:
+            operationId: syslogRules
+            tags:
+                - Syslog
+            summary: The syslog rules
+            description: Rules that highlight, alert on or hide messages; the first that matches wins.
+            responses:
+                200:
+                    description: The rules.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/SyslogRule'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+        put:
+            operationId: syslogSetRules
+            tags:
+                - Syslog
+            summary: Replace the syslog rules
+            description: 'Saves the rules ({"rules": [...]}).'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                rules:
+                                    type: array
+                                    items:
+                                        $ref: '#/components/schemas/SyslogRule'
+            responses:
+                200:
+                    description: The rules.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/SyslogRule'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /snmp:
         post:
             operationId: snmp
@@ -1653,7 +1902,7 @@ paths:
             tags:
                 - Network tools
             summary: The network tools
-            description: 'The network tools (snmp, http; syslog joins them) with their arguments (JSON Schema): the same tools the in-app AI assistant and the Claude connector use. Each one is POST /tools/{name}.'
+            description: 'The network tools (snmp, http, syslog) with their arguments (JSON Schema): the same tools the in-app AI assistant and the Claude connector use. Each one is POST /tools/{name}.'
             responses:
                 200:
                     description: The tools.
@@ -1761,7 +2010,7 @@ paths:
             tags:
                 - Network tools
             summary: The http tool
-            description: 'The REST API client with saved API sessions (Protocol API: base URL, authentication - API key, bearer token, login, basic, OAuth 2.0 - and {{variables}}; secrets stay in the credential store) and collections. send sends one request (a path goes after the session''s base URL; the login token is fetched and renewed by itself) or a saved one (collection + request); POST, PUT, PATCH and DELETE on a production session are asked first. run runs a collection''s requests with their tests; collections / collection list them; save adds or replaces a request in a collection (made when missing); import reads a cURL command, a Postman collection or an OpenAPI document into a collection; history lists the last requests. Through the API it runs without asking.'
+            description: 'The REST API client with saved API sessions (Protocol API: base URL, authentication - API key, bearer token, login, basic, OAuth 2.0 - and {{variables}}; secrets stay in the credential store) and collections. send sends one request (a path goes after the session''s base URL; the login token is fetched and renewed by itself) or a saved one (collection + request); POST, PUT, PATCH and DELETE on a production session are asked first. run runs a collection''s requests with their tests; collections / collection list them; save adds or replaces a request in a collection (made when missing), with its pre-request script (preScript) and tests in Postman''s pm.* style (pm.test, pm.expect, pm.response.json(), pm.variables.set); import reads a cURL command, a Postman collection or an OpenAPI document into a collection; history lists the last requests. Through the API it runs without asking.'
             requestBody:
                 required: true
                 content:
@@ -1827,6 +2076,91 @@ paths:
                                 url:
                                     description: 'send: a path (/rest/restconf/data/openconfig-interfaces:interfaces) or a full URL; {{variables}} work'
                                     type: string
+                            required:
+                                - action
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /tools/syslog:
+        post:
+            operationId: net_syslog
+            tags:
+                - Network tools
+            summary: The syslog tool
+            description: 'The syslog server in Termwright (receives from devices over UDP, TCP and TLS while Termwright runs; senders are matched to saved sessions) and a syslog client. status: whether it listens, counts per severity, senders. messages: what was received, filtered by words or /regex/, sender, severity and minutes back (newest last). start / stop the server (ports: udp 514, tcp, tls 6514; ports below 1024 may need administrator rights - use 1514 then). send: a test message to a syslog server. clear forgets the messages. Through the API it runs without asking.'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    description: what to do
+                                    enum:
+                                        - status
+                                        - messages
+                                        - start
+                                        - stop
+                                        - send
+                                        - clear
+                                    type: string
+                                facility:
+                                    description: 'send: local7, user, … (default user)'
+                                    type: string
+                                host:
+                                    description: 'messages: only from this sender (address or host name)'
+                                    type: string
+                                limit:
+                                    description: 'messages: at most this many (default 200)'
+                                    type: integer
+                                minutes:
+                                    description: 'messages: only the last minutes'
+                                    type: integer
+                                proto:
+                                    description: 'send: transport (default udp)'
+                                    enum:
+                                        - udp
+                                        - tcp
+                                        - tls
+                                    type: string
+                                query:
+                                    description: 'messages: words that must all be in the message, or /regex/'
+                                    type: string
+                                severity:
+                                    description: 'messages: this severity or worse (emerg, alert, crit, err, warning, notice, info, debug or 0-7); send: the message''s severity'
+                                    type: string
+                                target:
+                                    description: 'send: the syslog server, host or host:port'
+                                    type: string
+                                tcp:
+                                    description: 'start: TCP port (0 off)'
+                                    type: integer
+                                text:
+                                    description: 'send: the message'
+                                    type: string
+                                tls:
+                                    description: 'start: TLS port (0 off)'
+                                    type: integer
+                                udp:
+                                    description: 'start: UDP port (default the saved one, 514)'
+                                    type: integer
                             required:
                                 - action
             responses:
@@ -7400,6 +7734,242 @@ components:
                 - rxRate
                 - running
                 - result
+        SyslogRule:
+            type: object
+            description: A rule that highlights, alerts on or hides syslog messages (the first that matches wins).
+            properties:
+                name:
+                    description: Name shown with the messages it matches.
+                    type: string
+                match:
+                    description: 'Match: words that must all be in the message, or /regex/ ("" = any).'
+                    type: string
+                maxSeverity:
+                    description: 'MaxSeverity: this severity or worse (0 emerg … 7 debug; -1 any).'
+                    type: integer
+                host:
+                    description: 'Host: only from this sender ("" any).'
+                    type: string
+                color:
+                    description: Color of the matching lines (red, amber, green, blue, purple; "" none).
+                    type: string
+                notify:
+                    description: 'Notify: a notification in Termwright for each one.'
+                    type: boolean
+                hide:
+                    description: 'Hide: not shown (noise).'
+                    type: boolean
+                off:
+                    description: 'Off: kept but not used.'
+                    type: boolean
+            required:
+                - name
+                - maxSeverity
+        SyslogSendIn:
+            type: object
+            description: A test message to send to a syslog server.
+            properties:
+                target:
+                    description: 'Target: host or host:port (514; 6514 for TLS).'
+                    type: string
+                proto:
+                    description: 'Proto: udp (default), tcp or tls.'
+                    type: string
+                format:
+                    description: 'Format: 5424 (default) or 3164.'
+                    type: string
+                facility:
+                    description: 'Facility: a name (local7) or number (default user).'
+                    type: string
+                severity:
+                    description: 'Severity: a name (err, warning) or number (default notice).'
+                    type: string
+                host:
+                    description: 'Host: the host name in the message (default this computer''s).'
+                    type: string
+                app:
+                    description: 'App: the program name (default termwright).'
+                    type: string
+                text:
+                    description: Text of the message.
+                    type: string
+                count:
+                    description: 'Count: send it this many times (1-1000).'
+                    type: integer
+                insecure:
+                    description: 'Insecure: TLS without checking the server''s certificate.'
+                    type: boolean
+            required:
+                - target
+                - text
+        SyslogSettings:
+            type: object
+            description: The syslog server's ports, files and start-up.
+            properties:
+                udp:
+                    description: UDP port (514; 0 = off). Ports below 1024 need administrator rights on macOS and Linux.
+                    type: integer
+                tcp:
+                    description: TCP port (0 = off; 514 or 601 usually).
+                    type: integer
+                tls:
+                    description: TLS port (0 = off; 6514 usually). A self-signed certificate is made unless Cert and Key are given.
+                    type: integer
+                cert:
+                    description: 'Cert: TLS certificate (PEM file).'
+                    type: string
+                key:
+                    description: 'Key: its private key (PEM file).'
+                    type: string
+                bind:
+                    description: 'Bind: the address to listen on ("" all).'
+                    type: string
+                saveFiles:
+                    description: 'SaveFiles: write every message to a file per day.'
+                    type: boolean
+                perHost:
+                    description: 'PerHost: one folder per sender.'
+                    type: boolean
+                folder:
+                    description: Folder for the files ("" = the syslog folder in Termwright's data folder).
+                    type: string
+                autoStart:
+                    description: 'AutoStart: start receiving when Termwright starts.'
+                    type: boolean
+                keep:
+                    description: 'Keep: messages kept in memory (default 50000).'
+                    type: integer
+            required:
+                - udp
+                - tcp
+                - tls
+        SyslogState:
+            type: object
+            description: Whether the syslog server listens, on what, and what it received.
+            properties:
+                on:
+                    description: 'On: it listens.'
+                    type: boolean
+                addrs:
+                    description: Addrs it listens on ("udp 0.0.0.0:514").
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                error:
+                    description: 'Error: why it could not start.'
+                    type: string
+                counts:
+                    description: Counts of messages per severity since it started (emerg … debug).
+                    type: array
+                    items:
+                        type: integer
+                    minItems: 8
+                    maxItems: 8
+                total:
+                    description: Total messages kept.
+                    type: integer
+                hosts:
+                    description: 'Hosts: senders and their message counts.'
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: integer
+                settings:
+                    $ref: '#/components/schemas/SyslogSettings'
+                    description: Settings in use.
+                folder:
+                    description: Folder the files are written to (when SaveFiles).
+                    type: string
+                since:
+                    description: 'Since: when it started.'
+                    type: string
+            required:
+                - "on"
+                - addrs
+                - counts
+                - total
+                - hosts
+                - settings
+        SyslogView:
+            type: object
+            description: A syslog message received, with the saved session of its sender and the rule it matched.
+            properties:
+                id:
+                    description: 'ID: increases with every message (to ask for the newer ones).'
+                    type: integer
+                at:
+                    description: 'At: when it was received.'
+                    type: string
+                    format: date-time
+                from:
+                    description: 'From: the sender''s address.'
+                    type: string
+                proto:
+                    description: 'Proto: udp, tcp or tls.'
+                    type: string
+                facility:
+                    description: 'Facility: 0-23 (16-23 are local0-local7).'
+                    type: integer
+                facilityName:
+                    description: 'FacilityName: kern, user, … local7.'
+                    type: string
+                severity:
+                    description: 'Severity: 0 emerg, 1 alert, 2 crit, 3 err, 4 warning, 5 notice, 6 info, 7 debug.'
+                    type: integer
+                severityName:
+                    description: 'SeverityName: emerg … debug.'
+                    type: string
+                time:
+                    description: Time the device put in it ("" when none or unreadable).
+                    type: string
+                host:
+                    description: Host the device names itself.
+                    type: string
+                app:
+                    description: 'App: the program (TAG / APP-NAME).'
+                    type: string
+                procId:
+                    description: 'ProcID: the process id.'
+                    type: string
+                msgId:
+                    description: 'MsgID: the message type (RFC 5424).'
+                    type: string
+                sd:
+                    description: 'SD: structured data (RFC 5424) as written.'
+                    type: string
+                text:
+                    description: 'Text: the message itself.'
+                    type: string
+                format:
+                    description: 'Format: 3164, 5424 or raw.'
+                    type: string
+                raw:
+                    description: 'Raw: the message as received.'
+                    type: string
+                session:
+                    description: 'Session: the saved session at the sender''s address.'
+                    type: string
+                rule:
+                    description: 'Rule: the first rule that matched.'
+                    type: string
+                color:
+                    description: Color of that rule.
+                    type: string
+            required:
+                - id
+                - at
+                - from
+                - proto
+                - facility
+                - facilityName
+                - severity
+                - severityName
+                - text
+                - format
+                - raw
         TestPort:
             type: object
             description: 'A test port: a sender and counter on a free switch port (no VM). It answers ARP, neighbour solicitations and ping at its addresses.'

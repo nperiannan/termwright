@@ -85,6 +85,8 @@
               @defer (on immediate) { <app-lab-workspace [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" /> } @placeholder { <div class="lab-loading">Loading the lab…</div> }
             } @else if (t.kind === 'map') {
               @defer (on immediate) { <app-network-map [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" /> } @placeholder { <div class="lab-loading">Loading the map…</div> }
+            } @else if (t.kind === 'syslog') {
+              @defer (on immediate) { <app-syslog-view [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" /> } @placeholder { <div class="lab-loading">Loading…</div> }
             } @else if (t.kind === 'api') {
               @defer (on immediate) { <app-api-client [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" /> } @placeholder { <div class="lab-loading">Loading…</div> }
             } @else if (t.kind === 'snmp') {

@@ -70,6 +70,11 @@ Settings, and turning one on does not turn on the other.
 | `POST /http/collections/{collection}/run` | Runs it (requests, folder, iterations, CSV / JSON data) with its tests | 200 `HTTPRunResult` |
 | `POST /http/import` | Imports a Postman collection, an OpenAPI / Swagger document or cURL (`{"text": "..."}`) | 201 `HTTPCollection` |
 | `GET /http/history` | The requests sent, newest first | 200 |
+| `GET /syslog` | The syslog server: listening, counts per severity, senders | 200 `SyslogState` |
+| `POST /syslog/start`, `POST /syslog/stop` | Starts (with settings, or the saved ones) or stops it | 200 `SyslogState` |
+| `GET /syslog/messages?q=&host=&severity=&minutes=&after=&limit=`, `DELETE /syslog/messages` | Messages received (words or /regex/, sender, severity or worse); clear them | 200 `[SyslogView]` / 204 |
+| `POST /syslog/send` | Sends a test message to a syslog server | 200 |
+| `GET`, `PUT /syslog/rules` | Rules that colour, notify or hide | 200 |
 | `GET /tools` | The network tools (`snmp`) with their arguments (JSON Schema), the same as the MCP connector's | 200 `Tool[]` |
 | `POST /tools/{tool}` | Runs a network tool; the body holds its arguments | 200 `{"result": text}` |
 

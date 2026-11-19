@@ -20,6 +20,7 @@ import (
 
 	"github.com/termwright/termwright/internal/apiclient"
 	"github.com/termwright/termwright/internal/emu"
+	"github.com/termwright/termwright/internal/syslog"
 )
 
 // The local API's OpenAPI 3.2.1 document, docs/api/openapi.yaml, is made here from
@@ -73,7 +74,7 @@ func (o om) MarshalYAML() (any, error) {
 // fieldDocs reads the field comments of the API's Go types: "Type.jsonName" → text.
 func fieldDocs(t *testing.T) map[string]string {
 	out := map[string]string{}
-	for _, dir := range []string{".", "../internal/emu", "../internal/apiclient"} {
+	for _, dir := range []string{".", "../internal/emu", "../internal/apiclient", "../internal/syslog"} {
 		fs := token.NewFileSet()
 		pkgs, err := parser.ParseDir(fs, dir, func(fi os.FileInfo) bool { return !strings.HasSuffix(fi.Name(), "_test.go") }, parser.ParseComments)
 		if err != nil {
@@ -128,7 +129,7 @@ var oasNames = map[string]string{
 	"app.apiToolInfo": "Tool", "emu.TrafficTest": "TrafficTest", "app.EmuTestRun": "TestRun", "app.EmuTestRow": "TestRow",
 	"apiclient.Request": "HTTPRequestDef", "apiclient.Response": "HTTPResponse", "apiclient.KV": "HTTPKeyValue", "apiclient.Body": "HTTPBody",
 	"apiclient.Cookie": "HTTPCookie", "apiclient.Timing": "HTTPTiming", "apiclient.TestResult": "HTTPTestResult", "apiclient.Collection": "HTTPCollection",
-	"apiclient.CollectionInfo": "HTTPCollectionInfo", "apiclient.RunResult": "HTTPRunResult", "apiclient.RunStep": "HTTPRunStep", "session.Session": "Session",
+	"apiclient.CollectionInfo": "HTTPCollectionInfo", "syslog.Message": "SyslogMessage", "apiclient.RunResult": "HTTPRunResult", "apiclient.RunStep": "HTTPRunStep", "session.Session": "Session",
 }
 
 type schemaGen struct {
@@ -282,6 +283,11 @@ var oasTypeDocs = map[string]string{
 	"HTTPRunResult":      "A collection run: every request with its status and tests.",
 	"HTTPImportIn":       "A cURL command, Postman collection or OpenAPI document to import.",
 	"HTTPHistoryItem":    "A request sent (no answer body).",
+	"SyslogState":        "Whether the syslog server listens, on what, and what it received.",
+	"SyslogSettings":     "The syslog server's ports, files and start-up.",
+	"SyslogView":         "A syslog message received, with the saved session of its sender and the rule it matched.",
+	"SyslogSendIn":       "A test message to send to a syslog server.",
+	"SyslogRule":         "A rule that highlights, alerts on or hides syslog messages (the first that matches wins).",
 }
 
 func TestOpenAPIDoc(t *testing.T) {
@@ -336,7 +342,8 @@ func TestOpenAPIDoc(t *testing.T) {
 	for _, ty := range []reflect.Type{reflect.TypeOf(emu.Stream{}), reflect.TypeOf(emu.Tester{}), reflect.TypeOf(emu.Mod{}), reflect.TypeOf(EmuStreamResult{}), reflect.TypeOf(EmuTrafficView{}), reflect.TypeOf(emu.TrafficTest{}), reflect.TypeOf(EmuTestRun{}), reflect.TypeOf(EmuTestRow{}),
 		reflect.TypeOf(EmuEngines{}), reflect.TypeOf(EmuEngineHost{}), reflect.TypeOf(EmuTrex{}), reflect.TypeOf(EmuTrexPort{}), reflect.TypeOf(EmuHostNIC{}), reflect.TypeOf(EmuSessionResult{}), reflect.TypeOf(emu.Session{}), reflect.TypeOf(SNMPRequest{}), reflect.TypeOf(SNMPResult{}), reflect.TypeOf(SNMPRow{}), reflect.TypeOf(SNMPTarget{}), reflect.TypeOf(SNMPValue{}),
 		reflect.TypeOf(HTTPSendRequest{}), reflect.TypeOf(HTTPRunRequest{}), reflect.TypeOf(HTTPImportIn{}), reflect.TypeOf(apiclient.Request{}), reflect.TypeOf(apiclient.Response{}),
-		reflect.TypeOf(apiclient.Collection{}), reflect.TypeOf(apiclient.Body{}), reflect.TypeOf(apiclient.KV{}), reflect.TypeOf(apiclient.RunResult{}), reflect.TypeOf(apiclient.RunStep{})} {
+		reflect.TypeOf(apiclient.Collection{}), reflect.TypeOf(apiclient.Body{}), reflect.TypeOf(apiclient.KV{}), reflect.TypeOf(apiclient.RunResult{}), reflect.TypeOf(apiclient.RunStep{}),
+		reflect.TypeOf(SyslogState{}), reflect.TypeOf(SyslogSettings{}), reflect.TypeOf(SyslogSendIn{}), reflect.TypeOf(SyslogRule{}), reflect.TypeOf(syslog.Message{})} {
 		tn := strings.TrimPrefix(ty.String(), "app.")
 		for i := 0; i < ty.NumField(); i++ {
 			name := strings.Split(ty.Field(i).Tag.Get("json"), ",")[0]
@@ -383,7 +390,8 @@ func op(id, tag, summary, desc string, extra ...kv) om {
 func openAPIDoc(t *testing.T) om {
 	g := &schemaGen{docs: fieldDocs(t), comps: map[string]om{}}
 	for _, ty := range []any{EmuView{}, EmuTrafficView{}, emu.Stream{}, emu.Tester{}, apiToolInfo{}, emu.TrafficTest{}, EmuTestRun{}, EmuEngines{}, EmuHostNIC{}, SNMPRequest{}, SNMPResult{}, SNMPMibNode{}, SNMPTrapsView{},
-		HTTPSendRequest{}, apiclient.Response{}, apiclient.Collection{}, apiclient.CollectionInfo{}, HTTPRunRequest{}, apiclient.RunResult{}, HTTPImportIn{}, HTTPHistoryItem{}} {
+		HTTPSendRequest{}, apiclient.Response{}, apiclient.Collection{}, apiclient.CollectionInfo{}, HTTPRunRequest{}, apiclient.RunResult{}, HTTPImportIn{}, HTTPHistoryItem{},
+		SyslogState{}, SyslogSettings{}, SyslogView{}, SyslogSendIn{}, SyslogRule{}} {
 		g.schema(reflect.TypeOf(ty))
 	}
 	std := append([]kv{}, errs("401", "403", "405")...)
@@ -565,6 +573,34 @@ func openAPIDoc(t *testing.T) om {
 			kv{"responses", append(om{{"201", resp("The new collection.", "HTTPCollection")}}, append(errs("400"), std...)...)})}}},
 		kv{"/http/history", om{{"get", op("httpHistory", "API client", "Requests sent", "The last 300 requests sent, newest first (no answer bodies; secrets masked).",
 			kv{"responses", append(om{{"200", om{{"description", "The requests."}, {"content", om{{"application/json", om{{"schema", om{{"type", "array"}, {"items", om{{"$ref", "#/components/schemas/HTTPHistoryItem"}}}}}}}}}}}}, std...)})}}},
+		kv{"/syslog", om{{"get", op("syslogState", "Syslog", "The syslog server", "Whether Termwright's syslog server listens (UDP, TCP, TLS), its counts per severity and its senders.",
+			kv{"responses", append(om{{"200", resp("Its state.", "SyslogState")}}, std...)})}}},
+		kv{"/syslog/start", om{{"post", op("syslogStart", "Syslog", "Start the syslog server", "Starts (or restarts) it with these settings, saved for the next time; no body uses the saved ones. Ports below 1024 may need administrator rights on macOS and Linux.",
+			kv{"requestBody", om{{"content", om{{"application/json", om{{"schema", om{{"$ref", "#/components/schemas/SyslogSettings"}}}, {"examples", om{{"udp", ex("UDP 514 and TLS 6514, files per sender", om{{"udp", 514}, {"tcp", 0}, {"tls", 6514}, {"saveFiles", true}, {"perHost", true}})}}}}}}}}},
+			kv{"responses", append(om{{"200", resp("Its state.", "SyslogState")}}, append(errs("400", "422"), std...)...)})}}},
+		kv{"/syslog/stop", om{{"post", op("syslogStop", "Syslog", "Stop the syslog server", "Stops listening; the messages are kept until cleared.",
+			kv{"responses", append(om{{"200", resp("Its state.", "SyslogState")}}, std...)})}}},
+		kv{"/syslog/messages", om{
+			{"get", op("syslogMessages", "Syslog", "Messages received", "The messages that match, oldest first (the newest limit). Rules that hide a message leave it out.",
+				kv{"parameters", []om{
+					{{"name", "q"}, {"in", "query"}, {"description", "Words that must all be in the message, its host or program; /regex/ for a regular expression."}, {"schema", om{{"type", "string"}}}},
+					{{"name", "host"}, {"in", "query"}, {"description", "Only from this sender (address or host name)."}, {"schema", om{{"type", "string"}}}},
+					{{"name", "severity"}, {"in", "query"}, {"description", "This severity or worse: emerg, alert, crit, err, warning, notice, info, debug or 0-7."}, {"schema", om{{"type", "string"}}}},
+					{{"name", "minutes"}, {"in", "query"}, {"description", "Only the last minutes."}, {"schema", om{{"type", "integer"}}}},
+					{{"name", "after"}, {"in", "query"}, {"description", "Only messages with a larger id (to follow new ones)."}, {"schema", om{{"type", "integer"}}}},
+					{{"name", "limit"}, {"in", "query"}, {"description", "At most this many (default 1000)."}, {"schema", om{{"type", "integer"}}}}}},
+				kv{"responses", append(om{{"200", om{{"description", "The messages."}, {"content", om{{"application/json", om{{"schema", om{{"type", "array"}, {"items", om{{"$ref", "#/components/schemas/SyslogView"}}}}}}}}}}}}, append(errs("400"), std...)...)})},
+			{"delete", op("syslogClear", "Syslog", "Clear the messages", "Forgets the messages received (the files stay).",
+				kv{"responses", append(om{{"204", om{{"description", "Cleared."}}}}, std...)})}}},
+		kv{"/syslog/send", om{{"post", op("syslogSend", "Syslog", "Send a test message", "Sends a syslog message (RFC 5424 or 3164) over UDP, TCP or TLS to a syslog server: to check that a server receives, or to set off its alerts.",
+			kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", om{{"$ref", "#/components/schemas/SyslogSendIn"}}}, {"examples", om{{"test", ex("An error to a server", om{{"target", "10.0.0.5"}, {"facility", "local7"}, {"severity", "err"}, {"text", "test from Termwright"}})}}}}}}}}},
+			kv{"responses", append(om{{"200", om{{"description", "The message as sent."}, {"content", om{{"application/json", om{{"schema", om{{"type", "object"}, {"properties", om{{"sent", om{{"type", "string"}}}}}}}}}}}}}}, append(errs("400", "422"), std...)...)})}}},
+		kv{"/syslog/rules", om{
+			{"get", op("syslogRules", "Syslog", "The syslog rules", "Rules that highlight, alert on or hide messages; the first that matches wins.",
+				kv{"responses", append(om{{"200", om{{"description", "The rules."}, {"content", om{{"application/json", om{{"schema", om{{"type", "array"}, {"items", om{{"$ref", "#/components/schemas/SyslogRule"}}}}}}}}}}}}, std...)})},
+			{"put", op("syslogSetRules", "Syslog", "Replace the syslog rules", "Saves the rules ({\"rules\": [...]}).",
+				kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", om{{"type", "object"}, {"properties", om{{"rules", om{{"type", "array"}, {"items", om{{"$ref", "#/components/schemas/SyslogRule"}}}}}}}}}}}}}}},
+				kv{"responses", append(om{{"200", om{{"description", "The rules."}, {"content", om{{"application/json", om{{"schema", om{{"type", "array"}, {"items", om{{"$ref", "#/components/schemas/SyslogRule"}}}}}}}}}}}}, append(errs("400", "422"), std...)...)})}}},
 		kv{"/snmp", om{{"post", op("snmp", "SNMP", "Run an SNMP operation", "get, getnext, bulk, walk or set against a saved session's SNMP settings (session properties → SNMP: version, community or v3 user; the community and passwords from the credential store) or a target given here. OIDs can be names from the loaded MIBs (sysDescr.0, IF-MIB::ifTable, ifOperStatus). Values come back with names and readable values. A set needs writes allowed on the session; through the API it is not asked, production sessions too (the scripts are the user's own).",
 			kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", om{{"$ref", "#/components/schemas/SNMPRequest"}}}, {"examples", snmpEx}}}}}}},
 			kv{"responses", append(om{{"200", resp("The values.", "SNMPResult")}}, append(errs("400", "422"), std...)...)})}}},
@@ -576,7 +612,7 @@ func openAPIDoc(t *testing.T) om {
 			kv{"responses", append(om{{"200", resp("The object.", "SNMPMibNode")}}, append(errs("404"), std...)...)})}}},
 		kv{"/snmp/traps", om{{"get", op("listTraps", "SNMP", "Traps received", "The trap receiver's state (start it in SNMP → Traps) and the notifications it got, newest first, with names from the MIBs.",
 			kv{"responses", append(om{{"200", resp("The receiver and its notifications.", "SNMPTrapsView")}}, std...)})}}},
-		kv{"/tools", om{{"get", op("listNetTools", "Network tools", "The network tools", "The network tools (snmp, http; syslog joins them) with their arguments (JSON Schema): the same tools the in-app AI assistant and the Claude connector use. Each one is POST /tools/{name}.",
+		kv{"/tools", om{{"get", op("listNetTools", "Network tools", "The network tools", "The network tools (snmp, http, syslog) with their arguments (JSON Schema): the same tools the in-app AI assistant and the Claude connector use. Each one is POST /tools/{name}.",
 			kv{"responses", append(om{{"200", om{{"description", "The tools."}, {"content", om{{"application/json", om{{"schema", om{{"type", "array"}, {"items", om{{"$ref", "#/components/schemas/Tool"}}}}}}}}}}}}, std...)})}}},
 	)
 	for _, tl := range netTools {
@@ -703,7 +739,8 @@ func openAPIDoc(t *testing.T) om {
 			{{"name", "Traffic tests"}, {"summary", "Tests"}, {"parent", "Traffic"}, {"description", "RFC 2544, RFC 2889 learning and convergence tests, and their runs."}},
 			{{"name", "SNMP"}, {"description", "SNMP v1, v2c and v3 with the saved sessions' settings: get, walk, set, the MIBs and traps."}},
 			{{"name", "API client"}, {"description", "The REST API client: send requests with saved API sessions, collections, runs, imports."}},
-			{{"name", "Network tools"}, {"description", "The network tools the AI assistant and the Claude connector use (snmp, http), as JSON."}},
+			{{"name", "Syslog"}, {"description", "The syslog server (UDP, TCP, TLS) and client: messages received, rules, test messages."}},
+			{{"name", "Network tools"}, {"description", "The network tools the AI assistant and the Claude connector use (snmp, http, syslog), as JSON."}},
 			{{"name", "API"}, {"description", "This description."}}}},
 		{"paths", paths},
 		{"components", om{

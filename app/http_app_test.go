@@ -127,3 +127,17 @@ func TestHTTPSessionToolAndRun(t *testing.T) {
 		t.Fatalf("%+v", res)
 	}
 }
+
+// The AI writes API scripts with the pm.* reference and answers with one code block.
+func TestAIPromptAPIScript(t *testing.T) {
+	sys, user := aiPrompt(AIRequest{Kind: "apiscript", Question: "ports up"}, "The request: GET /ports")
+	if !strings.Contains(sys, "pm.response.to.have.status") || !strings.Contains(sys, "one ```javascript block") || !strings.Contains(user, "ports up") || !strings.Contains(user, "GET /ports") {
+		t.Fatal(sys, user)
+	}
+	if sys, _ := aiPrompt(AIRequest{Kind: "apiprescript"}, ""); !strings.Contains(sys, "pre-request script") {
+		t.Fatal(sys)
+	}
+	if !strings.Contains(netAgentText([]string{"http"}), "pm.test(name, fn)") {
+		t.Fatal("agent text")
+	}
+}

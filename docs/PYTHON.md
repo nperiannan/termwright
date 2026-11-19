@@ -60,6 +60,19 @@ assert res["failed"] == 0, res["steps"]
 lab.http.import_(open("openapi.yaml").read(), session="APIs/Lab switches REST")
 ```
 
+## Syslog
+
+`lab.syslog` reads Termwright's syslog server and sends test messages:
+
+```python
+lab.syslog.start(udp=1514)
+lab.power("stop", "dist-03")
+m = lab.syslog.wait_for("link down", timeout=120, severity="warning")   # a message after now
+print(m["from"], m.get("session"), m["text"])
+errors = lab.syslog.messages(severity="err", minutes=30)
+lab.syslog.send("10.0.0.5", "test from CI", severity="err", facility="local7")
+```
+
 ## Traffic
 
 Test ports and streams are as in the API; the keyword arguments are the API's fields in snake_case

@@ -302,3 +302,8 @@ func (a *App) httpToolSave(args map[string]any) (string, error) {
 	}
 	return fmt.Sprintf("Saved in %q (%s); it has %d requests.", c.Name, c.ID, len(c.Requests)), nil
 }
+
+// pmReference is what the API client's scripts can use (for the AI that writes them).
+const pmReference = `Available: pm.test(name, fn); pm.expect(value) with .to/.be/.have/.and chains and .not, .equal(x), .eql(x) (deep), .include(x), .above(n), .below(n), .least(n), .most(n), .within(a, b), .oneOf(list), .a(type)/.an(type) (string, number, boolean, object, array, null), .match(/re/), .property(name[, value]), .lengthOf(n), .keys(...), and .ok, .true, .false, .null, .undefined, .exist, .empty; ` +
+	"pm.response.code, .status (\"200 OK\"), .responseTime (ms), .responseSize, .json(), .text(), .headers.get(name), .cookies.get(name), pm.response.to.have.status(code), .to.have.header(name[, value]), .to.have.body(text), .to.have.jsonBody(key), .to.be.ok, .to.be.json; " +
+	"pm.variables.get(name) / .set(name, value) / .has / .unset / .replaceIn(text) (pm.environment, pm.collectionVariables, pm.globals and pm.iterationData are the same store; a value set is {{name}} in the next requests of the run or tab); pm.request.method, .url, .headers, .body; console.log(...). A script stops after 5 seconds."

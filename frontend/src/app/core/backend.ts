@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import type { TopoRequest, TopoResult, LayoutRequest, LayoutResult } from './models';
 import { EmuEngines, EmuHostNIC, EmuTrex,
   EmuServer, EmuServerView,
-  AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange, SNMPRequest, SNMPResult, SNMPMibNode, SNMPModule, SNMPSecretState, SNMPTrapState, SNMPTrapsView, HSendRequest, HResponse, HCollection, HCollectionInfo, HRunRequest, HRunResult, HHistoryItem } from './models';
+  AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange, SNMPRequest, SNMPResult, SNMPMibNode, SNMPModule, SNMPSecretState, SNMPTrapState, SNMPTrapsView, HSendRequest, HResponse, HCollection, HCollectionInfo, HRunRequest, HRunResult, HHistoryItem, SyslogSettings, SyslogState, SyslogMsg, SyslogRule, SyslogQuery, SyslogSendIn } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -258,6 +258,17 @@ export class Backend {
   emuSetUplink(id: string, port: string, on: boolean) { return this.call<LabView>('EmuSetUplink', id, port, on); }
   emuSetIconStyle(id: string, style: string) { return this.call<LabView>('EmuSetIconStyle', id, style); }
   emuAgentText() { return this.call<string>('EmuAgentText'); }
+  // ---- syslog ----
+  syslogSettings() { return this.call<SyslogSettings>('SyslogSettingsGet'); }
+  syslogStart(s: SyslogSettings) { return this.call<SyslogState>('SyslogStart', s); }
+  syslogStop() { return this.call<void>('SyslogStop'); }
+  syslogState() { return this.call<SyslogState>('SyslogState'); }
+  syslogMessages(q: SyslogQuery) { return this.call<SyslogMsg[]>('SyslogMessages', q); }
+  syslogClear() { return this.call<void>('SyslogClear'); }
+  syslogRules() { return this.call<SyslogRule[]>('SyslogRules'); }
+  syslogSetRules(r: SyslogRule[]) { return this.call<void>('SyslogSetRules', r); }
+  syslogSend(m: SyslogSendIn) { return this.call<string>('SyslogSend', m); }
+  syslogExport(q: SyslogQuery) { return this.call<string>('SyslogExport', q); }
   // ---- API client ----
   httpSend(r: HSendRequest) { return this.call<HResponse>('HTTPSend', r); }
   httpTest(session: Session, path: string, secret: string, url = '/') { return this.call<HResponse>('HTTPTest', { session, path, secret, url }); }

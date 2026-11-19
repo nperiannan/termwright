@@ -46,6 +46,7 @@ import { LabWorkspace } from './components/lab-workspace';
 import { NetworkMap } from './components/network-map';
 import { SnmpBrowser } from './components/snmp-browser';
 import { ApiClient } from './components/api-client';
+import { SyslogView } from './components/syslog-view';
 import { ConsolePorts } from './dialogs/console-ports';
 import { HistoryDialog } from './dialogs/history';
 import { KeySetupDialog } from './dialogs/key-setup-dialog';
@@ -79,7 +80,7 @@ import { FactTeach } from './dialogs/fact-teach';
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionsMenu, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, FilesPanel, WebOpenDialog, RemoteDiagDialog, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, FileServersDialog, NetCheckDialog, NameAfterDialog, LabDialog, LabWizard, ServersIndicator, AIPanel, TeamPushDialog, TeamReserveDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, LabWorkspace, NetworkMap, SnmpBrowser, ApiClient, Moved, HistoryDialog, Overlays, About, Welcome, LabWorkflow, FactTeach, Unlock],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, FileServersDialog, NetCheckDialog, NameAfterDialog, LabDialog, LabWizard, ServersIndicator, AIPanel, TeamPushDialog, TeamReserveDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, LabWorkspace, NetworkMap, SnmpBrowser, ApiClient, SyslogView, Moved, HistoryDialog, Overlays, About, Welcome, LabWorkflow, FactTeach, Unlock],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -447,6 +448,8 @@ export class App implements OnInit {
     // the download count asks GitHub (cached for six hours); not when update checks are turned off
     if (this.ui.settings()?.updateChannel !== 'off') this.backend.downloadCount().then(n => this.downloads.set(n > 0 ? n : 0)).catch(() => {});
     this.backend.on('menu', (a: string) => void this.action(a));
+    this.backend.on('syslog:alert', (m: { rule: string; from: string; host?: string; severity: string; text: string }) =>
+      this.ui.toast(`${m.rule}: ${m.host || m.from} ${m.severity} - ${m.text}`, ['emerg', 'alert', 'crit', 'err'].includes(m.severity) ? 'error' : 'info', 8000, [{ label: tr('Show'), run: () => void this.tabs.openSyslog() }]));
     // the session files changed on disk (sync, git pull, another Termwright): the Session Manager follows by itself
     let treeTimer: ReturnType<typeof setTimeout> | undefined;
     this.backend.on('sessions:changed', () => { clearTimeout(treeTimer); treeTimer = setTimeout(() => void this.ui.refreshTree(), 400); });
@@ -559,6 +562,13 @@ export class App implements OnInit {
         this.labs.goto.set({ kind: 'emu', page: a.slice(4) as 'overview' | 'traffic' | 'appliances' | 'hosts' }); this.openLab('emu'); break;
       case 'snmp-browser': { const t = this.tabs.active(); void this.tabs.openSnmp(t?.kind === 'terminal' ? t.session.path : '', t?.kind === 'terminal' ? t.session.name : ''); break; }
       case 'api-client': void this.tabs.openApi(); break;
+      case 'syslog-server': void this.tabs.openSyslog(); break;
+      case 'syslog-send': void this.tabs.openSyslog('send'); break;
+      case 'syslog-toggle': try {
+        const st = await this.backend.syslogState();
+        if (st.on) { await this.backend.syslogStop(); this.ui.toast(tr('Syslog: stopped receiving'), 'info'); }
+        else { const n = await this.backend.syslogStart(await this.backend.syslogSettings()); this.ui.toast(tr('Syslog: receiving on {0}', n.addrs.join(', ')), 'success'); }
+      } catch (e) { this.ui.toast(errText(e), 'error'); } break;
       case 'api-new-session': await this.ui.newSession(this.ui.currentFolder(), true, 'API'); break;
       case 'api-import': await this.tabs.openApi(); this.ui.apiImportAsked.set(Date.now()); break;
       case 'snmp-traps': void this.tabs.openSnmp('', '', 'traps'); break;

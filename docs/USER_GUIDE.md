@@ -1393,7 +1393,9 @@ The password, key, token, client secret and the values of secret variables are k
 
 **Production.** On a production session, or with the environment set to Production, POST, PUT, PATCH and DELETE ask before they are sent (the runner and the AI assistant too); GET always runs.
 
-**Tests and scripts.** The Scripts tab has **Tests** (run on the answer) and a **Pre-request script**, in Postman's style: `pm.test("ok", () => pm.response.to.have.status(200))`, `pm.expect(pm.response.json().items).to.have.lengthOf(3)`, `pm.variables.set("id", pm.response.json().id)` (used as `{{id}}` by the next requests), `console.log(...)`. *Add a snippet…* writes common ones.
+**Monochrome.** The half-filled circle at the top right of the answer shows the body in plain black (light theme) or white (dark theme) instead of colours, for easier reading; click it again for colours (the default).
+
+**Tests and scripts.** The Scripts tab has **Tests** (run on the answer) and a **Pre-request script**, in Postman's style: `pm.test("ok", () => pm.response.to.have.status(200))`, `pm.expect(pm.response.json().items).to.have.lengthOf(3)`, `pm.variables.set("id", pm.response.json().id)` (used as `{{id}}` by the next requests), `console.log(...)`. *Add a snippet…* writes common ones. **Write with AI**: describe what the script must check (*"every interface is UP and the answer is under 300 ms"*), choose Tests or Pre-request, and the AI assistant writes it from the request and its last answer (send the request first); check it, then Send. Secrets are removed before anything goes to the AI.
 
 **Collections.** **Save** keeps a request in a collection (a new one, or an existing one, in a folder). Collections are plain JSON files in Termwright's data folder (`api/collections`): keep them in git or send them to a colleague; they never hold secrets. Right-click a collection: **Run Collection…**, New Request, Rename, Use the Chosen Session, **Export…** (Termwright JSON) or **Export for Postman…**, Delete. Right-click a request: Open, Run, Rename, Duplicate, Delete.
 
@@ -1406,6 +1408,20 @@ The password, key, token, client secret and the values of secret variables are k
 - one or more **cURL** commands (as copied from a browser's developer tools).
 
 **AI assistant, MCP and scripts.** Turn on the **API client** tool in the agent's tool list and ask, for example, *"list the interfaces of the lab switches through RESTCONF"*: the agent sends with the session's login (it never asks you for tokens). Changes follow the agent's permission and always ask on production sessions. MCP apps get the same `http` tool, the local API has `POST /api/v1/http/send` and the `/http/collections…` routes (see the [API guide](API.md)), and Python has `Lab().http` ([Python guide](PYTHON.md)).
+
+## 9e. Syslog server
+
+Termwright receives syslog from your devices while it runs, so you do not need a separate syslog server such as Kiwi.
+
+**Start.** **Syslog → Syslog Server**, then **Start Receiving** (or **Syslog → Start / Stop Receiving**). **Settings**: the UDP port (514), a TCP port (one message per line or octet-counted) and a TLS port (6514; your certificate and key, or a self-signed one), the address to listen on, *Save every message to a file per day* (optionally one folder per sender, in a folder you choose) and *Start receiving when Termwright starts*. On macOS and Linux a port below 1024 may need administrator rights: if it does not start, use 1514 and point the devices there. Then set each device's logging host to this computer.
+
+**Read.** New messages appear at the bottom (*Follow*; *Pause* holds the list and counts what arrives). Each line shows when it arrived, the sender (the saved session's name when its address belongs to one), the severity in colour, facility, host, program and text. The severity buttons count the messages since the start; click one to show it and worse. Search with words (all must be in the message) or `/regex/`, choose a sender or a severity. Click a line for its details (device time, process, structured data, the raw message), **Connect** to the session, **Only This Sender** or **Copy**. **Export** saves what is shown as CSV (or text with a .log / .txt name); **Clear** forgets the messages (files stay).
+
+**Rules.** The first rule that matches a message colours its line, sends a **notification** (also when the Syslog tab is closed) or **hides** it (noise such as keepalives). A rule matches words or a `/regex/`, a severity or worse, and a sender.
+
+**Send Test Message.** To a syslog server (this one at 127.0.0.1, or another): UDP, TCP or TLS, RFC 5424 or 3164, facility, severity, host name, program, text, and how many times.
+
+**AI assistant, MCP and scripts.** Turn on the **Syslog** tool in the agent's tool list and ask, for example, *"what errors did the switches log in the last 30 minutes?"*. MCP apps get the same `syslog` tool, the local API has `/api/v1/syslog…` (see the [API guide](API.md)), and in Python `Lab().syslog.wait_for("link down", timeout=60)` waits for a message in a test.
 
 ## 10. Automation: logon actions, triggers, scripts
 
