@@ -28,7 +28,27 @@ func Code(r Request, t *Target, lang string) (string, error) {
 		}
 	}
 	env := ""
-	if r.Auth != "none" {
+	mode, ad := r.Auth, r.AuthData
+	if mode == "" && t.CollAuth != "" {
+		mode, ad = t.CollAuth, t.CollAuthData
+	}
+	if ad == nil {
+		ad = &ReqAuth{}
+	}
+	switch mode {
+	case "bearer":
+		env = "API_TOKEN"
+		hs = append(hs, KV{Key: "Authorization", Value: "Bearer $API_TOKEN"})
+	case "basic":
+		env = "API_PASSWORD"
+		hs = append(hs, KV{Key: "Authorization", Value: "Basic $(printf '%s' '" + Resolve(ad.User, t.Vars) + ":'\"$API_PASSWORD\" | base64)"})
+	case "apikey":
+		env = "API_KEY"
+		if ad.In != "query" {
+			hs = append(hs, KV{Key: Resolve(ad.Key, t.Vars), Value: "$API_KEY"})
+		}
+	}
+	if mode == "" {
 		switch t.Auth.Type {
 		case "apikey":
 			env = "API_KEY"
@@ -49,9 +69,9 @@ func Code(r Request, t *Target, lang string) (string, error) {
 	}
 	body, ctype := "", ""
 	switch r.Body.Mode {
-	case "json", "text", "xml":
+	case "json", "text", "xml", "html", "javascript":
 		body = Resolve(r.Body.Raw, t.Vars)
-		ctype = map[string]string{"json": "application/json", "text": "text/plain", "xml": "application/xml"}[r.Body.Mode]
+		ctype = map[string]string{"json": "application/json", "text": "text/plain", "xml": "application/xml", "html": "text/html", "javascript": "application/javascript"}[r.Body.Mode]
 	case "graphql":
 		b, _ := json.Marshal(map[string]any{"query": Resolve(r.Body.Raw, t.Vars)})
 		body, ctype = string(b), "application/json"
@@ -82,9 +102,15 @@ func Code(r Request, t *Target, lang string) (string, error) {
 		if r.Body.Mode == "form" {
 			for _, f := range r.Body.Form {
 				if !f.Off {
-					fmt.Fprintf(&b, " \\\n  -F %s", sq(Resolve(f.Key, t.Vars)+"="+Resolve(f.Value, t.Vars)))
+					v := Resolve(f.Value, t.Vars)
+					if f.Type == "file" {
+						v = "@" + v
+					}
+					fmt.Fprintf(&b, " \\\n  -F %s", sq(Resolve(f.Key, t.Vars)+"="+v))
 				}
 			}
+		} else if r.Body.Mode == "binary" {
+			fmt.Fprintf(&b, " \\\n  --data-binary %s", sq("@"+Resolve(r.Body.File, t.Vars)))
 		} else if body != "" {
 			fmt.Fprintf(&b, " \\\n  --data-raw %s", sq(body))
 		}
@@ -200,21 +226,59 @@ func ExportPostman(c Collection) ([]byte, error) {
 		return out
 	}
 	for _, r := range c.Requests {
-		rq := item{"method": r.Method, "header": kv(r.Headers), "url": item{"raw": r.URL, "query": kv(r.Params)}, "description": r.Description}
+		u := item{"raw": r.URL, "query": kv(r.Params)}
+		if len(r.PathVars) > 0 {
+			u["variable"] = kv(r.PathVars)
+		}
+		rq := item{"method": r.Method, "header": kv(r.Headers), "url": u, "description": r.Description}
 		switch r.Body.Mode {
-		case "json", "text", "xml":
-			rq["body"] = item{"mode": "raw", "raw": r.Body.Raw, "options": item{"raw": item{"language": map[string]string{"json": "json", "xml": "xml", "text": "text"}[r.Body.Mode]}}}
+		case "json", "text", "xml", "html", "javascript":
+			rq["body"] = item{"mode": "raw", "raw": r.Body.Raw, "options": item{"raw": item{"language": r.Body.Mode}}}
+		case "binary":
+			rq["body"] = item{"mode": "file", "file": item{"src": r.Body.File}}
 		case "urlencoded":
 			rq["body"] = item{"mode": "urlencoded", "urlencoded": kv(r.Body.Form)}
 		case "form":
-			rq["body"] = item{"mode": "formdata", "formdata": kv(r.Body.Form)}
+			fd := []any{}
+			for _, x := range r.Body.Form {
+				m := item{"key": x.Key, "value": x.Value, "type": "text"}
+				if x.Type == "file" {
+					m = item{"key": x.Key, "src": x.Value, "type": "file"}
+				}
+				if x.Off {
+					m["disabled"] = true
+				}
+				fd = append(fd, m)
+			}
+			rq["body"] = item{"mode": "formdata", "formdata": fd}
 		case "graphql":
 			rq["body"] = item{"mode": "graphql", "graphql": item{"query": r.Body.Raw, "variables": r.Body.GraphQLVars}}
 		}
-		if r.Auth == "none" {
-			rq["auth"] = item{"type": "noauth"}
+		if a := postmanAuthOut(r.Auth, r.AuthData); a != nil {
+			rq["auth"] = a
 		}
 		it := item{"name": firstNonEmpty(r.Name, r.Method+" "+r.URL), "request": rq}
+		if st := r.Settings; st != nil {
+			pb := item{}
+			if st.NoRedirects {
+				pb["followRedirects"] = false
+			}
+			if st.Verify != "" {
+				pb["strictSSL"] = st.Verify == "on"
+			}
+			for k, v := range map[string]bool{"followOriginalHttpMethod": st.FollowMethod, "followAuthorizationHeader": st.FollowAuth,
+				"removeRefererHeaderOnRedirect": st.RemoveReferer, "disableUrlEncoding": st.NoEncode, "disableCookies": st.NoCookies} {
+				if v {
+					pb[k] = true
+				}
+			}
+			if st.MaxRedirects > 0 {
+				pb["maxRedirects"] = st.MaxRedirects
+			}
+			if len(pb) > 0 {
+				it["protocolProfileBehavior"] = pb
+			}
+		}
 		var ev []any
 		if r.PreScript != "" {
 			ev = append(ev, item{"listen": "prerequest", "script": item{"type": "text/javascript", "exec": strings.Split(r.PreScript, "\n")}})
@@ -248,7 +312,45 @@ func ExportPostman(c Collection) ([]byte, error) {
 	}
 	doc := item{"info": item{"name": c.Name, "description": c.Description, "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
 		"item": fix(root), "variable": kv(c.Vars)}
+	if a := postmanAuthOut(c.Auth, c.AuthData); a != nil {
+		doc["auth"] = a
+	}
+	var ev []any
+	if c.PreScript != "" {
+		ev = append(ev, item{"listen": "prerequest", "script": item{"type": "text/javascript", "exec": strings.Split(c.PreScript, "\n")}})
+	}
+	if c.Tests != "" {
+		ev = append(ev, item{"listen": "test", "script": item{"type": "text/javascript", "exec": strings.Split(c.Tests, "\n")}})
+	}
+	if ev != nil {
+		doc["event"] = ev
+	}
 	return json.MarshalIndent(doc, "", "  ")
+}
+
+// postmanAuthOut is a request's own authentication in Postman's form (nil: inherit).
+func postmanAuthOut(mode string, a *ReqAuth) map[string]any {
+	if a == nil {
+		a = &ReqAuth{}
+	}
+	kv := func(p ...string) []any {
+		var out []any
+		for i := 0; i+1 < len(p); i += 2 {
+			out = append(out, map[string]any{"key": p[i], "value": p[i+1], "type": "string"})
+		}
+		return out
+	}
+	switch mode {
+	case "none":
+		return map[string]any{"type": "noauth"}
+	case "bearer":
+		return map[string]any{"type": "bearer", "bearer": kv("token", a.Token)}
+	case "basic":
+		return map[string]any{"type": "basic", "basic": kv("username", a.User, "password", a.Password)}
+	case "apikey":
+		return map[string]any{"type": "apikey", "apikey": kv("key", a.Key, "value", a.Value, "in", firstNonEmpty(a.In, "header"))}
+	}
+	return nil
 }
 
 // ---- collections on disk ----
@@ -365,7 +467,9 @@ func (s Store) Save(c Collection) (Collection, error) {
 		if c.Requests[i].Method == "" {
 			c.Requests[i].Method = "GET"
 		}
+		c.Requests[i].AuthData.Scrub()
 	}
+	c.AuthData.Scrub()
 	if c.Requests == nil {
 		c.Requests = []Request{}
 	}

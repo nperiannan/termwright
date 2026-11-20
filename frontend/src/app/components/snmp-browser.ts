@@ -133,7 +133,7 @@ const FAV_KEY = 'tw.snmp.favourites';
                   }
                   <table><thead><tr><th>Name</th><th>Index</th><th>Type</th><th>Value</th><th>OID</th></tr></thead><tbody>
                     @for (x of r.rows; track $index) {
-                      <tr (click)="oid = x.oid" translate="no" [class.unkr]="x.unknown"><td [title]="x.unknown ? 'Not described by the loaded MIBs' + (x.suggest ? ' - most likely in ' + x.suggest : '') : (x.module ? x.module + '::' + x.object : '')">@if (x.unknown) { <span class="q">?</span> }{{ x.object || x.name }}</td><td>{{ x.instance }}</td><td>{{ x.type }}</td>
+                      <tr (click)="oid = x.oid" translate="no" [class.unkr]="x.unknown"><td [title]="x.unknown ? 'Not described by the loaded MIBs' + (x.suggest ? ' - most likely in ' + x.suggest : '') : (x.module ? x.module + '::' + x.object : '')">@if (x.unknown) { <span class="uq">?</span> }{{ x.object || x.name }}</td><td>{{ x.instance }}</td><td>{{ x.type }}</td>
                         <td [class]="tone(x)">{{ x.display }}</td><td class="mono mut">{{ x.oid }}</td></tr>
                     }
                   </tbody></table>
@@ -273,7 +273,7 @@ const FAV_KEY = 'tw.snmp.favourites';
     .dlg { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 14px 16px; width: min(900px, 94%); max-height: 86%; display: flex; flex-direction: column; gap: 8px; }
     .dlg h3 { margin: 0; font-size: 15px; } .dh { display: flex; gap: 10px; align-items: baseline; } .x { cursor: pointer; color: var(--muted); }
     .unk { margin: 8px 12px; padding: 8px 10px; border-radius: var(--r); background: color-mix(in srgb, var(--warn) 13%, transparent); font-size: 12.5px; line-height: 1.6; }
-    tr.unkr td:first-child { color: var(--muted); font-style: italic; } .q { display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: var(--warn); color: #fff; font: 700 10px/14px var(--ui-font); text-align: center; margin-right: 6px; font-style: normal; }
+    tr.unkr td:first-child { color: var(--muted); font-style: italic; } .uq { display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: var(--warn); color: #fff; font: 700 10px/14px var(--ui-font); text-align: center; margin-right: 6px; font-style: normal; }
     .q2 { width: 260px; } .need { padding: 6px 10px; border-radius: var(--r); background: color-mix(in srgb, var(--warn) 12%, transparent); font-size: 12px; } .need b { margin-right: 8px; }
     .deps { white-space: normal !important; } .dep { display: inline-block; font-size: 11.5px; margin: 1px 6px 1px 0; color: var(--muted); } .dep.miss { color: var(--danger); font-weight: 600; }
     .act { white-space: nowrap; text-align: right; } .sm2 { height: 24px; padding: 0 8px; font-size: 12px; margin-left: 4px; }

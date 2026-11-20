@@ -61,6 +61,10 @@ class Fake(BaseHTTPRequestHandler):
                 return self.reply(200, {"passed": 2, "failed": 0, "steps": []})
             if self.path == "/api/v1/http/import":
                 return self.reply(201, {"id": "x", "requests": [{}]})
+            if self.path == "/api/v1/http/environments":
+                return self.reply(200, {"id": "dl2r1", "name": "dl2r1", "vars": []})
+            if self.path == "/api/v1/http/variables":
+                return self.reply(200, [{"name": "ep1", "value": "10.1.1.1", "source": "environment"}])
         if path == "/traffic/ports" and m == "POST":
             v["testers"].append({"id": "p%d" % (len(v["testers"]) + 1), "name": "Test port %d" % (len(v["testers"]) + 1)})
             return self.reply(201, v)
@@ -261,6 +265,12 @@ class ClientTest(unittest.TestCase):
                                                                   "body": {"mode": "json", "raw": '{"id": 10}'}}, "session": "APIs/rest"})
         self.assertEqual(calls["/api/v1/http/collections/Lab%20checks/run"], {"iterations": 2})
         self.assertEqual(calls["/api/v1/http/import"], {"text": "curl https://x/y"})
+        self.assertEqual(self.lab.http.save_environment("dl2r1", {"ep1": "10.1.1.1", "Bearer": "t"}, secret=["Bearer"])["id"], "dl2r1")
+        self.assertEqual(self.lab.http.variables(environment="dl2r1")[0]["source"], "environment")
+        self.lab.http.run("Lab checks", environment="dl2r1")
+        calls = {p: b for _, p, b in Fake.state["calls"]}
+        self.assertEqual(calls["/api/v1/http/environments"]["vars"][1], {"key": "Bearer", "value": "t", "secret": True})
+        self.assertEqual(calls["/api/v1/http/collections/Lab%20checks/run"], {"environment": "dl2r1"})
 
     def test_syslog(self):
         self.assertEqual(self.lab.syslog.messages("link down", severity="err")[0]["id"], 7)

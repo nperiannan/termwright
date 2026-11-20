@@ -71,6 +71,9 @@ Settings, and turning one on does not turn on the other.
 | `POST /http/collections/{collection}/run` | Runs it (requests, folder, iterations, CSV / JSON data) with its tests | 200 `HTTPRunResult` |
 | `POST /http/import` | Imports a Postman collection, an OpenAPI / Swagger document or cURL (`{"text": "..."}`) | 201 `HTTPCollection` |
 | `GET /http/history` | The requests sent, newest first | 200 |
+| `GET /http/environments` | The environments, the globals (id `globals`) first; secret values never given | 200 |
+| `POST /http/environments` | Add or replace an environment (secret values go to the credential store) | 200 |
+| `POST /http/variables` | The variables a request can use, with their values and sources (secrets left out) | 200 |
 | `GET /syslog` | The syslog server: listening, counts per severity, senders | 200 `SyslogState` |
 | `POST /syslog/start`, `POST /syslog/stop` | Starts (with settings, or the saved ones) or stops it | 200 `SyslogState` |
 | `GET /syslog/messages?q=&host=&severity=&minutes=&after=&limit=`, `DELETE /syslog/messages` | Messages received (words or /regex/, sender, severity or worse); clear them | 200 `[SyslogView]` / 204 |

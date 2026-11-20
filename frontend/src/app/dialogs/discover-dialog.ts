@@ -3,14 +3,14 @@ import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DEVICE_KINDS, DeviceIcon, DeviceKind, customDeviceKinds } from '../components/device-icon';
 import { Backend, errText } from '../core/backend';
-import { DeviceType, DiscoverResult, LocalNet, MovedDevice, SessionNode } from '../core/models';
+import { DeviceType, DiscoverResult, LocalNet, MovedDevice, Session, SessionNode } from '../core/models';
 import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { Moved } from './moved';
 import { FolderPicker } from '../components/folder-picker';
 import { Icon } from '../components/icon';
 
-interface Row extends DiscoverResult { selected: boolean; exists: boolean; deviceType: string; open?: boolean; touched?: boolean; }
+interface Row extends DiscoverResult { selected: boolean; exists: boolean; deviceType: string; open?: boolean; touched?: boolean; /** saved as an SNMP session only */ snmpOnly?: boolean; }
 
 const ACK_KEY = 'termwright.discoverAck';
 
@@ -62,7 +62,7 @@ const ACK_KEY = 'termwright.discoverAck';
             <div class="row">
               <label class="inline"><input type="checkbox" [(ngModel)]="useSnmp" [disabled]="running()" /> Look up name and model (SNMP v2c)</label>
               <input class="comm" [type]="showComm ? 'text' : 'password'" [(ngModel)]="community" [disabled]="running() || !useSnmp" placeholder="community"
-                autocomplete="off" spellcheck="false" title="Read-only SNMP community. It is used for this scan only and not saved." />
+                autocomplete="off" spellcheck="false" title="Read-only SNMP community, used for the scan. SNMP sessions you add keep it in the computer's credential store." />
               <button type="button" class="icon-btn eye" (click)="showComm = !showComm" [disabled]="!useSnmp"
                 [title]="showComm ? 'Hide the community' : 'Show the community'">{{ showComm ? 'Hide' : 'Show' }}</button>
             </div>
@@ -123,11 +123,11 @@ const ACK_KEY = 'termwright.discoverAck';
               <tbody>
                 @for (r of shown(); track r.ip) {
                   <tr [class.dim]="!addable(r)" [class.opened]="r.open" (click)="toggle(r, $event)" (dblclick)="connect(r, $event)" (contextmenu)="rowMenu($event, r)"
-                    [title]="r.protocol ? 'Double-click to connect now (' + r.protocol + ') without saving' : r.mac ? 'No login port answered - it can be added as a Wake-on-LAN session' : ''">
+                    [title]="r.protocol ? 'Double-click to connect now (' + r.protocol + ') without saving' : hasSnmp(r) ? 'No login port answered - it can be added as an SNMP session' : r.mac ? 'No login port answered - it can be added as a Wake-on-LAN session' : ''">
                     <td class="c"><input type="checkbox" [checked]="r.selected" [disabled]="!addable(r)"
-                      [title]="r.protocol ? '' : r.mac ? 'No login port answered - added as a Wake-on-LAN session' : 'No SSH, Telnet, RDP or VNC port answered and no MAC address - cannot be added as a session'" /></td>
+                      [title]="r.protocol ? '' : hasSnmp(r) ? 'No login port answered - added as an SNMP session' : r.mac ? 'No login port answered - added as a Wake-on-LAN session' : 'No SSH, Telnet, RDP or VNC port answered and no MAC address - cannot be added as a session'" /></td>
                     <td><app-device-icon [kind]="typeOf(r).kind" /></td>
-                    <td><b>{{ r.name }}</b>@if (r.self) { <span class="tag me">this computer</span> }@if (r.exists) { <span class="tag">in sessions</span> }@if (!r.protocol && r.mac && r.selected) { <span class="tag wol" title="Added as a Wake-on-LAN session">Wake-on-LAN</span> }
+                    <td><b>{{ r.name }}</b>@if (r.self) { <span class="tag me">this computer</span> }@if (r.exists) { <span class="tag">in sessions</span> }@if (r.selected && hasSnmp(r) && (r.snmpOnly || !r.protocol)) { <span class="tag" title="Added as an SNMP session">SNMP session</span> } @else if (!r.protocol && r.mac && r.selected) { <span class="tag wol" title="Added as a Wake-on-LAN session">Wake-on-LAN</span> }
                       @if (r.dns && r.dns !== r.name) { <div class="hint">{{ r.dns }}</div> }</td>
                     <td class="mono">{{ r.ip }}@if (r.mac) { <div class="hint mac" title="Right-click the row to copy the MAC address">{{ r.mac }}</div> }</td>
                     <td>{{ typeOf(r).label }}@if (typeOf(r).why) { <div class="hint likely">{{ typeOf(r).why }}</div> }</td>
@@ -177,6 +177,10 @@ const ACK_KEY = 'termwright.discoverAck';
             }
             <label class="inline" title="For example Discovered/EXOS and Discovered/VOSS">
               <input type="checkbox" [ngModel]="byType()" (ngModelChange)="byType.set($event); savePrefs()" [disabled]="!selectedCount()" /> a subfolder per device type</label>
+            @if (snmpSelected()) {
+              <label class="inline" title="An SNMP session (protocol SNMP, v2c, with the community the scan used) opens the SNMP Browser for the device">
+                <input type="checkbox" [ngModel]="snmpToo()" (ngModelChange)="snmpToo.set($event)" /> also an SNMP session for the {{ snmpSelected() }} that answer SNMP</label>
+            }
             <label class="inline">to</label>
             <app-folder-picker class="folder" [(value)]="folder" />
           </div>
@@ -361,6 +365,10 @@ export class DiscoverDialog implements OnDestroy {
   readonly ouiDate = signal('');
   readonly ouiBusy = signal(false);
   private usedCommunity = false;
+  /** Selected devices that answered SNMP also get an SNMP session. */
+  readonly snmpToo = signal(true);
+  snmpSelected() { return this.rows().filter(r => r.selected && this.hasSnmp(r) && !r.snmpOnly).length; }
+  hasSnmp(r: Row) { return r.services.includes('snmp'); }
   private id = '';
   private unsub: (() => void)[] = [];
 
@@ -497,7 +505,7 @@ export class DiscoverDialog implements OnDestroy {
     return this.rows().filter(r => r.selected && this.addable(r) && (!types || types.has(r.deviceType ?? '')));
   }
   /** A device with a login port is added as that kind of session; one with only a MAC address as a Wake-on-LAN session. */
-  addable(r: Row) { return !!r.protocol || !!r.mac; }
+  addable(r: Row) { return !!r.protocol || !!r.mac || this.hasSnmp(r); }
   selectedCount() { return this.toAdd().length; }
   /** Device types of the devices that can be added ("" = none), named ones first. */
   foundTypes() {
@@ -683,6 +691,18 @@ export class DiscoverDialog implements OnDestroy {
     return '';
   }
 
+  /** Saves an SNMP session for a device that answered SNMP, with the community the scan used. */
+  private async saveSnmp(r: Row, name: string, folder: string): Promise<boolean> {
+    const s = await this.backend.newSessionDefaults();
+    Object.assign(s, { name, folder, path: '', protocol: 'SNMP', hostname: r.ip, port: 161, snmpVersion: '2c', snmpPort: 161, deviceType: r.deviceType, mac: r.mac || '',
+      description: [r.vendor, r.os].filter(Boolean).length ? [[r.vendor, r.os].filter(Boolean).join(' · ')] : [] });
+    let saved: Session;
+    try { saved = await this.backend.saveSession(s, ''); }
+    catch { try { s.name = `${name} (${r.ip})`; saved = await this.backend.saveSession(s, ''); } catch { return false; } }
+    if (this.usedCommunity && this.community.trim()) await this.backend.snmpSetSecrets(saved.path, this.community.trim(), null, null).catch(() => {});
+    return true;
+  }
+
   /** A session for a device, as Add saves it. */
   private async sessionFor(r: Row, folder = '') {
     const s = await this.backend.newSessionDefaults();
@@ -713,7 +733,8 @@ export class DiscoverDialog implements OnDestroy {
       { label: 'Copy Vendor / System Info', disabled: !this.sysText(r), action: () => this.copy(this.sysText(r), 'Vendor / system info') },
       { label: 'Copy All Details', action: () => this.copy(this.allText(r), 'Details') },
       { separator: true },
-      { label: r.selected ? 'Do Not Add' : r.protocol ? 'Add as a Session' : 'Add as a Wake-on-LAN Session', disabled: !this.addable(r), action: () => { r.selected = !r.selected; r.touched = true; this.rows.update(l => [...l]); } },
+      { label: r.selected ? 'Do Not Add' : r.protocol ? 'Add as a Session' : this.hasSnmp(r) ? 'Add as an SNMP Session' : 'Add as a Wake-on-LAN Session', disabled: !this.addable(r), action: () => { r.selected = !r.selected; r.snmpOnly = !r.protocol && this.hasSnmp(r); r.touched = true; this.rows.update(l => [...l]); } },
+      ...(this.hasSnmp(r) && r.protocol ? [{ label: 'Add Only as an SNMP Session', icon: 'snmp', action: () => { r.selected = true; r.snmpOnly = true; r.touched = true; this.rows.update(l => [...l]); } }] : []),
     ]);
   }
 
@@ -782,8 +803,14 @@ export class DiscoverDialog implements OnDestroy {
         const sub = this.byType() ? (r.deviceType || 'Other').replace(/[\\/:*?"<>|]+/g, '-') : '';
         const dest = [folder, sub].filter(Boolean).join('/');
         await ensure(dest);
-        const s = await this.backend.newSessionDefaults();
         const base = (r.name || r.ip).replace(/[\\/:*?"<>|]+/g, '-').trim() || r.ip;
+        const snmpOnly = this.hasSnmp(r) && (r.snmpOnly || !r.protocol);
+        if (this.hasSnmp(r) && (snmpOnly || this.snmpToo())) {
+          const ok = await this.saveSnmp(r, snmpOnly ? base : base + ' (SNMP)', dest);
+          if (!ok) failed.push(`${r.ip}: SNMP session`);
+          if (snmpOnly) { if (ok) { added++; r.selected = false; r.exists = true; } continue; }
+        }
+        const s = await this.backend.newSessionDefaults();
         Object.assign(s, {
           name: base, folder: dest, path: '', protocol: r.protocol || 'WOL', hostname: r.ip, port: r.protocol ? r.port : 0, mac: r.mac || '',
           deviceType: r.deviceType, description: [r.vendor, r.os].filter(Boolean).length ? [[r.vendor, r.os].filter(Boolean).join(' · ')] : [],

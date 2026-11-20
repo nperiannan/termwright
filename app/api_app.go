@@ -233,6 +233,26 @@ func (a *App) apiHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 		apiOut(w, http.StatusCreated, c, nil)
 	case "/http/history":
 		apiOut(w, http.StatusOK, a.HTTPHistory(), nil)
+	case "/http/environments":
+		if r.Method == http.MethodGet {
+			apiOut(w, http.StatusOK, a.HTTPEnvironments(), nil)
+			return
+		}
+		var in HTTPEnv
+		if err := apiDecode(body, &in); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		e, err := a.HTTPSaveEnvironment(in)
+		apiOut(w, http.StatusOK, e, err)
+	case "/http/variables":
+		var in HTTPSendRequest
+		if err := apiDecode(body, &in); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		vs, err := a.HTTPVariables(in)
+		apiOut(w, http.StatusOK, vs, err)
 	case "/syslog":
 		apiOut(w, http.StatusOK, a.SyslogState(), nil)
 	case "/syslog/start":
@@ -491,6 +511,7 @@ var apiRoutes = map[string][]string{
 	"/tools": {"GET"}, "/tools/{tool}": {"POST"}, "/snmp": {"POST"}, "/snmp/mib": {"GET"}, "/snmp/mib/{object}": {"GET"}, "/snmp/traps": {"GET"}, "/snmp/trap": {"POST"},
 	"/http/send": {"POST"}, "/http/collections": {"GET", "POST"}, "/http/collections/{collection}": {"GET", "PUT", "DELETE"},
 	"/http/collections/{collection}/run": {"POST"}, "/http/import": {"POST"}, "/http/history": {"GET"},
+	"/http/environments": {"GET", "POST"}, "/http/variables": {"POST"},
 	"/syslog": {"GET"}, "/syslog/start": {"POST"}, "/syslog/stop": {"POST"}, "/syslog/messages": {"GET", "DELETE"}, "/syslog/send": {"POST"}, "/syslog/rules": {"GET", "PUT"},
 }
 

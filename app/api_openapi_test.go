@@ -130,6 +130,7 @@ var oasNames = map[string]string{
 	"apiclient.Request": "HTTPRequestDef", "apiclient.Response": "HTTPResponse", "apiclient.KV": "HTTPKeyValue", "apiclient.Body": "HTTPBody",
 	"apiclient.Cookie": "HTTPCookie", "apiclient.Timing": "HTTPTiming", "apiclient.TestResult": "HTTPTestResult", "apiclient.Collection": "HTTPCollection",
 	"apiclient.CollectionInfo": "HTTPCollectionInfo", "syslog.Message": "SyslogMessage", "apiclient.RunResult": "HTTPRunResult", "apiclient.RunStep": "HTTPRunStep", "session.Session": "Session",
+	"apiclient.ReqAuth": "HTTPReqAuth", "apiclient.Settings": "HTTPSettings", "apiclient.EnvVar": "HTTPEnvVarDef",
 }
 
 type schemaGen struct {
@@ -283,6 +284,11 @@ var oasTypeDocs = map[string]string{
 	"HTTPRunResult":      "A collection run: every request with its status and tests.",
 	"HTTPImportIn":       "A cURL command, Postman collection or OpenAPI document to import.",
 	"HTTPHistoryItem":    "A request sent (no answer body).",
+	"HTTPEnv":            "An environment (Postman's): named variables chosen in the API client; id globals holds the global variables.",
+	"HTTPEnvVar":         "A variable of an environment; a secret one's value stays in the credential store.",
+	"HTTPVar":            "A variable a request can use, and where its value comes from.",
+	"HTTPReqAuth":        "A request's or collection's own authentication; values may be {{variables}}.",
+	"HTTPSettings":       "A request's settings: HTTP version, certificate check, redirects, URL encoding, cookies, timeout.",
 	"SyslogState":        "Whether the syslog server listens, on what, and what it received.",
 	"SyslogSettings":     "The syslog server's ports, files and start-up.",
 	"SyslogView":         "A syslog message received, with the saved session of its sender and the rule it matched.",
@@ -390,7 +396,7 @@ func op(id, tag, summary, desc string, extra ...kv) om {
 func openAPIDoc(t *testing.T) om {
 	g := &schemaGen{docs: fieldDocs(t), comps: map[string]om{}}
 	for _, ty := range []any{EmuView{}, EmuTrafficView{}, emu.Stream{}, emu.Tester{}, apiToolInfo{}, emu.TrafficTest{}, EmuTestRun{}, EmuEngines{}, EmuHostNIC{}, SNMPRequest{}, SNMPResult{}, SNMPMibNode{}, SNMPTrapsView{},
-		HTTPSendRequest{}, apiclient.Response{}, apiclient.Collection{}, apiclient.CollectionInfo{}, HTTPRunRequest{}, apiclient.RunResult{}, HTTPImportIn{}, HTTPHistoryItem{},
+		HTTPSendRequest{}, apiclient.Response{}, apiclient.Collection{}, apiclient.CollectionInfo{}, HTTPRunRequest{}, apiclient.RunResult{}, HTTPImportIn{}, HTTPHistoryItem{}, HTTPEnv{}, HTTPEnvVar{}, HTTPVar{}, apiclient.ReqAuth{}, apiclient.Settings{},
 		SyslogState{}, SyslogSettings{}, SyslogView{}, SyslogSendIn{}, SyslogRule{}, SNMPTrapSendIn{}} {
 		g.schema(reflect.TypeOf(ty))
 	}
@@ -573,6 +579,15 @@ func openAPIDoc(t *testing.T) om {
 			kv{"responses", append(om{{"201", resp("The new collection.", "HTTPCollection")}}, append(errs("400"), std...)...)})}}},
 		kv{"/http/history", om{{"get", op("httpHistory", "API client", "Requests sent", "The last 300 requests sent, newest first (no answer bodies; secrets masked).",
 			kv{"responses", append(om{{"200", om{{"description", "The requests."}, {"content", om{{"application/json", om{{"schema", om{{"type", "array"}, {"items", om{{"$ref", "#/components/schemas/HTTPHistoryItem"}}}}}}}}}}}}, std...)})}}},
+		kv{"/http/environments", om{
+			{"get", op("listEnvironments", "API client", "The environments", "The API client's environments (Postman's environments), the globals (id globals) first. Secret values are never given, only whether one is set.",
+				kv{"responses", append(om{{"200", om{{"description", "The environments."}, {"content", om{{"application/json", om{{"schema", om{{"type", "array"}, {"items", om{{"$ref", "#/components/schemas/HTTPEnv"}}}}}}}}}}}}, std...)})},
+			{"post", op("saveEnvironment", "API client", "Save an environment", "Adds or replaces an environment (no id: a new one; id globals: the global variables). Secret values go to the computer's credential store; an empty secret value keeps the saved one.",
+				kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", om{{"$ref", "#/components/schemas/HTTPEnv"}}}}}}}}},
+				kv{"responses", append(om{{"200", resp("The environment.", "HTTPEnv")}}, append(errs("400", "422"), std...)...)})}}},
+		kv{"/http/variables", om{{"post", op("httpVariables", "API client", "Variables of a request", "Every variable a request can use with the winning value and where it comes from (globals, collection, session, environment, local). Secret values are left out.",
+			kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", om{{"$ref", "#/components/schemas/HTTPSendRequest"}}}}}}}}},
+			kv{"responses", append(om{{"200", om{{"description", "The variables."}, {"content", om{{"application/json", om{{"schema", om{{"type", "array"}, {"items", om{{"$ref", "#/components/schemas/HTTPVar"}}}}}}}}}}}}, append(errs("400"), std...)...)})}}},
 		kv{"/syslog", om{{"get", op("syslogState", "Syslog", "The syslog server", "Whether Termwright's syslog server listens (UDP, TCP, TLS), its counts per severity and its senders.",
 			kv{"responses", append(om{{"200", resp("Its state.", "SyslogState")}}, std...)})}}},
 		kv{"/syslog/start", om{{"post", op("syslogStart", "Syslog", "Start the syslog server", "Starts (or restarts) it with these settings, saved for the next time; no body uses the saved ones. Ports below 1024 may need administrator rights on macOS and Linux.",

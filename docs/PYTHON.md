@@ -58,6 +58,9 @@ lab.http.post("/vlans", {"id": 10, "name": "voice"}, session="APIs/Lab switches 
 res = lab.http.run("EXOS RESTCONF", data="port\n1:1\n1:2")       # one iteration per row
 assert res["failed"] == 0, res["steps"]
 lab.http.import_(open("openapi.yaml").read(), session="APIs/Lab switches REST")
+lab.http.save_environment("dl2r1", {"ep1-environment": "10.127.34.200", "Bearer": token}, secret=["Bearer"])
+lab.http.run("RADIUS-BluePrint", environment="dl2r1")             # postman.setNextRequest loops work
+print(lab.http.variables(collection="RADIUS-BluePrint", environment="dl2r1"))
 ```
 
 ## Syslog

@@ -165,7 +165,7 @@ func TestImportCurlPostmanOpenAPI(t *testing.T) {
 	if r := c.Requests[0]; r.Folder != "Ports" || r.URL != "{{baseUrl}}/ports" || len(r.Params) != 1 || !strings.Contains(r.Tests, "pm.test") {
 		t.Fatalf("%+v", r)
 	}
-	if r := c.Requests[1]; r.Body.Mode != "json" || r.Auth != "none" || r.Headers[0].Value != "Bearer {{tok}}" {
+	if r := c.Requests[1]; r.Body.Mode != "json" || r.Auth != "bearer" || r.AuthData.Token != "{{tok}}" {
 		t.Fatalf("%+v", r)
 	}
 	// and back to Postman

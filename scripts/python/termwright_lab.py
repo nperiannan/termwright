@@ -675,8 +675,9 @@ class HTTP:
 
     def send(self, url: str, method: str = "GET", session: Optional[str] = None, env: str = "", headers: Optional[dict] = None,
              params: Optional[dict] = None, json_body: Any = None, text: Optional[str] = None, tests: str = "",
-             vars: Optional[dict] = None, collection: Optional[str] = None, timeout: Optional[int] = None) -> dict:
-        """Send a request; a path goes after the session's base URL. Returns status, headers, body, ms, tests..."""
+             vars: Optional[dict] = None, collection: Optional[str] = None, timeout: Optional[int] = None, environment: str = "") -> dict:
+        """Send a request; a path goes after the session's base URL. Returns status, headers, body, ms, tests...
+        environment: an environment's id or name (its variables win over the session's)."""
         req: dict = {"method": method.upper(), "url": url}
         if headers:
             req["headers"] = [{"key": k, "value": str(v)} for k, v in headers.items()]
@@ -689,7 +690,7 @@ class HTTP:
         if tests:
             req["tests"] = tests
         body = {"request": req}
-        for k, v in (("session", session), ("env", env), ("vars", vars), ("collection", collection), ("timeout", timeout)):
+        for k, v in (("session", session), ("env", env), ("vars", vars), ("collection", collection), ("timeout", timeout), ("environment", environment)):
             if v:
                 body[k] = v
         return self.lab.request("POST", "/http/send", body, root=True, timeout=max(self.lab.timeout, (timeout or 30) + 30))
@@ -717,10 +718,10 @@ class HTTP:
         return self.lab.request("POST", "/http/collections", collection, root=True)
 
     def run(self, collection: str, session: Optional[str] = None, env: str = "", requests: Optional[list] = None, folder: str = "",
-            iterations: int = 0, data: str = "", stop_on_fail: bool = False) -> dict:
-        """Run a collection; returns steps, passed, failed, tests."""
+            iterations: int = 0, data: str = "", stop_on_fail: bool = False, environment: str = "") -> dict:
+        """Run a collection (postman.setNextRequest works); returns steps, passed, failed, tests."""
         body = {k: v for k, v in {"session": session, "env": env, "requests": requests, "folder": folder, "iterations": iterations,
-                                  "data": data, "stopOnFail": stop_on_fail}.items() if v}
+                                  "data": data, "stopOnFail": stop_on_fail, "environment": environment}.items() if v}
         return self.lab.request("POST", "/http/collections/" + urllib.parse.quote(collection, safe="") + "/run", body, root=True, timeout=3600)
 
     def import_(self, text: str, name: str = "", session: str = "") -> dict:
@@ -729,6 +730,22 @@ class HTTP:
 
     def history(self) -> list:
         return self.lab.request("GET", "/http/history", root=True) or []
+
+    def environments(self) -> list:
+        """The environments (Postman's), the globals (id "globals") first; secret values are never given."""
+        return self.lab.request("GET", "/http/environments", root=True) or []
+
+    def save_environment(self, name: str, variables: dict, secret: Optional[list] = None, id: str = "") -> dict:
+        """Add or replace an environment from {name: value}; names in secret go to the credential store."""
+        sec = set(secret or [])
+        vs = [{"key": k, "value": str(v), "secret": k in sec} for k, v in variables.items()]
+        return self.lab.request("POST", "/http/environments", {"id": id, "name": name, "vars": vs}, root=True)
+
+    def variables(self, session: Optional[str] = None, collection: Optional[str] = None, environment: str = "", env: str = "") -> list:
+        """Every variable a request can use, with its value and source (secret values left out)."""
+        body = {k: v for k, v in {"session": session, "collection": collection, "environment": environment, "env": env,
+                                  "request": {"method": "GET", "url": ""}}.items() if v}
+        return self.lab.request("POST", "/http/variables", body, root=True) or []
 
 
 class Syslog:

@@ -72,6 +72,36 @@ func (a *App) httpTool(ctx context.Context, args map[string]any, ask netAsker) (
 			return "", err
 		}
 		return fmt.Sprintf("Imported %q (%s) with %d requests.", c.Name, c.ID, len(c.Requests)), nil
+	case "environments":
+		var b strings.Builder
+		for _, e := range a.HTTPEnvironments() {
+			fmt.Fprintf(&b, "%s  %q  %d variables\n", e.ID, e.Name, len(e.Vars))
+			for _, v := range e.Vars {
+				val := v.Value
+				if v.Secret {
+					val = map[bool]string{true: "(secret, set)", false: "(secret, empty)"}[v.HasValue]
+				}
+				fmt.Fprintf(&b, "  %s = %s\n", v.Key, val)
+			}
+		}
+		return b.String(), nil
+	case "variables":
+		vs, err := a.HTTPVariables(HTTPSendRequest{Session: argStr(args, "session"), Env: argStr(args, "env"), Collection: argStr(args, "collection"), Environment: argStr(args, "environment")})
+		if err != nil {
+			return "", err
+		}
+		var b strings.Builder
+		for _, v := range vs {
+			val := v.Value
+			if v.Secret {
+				val = "(secret)"
+			}
+			fmt.Fprintf(&b, "%s = %s  [%s]\n", v.Name, val, v.Source)
+		}
+		if b.Len() == 0 {
+			return "No variables.", nil
+		}
+		return b.String(), nil
 	case "save":
 		return a.httpToolSave(args)
 	case "run":
@@ -138,7 +168,7 @@ func (a *App) httpToolSend(ctx context.Context, args map[string]any, ask netAske
 	if err != nil {
 		return "", err
 	}
-	req := HTTPSendRequest{Session: argStr(args, "session"), Env: argStr(args, "env"), Collection: coll, Request: r}
+	req := HTTPSendRequest{Session: argStr(args, "session"), Env: argStr(args, "env"), Collection: coll, Request: r, Environment: argStr(args, "environment")}
 	if req.Session == "" && coll != "" {
 		if c, err := a.httpStore().Find(coll); err == nil {
 			req.Session = c.Session
@@ -215,7 +245,7 @@ func clip(s string, n int) string {
 }
 
 func (a *App) httpToolRun(ctx context.Context, args map[string]any, ask netAsker) (string, error) {
-	r := HTTPRunRequest{Collection: argStr(args, "collection"), Session: argStr(args, "session"), Env: argStr(args, "env"), Folder: argStr(args, "folder"),
+	r := HTTPRunRequest{Collection: argStr(args, "collection"), Session: argStr(args, "session"), Env: argStr(args, "env"), Environment: argStr(args, "environment"), Folder: argStr(args, "folder"),
 		Iterations: argInt(args, "iterations", 1, 1000), Data: argStr(args, "data")}
 	if id, ok := args["request"].(string); ok && id != "" {
 		r.Requests = []string{id}
@@ -306,4 +336,7 @@ func (a *App) httpToolSave(args map[string]any) (string, error) {
 // pmReference is what the API client's scripts can use (for the AI that writes them).
 const pmReference = `Available: pm.test(name, fn); pm.expect(value) with .to/.be/.have/.and chains and .not, .equal(x), .eql(x) (deep), .include(x), .above(n), .below(n), .least(n), .most(n), .within(a, b), .oneOf(list), .a(type)/.an(type) (string, number, boolean, object, array, null), .match(/re/), .property(name[, value]), .lengthOf(n), .keys(...), and .ok, .true, .false, .null, .undefined, .exist, .empty; ` +
 	"pm.response.code, .status (\"200 OK\"), .responseTime (ms), .responseSize, .json(), .text(), .headers.get(name), .cookies.get(name), pm.response.to.have.status(code), .to.have.header(name[, value]), .to.have.body(text), .to.have.jsonBody(key), .to.be.ok, .to.be.json; " +
-	"pm.variables.get(name) / .set(name, value) / .has / .unset / .replaceIn(text) (pm.environment, pm.collectionVariables, pm.globals and pm.iterationData are the same store; a value set is {{name}} in the next requests of the run or tab); pm.request.method, .url, .headers, .body; console.log(...). A script stops after 5 seconds."
+	"pm.variables.get(name) / .set(name, value) / .has / .unset / .replaceIn(text) / .toObject(); pm.environment, pm.collectionVariables, pm.globals and pm.iterationData read the same values (a value set is {{name}} in the next requests of the run or tab; pm.environment.set also keeps it in the chosen environment and pm.globals.set in the globals); " +
+	"postman.setNextRequest(name) or pm.execution.setNextRequest(name) runs that request next in a collection run (null ends the iteration; loops stop after 10000 requests); pm.execution.skipRequest() in a pre-request script does not send it; " +
+	"pm.sendRequest(urlOrRequest, (err, res) => ...) sends another request ({url, method, header: [{key, value}], body: {mode: 'raw', raw}}; it also returns a promise; changes on a Production session are refused); " +
+	"pm.info.requestName, .iteration, .iterationCount, .eventName; pm.environment.name; pm.request.method, .url, .headers, .body; console.log(...). The collection's own scripts run before each request's. A script stops after 60 seconds."

@@ -112,3 +112,21 @@ END`); err != nil {
 		t.Fatal(r)
 	}
 }
+
+// Every module a built-in MIB imports is built in too (or is the SMI base), so nothing shows as missing.
+func TestStandardImportsComplete(t *testing.T) {
+	m := Standard()
+	base := map[string]bool{"SNMPv2-SMI": true, "SNMPv2-TC": true, "SNMPv2-CONF": true, "RFC1155-SMI": true, "RFC-1212": true, "RFC-1215": true, "RFC1213-MIB": true}
+	for mod := range m.Counts() {
+		for _, im := range m.Imports(mod) {
+			if !base[im] && !m.Loaded(im) {
+				t.Errorf("%s imports %s, which is not built in", mod, im)
+			}
+		}
+	}
+	for _, n := range []string{"RMON2-MIB::probeCapabilities", "RMON-MIB::etherStatsTable", "IANA-RTPROTO-MIB::ianaRtProtoMIB", "UUID-TC-MIB::uuidTCMIB", "TOKEN-RING-RMON-MIB::tokenRingMLStatsTable"} {
+		if _, err := m.Resolve(n); err != nil {
+			t.Error(n, err)
+		}
+	}
+}

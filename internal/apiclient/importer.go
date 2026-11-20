@@ -303,9 +303,13 @@ func importPostman(doc map[string]any, name string) (Collection, error) {
 			c.Vars = append(c.Vars, KV{Key: k, Value: str(m["value"])})
 		}
 	}
-	var walk func(items []any, folder string, inherited []any)
+	if a, _ := doc["auth"].(map[string]any); a != nil {
+		c.Auth, c.AuthData = postmanAuth(a)
+	}
+	c.PreScript, c.Tests = postmanScripts(asList(doc["event"]))
+	var walk func(items []any, folder string, inherited []any, auth map[string]any)
 	n := 0
-	walk = func(items []any, folder string, events []any) {
+	walk = func(items []any, folder string, events []any, fauth map[string]any) {
 		for _, it := range items {
 			m, _ := it.(map[string]any)
 			if m == nil {
@@ -316,7 +320,11 @@ func importPostman(doc map[string]any, name string) (Collection, error) {
 				if folder != "" {
 					f = folder + "/" + f
 				}
-				walk(sub, f, append(events, asList(m["event"])...))
+				fa := fauth
+				if a, _ := m["auth"].(map[string]any); a != nil {
+					fa = a
+				}
+				walk(sub, f, append(append([]any{}, events...), asList(m["event"])...), fa)
 				continue
 			}
 			rq, _ := m["request"].(map[string]any)
@@ -334,6 +342,12 @@ func importPostman(doc map[string]any, name string) (Collection, error) {
 				r.URL = u
 			case map[string]any:
 				r.URL = str(u["raw"])
+				for _, pv := range asList(u["variable"]) {
+					pm, _ := pv.(map[string]any)
+					if k := str(pm["key"]); k != "" {
+						r.PathVars = append(r.PathVars, KV{Key: k, Value: str(pm["value"]), Desc: descText(pm["description"])})
+					}
+				}
 				if i := strings.IndexByte(r.URL, '?'); i >= 0 && len(asList(u["query"])) > 0 {
 					r.URL = r.URL[:i]
 					for _, q := range asList(u["query"]) {
@@ -351,7 +365,7 @@ func importPostman(doc map[string]any, name string) (Collection, error) {
 				case "raw":
 					r.Body.Raw = str(b["raw"])
 					lang := str(Path(b, "options.raw.language"))
-					r.Body.Mode = map[string]string{"json": "json", "xml": "xml"}[lang]
+					r.Body.Mode = map[string]string{"json": "json", "xml": "xml", "html": "html", "javascript": "javascript", "text": "text"}[lang]
 					if r.Body.Mode == "" {
 						r.Body.Mode = "text"
 						if t := strings.TrimSpace(r.Body.Raw); strings.HasPrefix(t, "{") || strings.HasPrefix(t, "[") {
@@ -362,33 +376,31 @@ func importPostman(doc map[string]any, name string) (Collection, error) {
 					r.Body.Mode = map[string]string{"urlencoded": "urlencoded", "formdata": "form"}[str(b["mode"])]
 					for _, f := range asList(b[str(b["mode"])]) {
 						fm, _ := f.(map[string]any)
-						v := str(fm["value"])
+						kv := KV{Key: str(fm["key"]), Value: str(fm["value"]), Off: fm["disabled"] == true, Desc: descText(fm["description"])}
 						if str(fm["type"]) == "file" {
-							v = "@" + str(fm["src"])
+							kv.Type = "file"
+							kv.Value = str(fm["src"])
+							if l, ok := fm["src"].([]any); ok && len(l) > 0 {
+								kv.Value = str(l[0])
+							}
 						}
-						r.Body.Form = append(r.Body.Form, KV{Key: str(fm["key"]), Value: v, Off: fm["disabled"] == true})
+						r.Body.Form = append(r.Body.Form, kv)
 					}
+				case "file":
+					f, _ := b["file"].(map[string]any)
+					r.Body.Mode, r.Body.File = "binary", str(f["src"])
 				case "graphql":
 					g, _ := b["graphql"].(map[string]any)
 					r.Body.Mode, r.Body.Raw, r.Body.GraphQLVars = "graphql", str(g["query"]), str(g["variables"])
 				}
 			}
 			if a, _ := rq["auth"].(map[string]any); a != nil {
-				switch str(a["type"]) {
-				case "noauth":
-					r.Auth = "none"
-				case "bearer":
-					if t := postmanAuthVal(a["bearer"], "token"); t != "" {
-						r.Headers = append(r.Headers, KV{Key: "Authorization", Value: "Bearer " + t})
-						r.Auth = "none"
-					}
-				case "basic":
-					u, p := postmanAuthVal(a["basic"], "username"), postmanAuthVal(a["basic"], "password")
-					if u != "" {
-						r.Headers = append(r.Headers, KV{Key: "Authorization", Value: "Basic " + b64(u+":"+p)})
-						r.Auth = "none"
-					}
-				}
+				r.Auth, r.AuthData = postmanAuth(a)
+			} else if fauth != nil {
+				r.Auth, r.AuthData = postmanAuth(fauth)
+			}
+			if pb, _ := m["protocolProfileBehavior"].(map[string]any); pb != nil {
+				r.Settings = postmanSettings(pb)
 			}
 			for _, e := range append(events, asList(m["event"])...) {
 				em, _ := e.(map[string]any)
@@ -416,8 +428,84 @@ func importPostman(doc map[string]any, name string) (Collection, error) {
 			c.Requests = append(c.Requests, r)
 		}
 	}
-	walk(asList(doc["item"]), "", asList(doc["event"]))
+	walk(asList(doc["item"]), "", nil, nil)
 	return c, nil
+}
+
+// postmanAuth maps a Postman auth object to a request's own authentication ("" for inherit).
+func postmanAuth(a map[string]any) (string, *ReqAuth) {
+	switch str(a["type"]) {
+	case "noauth":
+		return "none", nil
+	case "bearer":
+		return "bearer", &ReqAuth{Token: postmanAuthVal(a["bearer"], "token")}
+	case "basic":
+		return "basic", &ReqAuth{User: postmanAuthVal(a["basic"], "username"), Password: postmanAuthVal(a["basic"], "password")}
+	case "apikey":
+		in := "header"
+		if postmanAuthVal(a["apikey"], "in") == "query" {
+			in = "query"
+		}
+		return "apikey", &ReqAuth{Key: postmanAuthVal(a["apikey"], "key"), Value: postmanAuthVal(a["apikey"], "value"), In: in}
+	case "oauth2":
+		if t := postmanAuthVal(a["oauth2"], "accessToken"); t != "" {
+			return "bearer", &ReqAuth{Token: t}
+		}
+	}
+	return "", nil
+}
+
+// postmanScripts joins the pre-request and test scripts of a Postman event list.
+func postmanScripts(events []any) (pre, tests string) {
+	for _, e := range events {
+		em, _ := e.(map[string]any)
+		sc, _ := em["script"].(map[string]any)
+		var src string
+		switch x := sc["exec"].(type) {
+		case string:
+			src = x
+		case []any:
+			var l []string
+			for _, s := range x {
+				l = append(l, str(s))
+			}
+			src = strings.Join(l, "\n")
+		}
+		if strings.TrimSpace(src) == "" {
+			continue
+		}
+		switch str(em["listen"]) {
+		case "test":
+			tests = strings.TrimSpace(tests + "\n" + src)
+		case "prerequest":
+			pre = strings.TrimSpace(pre + "\n" + src)
+		}
+	}
+	return pre, tests
+}
+
+// postmanSettings maps Postman's protocolProfileBehavior.
+func postmanSettings(pb map[string]any) *Settings {
+	st := &Settings{}
+	b := func(k string) (bool, bool) { v, ok := pb[k].(bool); return v, ok }
+	if v, ok := b("followRedirects"); ok && !v {
+		st.NoRedirects = true
+	}
+	if v, ok := b("strictSSL"); ok {
+		st.Verify = map[bool]string{true: "on", false: "off"}[v]
+	}
+	st.FollowMethod, _ = b("followOriginalHttpMethod")
+	st.FollowAuth, _ = b("followAuthorizationHeader")
+	st.RemoveReferer, _ = b("removeRefererHeaderOnRedirect")
+	st.NoEncode, _ = b("disableUrlEncoding")
+	st.NoCookies, _ = b("disableCookies")
+	if v, ok := pb["maxRedirects"].(float64); ok {
+		st.MaxRedirects = int(v)
+	}
+	if *st == (Settings{}) {
+		return nil
+	}
+	return st
 }
 
 func postmanAuthVal(v any, key string) string {

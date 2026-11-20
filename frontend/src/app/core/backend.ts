@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import type { TopoRequest, TopoResult, LayoutRequest, LayoutResult } from './models';
 import { EmuEngines, EmuHostNIC, EmuTrex,
   EmuServer, EmuServerView,
-  AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange, SNMPRequest, SNMPResult, SNMPMibNode, SNMPModule, SNMPSecretState, SNMPTrapState, SNMPTrapsView, HSendRequest, HResponse, HCollection, HCollectionInfo, HRunRequest, HRunResult, HHistoryItem, SyslogSettings, SyslogState, SyslogMsg, SyslogRule, SyslogQuery, SyslogSendIn } from './models';
+  AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange, SNMPRequest, SNMPResult, SNMPMibNode, SNMPModule, SNMPSecretState, SNMPTrapState, SNMPTrapsView, HSendRequest, HResponse, HCollection, HCollectionInfo, HRunRequest, HRunResult, HHistoryItem, HRequest, HEnv, HVar, HHostCookies, SyslogSettings, SyslogState, SyslogMsg, SyslogRule, SyslogQuery, SyslogSendIn } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -287,6 +287,17 @@ export class Backend {
   httpRun(r: HRunRequest) { return this.call<HRunResult>('HTTPRun', r); }
   httpHistory() { return this.call<HHistoryItem[]>('HTTPHistory'); }
   httpClearHistory() { return this.call<void>('HTTPClearHistory'); }
+  httpParseCurl(text: string) { return this.call<HRequest>('HTTPParseCurl', text); }
+  httpEnvironments() { return this.call<HEnv[]>('HTTPEnvironments'); }
+  httpSaveEnvironment(e: HEnv) { return this.call<HEnv>('HTTPSaveEnvironment', e); }
+  httpDeleteEnvironment(id: string) { return this.call<void>('HTTPDeleteEnvironment', id); }
+  httpImportEnvironment(text: string, name: string) { return this.call<HEnv>('HTTPImportEnvironment', text, name); }
+  httpImportEnvironmentFile() { return this.call<HEnv>('HTTPImportEnvironmentFile'); }
+  httpExportEnvironmentFile(id: string) { return this.call<string>('HTTPExportEnvironmentFile', id); }
+  httpVariables(r: HSendRequest) { return this.call<HVar[]>('HTTPVariables', r); }
+  httpCookies(session: string) { return this.call<HHostCookies[]>('HTTPCookies', session); }
+  httpDeleteCookie(session: string, host: string, name: string) { return this.call<void>('HTTPDeleteCookie', session, host, name); }
+  httpSaveResponse(body: string, base64: boolean, name: string) { return this.call<string>('HTTPSaveResponse', body, base64, name); }
   // ---- SNMP ----
   snmpRun(r: SNMPRequest) { return this.call<SNMPResult>('SNMPRun', r); }
   snmpSecrets(path: string) { return this.call<SNMPSecretState>('SNMPSecrets', path); }

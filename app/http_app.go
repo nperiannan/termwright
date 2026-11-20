@@ -152,6 +152,8 @@ type HTTPSendRequest struct {
 	Collection string `json:"collection,omitempty"`
 	// Request to send.
 	Request apiclient.Request `json:"request"`
+	// Environment: the id or name of an environment whose variables win over the session's ("" none).
+	Environment string `json:"environment,omitempty"`
 	// Vars: values that win over the session's and the collection's (set by earlier scripts).
 	Vars map[string]string `json:"vars,omitempty"`
 	// Timeout in seconds (default 30).
@@ -198,6 +200,7 @@ func (a *App) httpTarget(r HTTPSendRequest) (*apiclient.Target, *session.Session
 
 func (a *App) httpTargetDraft(r HTTPSendRequest, draft *session.Session, typed string) (*apiclient.Target, *session.Session, bool, error) {
 	t := &apiclient.Target{Vars: map[string]string{}, Tokens: httpTokens, Timeout: time.Duration(min(max(r.Timeout, 0), 600)) * time.Second, NoRedirects: r.NoRedirects}
+	a.httpEnvVars(apiclient.GlobalsID, t)
 	if r.Collection != "" {
 		c, err := a.httpStore().Find(r.Collection)
 		if err != nil {
@@ -208,6 +211,7 @@ func (a *App) httpTargetDraft(r HTTPSendRequest, draft *session.Session, typed s
 				t.Vars[v.Key] = v.Value
 			}
 		}
+		t.CollAuth, t.CollAuthData, t.CollPre, t.CollTests = c.Auth, c.AuthData, c.PreScript, c.Tests
 	}
 	var sp *session.Session
 	prodEnv := strings.EqualFold(r.Env, "production")
@@ -272,7 +276,20 @@ func (a *App) httpTargetDraft(r HTTPSendRequest, draft *session.Session, typed s
 		}
 		t.Jar = httpJars[path]
 		httpJarsMu.Unlock()
-	} else if t.Vars["baseUrl"] != "" {
+	} else {
+		httpJarsMu.Lock()
+		if httpJars[""] == nil {
+			httpJars[""] = apiclient.NewJar()
+		}
+		t.Jar = httpJars[""]
+		httpJarsMu.Unlock()
+	}
+	if r.Environment != "" {
+		if err := a.httpEnvVars(r.Environment, t); err != nil {
+			return nil, nil, false, err
+		}
+	}
+	if t.BaseURL == "" && t.Vars["baseUrl"] != "" {
 		t.BaseURL = "{{baseUrl}}"
 	}
 	for k, v := range r.Vars {
@@ -299,7 +316,9 @@ func (a *App) httpSend(ctx context.Context, r HTTPSendRequest) (apiclient.Respon
 	if prod && apiclient.Changes(strings.ToUpper(r.Request.Method)) && !r.Confirmed {
 		return apiclient.Response{}, errHTTPConfirm
 	}
+	t.ScriptSend = httpScriptGuard(prod, r.Confirmed)
 	res := apiclient.Run(ctx, r.Request, t)
+	a.httpKeepSet(r.Environment, res)
 	a.httpRemember(r, res)
 	return res, nil
 }
@@ -310,6 +329,8 @@ type HTTPHistoryItem struct {
 	Session    string            `json:"session,omitempty"`    // the API session
 	Env        string            `json:"env,omitempty"`        // "" or production
 	Collection string            `json:"collection,omitempty"` // the collection it came from
+	// Environment chosen when it was sent.
+	Environment string `json:"environment,omitempty"`
 	Request    apiclient.Request `json:"request"`              // the request (the body cut at 16 KB)
 	URL        string            `json:"url"`                  // the URL sent (secrets masked)
 	Status     int               `json:"status"`               // the answer's status (0: not sent)
@@ -335,10 +356,15 @@ func (a *App) httpRemember(r HTTPSendRequest, res apiclient.Response) {
 	defer httpHistMu.Unlock()
 	a.httpLoadHist()
 	rq := r.Request
+	if rq.AuthData != nil {
+		ad := *rq.AuthData
+		ad.Scrub()
+		rq.AuthData = &ad
+	}
 	if len(rq.Body.Raw) > 16<<10 {
 		rq.Body.Raw = rq.Body.Raw[:16<<10]
 	}
-	httpHist = append([]HTTPHistoryItem{{At: time.Now(), Session: r.Session, Env: r.Env, Collection: r.Collection, Request: rq, URL: res.URL,
+	httpHist = append([]HTTPHistoryItem{{At: time.Now(), Session: r.Session, Env: r.Env, Environment: r.Environment, Collection: r.Collection, Request: rq, URL: res.URL,
 		Status: res.Status, Ms: res.Ms, Size: res.Size, Error: res.Error}}, httpHist...)
 	if len(httpHist) > 300 {
 		httpHist = httpHist[:300]
@@ -390,6 +416,9 @@ func (a *App) HTTPDeleteCollection(id string) error { return a.httpStore().Delet
 // HTTPImport reads a cURL command, a Postman collection or an OpenAPI / Swagger document and saves it as a
 // collection (using session when given).
 func (a *App) HTTPImport(text, name, session string) (apiclient.Collection, error) {
+	if apiclient.IsEnvironment(text) {
+		return apiclient.Collection{}, errors.New("this is a Postman environment, not a collection: import it with Environments → Import")
+	}
 	c, err := apiclient.Import(text, name)
 	if err != nil {
 		return c, err
@@ -400,6 +429,9 @@ func (a *App) HTTPImport(text, name, session string) (apiclient.Collection, erro
 	}
 	return a.httpStore().Save(c)
 }
+
+// HTTPParseCurl reads one cURL command as a request (nothing is saved).
+func (a *App) HTTPParseCurl(text string) (apiclient.Request, error) { return apiclient.ParseCurl(text) }
 
 // HTTPImportFile asks for a file and imports it.
 func (a *App) HTTPImportFile(session string) (apiclient.Collection, error) {
@@ -478,6 +510,8 @@ type HTTPRunRequest struct {
 	Session string `json:"session,omitempty"`
 	// Env: "" or "production".
 	Env string `json:"env,omitempty"`
+	// Environment: the id or name of an environment ("" none).
+	Environment string `json:"environment,omitempty"`
 	// Requests: ids or names to run, in the collection's order ("" = all).
 	Requests []string `json:"requests,omitempty"`
 	// Folder: only the requests in this folder (and below).
@@ -511,7 +545,7 @@ func (a *App) httpRun(ctx context.Context, r HTTPRunRequest) (apiclient.RunResul
 	if sess == "" {
 		sess = c.Session
 	}
-	t, _, prod, err := a.httpTarget(HTTPSendRequest{Session: sess, Env: r.Env, Collection: c.ID})
+	t, _, prod, err := a.httpTarget(HTTPSendRequest{Session: sess, Env: r.Env, Collection: c.ID, Environment: r.Environment})
 	if err != nil {
 		return apiclient.RunResult{}, err
 	}
@@ -545,11 +579,14 @@ func (a *App) httpRun(ctx context.Context, r HTTPRunRequest) (apiclient.RunResul
 			}
 			return nil
 		},
+		Done:    func(_ apiclient.Request, res apiclient.Response) { a.httpKeepSet(r.Environment, res) },
+		EnvName: a.httpEnvName(r.Environment),
 		Each: func(st apiclient.RunStep) {
 			if a.ctx != nil {
 				wruntime.EventsEmit(a.ctx, "http:run", st)
 			}
 		}}
+	t.ScriptSend = httpScriptGuard(prod, r.Confirmed)
 	return apiclient.RunCollection(ctx, reqs, t, o), nil
 }
 

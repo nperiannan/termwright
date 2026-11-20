@@ -1502,6 +1502,87 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /http/environments:
+        get:
+            operationId: listEnvironments
+            tags:
+                - API client
+            summary: The environments
+            description: The API client's environments (Postman's environments), the globals (id globals) first. Secret values are never given, only whether one is set.
+            responses:
+                200:
+                    description: The environments.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/HTTPEnv'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+        post:
+            operationId: saveEnvironment
+            tags:
+                - API client
+            summary: Save an environment
+            description: 'Adds or replaces an environment (no id: a new one; id globals: the global variables). Secret values go to the computer''s credential store; an empty secret value keeps the saved one.'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HTTPEnv'
+            responses:
+                200:
+                    description: The environment.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HTTPEnv'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /http/variables:
+        post:
+            operationId: httpVariables
+            tags:
+                - API client
+            summary: Variables of a request
+            description: Every variable a request can use with the winning value and where it comes from (globals, collection, session, environment, local). Secret values are left out.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HTTPSendRequest'
+            responses:
+                200:
+                    description: The variables.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/HTTPVar'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /syslog:
         get:
             operationId: syslogState
@@ -2058,7 +2139,7 @@ paths:
             tags:
                 - Network tools
             summary: The http tool
-            description: 'The REST API client with saved API sessions (Protocol API: base URL, authentication - API key, bearer token, login, basic, OAuth 2.0 - and {{variables}}; secrets stay in the credential store) and collections. send sends one request (a path goes after the session''s base URL; the login token is fetched and renewed by itself) or a saved one (collection + request); POST, PUT, PATCH and DELETE on a production session are asked first. run runs a collection''s requests with their tests; collections / collection list them; save adds or replaces a request in a collection (made when missing), with its pre-request script (preScript) and tests in Postman''s pm.* style (pm.test, pm.expect, pm.response.json(), pm.variables.set); import reads a cURL command, a Postman collection or an OpenAPI document into a collection; history lists the last requests. Through the API it runs without asking.'
+            description: 'The REST API client with saved API sessions (Protocol API: base URL, authentication - API key, bearer token, login, basic, OAuth 2.0 - and {{variables}}; secrets stay in the credential store) and collections. send sends one request (a path goes after the session''s base URL; the login token is fetched and renewed by itself) or a saved one (collection + request); POST, PUT, PATCH and DELETE on a production session are asked first. run runs a collection''s requests with their tests; collections / collection list them; save adds or replaces a request in a collection (made when missing), with its pre-request script (preScript) and tests in Postman''s pm.* style (pm.test, pm.expect, pm.response.json(), pm.variables.set); import reads a cURL command, a Postman collection or an OpenAPI document into a collection; history lists the last requests; environments lists the environments (Postman''s) and globals; variables lists the variables a request can use and where each comes from (secret values hidden). Through the API it runs without asking.'
             requestBody:
                 required: true
                 content:
@@ -2076,6 +2157,8 @@ paths:
                                         - save
                                         - import
                                         - history
+                                        - environments
+                                        - variables
                                     type: string
                                 body:
                                     description: 'send: a JSON value (sent as JSON) or text'
@@ -2090,6 +2173,9 @@ paths:
                                     enum:
                                         - ""
                                         - production
+                                    type: string
+                                environment:
+                                    description: 'send / run / variables: an environment''s id or name (environments lists them); its variables win over the session''s'
                                     type: string
                                 folder:
                                     description: 'run: only this folder'
@@ -5720,7 +5806,7 @@ components:
             type: object
             properties:
                 mode:
-                    description: 'Mode: "" (none), json, text, xml, urlencoded, form (multipart), graphql.'
+                    description: 'Mode: "" (none), json, text, xml, html, javascript, urlencoded, form (multipart), graphql, binary.'
                     type: string
                 raw:
                     description: 'Raw: the text of json, text, xml and the GraphQL query.'
@@ -5734,6 +5820,9 @@ components:
                         $ref: '#/components/schemas/HTTPKeyValue'
                 graphqlVars:
                     description: 'GraphQLVars: the GraphQL variables as JSON.'
+                    type: string
+                file:
+                    description: 'File: the path of the file sent as it is (binary).'
                     type: string
         HTTPCollection:
             type: object
@@ -5762,6 +5851,20 @@ components:
                         - "null"
                     items:
                         $ref: '#/components/schemas/HTTPRequestDef'
+                auth:
+                    description: 'Auth of its requests that inherit: "" (the session''s), "none", "bearer", "basic" or "apikey".'
+                    type: string
+                authData:
+                    description: 'AuthData: the values of its authentication.'
+                    anyOf:
+                        - $ref: '#/components/schemas/HTTPReqAuth'
+                        - type: "null"
+                preScript:
+                    description: PreScript runs before each of its requests, before the request's own.
+                    type: string
+                tests:
+                    description: Tests run after each of its requests, before the request's own.
+                    type: string
                 description:
                     description: 'Description: what it is for.'
                     type: string
@@ -5814,6 +5917,52 @@ components:
             required:
                 - name
                 - value
+        HTTPEnv:
+            type: object
+            description: 'An environment (Postman''s): named variables chosen in the API client; id globals holds the global variables.'
+            properties:
+                id:
+                    description: 'ID: its id ("globals" for the global variables).'
+                    type: string
+                name:
+                    description: Name shown.
+                    type: string
+                vars:
+                    description: 'Vars: its variables (secret values left out).'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPEnvVar'
+            required:
+                - id
+                - name
+                - vars
+        HTTPEnvVar:
+            type: object
+            description: A variable of an environment; a secret one's value stays in the credential store.
+            properties:
+                key:
+                    description: 'Key: the name.'
+                    type: string
+                value:
+                    description: 'Value: the value ("" in the file when Secret).'
+                    type: string
+                secret:
+                    description: 'Secret: kept in the credential store and masked where requests are shown.'
+                    type: boolean
+                off:
+                    description: 'Off: not used.'
+                    type: boolean
+                desc:
+                    description: 'Desc: a note.'
+                    type: string
+                hasValue:
+                    description: 'HasValue: a secret variable has a value in the credential store.'
+                    type: boolean
+            required:
+                - key
+                - value
         HTTPHistoryItem:
             type: object
             description: A request sent (no answer body).
@@ -5830,6 +5979,9 @@ components:
                     type: string
                 collection:
                     description: the collection it came from
+                    type: string
+                environment:
+                    description: Environment chosen when it was sent.
                     type: string
                 request:
                     $ref: '#/components/schemas/HTTPRequestDef'
@@ -5885,9 +6037,34 @@ components:
                 desc:
                     description: 'Desc: a note.'
                     type: string
+                type:
+                    description: 'Type of a multipart form field: "" (text) or "file" (Value is the file''s path).'
+                    type: string
             required:
                 - key
                 - value
+        HTTPReqAuth:
+            type: object
+            description: A request's or collection's own authentication; values may be {{variables}}.
+            properties:
+                token:
+                    description: Token of a bearer token.
+                    type: string
+                user:
+                    description: User of basic authentication.
+                    type: string
+                password:
+                    description: Password of basic authentication.
+                    type: string
+                key:
+                    description: 'Key: the API key''s header or query parameter name.'
+                    type: string
+                value:
+                    description: Value of the API key.
+                    type: string
+                in:
+                    description: 'In: where the API key goes, "header" (default) or "query".'
+                    type: string
         HTTPRequestDef:
             type: object
             description: 'A request: method, URL, parameters, headers, body, pre-request script and tests.'
@@ -5902,13 +6079,20 @@ components:
                     description: Folder in the collection ("Interfaces/Ports"), "" = top level.
                     type: string
                 method:
-                    description: 'Method: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS.'
+                    description: 'Method: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS or any other word.'
                     type: string
                 url:
                     description: 'URL: absolute, or a path (/rest/...) that goes after the session''s base URL.'
                     type: string
                 params:
                     description: 'Params: query parameters added to the URL.'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPKeyValue'
+                pathVars:
+                    description: 'PathVars: values of the :name parts of the URL''s path.'
                     type:
                         - array
                         - "null"
@@ -5925,8 +6109,18 @@ components:
                     $ref: '#/components/schemas/HTTPBody'
                     description: Body sent with it.
                 auth:
-                    description: 'Auth: "" uses the session''s authentication, "none" sends none.'
+                    description: 'Auth: "" inherits (the collection''s, else the session''s), "none", "bearer", "basic" or "apikey".'
                     type: string
+                authData:
+                    description: 'AuthData: the values of its own authentication.'
+                    anyOf:
+                        - $ref: '#/components/schemas/HTTPReqAuth'
+                        - type: "null"
+                settings:
+                    description: Settings of the request.
+                    anyOf:
+                        - $ref: '#/components/schemas/HTTPSettings'
+                        - type: "null"
                 preScript:
                     description: PreScript runs before it is sent (pm.variables.set ...).
                     type: string
@@ -6027,6 +6221,29 @@ components:
                 error:
                     description: 'Error: why it could not be sent or what failed (the answer is still shown when there is one).'
                     type: string
+                next:
+                    description: 'Next: the request a script chose to run next in a collection run (postman.setNextRequest).'
+                    type: string
+                nextSet:
+                    description: 'NextSet: a script chose the next request; Next "" ends the run.'
+                    type: boolean
+                skipped:
+                    description: 'Skipped: the pre-request script skipped it (pm.execution.skipRequest).'
+                    type: boolean
+                envSet:
+                    description: 'EnvSet: values the scripts set with pm.environment.set (kept in the chosen environment).'
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
+                globalSet:
+                    description: 'GlobalSet: values the scripts set with pm.globals.set (kept in the globals).'
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
             required:
                 - status
                 - statusText
@@ -6050,6 +6267,9 @@ components:
                     type: string
                 env:
                     description: 'Env: "" or "production".'
+                    type: string
+                environment:
+                    description: 'Environment: the id or name of an environment ("" none).'
                     type: string
                 requests:
                     description: 'Requests: ids or names to run, in the collection''s order ("" = all).'
@@ -6172,6 +6392,9 @@ components:
                 request:
                     $ref: '#/components/schemas/HTTPRequestDef'
                     description: Request to send.
+                environment:
+                    description: 'Environment: the id or name of an environment whose variables win over the session''s ("" none).'
+                    type: string
                 vars:
                     description: 'Vars: values that win over the session''s and the collection''s (set by earlier scripts).'
                     type:
@@ -6190,6 +6413,40 @@ components:
                     type: boolean
             required:
                 - request
+        HTTPSettings:
+            type: object
+            description: 'A request''s settings: HTTP version, certificate check, redirects, URL encoding, cookies, timeout.'
+            properties:
+                httpVersion:
+                    description: 'HTTPVersion: "" (automatic), "1.1" or "2".'
+                    type: string
+                verify:
+                    description: 'Verify: "" (the session''s choice), "on" (check the certificate) or "off" (accept any).'
+                    type: string
+                noRedirects:
+                    description: 'NoRedirects: answer 3xx instead of following.'
+                    type: boolean
+                followMethod:
+                    description: 'FollowMethod: follow a redirect with the original method and body (not GET).'
+                    type: boolean
+                followAuth:
+                    description: 'FollowAuth: keep the Authorization header when a redirect goes to another host.'
+                    type: boolean
+                removeReferer:
+                    description: 'RemoveReferer: send no Referer header after a redirect.'
+                    type: boolean
+                noEncode:
+                    description: 'NoEncode: send the query parameters as typed (not URL-encoded).'
+                    type: boolean
+                noCookies:
+                    description: 'NoCookies: neither send nor keep cookies.'
+                    type: boolean
+                maxRedirects:
+                    description: 'MaxRedirects followed (0: 10).'
+                    type: integer
+                timeoutMs:
+                    description: 'TimeoutMs of the request (0: the session''s, 30 s).'
+                    type: integer
         HTTPTestResult:
             type: object
             properties:
@@ -6227,6 +6484,25 @@ components:
                 - tls
                 - firstByte
                 - total
+        HTTPVar:
+            type: object
+            description: A variable a request can use, and where its value comes from.
+            properties:
+                name:
+                    type: string
+                value:
+                    description: 'Value: "" for a secret (see Secret).'
+                    type: string
+                source:
+                    description: 'Source: globals, collection, session, environment or local (set by a script in this tab).'
+                    type: string
+                secret:
+                    description: 'Secret: its value is hidden.'
+                    type: boolean
+            required:
+                - name
+                - value
+                - source
         Host:
             type: object
             properties:

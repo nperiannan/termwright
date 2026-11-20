@@ -4,6 +4,8 @@
 // v2.1, OpenAPI 3 / Swagger 2) and code export. Standard library and goja only.
 package apiclient
 
+import "strings"
+
 // KV is a parameter, header or form field. Off keeps it in the request without sending it.
 type KV struct {
 	// Key: the name.
@@ -14,11 +16,54 @@ type KV struct {
 	Off bool `json:"off,omitempty"`
 	// Desc: a note.
 	Desc string `json:"desc,omitempty"`
+	// Type of a multipart form field: "" (text) or "file" (Value is the file's path).
+	Type string `json:"type,omitempty"`
+}
+
+// ReqAuth is a request's (or a collection's) own authentication. Values may hold {{variables}}; typed
+// passwords, tokens and API key values are not saved in a collection (use a secret variable).
+type ReqAuth struct {
+	// Token of a bearer token.
+	Token string `json:"token,omitempty"`
+	// User of basic authentication.
+	User string `json:"user,omitempty"`
+	// Password of basic authentication.
+	Password string `json:"password,omitempty"`
+	// Key: the API key's header or query parameter name.
+	Key string `json:"key,omitempty"`
+	// Value of the API key.
+	Value string `json:"value,omitempty"`
+	// In: where the API key goes, "header" (default) or "query".
+	In string `json:"in,omitempty"`
+}
+
+// Settings of a request (Postman's request settings). Zero values are the defaults.
+type Settings struct {
+	// HTTPVersion: "" (automatic), "1.1" or "2".
+	HTTPVersion string `json:"httpVersion,omitempty"`
+	// Verify: "" (the session's choice), "on" (check the certificate) or "off" (accept any).
+	Verify string `json:"verify,omitempty"`
+	// NoRedirects: answer 3xx instead of following.
+	NoRedirects bool `json:"noRedirects,omitempty"`
+	// FollowMethod: follow a redirect with the original method and body (not GET).
+	FollowMethod bool `json:"followMethod,omitempty"`
+	// FollowAuth: keep the Authorization header when a redirect goes to another host.
+	FollowAuth bool `json:"followAuth,omitempty"`
+	// RemoveReferer: send no Referer header after a redirect.
+	RemoveReferer bool `json:"removeReferer,omitempty"`
+	// NoEncode: send the query parameters as typed (not URL-encoded).
+	NoEncode bool `json:"noEncode,omitempty"`
+	// NoCookies: neither send nor keep cookies.
+	NoCookies bool `json:"noCookies,omitempty"`
+	// MaxRedirects followed (0: 10).
+	MaxRedirects int `json:"maxRedirects,omitempty"`
+	// TimeoutMs of the request (0: the session's, 30 s).
+	TimeoutMs int `json:"timeoutMs,omitempty"`
 }
 
 // Body of a request.
 type Body struct {
-	// Mode: "" (none), json, text, xml, urlencoded, form (multipart), graphql.
+	// Mode: "" (none), json, text, xml, html, javascript, urlencoded, form (multipart), graphql, binary.
 	Mode string `json:"mode,omitempty"`
 	// Raw: the text of json, text, xml and the GraphQL query.
 	Raw string `json:"raw,omitempty"`
@@ -26,6 +71,8 @@ type Body struct {
 	Form []KV `json:"form,omitempty"`
 	// GraphQLVars: the GraphQL variables as JSON.
 	GraphQLVars string `json:"graphqlVars,omitempty"`
+	// File: the path of the file sent as it is (binary).
+	File string `json:"file,omitempty"`
 }
 
 // Request is a saved or typed request.
@@ -36,18 +83,24 @@ type Request struct {
 	Name string `json:"name,omitempty"`
 	// Folder in the collection ("Interfaces/Ports"), "" = top level.
 	Folder string `json:"folder,omitempty"`
-	// Method: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS.
+	// Method: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS or any other word.
 	Method string `json:"method"`
 	// URL: absolute, or a path (/rest/...) that goes after the session's base URL.
 	URL string `json:"url"`
 	// Params: query parameters added to the URL.
 	Params []KV `json:"params,omitempty"`
+	// PathVars: values of the :name parts of the URL's path.
+	PathVars []KV `json:"pathVars,omitempty"`
 	// Headers sent with it.
 	Headers []KV `json:"headers,omitempty"`
 	// Body sent with it.
 	Body Body `json:"body,omitempty"`
-	// Auth: "" uses the session's authentication, "none" sends none.
+	// Auth: "" inherits (the collection's, else the session's), "none", "bearer", "basic" or "apikey".
 	Auth string `json:"auth,omitempty"`
+	// AuthData: the values of its own authentication.
+	AuthData *ReqAuth `json:"authData,omitempty"`
+	// Settings of the request.
+	Settings *Settings `json:"settings,omitempty"`
 	// PreScript runs before it is sent (pm.variables.set ...).
 	PreScript string `json:"preScript,omitempty"`
 	// Tests run on the answer (pm.test("ok", () => pm.response.to.have.status(200))).
@@ -68,6 +121,14 @@ type Collection struct {
 	Vars []KV `json:"vars,omitempty"`
 	// Requests in order.
 	Requests []Request `json:"requests"`
+	// Auth of its requests that inherit: "" (the session's), "none", "bearer", "basic" or "apikey".
+	Auth string `json:"auth,omitempty"`
+	// AuthData: the values of its authentication.
+	AuthData *ReqAuth `json:"authData,omitempty"`
+	// PreScript runs before each of its requests, before the request's own.
+	PreScript string `json:"preScript,omitempty"`
+	// Tests run after each of its requests, before the request's own.
+	Tests string `json:"tests,omitempty"`
 	// Description: what it is for.
 	Description string `json:"description,omitempty"`
 }
@@ -149,6 +210,56 @@ type Response struct {
 	Vars map[string]string `json:"vars,omitempty"`
 	// Error: why it could not be sent or what failed (the answer is still shown when there is one).
 	Error string `json:"error,omitempty"`
+	// Next: the request a script chose to run next in a collection run (postman.setNextRequest).
+	Next string `json:"next,omitempty"`
+	// NextSet: a script chose the next request; Next "" ends the run.
+	NextSet bool `json:"nextSet,omitempty"`
+	// Skipped: the pre-request script skipped it (pm.execution.skipRequest).
+	Skipped bool `json:"skipped,omitempty"`
+	// EnvSet: values the scripts set with pm.environment.set (kept in the chosen environment).
+	EnvSet map[string]string `json:"envSet,omitempty"`
+	// GlobalSet: values the scripts set with pm.globals.set (kept in the globals).
+	GlobalSet map[string]string `json:"globalSet,omitempty"`
+}
+
+// Environment is a named set of variables (Postman's environments); the one with ID "globals" holds
+// the global variables. Secret values are kept in the computer's credential store, not in the file.
+type Environment struct {
+	// ID: the file name without .json ("globals" for the globals).
+	ID string `json:"id"`
+	// Name shown.
+	Name string `json:"name"`
+	// Vars: its variables.
+	Vars []EnvVar `json:"vars"`
+}
+
+// EnvVar is a variable of an environment.
+type EnvVar struct {
+	// Key: the name.
+	Key string `json:"key"`
+	// Value: the value ("" in the file when Secret).
+	Value string `json:"value"`
+	// Secret: kept in the credential store and masked where requests are shown.
+	Secret bool `json:"secret,omitempty"`
+	// Off: not used.
+	Off bool `json:"off,omitempty"`
+	// Desc: a note.
+	Desc string `json:"desc,omitempty"`
+}
+
+// Literal says whether a value is typed rather than a {{variable}} (an empty value is not).
+func Literal(v string) bool { return strings.TrimSpace(v) != "" && !strings.Contains(v, "{{") }
+
+// Scrub removes typed secrets (passwords, tokens, API key values) of a request's own authentication.
+func (a *ReqAuth) Scrub() {
+	if a == nil {
+		return
+	}
+	for _, p := range []*string{&a.Token, &a.Password, &a.Value} {
+		if Literal(*p) {
+			*p = ""
+		}
+	}
 }
 
 // Changes says whether a method changes something on the server.
