@@ -49,6 +49,7 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
         </div>
       } @empty { <div class="mut empty">No steps yet.</div> }
     </div>
+    <label class="roles" title="Sessions are saved as {{ '{{' }}role{{ '}}' }} variables with these sessions as defaults, so a testbed can point the test at other devices"><input type="checkbox" [ngModel]="rec.roles()" (ngModelChange)="rec.roles.set($event)" /> Sessions as roles</label>
     <div class="ft">
       <span class="mut">{{ rec.steps().length }} steps · {{ rec.checks() }} checks</span><span class="sp"></span>
       <button type="button" (click)="rec.discard()">Discard</button>
@@ -67,7 +68,7 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
     .chip.var { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); } .chip button { border: 0; background: none; color: inherit; padding: 0 3px; cursor: pointer; }
     .lnk { border: 0; background: none; color: var(--accent); padding: 0; cursor: pointer; font-size: 12px; }
     .add { display: flex; flex-direction: column; gap: 5px; width: 100%; } .add .row { justify-content: flex-end; }
-    .pri { background: var(--accent); color: #fff; border-color: transparent; } .empty { padding: 16px 0; text-align: center; }
+    .pri { background: var(--accent); color: #fff; border-color: transparent; } .empty { padding: 16px 0; text-align: center; } .roles { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
   `],
 })
 export class RecorderPanel {

@@ -588,7 +588,7 @@ export interface TestStep {
   snmp?: { session: string; op?: string; oids?: string[]; values?: { oid: string; type?: string; value: string }[] };
   expect?: TestExpect[]; save?: { var: string; field?: string; json?: string; oid?: string }[]; timeout?: number; continueOnFail?: boolean;
 }
-export interface TestCase { name?: string; description?: string; tags?: string[]; vars?: Record<string, string>; steps: TestStep[]; }
+export interface TestCase { name?: string; description?: string; tags?: string[]; vars?: Record<string, string>; params?: Record<string, string>[]; steps: TestStep[]; }
 export interface TestCaseInfo { file: string; name: string; description?: string; tags?: string[]; steps: number; error?: string; }
 export interface TestCheckResult { what: string; passed: boolean; got?: string; }
 export interface TestStepResult { name: string; kind: string; target?: string; sent?: string; status?: number; output?: string; ms: number; passed: boolean; skipped?: boolean; error?: string; checks?: TestCheckResult[]; }

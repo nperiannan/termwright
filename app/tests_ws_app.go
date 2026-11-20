@@ -209,3 +209,24 @@ func (a *App) TestsOpenInEditor(rel string) error {
 	}
 	return openWithSystem(f.Root)
 }
+
+// TestsNewTestbed writes testbeds/<name>.yaml with a role for each saved session in a session folder
+// (the emulated lab's folder, a site): core-sw1 → {{core_sw1}}. It returns the file.
+func (a *App) TestsNewTestbed(name, folder string) (string, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return "", err
+	}
+	folder = strings.Trim(strings.TrimSpace(folder), "/")
+	if folder == "" {
+		return "", errors.New("give a session folder, e.g. Lab")
+	}
+	paths, err := a.store.AllSessions([]string{folder})
+	if err != nil {
+		return "", err
+	}
+	if len(paths) == 0 {
+		return "", fmt.Errorf("no saved sessions in %s", folder)
+	}
+	return f.WriteTestbed(name, paths, "the sessions of "+folder)
+}

@@ -50,7 +50,16 @@ func GenerateGo(c Case, caseFile string) ([]byte, error) {
 	if c.Description != "" {
 		fmt.Fprintf(&b, ": %s", oneLine(c.Description))
 	}
-	fmt.Fprintf(&b, "\nfunc Test%s(t *testing.T) {\n\ttw := twtest.New(t, %s)\n", goIdent(strings.TrimSuffix(filepath.Base(caseFile), filepath.Ext(caseFile))), goMap(c.Vars))
+	fmt.Fprintf(&b, "\nfunc Test%s(t *testing.T) {\n", goIdent(strings.TrimSuffix(filepath.Base(caseFile), filepath.Ext(caseFile))))
+	if len(c.Params) > 0 {
+		var ps []string
+		for _, p := range c.Params {
+			ps = append(ps, goMap(p))
+		}
+		fmt.Fprintf(&b, "\ttwtest.Params(t, %s, []map[string]string{\n%s,\n}, func(tw *twtest.T) {\n", goMap(c.Vars), strings.Join(ps, ",\n"))
+	} else {
+		fmt.Fprintf(&b, "\ttw := twtest.New(t, %s)\n", goMap(c.Vars))
+	}
 	for i, st := range c.Steps {
 		fmt.Fprintf(&b, "\ttw.Step(%s, %v, func(s *twtest.Step) {\n", q(stepName(st, i)), st.ContinueOnFail)
 		switch {
@@ -122,6 +131,9 @@ func GenerateGo(c Case, caseFile string) ([]byte, error) {
 		if len(st.Expect) == 0 && len(st.Save) == 0 {
 			b.WriteString("\t\t_ = a\n")
 		}
+		b.WriteString("\t})\n")
+	}
+	if len(c.Params) > 0 {
 		b.WriteString("\t})\n")
 	}
 	b.WriteString("}\n")

@@ -29,7 +29,7 @@ type View = 'steps' | 'yaml' | 'go';
                 <span class="dot" [class]="dot(c)">●</span>{{ c.name }}<span class="n">{{ c.steps }}</span></button>
             }
           } @empty { <div class="mut">No tests yet. Tests → Record a Test, or ask the AI assistant to write one.</div> }
-          <div class="h">TESTBEDS</div>
+          <div class="h hb">TESTBEDS<button type="button" class="lnk" (click)="newTestbed()" title="New testbed from a session folder: a role for each session">+</button></div>
           @for (b of tree()?.testbeds ?? []; track b) { <button type="button" class="it" (click)="backend.testsOpen(b)">{{ b.slice(9) }}</button> } @empty { <div class="mut">none - add files in testbeds/</div> }
           <div class="h">REPORTS</div>
           @for (r of (tree()?.reports ?? []).slice(0, 12); track r.dir) {
@@ -51,6 +51,8 @@ type View = 'steps' | 'yaml' | 'go';
             @switch (view()) {
               @case ('steps') {
                 @if (test()?.description) { <p class="mut">{{ test()?.description }}</p> }
+                @if (test()?.params?.length) { <p class="mut">Runs {{ test()?.params?.length }} times: {{ paramsText() }}</p> }
+                @if (varsText()) { <p class="mut">Defaults: {{ varsText() }} - a testbed's values win.</p> }
                 @for (s of test()?.steps ?? []; track $index; let i = $index) {
                   <div class="st" [class.f]="stepRes(i)?.passed === false && !stepRes(i)?.skipped">
                     <div><b>{{ i + 1 }}</b> <span class="mut">{{ s.run?.session ?? s.http?.session ?? s.snmp?.session ?? '' }} ›</span> <span class="cmd">{{ text(s) }}</span>
@@ -93,7 +95,7 @@ type View = 'steps' | 'yaml' | 'go';
     .side { width: 250px; flex: none; display: flex; flex-direction: column; gap: 8px; padding: 10px; border-right: 1px solid var(--border); background: var(--panel); min-height: 0; }
     .row { display: flex; align-items: center; gap: 6px; } .sp { flex: 1; } .mut { color: var(--muted); font-size: 12px; } .ok { color: var(--ok, #4ec07a); } .bad { color: var(--danger, #ef6161); }
     .git { display: flex; gap: 8px; font-size: 12px; color: var(--muted); align-items: center; } .lnk { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0 4px; }
-    .tree { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 1px; } .h { font-size: 11px; letter-spacing: .06em; color: var(--muted); margin: 8px 0 3px; } .grp { font-size: 12px; color: var(--muted); padding: 2px 4px; }
+    .tree { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 1px; } .hb { display: flex; justify-content: space-between; align-items: center; } .h { font-size: 11px; letter-spacing: .06em; color: var(--muted); margin: 8px 0 3px; } .grp { font-size: 12px; color: var(--muted); padding: 2px 4px; }
     .it { display: flex; gap: 6px; align-items: center; text-align: left; border: 0; background: none; color: var(--text); padding: 4px 8px; border-radius: 6px; cursor: pointer; font: inherit; }
     .it:hover { background: var(--hover, rgba(255,255,255,.05)); } .it.sel { background: color-mix(in srgb, var(--accent) 20%, transparent); } .it .n { margin-left: auto; color: var(--muted); font-size: 11px; }
     .dot { font-size: 9px; color: var(--muted); } .dot.p { color: var(--ok, #4ec07a); } .dot.f { color: var(--danger, #ef6161); } .dot.e { color: var(--warn, #e0a030); }
@@ -225,6 +227,16 @@ export class TestsView implements OnInit, OnDestroy {
     this.busy.set(false);
   }
   recordMore() { this.rec.start(); }
+  async newTestbed() {
+    const folder = await this.ui.input(tr('New Testbed'), tr('Session folder whose sessions become roles (e.g. Lab)'), '');
+    if (!folder) return;
+    const name = await this.ui.input(tr('New Testbed'), tr('Testbed name'), folder.split('/').pop() ?? '');
+    if (!name) return;
+    try { const rel = await this.backend.testsNewTestbed(name, folder); this.ui.toast(tr('Wrote {0}', rel), 'success'); await this.load(); void this.backend.testsOpen(rel); }
+    catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  paramsText() { return (this.test()?.params ?? []).map(p => Object.entries(p).map(([k, v]) => `${k}=${v}`).join(', ')).join(' · '); }
+  varsText() { return Object.entries(this.test()?.vars ?? {}).map(([k, v]) => `{{${k}}} = ${v}`).join(', '); }
 
   dot(c: TestCaseInfo) { if (c.error) return 'dot e'; const r = this.last()[c.file]; return r ? (r.passed ? 'dot p' : 'dot f') : 'dot'; }
   stepRes(i: number) { return this.last()[this.sel()]?.steps?.[i]; }

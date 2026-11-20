@@ -75,7 +75,10 @@ func TestGeneratedGoRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.Save("snmp/ifs", sn)
-	for _, file := range []string{"cases/vlan/vlan42.yaml", "cases/other/bad.yaml", "cases/snmp/ifs.yaml"} {
+	pc, _ := Parse([]byte("params: [{vlan: \"42\"}]\nsteps:\n  - run: {session: \"{{site.sw}}\", command: \"show vlan {{vlan}}\"}\n    expect: [{contains: created}]\n"))
+	f.Save("params/vlans", pc)
+	os.WriteFile(filepath.Join(f.Root, "testbeds", "nested.yaml"), []byte("site:\n  sw: Lab/sw1   # the core\n"), 0o644)
+	for _, file := range []string{"cases/vlan/vlan42.yaml", "cases/other/bad.yaml", "cases/snmp/ifs.yaml", "cases/params/vlans.yaml"} {
 		if _, err := f.WriteGo(file); err != nil {
 			t.Fatal(err)
 		}
@@ -89,6 +92,9 @@ func TestGeneratedGoRuns(t *testing.T) {
 	}
 	if out, err := run("test", "-count=1", "./cases/vlan/", "./cases/snmp/"); err != nil {
 		t.Fatalf("vlan: %v\n%s", err, out)
+	}
+	if out, err := run("test", "-count=1", "-v", "./cases/params/", "-args", "-tw.testbed=testbeds/nested.yaml"); err != nil || !strings.Contains(out, "[vlan=42]") || !strings.Contains(fk.sent[len(fk.sent)-1], "Lab/sw1: show vlan 42") {
+		t.Fatalf("params: %v\n%s\n%v", err, out, fk.sent)
 	}
 	out, err := run("test", "-count=1", "-v", "./cases/other/", "-args", "-tw.var=x=1")
 	if err == nil || !strings.Contains(out, `expected the output to contain "NOPE"`) || !strings.Contains(out, "an earlier step failed") {

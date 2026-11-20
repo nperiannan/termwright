@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -60,23 +61,98 @@ func New(t *testing.T, vars map[string]string) *T {
 		v[k] = x
 	}
 	if *flagTestbed != "" {
-		f, err := os.Open(*flagTestbed)
+		f, err := os.Open(testbedPath(*flagTestbed))
 		if err != nil {
 			t.Fatalf("testbed: %v", err)
 		}
-		sc := bufio.NewScanner(f)
-		for sc.Scan() {
-			l := strings.TrimSpace(sc.Text())
-			if k, x, ok := strings.Cut(l, ":"); ok && l != "" && !strings.HasPrefix(l, "#") {
-				v[strings.TrimSpace(k)] = strings.Trim(strings.TrimSpace(x), `"'`)
-			}
-		}
+		readTestbed(bufio.NewScanner(f), v)
 		f.Close()
 	}
 	for k, x := range flagVars {
 		v[k] = x
 	}
 	return &T{t: t, Vars: v}
+}
+
+// Params runs fn once per params entry as a subtest named [k=v, …]; the entry's values win over
+// vars, and the testbed's and -tw.var values win over both.
+func Params(t *testing.T, vars map[string]string, params []map[string]string, fn func(tw *T)) {
+	for _, p := range params {
+		v := map[string]string{}
+		for k, x := range vars {
+			v[k] = x
+		}
+		for k, x := range p {
+			v[k] = x
+		}
+		keys := make([]string, 0, len(p))
+		for k := range p {
+			keys = append(keys, k+"="+p[k])
+		}
+		sort.Strings(keys)
+		t.Run("["+strings.Join(keys, ", ")+"]", func(t *testing.T) { fn(New(t, v)) })
+	}
+}
+
+// testbedPath finds a relative testbed from the tests folder (where go.mod is): go test runs in the
+// package's folder.
+func testbedPath(p string) string {
+	if filepath.IsAbs(p) {
+		return p
+	}
+	if _, err := os.Stat(p); err == nil {
+		return p
+	}
+	dir, _ := os.Getwd()
+	for i := 0; i < 20; i++ {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return filepath.Join(dir, p)
+		}
+		up := filepath.Dir(dir)
+		if up == dir {
+			break
+		}
+		dir = up
+	}
+	return p
+}
+
+// readTestbed reads "name: value" lines; a "name:" line with nothing after it starts a group whose
+// indented lines are name.child (as Termwright reads testbeds).
+func readTestbed(sc *bufio.Scanner, v map[string]string) {
+	type level struct {
+		indent int
+		key    string
+	}
+	var stack []level
+	for sc.Scan() {
+		raw := sc.Text()
+		l := strings.TrimSpace(raw)
+		if l == "" || strings.HasPrefix(l, "#") {
+			continue
+		}
+		indent := len(raw) - len(strings.TrimLeft(raw, " \t"))
+		for len(stack) > 0 && stack[len(stack)-1].indent >= indent {
+			stack = stack[:len(stack)-1]
+		}
+		k, x, ok := strings.Cut(l, ":")
+		if !ok {
+			continue
+		}
+		k = strings.Trim(strings.TrimSpace(k), `"'`)
+		if len(stack) > 0 {
+			k = stack[len(stack)-1].key + "." + k
+		}
+		x = strings.TrimSpace(x)
+		if i := strings.Index(x, " #"); i >= 0 {
+			x = strings.TrimSpace(x[:i])
+		}
+		if x == "" {
+			stack = append(stack, level{indent, k})
+			continue
+		}
+		v[k] = strings.Trim(x, `"'`)
+	}
 }
 
 // Step runs one step as a subtest.

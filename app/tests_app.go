@@ -376,6 +376,16 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 		ans := testrec.RunOne(ctx, st, testDriver{a})
 		j, _ := json.Marshal(ans)
 		return string(j), nil
+	case "new_testbed":
+		if err := ask("Write a testbed", "testbeds/"+argStr(args, "name")+".yaml from the sessions of "+argStr(args, "folder"), false); err != nil {
+			return "", err
+		}
+		rel, err := a.TestsNewTestbed(argStr(args, "name"), argStr(args, "folder"))
+		if err != nil {
+			return "", err
+		}
+		txt, _ := f.ReadText(rel)
+		return "Wrote " + rel + ":\n" + txt, nil
 	case "results":
 		r := a.TestLastRun()
 		if r == nil {
@@ -383,7 +393,7 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 		}
 		return testsReportText(f, *r), nil
 	default:
-		return "", fmt.Errorf("unknown action %q (list, show, run, save, generate, step, results)", act)
+		return "", fmt.Errorf("unknown action %q (list, show, run, save, generate, step, new_testbed, results)", act)
 	}
 }
 

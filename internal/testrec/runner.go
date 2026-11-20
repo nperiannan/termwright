@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -114,6 +115,66 @@ func Run(ctx context.Context, c Case, d Driver, vars map[string]string) Result {
 	}
 	r.Ms = time.Since(r.Start).Milliseconds()
 	return r
+}
+
+// RunParams runs a case once per Params entry (once when it has none); each result is named
+// "case [name=value …]". vars win over the params, which win over the case's own vars.
+func RunParams(ctx context.Context, c Case, d Driver, vars map[string]string) []Result {
+	if len(c.Params) == 0 {
+		return []Result{Run(ctx, c, d, vars)}
+	}
+	var out []Result
+	for _, p := range c.Params {
+		v := map[string]string{}
+		for k, x := range p {
+			v[k] = x
+		}
+		for k, x := range vars {
+			v[k] = x
+		}
+		r := Run(ctx, c, d, v)
+		r.Case = c.Name + " " + ParamName(p)
+		out = append(out, r)
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	return out
+}
+
+// ParamName is "[k=v, …]" with the keys sorted.
+func ParamName(p map[string]string) string {
+	keys := make([]string, 0, len(p))
+	for k := range p {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for i, k := range keys {
+		keys[i] = k + "=" + p[k]
+	}
+	return "[" + strings.Join(keys, ", ") + "]"
+}
+
+// RoleName makes a variable name for a session path: Lab/core-sw1 → core_sw1.
+func RoleName(path string) string {
+	base := path
+	if i := strings.LastIndex(path, "/"); i >= 0 {
+		base = path[i+1:]
+	}
+	var b strings.Builder
+	for _, r := range strings.ToLower(base) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case b.Len() > 0 && !strings.HasSuffix(b.String(), "_"):
+			b.WriteByte('_')
+		}
+	}
+	n := strings.Trim(b.String(), "_")
+	if n == "" || n[0] >= '0' && n[0] <= '9' {
+		n = "dev_" + n
+	}
+	return n
 }
 
 func stepKind(s Step) string {

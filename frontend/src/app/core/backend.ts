@@ -297,6 +297,7 @@ export class Backend {
   testSaveYAML(rel: string, text: string) { return this.call<string>('TestSaveYAML', rel, text); }
   testsOpenFolder() { return this.call<string>('TestsOpenFolder'); }
   testsClone(repo: string) { return this.call<string>('TestsClone', repo); }
+  testsNewTestbed(name: string, folder: string) { return this.call<string>('TestsNewTestbed', name, folder); }
   testsGit() { return this.call<TestsGitInfo>('TestsGit'); }
   testsOpen(rel: string) { return this.call<void>('TestsOpen', rel); }
   testsOpenInEditor(rel: string) { return this.call<void>('TestsOpenInEditor', rel); }

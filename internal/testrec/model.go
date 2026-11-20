@@ -14,6 +14,9 @@ type Case struct {
 	Tags []string `yaml:"tags,omitempty" json:"tags,omitempty"`
 	// Vars: values used as {{name}} in the steps; a run's own values win.
 	Vars map[string]string `yaml:"vars,omitempty" json:"vars,omitempty"`
+	// Params: the test runs once per entry, with its values as {{variables}} (data-driven tests);
+	// a testbed's and a run's own values still win.
+	Params []map[string]string `yaml:"params,omitempty" json:"params,omitempty"`
 	// Steps run in order.
 	Steps []Step `yaml:"steps" json:"steps"`
 }

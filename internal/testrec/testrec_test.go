@@ -207,3 +207,30 @@ func TestTreeTestbedSignature(t *testing.T) {
 		t.Fatal("read outside")
 	}
 }
+
+func TestParamsAndRoles(t *testing.T) {
+	c, err := Parse([]byte("name: v\nparams: [{vlan: \"42\"}, {vlan: \"7\"}]\nsteps:\n  - run: {session: s, command: \"show vlan {{vlan}}\"}\n    expect: [{contains: \"v{{vlan}}\"}]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rs := RunParams(context.Background(), c, &fake{}, nil)
+	if len(rs) != 2 || rs[0].Case != "v [vlan=42]" || !rs[0].Passed || rs[1].Passed {
+		t.Fatalf("%+v", rs) // the fake only knows vlan 42
+	}
+	if RoleName("Lab/core-sw1") != "core_sw1" || RoleName("Lab/7750 SR") != "dev_7750_sr" {
+		t.Fatal(RoleName("Lab/core-sw1"), RoleName("Lab/7750 SR"))
+	}
+	f := Folder{Root: t.TempDir()}
+	f.Init()
+	rel, err := f.WriteTestbed("Lab A", []string{"Lab/core-sw1", "Lab/edge-sw3", "Other/core-sw1"}, "from Lab")
+	if err != nil || rel != "testbeds/lab-a.yaml" {
+		t.Fatal(rel, err)
+	}
+	tb, _ := f.Testbed("lab-a.yaml")
+	if tb["core_sw1"] != "Lab/core-sw1" || tb["core_sw1_2"] != "Other/core-sw1" || tb["edge_sw3"] != "Lab/edge-sw3" {
+		t.Fatal(tb)
+	}
+	if _, err := f.WriteTestbed("lab-a", nil, ""); err == nil {
+		t.Fatal("replaced a testbed")
+	}
+}

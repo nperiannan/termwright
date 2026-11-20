@@ -19,6 +19,8 @@ export class Recorder {
   private ui = inject(Ui);
   readonly on = signal(false);
   readonly paused = signal(false);
+  /** Saved sessions become {{roles}} (their paths kept as the test's defaults), so a testbed can point the test at other devices. */
+  readonly roles = signal(true);
   readonly name = signal('');
   readonly steps = signal<RecStep[]>([]);
   readonly checks = computed(() => this.steps().reduce((n, s) => n + (s.step.expect?.length ?? 0), 0));
@@ -135,7 +137,21 @@ export class Recorder {
   testCase(): TestCase {
     const l = this.steps();
     l.forEach(s => this.output(s));
-    return { name: this.name().trim() || tr('New test'), steps: l.map(s => s.step) };
+    const steps = l.map(s => structuredClone(s.step));
+    if (!this.roles()) return { name: this.name().trim() || tr('New test'), steps };
+    const vars: Record<string, string> = {}, role = (p: string) => {
+      if (!p || p.includes('{{')) return p;
+      let r = roleName(p), i = 2;
+      while (vars[r] && vars[r] !== p) r = roleName(p) + '_' + i++;
+      vars[r] = p;
+      return '{{' + r + '}}';
+    };
+    for (const s of steps) {
+      if (s.run) s.run.session = role(s.run.session);
+      if (s.snmp) s.snmp.session = role(s.snmp.session);
+      if (s.http?.session) s.http.session = role(s.http.session);
+    }
+    return { name: this.name().trim() || tr('New test'), vars, steps };
   }
 
   async save(): Promise<boolean> {
@@ -184,3 +200,9 @@ export function fieldPattern(out: string, sel: string): string | null {
 
 function slugVar(s: string) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30) || 'value'; }
 function slugFile(s: string) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'test'; }
+
+/** A variable name for a session path, as Termwright's testbeds name roles: Lab/core-sw1 → core_sw1. */
+export function roleName(path: string) {
+  const n = (path.split('/').pop() ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return !n || /^\d/.test(n) ? 'dev_' + n : n;
+}

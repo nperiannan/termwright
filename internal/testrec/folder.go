@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -242,21 +243,23 @@ func (f Folder) RunFiles(ctx context.Context, files []string, d Driver, vars map
 	start := time.Now()
 	rep := RunReport{}
 	for _, file := range files {
-		var r Result
+		var rs []Result
 		if c, err := f.Load(file); err != nil {
-			r = Result{Case: file, File: file, Start: time.Now(), Error: err.Error()}
+			rs = []Result{{Case: file, File: file, Start: time.Now(), Error: err.Error()}}
 		} else {
-			r = Run(ctx, c, d, vars)
+			rs = RunParams(ctx, c, d, vars)
+		}
+		for _, r := range rs {
 			r.File = file
-		}
-		if r.Passed {
-			rep.Passed++
-		} else {
-			rep.Failed++
-		}
-		rep.Results = append(rep.Results, r)
-		if progress != nil {
-			progress(r)
+			if r.Passed {
+				rep.Passed++
+			} else {
+				rep.Failed++
+			}
+			rep.Results = append(rep.Results, r)
+			if progress != nil {
+				progress(r)
+			}
 		}
 		if ctx.Err() != nil {
 			break
@@ -423,4 +426,47 @@ func (f Folder) Testbed(rel string) (map[string]string, error) {
 	}
 	walk("", m)
 	return out, nil
+}
+
+// WriteTestbed writes testbeds/<name>.yaml with a role per session (RoleName → path), sorted, with
+// a comment line; an existing file is not replaced. It returns the file, relative.
+func (f Folder) WriteTestbed(name string, sessions []string, comment string) (string, error) {
+	name = slug(strings.TrimSuffix(strings.TrimSuffix(name, ".yaml"), ".yml"))
+	if name == "" {
+		return "", errors.New("give the testbed a name")
+	}
+	rel := "testbeds/" + name + ".yaml"
+	p, err := f.path(rel)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(p); err == nil {
+		return "", fmt.Errorf("%s is already there", rel)
+	}
+	m := map[string]string{}
+	for _, s := range sessions {
+		r := RoleName(s)
+		for i := 2; m[r] != "" && m[r] != s; i++ {
+			r = RoleName(s) + "_" + strconv.Itoa(i)
+		}
+		m[r] = s
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	if comment != "" {
+		b.WriteString("# " + comment + "\n")
+	}
+	b.WriteString("# role: saved session path - tests use {{role}}\n")
+	for _, k := range keys {
+		y, _ := yaml.Marshal(map[string]string{k: m[k]})
+		b.Write(y)
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return "", err
+	}
+	return rel, os.WriteFile(p, []byte(b.String()), 0o644)
 }
