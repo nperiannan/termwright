@@ -1390,6 +1390,16 @@ The community and passwords are kept in the computer's credential store (Keychai
 
 **AI assistant, MCP and scripts.** Turn on the **SNMP** tool in the agent's tool list and ask, for example, *"which ports of core-sw1 are down?"*: the agent walks `IF-MIB::ifOperStatus` with the session's credentials. Reads always run; a Set follows the agent's permission and always asks on production sessions. The same `snmp` tool is offered to MCP apps (Claude Desktop, Cursor, VS Code…), and the local API has `POST /api/v1/snmp` and `GET /api/v1/snmp/mib`, `/snmp/mib/{object}`, `/snmp/traps` (see the [API guide](API.md)); in Python, `Lab().snmp.walk("IF-MIB::ifOperStatus", session="Lab/core-sw1")`.
 
+## 9c2. AI instructions and skills
+
+**Instructions** are rules the AI assistant follows in every chat: *VLAN names are <site>-<purpose>*, *save the configuration after every change*, *never change ports 1:49-1:52*, *production changes only 22:00-02:00*. Write them in **Settings → Instructions & Skills**. A folder can add its own (right-click the folder → **Folder Defaults** → *AI*), and so can a device type (Settings → Device Types → *AI instructions*); the AI gets those of the session it works on. Instructions never lift Termwright's own checks: changes on production sessions are still asked, read-only mode stays read-only and secrets are still kept out.
+
+**Skills** are procedures the agent follows when a request matches one - *upgrade EXOS firmware*, *add a VLAN across the fabric*, *troubleshoot a port*, *onboard a new switch*. Each is a folder with a **SKILL.md** in Termwright's data folder (`skills/`), in the open Agent Skills format: front matter with a `name` (lower case and dashes), a `description` (what it does and when to use it - the words a user would say) and optionally `device-types`, then the steps in Markdown. The AI sees only the names and descriptions; when a request matches, it loads the skill (a purple **Skill** line in the chat) and follows its steps as its plan, still asking before changes.
+
+In **Settings → Instructions & Skills**: **+ New Skill** starts from a template; **Write with AI** writes one from a description; **Add Examples** adds three to start from; **Import…** takes a SKILL.md, a .md with its front matter or a .zip of a skill folder (skills written for other AI tools work as they are); **Export…** saves a .zip to share; **On** turns a skill off without removing it; **Remove** moves it to the folder's *.removed* folder. A folder's Folder Defaults can list the only skills offered for its sessions. In the chat, the **✦ Skills** chip under the message box asks for a skill by name. A skill that contains a password, key or SNMP community is refused: name the session or account instead - Termwright logs in with the saved ones.
+
+MCP apps get the `termwright_skills` tool (list the skills and instructions, get a skill's steps), the local API has `/api/v1/ai/skills`, and Python has `lab.skills()`, `lab.skill(name)` and `lab.save_skill(text)`.
+
 ## 9d. API client
 
 A REST client in the spirit of Postman, free and open source, with the logins kept in the Session Manager.

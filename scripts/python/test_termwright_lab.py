@@ -54,6 +54,8 @@ class Fake(BaseHTTPRequestHandler):
                 return self.reply(200, {"on": False, "settings": {"udp": 514, "saveFiles": True}})
             if self.path == "/api/v1/syslog/start":
                 return self.reply(200, {"on": True})
+        if self.path == "/api/v1/ai/skills":
+            return self.reply(200, [{"name": "troubleshoot-port", "description": "Port down or flapping", "on": True}] if self.command == "GET" else {"name": "add-vlan"})
         if self.path == "/api/v1/tools/device":
             return self.reply(200, {"result": "Lab/edge-sw3 looks like Huawei VRP"})
         if self.path.startswith("/api/v1/http"):
@@ -273,6 +275,10 @@ class ClientTest(unittest.TestCase):
         calls = {p: b for _, p, b in Fake.state["calls"]}
         self.assertEqual(calls["/api/v1/http/environments"]["vars"][1], {"key": "Bearer", "value": "t", "secret": True})
         self.assertEqual(calls["/api/v1/http/collections/Lab%20checks/run"], {"environment": "dl2r1"})
+
+    def test_skills(self):
+        self.assertEqual(self.lab.skills()[0]["name"], "troubleshoot-port")
+        self.assertEqual(self.lab.save_skill("---\nname: add-vlan\ndescription: x\n---\n")["name"], "add-vlan")
 
     def test_devices(self):
         self.assertIn("Huawei VRP", self.lab.devices.identify("Lab/edge-sw3"))

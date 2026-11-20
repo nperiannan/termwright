@@ -79,6 +79,8 @@ Settings, and turning one on does not turn on the other.
 | `GET /syslog/messages?q=&host=&severity=&minutes=&after=&limit=`, `DELETE /syslog/messages` | Messages received (words or /regex/, sender, severity or worse); clear them | 200 `[SyslogView]` / 204 |
 | `POST /syslog/send` | Sends a test message to a syslog server | 200 |
 | `GET`, `PUT /syslog/rules` | Rules that colour, notify or hide | 200 |
+| `GET /ai/skills` | The AI skills (SKILL.md procedures the AI assistant follows); `POST` adds or replaces one from its text | 200 |
+| `GET /ai/skills/{skill}` | One skill with its whole SKILL.md | 200 |
 | `GET /tools` | The network tools (`device`, `snmp`, `http`, `syslog`) with their arguments (JSON Schema), the same as the MCP connector's | 200 `Tool[]` |
 | `POST /tools/{tool}` | Runs a network tool; the body holds its arguments (`device`: a saved session's facts and device type - facts, refresh_facts, identify, set_type, types) | 200 `{"result": text}` |
 

@@ -35,7 +35,7 @@ export interface Session {
 /** A login profile for a kind of device (EXOS, VOSS, Cisco IOS …). */
 export interface DeviceType {
   name: string; icon?: string; protocol: string; port: number; username: string; credential: string; initialCr: boolean;
-  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string; detect?: string; detectCommand?: string; tunnel?: string; webCheck?: string; webHttp?: string; webHttps?: string; webOn?: string; webSave?: string; aiReadOnly?: string;
+  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string; aiInstructions?: string; detect?: string; detectCommand?: string; tunnel?: string; webCheck?: string; webHttp?: string; webHttps?: string; webOn?: string; webSave?: string; aiReadOnly?: string;
   facts?: FactRule[] | null;
 }
 /** A value read from command output after connecting: the first group of regex. every = at each connect. */
@@ -49,7 +49,7 @@ export interface Snippet { name: string; folder: string; text: string; descripti
 export interface Workspace { name: string; layout: string; tabs: { session: string; kind: string }[]; }
 export interface FolderDefault {
   folder: string; username: string; deviceType: string; jumpSession: string; identityFile: string; keywordSet: string; colorScheme: string;
-  environment?: string; record?: boolean; smartCard?: string; account?: string;
+  environment?: string; record?: boolean; smartCard?: string; account?: string; aiInstructions?: string; aiSkills?: string[];
 }
 /** Variables used in a snippet, in order: [{name, def}]. */
 export function snippetVars(text: string): { name: string; def: string }[] {
@@ -395,7 +395,9 @@ export interface TeamPushResult { status: 'new' | 'added' | 'exists' | 'pending'
 export interface SyncStatus { folder: string; last: string; peers: string[] | null; took: number; error: string; }
 
 /** The AI assistant (optional): the provider and model; the API key is in the OS keychain. */
-export interface AISettings { provider?: '' | 'anthropic' | 'openai' | 'ollama' | 'claudecode'; model?: string; baseUrl?: string; hideHosts?: boolean; mcp?: boolean; mcpCommands?: '' | 'never'; api?: boolean; agentPerm?: '' | 'every' | 'readonly' | 'auto'; effort?: string; agentToolsOff?: string[]; }
+export interface AISettings { provider?: '' | 'anthropic' | 'openai' | 'ollama' | 'claudecode'; model?: string; baseUrl?: string; hideHosts?: boolean; mcp?: boolean; mcpCommands?: '' | 'never'; api?: boolean; agentPerm?: '' | 'every' | 'readonly' | 'auto'; effort?: string; agentToolsOff?: string[]; instructions?: string; skillsOff?: string[]; }
+/** An AI skill (a SKILL.md in the skills folder). */
+export interface AISkill { name: string; description: string; deviceTypes?: string[]; text?: string; files?: string[]; path: string; modified: string; on: boolean; }
 export interface MCPInfo { running: boolean; command: string; codeCmd: string; desktopCfg: string; inDesktop: boolean; inCode?: boolean; apiUrl?: string; keyFile?: string; clients?: MCPClient[]; }
 /** An AI app that used Termwright since it started. */
 export interface MCPClient { name: string; at: string; calls: number; tool?: string; }

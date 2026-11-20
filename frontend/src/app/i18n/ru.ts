@@ -4822,6 +4822,23 @@ const ru: Record<string, string> = {
   'Device facts and type': 'Факты и тип устройства',
   'Set the device type?': 'Задать тип устройства?',
   'Reads the facts of saved sessions (model, version, serial number, uptime), identifies a session\'s device type with the Detect patterns and sets it after asking - logging in in the background with the saved login': 'Читает факты сохранённых сессий (модель, версию, серийный номер, время работы), определяет тип устройства по шаблонам распознавания и задаёт его после вопроса - входит в фоне с сохранённым логином',
+  'Instructions & Skills': 'Инструкции и навыки',
+  'Instructions & Skills…': 'Инструкции и навыки…',
+  'Skills': 'Навыки',
+  'Skill': 'Навык',
+  'No skills yet': 'Навыков пока нет',
+  'loaded - followed as the plan': 'загружен - выполняется как план',
+  'skill loaded - following its steps': 'навык загружен - выполняются его шаги',
+  '+ New Skill': '+ Новый навык',
+  'Add Examples': 'Добавить примеры',
+  'Filter skills': 'Фильтр навыков',
+  'Choose a skill, or make a new one.': 'Выберите навык или создайте новый.',
+  'Remove Skill': 'Удалить навык',
+  'Replace Skill': 'Заменить навык',
+  'Unsaved Skill': 'Несохранённый навык',
+  'AI instructions': 'Инструкции для ИИ',
+  'Instructions': 'Инструкции',
+  'New skill': 'Новый навык',
 };
 
 export default ru;

@@ -2,6 +2,12 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## Unreleased
+
+- **AI instructions**: rules the AI assistant follows in every chat - your naming, change windows, ports never to touch (Settings → **Instructions & Skills**); folders (Folder Defaults) and device types add their own for their sessions. They never lift Termwright's own checks: production changes still ask, read-only stays read-only.
+- **AI skills**: procedures the agent follows when a request matches - upgrade firmware, add a VLAN, troubleshoot a port - saved as **SKILL.md** files, the open Agent Skills format other AI tools use, so skills move between them. The AI sees only each skill's name and description until it loads one (a purple *Skill* line in the chat), then follows its steps as its plan. Settings → Instructions & Skills: add, edit, turn on or off, import (SKILL.md, .md or .zip), export, open the folder, **Write with AI** (describe a procedure, the AI writes the skill) and **Add Examples** (troubleshoot-port, backup-before-change, upgrade-exos-firmware). A folder can offer only some skills. The **✦ Skills** chip under the chat box asks for one. Skills with a password, key or community in them are refused.
+- **Skills for MCP apps and scripts**: a `termwright_skills` tool for the MCP connector (Claude Desktop and others can follow your skills), `GET` / `POST /api/v1/ai/skills` and `GET /api/v1/ai/skills/{skill}` in the local API, and `lab.skills()`, `skill()`, `save_skill()` in Python.
+
 ## 0.42.0 (2026-11-20)
 
 - **Device facts and type for the AI assistant, MCP apps and scripts**: a `device` tool (facts, refresh_facts, identify, set_type, types) for the in-app agent (*Device facts and type* in its tool list), the MCP connector and the local API (`POST /api/v1/tools/device`); setting a device type follows the agent's permission. Python has `lab.devices.facts()`, `identify()`, `set_type()` and `types()`.

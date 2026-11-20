@@ -47,6 +47,14 @@ lab.snmp.mib("IF-MIB::ifOperStatus")["description"]; lab.snmp.traps()["traps"]
 
 `get`, `bulk`, `walk`, `set` and `run(op, ...)` return the rows with `name`, `type`, `value` and `display`.
 
+## AI skills
+
+```python
+for s in lab.skills():
+    print(s["name"], "-", s["description"])
+lab.save_skill(open("upgrade-voss/SKILL.md").read())   # add or replace a skill
+```
+
 ## Device facts and type
 
 ```python

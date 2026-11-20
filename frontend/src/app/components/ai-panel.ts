@@ -127,6 +127,7 @@ function spans(t: string): Span[] {
               </div>
             }
             @if (worked(m)) {
+              @for (k of skillsUsed(m); track k.command) { <div class="skillc" [class.bad]="k.state === 'error'" [title]="k.note || ''"><span class="sk-ic">✦</span> <b>{{ tr('Skill') }}</b> <span translate="no">{{ k.command }}</span> <span class="mut">{{ k.state === 'error' ? k.note : tr('loaded - followed as the plan') }}</span></div> }
               <details class="work" [open]="busyMsg(m)"><summary><app-icon name="chevron-down" [size]="11" /><span class="wl">@if (busyMsg(m)) { <span class="spin"></span> }{{ workLine(m) }}</span></summary>
                 @if (devices(m); as ds) { @if (ds.length) {
                   <div class="devs" [attr.aria-label]="tr('Devices')">@for (d of ds; track d.tab) {
@@ -242,6 +243,7 @@ function spans(t: string): Span[] {
       </div>
       <div class="under">
         <button type="button" class="chip" (click)="ui.openOptions('ai')" [title]="tr('The AI service - click for the AI settings')"><app-icon name="sparkles" [size]="13" />{{ provider() || tr('AI') }}</button>
+        <button type="button" class="chip skc" (click)="skillMenu($event)" [title]="tr('Your skills: procedures the AI follows when a request matches. Click to ask for one, or to manage them.')">✦ {{ tr('Skills') }}</button>
         <span class="modew"><button type="button" class="chip" [class.on]="omenu()" (click)="omenu.set(!omenu()); pmenu.set(false)" aria-haspopup="menu" [attr.aria-expanded]="omenu()" [attr.aria-label]="tr('Mode')" [title]="tr(modeOf(ai.mode()).what)"><app-icon [name]="modeOf(ai.mode()).icon" [size]="13" />{{ tr(modeOf(ai.mode()).name) }}</button>
           @if (omenu()) {
             <div class="menu modes" role="menu" (click)="$event.stopPropagation()">
@@ -276,6 +278,9 @@ function spans(t: string): Span[] {
     </div>
   }`,
   styles: [`
+    .skillc { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; margin: 6px 0; padding: 6px 10px; border-radius: 8px; font-size: 12px; border: 1px solid color-mix(in srgb, #a371f7 55%, transparent); background: color-mix(in srgb, #a371f7 10%, transparent); }
+    .skillc .sk-ic { color: #a371f7; } .skillc .mut { color: var(--muted); } .skillc.bad { border-color: var(--danger); }
+
     :host { flex: none; display: flex; flex-direction: column; min-height: 0; min-width: 320px; max-width: 70vw; background: var(--panel); border-left: 1px solid var(--border); position: relative; font-size: calc(13px * var(--ui-scale, 1)); color: var(--text); }
     :host(.left) { border-left: 0; border-right: 1px solid var(--border); }
     :host(.float) { position: fixed; z-index: 60; height: min(680px, calc(100vh - 120px)); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 24px 60px rgba(0, 0, 0, .45); overflow: hidden; }
@@ -462,6 +467,7 @@ export class AIPanel implements OnInit {
   worked(m: ChatMsg) { return (m.steps ?? []).some(s => s.state !== 'ask'); }
   busyMsg(m: ChatMsg) { return (m.steps ?? []).some(s => s.state === 'running' || s.state === 'ask'); }
   /** One line for what the agent did, like VS Code's "Ran 3 commands": open it for the steps. */
+  skillsUsed(m: ChatMsg) { return (m.steps ?? []).filter(s => s.kind === 'skill'); }
   workLine(m: ChatMsg) {
     const ss = m.steps ?? [], cur = ss.find(s => s.state === 'running');
     if (cur) return cur.kind === 'run' ? tr('Running {0} on {1}…', cur.command, cur.tab) : cur.kind === 'open' ? tr('Connecting to {0}…', cur.tab) : tr('Working…');
@@ -556,6 +562,15 @@ export class AIPanel implements OnInit {
     this.ta()?.nativeElement.focus();
     try { const hint = await this.backend.startDictation(); if (hint) this.ui.toast(tr(hint), 'info', 8000); }
     catch { this.ui.toast(tr('Use your system’s dictation in the message box: on a Mac press Fn twice, on Windows press Windows+H.'), 'info', 8000); }
+  }
+  async skillMenu(ev: MouseEvent) {
+    ev.stopPropagation();
+    const l = (await this.backend.aiSkills().catch(() => [])).filter(k => k.on);
+    this.ui.showMenu(ev, [
+      ...l.map(k => ({ label: k.name, hint: k.description.slice(0, 60), icon: '', action: () => { this.text = `Use the skill ${k.name}: ${this.text}`.trimEnd() + ' '; this.grow(); } })),
+      ...(l.length ? [{ separator: true }] : [{ label: tr('No skills yet'), disabled: true }]),
+      { label: tr('Instructions & Skills…'), icon: 'settings', action: () => this.ui.openOptions('skills') },
+    ]);
   }
   canSend() { return !!(this.text.trim() || this.ai.ctxs().length || this.ai.images().length); }
 

@@ -115,7 +115,7 @@ export class Workspaces {
 @Component({
   selector: 'app-folder-defaults',
   imports: [FormsModule, FolderIcon],
-  styles: [`.mh-ic.fd { background: transparent; } .checks.rec { margin-top: 12px; }`],
+  styles: [`.mh-ic.fd { background: transparent; } .checks.rec { margin-top: 12px; } .aif { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; } .aif textarea { resize: vertical; font-size: 12.5px; }`],
   template: `
   <div class="modal-backdrop">
     <form class="modal" (ngSubmit)="save()">
@@ -162,6 +162,11 @@ export class Workspaces {
                 <option value="any">Any key on the inserted cards</option>
               </select></div>
           </div>
+          <label class="cl-only">AI</label>
+          <div class="aif">
+            <textarea name="aiins" rows="3" [(ngModel)]="d.aiInstructions" placeholder="AI instructions for these sessions, e.g. Production: changes only 22:00-02:00 with a ticket number"></textarea>
+            <input name="aisk" [ngModel]="(d.aiSkills ?? []).join(', ')" (ngModelChange)="d.aiSkills = splitSkills($event)" placeholder="Skills offered here (names, comma separated; empty = all)" />
+          </div>
           <label class="cl-only">Recording</label>
           <div class="checks rec"><label><input type="checkbox" name="rec" [(ngModel)]="d.record" />
              <span class="tx">Record every connection<small>of the sessions in this folder</small></span> </label></div>
@@ -180,6 +185,7 @@ export class FolderDefaults {
   protected ui = inject(Ui);
   readonly folder = this.ui.folderDefaultsFor();
   readonly depth = Math.max(0, this.folder.split('/').filter(Boolean).length - 1);
+  splitSkills(v: string) { const l = v.split(/[,\s]+/).map(x => x.trim().toLowerCase()).filter(Boolean); return l.length ? l : undefined; }
   readonly envs = envList;
   d: FolderDefault = structuredClone((this.ui.settings()?.folderDefaults ?? []).find(x => x.folder === this.folder)
     ?? { folder: this.folder, username: '', deviceType: '', jumpSession: '', identityFile: '', keywordSet: '', colorScheme: '', environment: '' });

@@ -6,7 +6,7 @@ import { LANGUAGES, previewLanguages, tr } from '../core/i18n';
 import { EFFORTS, modelChoices, readOnlyList } from '../core/ai-chat.service';
 import { Combo, ComboOption } from '../components/combo';
 import { Backend, errText } from '../core/backend';
-import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, SyncStatus, AISettings, AIStatus, MCPInfo, comboOf, FACT_NAMES, dtTunnels } from '../core/models';
+import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, SyncStatus, AISettings, AIStatus, AISkill, MCPInfo, comboOf, FACT_NAMES, dtTunnels } from '../core/models';
 import { COLOR_KEYS, SCHEME_NAMES, fullScheme } from '../core/themes';
 import { Ui } from '../core/ui.service';
 import { Icon } from '../components/icon';
@@ -15,7 +15,7 @@ import { UI_FONTS, UI_SIZES, uiFontStack } from '../core/ui-fonts';
 import { DEVICE_KINDS } from '../components/device-icon';
 
 interface DtPw { orig: string; pw: string; empty: boolean; state: string; forget: boolean; }
-type Page = 'general' | 'terminal' | 'schemes' | 'envs' | 'keywords' | 'keymap' | 'buttons' | 'updates' | 'devices' | 'alerts' | 'cards' | 'ai';
+type Page = 'general' | 'terminal' | 'schemes' | 'envs' | 'keywords' | 'keymap' | 'buttons' | 'updates' | 'devices' | 'alerts' | 'cards' | 'ai' | 'skills';
 
 /** What Global Options can find: page, the text shown on the page, extra words people search for. */
 const SEARCH: [Page, string, string][] = [
@@ -40,7 +40,7 @@ const SEARCH: [Page, string, string][] = [
   ['updates', 'Notify me about', 'update stable nightly'], ['updates', 'Check at start-up', 'update automatic'], ['updates', 'Repository', 'github'],
 ];
 const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Terminal & Appearance', schemes: 'Color Schemes', envs: 'Environments', keywords: 'Keyword Highlighting',
-  keymap: 'Key Map', buttons: 'Button Bar', devices: 'Device Types', alerts: 'Alerts', cards: 'Smart Cards', updates: 'Updates', ai: 'AI Assistant' };
+  keymap: 'Key Map', buttons: 'Button Bar', devices: 'Device Types', alerts: 'Alerts', cards: 'Smart Cards', updates: 'Updates', ai: 'AI Assistant', skills: 'Instructions & Skills' };
 
 /** Global Options dialog. */
 @Component({
@@ -71,6 +71,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
           <a [class.on]="page() === 'devices'" (click)="page.set('devices')"><app-icon name="device" [size]="15" />Device Types</a>
           <a [class.on]="page() === 'alerts'" (click)="page.set('alerts')"><app-icon name="bell" [size]="15" />Alerts</a>
           <a [class.on]="page() === 'ai'" (click)="page.set('ai'); loadAI()"><app-icon name="sparkles" [size]="15" />AI Assistant</a>
+          <a class="sub" [class.on]="page() === 'skills'" (click)="page.set('skills'); loadSkills()"><app-icon name="checklist" [size]="15" />Instructions &amp; Skills</a>
           <div class="cat-g">System</div>
           <a [class.on]="page() === 'cards'" (click)="page.set('cards'); loadCards()"><app-icon name="card" [size]="15" />Smart Cards</a>
           <a [class.on]="page() === 'updates'" (click)="page.set('updates')"><app-icon name="down" [size]="15" />Updates</a>
@@ -447,6 +448,9 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <label>Tunnel</label>
                   <select name="dttn" [(ngModel)]="d.tunnel" title="Open Web Page Through This Session needs its SSH server to pass connections on (TCP forwarding); EXOS, VOSS and Cisco IOS do not">
                     <option [ngValue]="undefined">{{ tunnelDefault(d.name) }}</option><option value="on">Its SSH server forwards connections</option><option value="off">No forwarding (Open Web Page Through This Session is off)</option></select>
+                  <label>AI instructions</label>
+                  <textarea name="dtai" rows="2" [(ngModel)]="d.aiInstructions" placeholder="Followed by the AI on sessions of this type, e.g. save configuration after every change"
+                    title="Added to the global instructions (Instructions &amp; Skills) when the AI works on a session of this device type"></textarea>
                   <label>AI agent: read-only</label>
                   <textarea name="dtro" class="mono" rows="2" [(ngModel)]="d.aiReadOnly" [placeholder]="readOnlyDefault(d.name)"
                     title="The AI agent runs commands that begin with these without asking (except on production); everything else asks first. One per line."></textarea>
@@ -622,6 +626,49 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 <div class="gf">For test frameworks and CI on this computer: a new random key each time Termwright starts, kept with the address in {{ mcp()?.keyFile || 'mcp.json in the data folder' }}. Changes made through it are not asked first and show as API in the Events.</div>
               </div>
             }
+            @case ('skills') {
+              <div class="skp">
+                <div class="skh"><b>Instructions</b><span class="mut">followed in every AI chat - your team's rules, naming, change windows. Folders (Folder Defaults) and device types (Device Types) can add their own.</span></div>
+                <textarea name="aiins" class="mono" rows="4" [ngModel]="s.ai?.instructions ?? ''" (ngModelChange)="setAI({ instructions: $event })"
+                  placeholder="e.g. VLAN names are <site>-<purpose>. Save the configuration after every change. Never change ports 1:49-1:52 (uplinks)."></textarea>
+                <div class="skh"><b>Skills</b><span class="mut">{{ skills().length }} skill{{ skills().length === 1 ? '' : 's' }} · procedures the AI loads when a request matches; it sees only their names and descriptions until then. SKILL.md files - the open format other AI tools use too.</span></div>
+                <div class="skbar"><span class="sp"></span>
+                  <button type="button" (click)="importSkill()">Import…</button><button type="button" (click)="skillsFolder()">Open Folder</button>
+                  @if (!skills().length) { <button type="button" (click)="addExampleSkills()">Add Examples</button> }
+                  <button type="button" (click)="aiSkillOpen.set(!aiSkillOpen())">✦ Write with AI</button>
+                  <button type="button" class="primary" (click)="newSkill()">+ New Skill</button></div>
+                @if (aiSkillOpen()) {
+                  <div class="skai"><input name="skai" [(ngModel)]="aiSkillText" (keydown.enter)="writeSkill()" [disabled]="aiSkillBusy()" placeholder="Describe the procedure, e.g. upgrade a VOSS switch: check the image, copy it from the file server, activate, reboot, verify" />
+                    <button type="button" class="primary" (click)="writeSkill()" [disabled]="aiSkillBusy() || !aiSkillText.trim()">{{ aiSkillBusy() ? 'Writing…' : 'Write' }}</button></div>
+                }
+                <div class="skg">
+                  <div class="skl">
+                    <input name="skq" [(ngModel)]="skillQ" placeholder="Filter skills" />
+                    <div class="skls">
+                      @for (k of shownSkills(); track k.name) {
+                        <div class="ski" [class.on]="skillEdit()?.name === k.name && !skillNew()" (click)="openSkill(k.name)" [class.off]="!skillOn(k.name)">
+                          <b>{{ k.name }}@for (t of k.deviceTypes ?? []; track t) { <span class="tg">{{ t }}</span> }@if (!k.deviceTypes?.length) { <span class="tg any">any</span> }@if (!skillOn(k.name)) { <span class="tg offt">off</span> }</b>
+                          <div class="d">{{ k.description }}</div>
+                        </div>
+                      } @empty { <div class="mut pad">No skills yet. <b>Add Examples</b> adds three to start from, or write your own with <b>+ New Skill</b>.</div> }
+                    </div>
+                  </div>
+                  <div class="ske">
+                    @if (skillEdit(); as k) {
+                      <div class="skeh"><b>{{ skillNew() ? 'New skill' : k.name }}</b>
+                        <span class="sp"></span>
+                        @if (!skillNew()) { <label class="inl"><input type="checkbox" name="skon" [ngModel]="skillOn(k.name)" (ngModelChange)="setSkillOn(k.name, $event)" /> On</label> }</div>
+                      <textarea name="sktext" class="mono sktext" [(ngModel)]="skillText" (ngModelChange)="skillDirty.set(true)" spellcheck="false"></textarea>
+                      @if (skillErr()) { <div class="bad small">{{ skillErr() }}</div> }
+                      @if (k.files?.length) { <div class="mut small">Other files: {{ k.files!.join(', ') }}</div> }
+                      <div class="skbar"><span class="mut small ell" [title]="k.path">{{ skillNew() ? 'name, description (when to use it) and device-types, then the steps' : k.path }}</span><span class="sp"></span>
+                        @if (!skillNew()) { <button type="button" (click)="exportSkill(k.name)">Export…</button><button type="button" (click)="removeSkill(k.name)">Remove</button> }
+                        <button type="button" class="primary" (click)="saveSkill()" [disabled]="!skillDirty()">Save</button></div>
+                    } @else { <div class="mut pad">Choose a skill, or make a new one.</div> }
+                  </div>
+                </div>
+              </div>
+            }
             @case ('cards') {
               <p class="hint">SSH keys on smart cards and tokens - PIV and CAC cards, YubiKey (PIV), SafeNet eToken, HSMs - through the card's PKCS#11 library.
                 The private key never leaves the card. Choose the key in Session Options → SSH2 Authentication → Smart card.</p>
@@ -720,6 +767,22 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
   </div>
   }`,
   styles: [`
+    .skp { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+    .skh { display: flex; gap: 10px; align-items: baseline; margin-top: 6px; } .skh .mut { font-size: 12px; }
+    .skp textarea[name=aiins] { width: 100%; box-sizing: border-box; font-size: 12px; }
+    .skbar { display: flex; gap: 8px; align-items: center; } .skbar .sp, .skeh .sp { flex: 1; }
+    .skai { display: flex; gap: 8px; } .skai input { flex: 1; }
+    .skg { display: grid; grid-template-columns: 250px 1fr; gap: 12px; height: 330px; }
+    .skl, .ske { border: 1px solid var(--border); border-radius: 9px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+    .skl > input { margin: 8px; } .skls { overflow: auto; flex: 1; }
+    .ski { padding: 8px 11px; border-top: 1px solid var(--line); cursor: pointer; } .ski:hover { background: var(--hover); } .ski.on { background: var(--selected); } .ski.off { opacity: .6; }
+    .ski b { font-size: 12.5px; } .ski .d { color: var(--muted); font-size: 11.5px; margin-top: 2px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .tg { font-size: 10px; border-radius: 4px; padding: 0 5px; margin-left: 6px; background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); font-weight: 600; }
+    .tg.any { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); } .tg.offt { background: var(--surface-2); color: var(--muted); }
+    .ske { padding: 0 10px 10px; } .skeh { display: flex; gap: 10px; align-items: center; padding: 9px 2px; }
+    .sktext { flex: 1; width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.55; resize: none; min-height: 0; margin-bottom: 8px; }
+    .ske .small, .skp .small { font-size: 11.5px; } .ske .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; } .ske .bad { color: var(--danger); margin-bottom: 6px; }
+
     .webd { display: flex; flex-direction: column; gap: 6px; min-width: 0; .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } }
     .glist { max-width: 760px;
       .gt { font-size: calc(11px * var(--ui-scale, 1)); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 4px 0 6px 4px; }
@@ -1022,6 +1085,7 @@ export class OptionsDialog implements OnInit {
   ngOnInit() {
     void this.backend.syncState().then(x => this.syncSt.set(x)).catch(() => {});
     if (this.page() === 'ai') this.loadAI();
+    if (this.page() === 'skills') void this.loadSkills();
     this.ui.optionsPage.set('');
     const focus = this.ui.optionsFocus(); // Help → Connect an AI App…: the connector's part of the page
     if (focus) { this.ui.optionsFocus.set(''); setTimeout(() => document.getElementById('opt-' + focus)?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 150); }
@@ -1114,6 +1178,71 @@ export class OptionsDialog implements OnInit {
     catch (e) { this.mcpMsg.set(errText(e)); }
   }
   async copyText(t: string) { if (t) { await this.backend.clipboardSet(t); this.ui.toast(tr('Copied'), 'success'); } }
+  // ---- AI instructions and skills ----
+  readonly skills = signal<AISkill[]>([]);
+  readonly skillEdit = signal<AISkill | null>(null);
+  readonly skillNew = signal(false);
+  readonly skillDirty = signal(false);
+  readonly skillErr = signal('');
+  readonly aiSkillOpen = signal(false);
+  readonly aiSkillBusy = signal(false);
+  skillText = ''; skillQ = ''; aiSkillText = '';
+  async loadSkills() { this.skills.set(await this.backend.aiSkills().catch(() => [])); if (!this.skillEdit() && this.skills().length) void this.openSkill(this.skills()[0].name); this.cdr.markForCheck(); }
+  shownSkills() { const q = this.skillQ.trim().toLowerCase(); return this.skills().filter(k => !q || (k.name + ' ' + k.description + ' ' + (k.deviceTypes ?? []).join(' ')).toLowerCase().includes(q)); }
+  skillOn(n: string) { return !(this.s?.ai?.skillsOff ?? []).includes(n); }
+  setSkillOn(n: string, on: boolean) { const off = (this.s?.ai?.skillsOff ?? []).filter(x => x !== n); if (!on) off.push(n); this.setAI({ skillsOff: off }); }
+  private async keepEdits(): Promise<boolean> {
+    return !this.skillDirty() || await this.ui.confirm('Unsaved Skill', 'The skill has changes that are not saved. Leave them?', 'Leave');
+  }
+  async openSkill(name: string) {
+    if (!(await this.keepEdits())) return;
+    try { const k = await this.backend.aiSkill(name); this.skillEdit.set(k); this.skillText = k.text ?? ''; this.skillNew.set(false); this.skillDirty.set(false); this.skillErr.set(''); }
+    catch (e) { this.skillErr.set(errText(e)); }
+    this.cdr.markForCheck();
+  }
+  async newSkill(text?: string) {
+    if (!(await this.keepEdits())) return;
+    this.skillEdit.set({ name: '', description: '', path: '', modified: '', on: true });
+    this.skillText = text ?? '---\nname: my-procedure\ndescription: What it does and when to use it, e.g. "use for upgrade or new firmware".\ndevice-types: EXOS\n---\n# My procedure\n\n1. First step - the command to run and what to check.\n2. Ask before anything that changes the device or interrupts traffic.\n3. Check the result and say what was done.\n';
+    this.skillNew.set(true); this.skillDirty.set(true); this.skillErr.set(''); this.cdr.markForCheck();
+  }
+  async saveSkill() {
+    const k = this.skillEdit(); if (!k) return;
+    try {
+      const saved = await this.backend.aiSaveSkill(this.skillNew() ? '' : k.name, this.skillText);
+      this.skillDirty.set(false); this.skillNew.set(false); this.skillErr.set('');
+      await this.loadSkills(); this.skillEdit.set(saved); this.skillText = saved.text ?? this.skillText;
+      this.ui.toast('Saved the skill ' + saved.name, 'success');
+    } catch (e) { this.skillErr.set(errText(e)); }
+    this.cdr.markForCheck();
+  }
+  async removeSkill(n: string) {
+    if (!(await this.ui.confirm('Remove Skill', 'Remove the skill ' + n + '? Its folder is moved to .removed in the skills folder, so it can be put back.', 'Remove', true))) return;
+    try { await this.backend.aiRemoveSkill(n); this.skillEdit.set(null); this.skillDirty.set(false); await this.loadSkills(); } catch (e) { this.ui.error(e); }
+  }
+  async importSkill() {
+    try { const k = await this.backend.aiImportSkill(false); if (k?.name) { this.skillDirty.set(false); await this.loadSkills(); await this.openSkill(k.name); this.ui.toast('Imported the skill ' + k.name, 'success'); } }
+    catch (e) {
+      if (/already exists/.test(errText(e)) && await this.ui.confirm('Replace Skill', errText(e) + '. Replace it? The old one is moved to .removed.', 'Replace')) {
+        try { const k = await this.backend.aiImportSkill(true); if (k?.name) { await this.loadSkills(); await this.openSkill(k.name); } } catch (e2) { this.ui.error(e2); }
+      } else this.ui.error(e);
+    }
+  }
+  async exportSkill(n: string) { try { const p = await this.backend.aiExportSkill(n); if (p) this.ui.toast('Saved ' + p, 'success'); } catch (e) { this.ui.error(e); } }
+  async skillsFolder() { try { await this.backend.showInFolder(await this.backend.aiSkillsFolder()); } catch (e) { this.ui.error(e); } }
+  async addExampleSkills() { try { const l = await this.backend.aiAddExampleSkills(); await this.loadSkills(); this.ui.toast('Added ' + (l.join(', ') || 'nothing new'), 'success'); } catch (e) { this.ui.error(e); } }
+  async writeSkill() {
+    const q = this.aiSkillText.trim(); if (!q || this.aiSkillBusy()) return;
+    this.aiSkillBusy.set(true); this.cdr.markForCheck();
+    try {
+      const a = await this.backend.aiAsk({ kind: 'skill', text: '', question: q, deviceType: '', protocol: '' });
+      const m = /```(?:markdown|md)?\s*\n([\s\S]*?)```/.exec(a.text);
+      await this.newSkill((m ? m[1] : a.text).trim() + '\n');
+      this.aiSkillText = ''; this.aiSkillOpen.set(false);
+      this.ui.toast('Written by the AI assistant - check it, then Save', 'info');
+    } catch (e) { this.ui.error(e); }
+    this.aiSkillBusy.set(false); this.cdr.markForCheck();
+  }
   setAI(p: Partial<AISettings>) { if (this.s) this.s.ai = { ...(this.s.ai ?? {}), ...p }; this.cdr.markForCheck(); }
   async saveAIKey() {
     const p = this.s?.ai?.provider ?? '';

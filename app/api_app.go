@@ -87,6 +87,8 @@ func (a *App) apiHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 		route, arg = "/tools/{tool}", seg[1]
 	} else if len(seg) == 3 && seg[0] == "snmp" && seg[1] == "mib" {
 		route, arg = "/snmp/mib/{object}", seg[2]
+	} else if len(seg) == 3 && seg[0] == "ai" && seg[1] == "skills" {
+		route, arg = "/ai/skills/{skill}", seg[2]
 	} else if len(seg) == 3 && seg[0] == "http" && seg[1] == "collections" {
 		route, arg = "/http/collections/{collection}", seg[2]
 	} else if len(seg) == 4 && seg[0] == "http" && seg[1] == "collections" && seg[3] == "run" {
@@ -233,6 +235,29 @@ func (a *App) apiHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 		apiOut(w, http.StatusCreated, c, nil)
 	case "/http/history":
 		apiOut(w, http.StatusOK, a.HTTPHistory(), nil)
+	case "/ai/skills":
+		if r.Method == http.MethodGet {
+			apiOut(w, http.StatusOK, a.AISkills(), nil)
+			return
+		}
+		var in AISkillSaveIn
+		if err := apiDecode(body, &in); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		sk, err := a.AISaveSkill(in.Replace, in.Text)
+		if err != nil {
+			apiProblem(w, http.StatusUnprocessableEntity, "invalid", err.Error())
+			return
+		}
+		apiOut(w, http.StatusOK, sk, nil)
+	case "/ai/skills/{skill}":
+		sk, err := a.AISkill(arg)
+		if err != nil {
+			apiProblem(w, http.StatusNotFound, "not-found", err.Error())
+			return
+		}
+		apiOut(w, http.StatusOK, sk, nil)
 	case "/http/environments":
 		if r.Method == http.MethodGet {
 			apiOut(w, http.StatusOK, a.HTTPEnvironments(), nil)
@@ -511,7 +536,7 @@ var apiRoutes = map[string][]string{
 	"/tools": {"GET"}, "/tools/{tool}": {"POST"}, "/snmp": {"POST"}, "/snmp/mib": {"GET"}, "/snmp/mib/{object}": {"GET"}, "/snmp/traps": {"GET"}, "/snmp/trap": {"POST"},
 	"/http/send": {"POST"}, "/http/collections": {"GET", "POST"}, "/http/collections/{collection}": {"GET", "PUT", "DELETE"},
 	"/http/collections/{collection}/run": {"POST"}, "/http/import": {"POST"}, "/http/history": {"GET"},
-	"/http/environments": {"GET", "POST"}, "/http/variables": {"POST"},
+	"/http/environments": {"GET", "POST"}, "/ai/skills": {"GET", "POST"}, "/ai/skills/{skill}": {"GET"}, "/http/variables": {"POST"},
 	"/syslog": {"GET"}, "/syslog/start": {"POST"}, "/syslog/stop": {"POST"}, "/syslog/messages": {"GET", "DELETE"}, "/syslog/send": {"POST"}, "/syslog/rules": {"GET", "PUT"},
 }
 

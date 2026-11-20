@@ -143,6 +143,18 @@ class Lab:
     def tools(self) -> list:
         return self.request("GET", "/tools")
 
+    def skills(self) -> list:
+        """The AI skills (SKILL.md procedures the AI assistant follows), without their text."""
+        return self.request("GET", "/ai/skills", root=True) or []
+
+    def skill(self, name: str) -> dict:
+        """One skill with the whole text of its SKILL.md."""
+        return self.request("GET", "/ai/skills/" + urllib.parse.quote(name, safe=""), root=True)
+
+    def save_skill(self, text: str, replace: str = "") -> dict:
+        """Add or replace a skill from the text of a SKILL.md (replace: its name before, to rename it)."""
+        return self.request("POST", "/ai/skills", {k: v for k, v in {"text": text, "replace": replace}.items() if v}, root=True)
+
     def tool(self, name: str, /, **args) -> str:
         """Run a lab tool (power, cable, console, wait, capture, address, cpu, computer, debug, ...). Its
         arguments are the ones in the OpenAPI document; "timeout" is also how long to wait for the answer."""

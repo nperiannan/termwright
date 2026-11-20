@@ -1502,6 +1502,86 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /ai/skills:
+        get:
+            operationId: listSkills
+            tags:
+                - AI
+            summary: The AI skills
+            description: 'The user''s AI skills: procedures saved as SKILL.md files (the open Agent Skills format) that the AI assistant loads when a request matches; on: offered to the AI.'
+            responses:
+                200:
+                    description: The skills (without their text).
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/AISkill'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+        post:
+            operationId: saveSkill
+            tags:
+                - AI
+            summary: Save a skill
+            description: 'Adds or replaces a skill from the text of its SKILL.md (front matter with name and description, then Markdown). replace: the skill''s name before, to rename it. A skill holding a password, key or community is refused.'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AISkillSaveIn'
+            responses:
+                200:
+                    description: The skill.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AISkill'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /ai/skills/{skill}:
+        get:
+            operationId: getSkill
+            tags:
+                - AI
+            summary: A skill
+            description: One skill with the whole text of its SKILL.md.
+            parameters:
+                - name: skill
+                  in: path
+                  required: true
+                  description: The skill's name.
+                  schema:
+                    type: string
+            responses:
+                200:
+                    description: The skill.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AISkill'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /http/environments:
         get:
             operationId: listEnvironments
@@ -4388,6 +4468,54 @@ components:
                 result:
                     type: string
                     description: What the tool did or found, as text.
+        AISkill:
+            type: object
+            description: 'An AI skill: a procedure saved as a SKILL.md that the AI assistant loads when a request matches.'
+            properties:
+                name:
+                    type: string
+                description:
+                    type: string
+                deviceTypes:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                text:
+                    type: string
+                files:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                path:
+                    type: string
+                modified:
+                    type: string
+                    format: date-time
+                on:
+                    description: 'On: offered to the AI (Settings → AI Assistant → Instructions & Skills).'
+                    type: boolean
+            required:
+                - name
+                - description
+                - path
+                - modified
+                - "on"
+        AISkillSaveIn:
+            type: object
+            description: 'A skill to save: the whole SKILL.md, and the name before to rename it.'
+            properties:
+                text:
+                    description: 'Text: the whole SKILL.md (front matter with name and description, then Markdown).'
+                    type: string
+                replace:
+                    description: 'Replace: the skill''s name before, to rename it ("" for a new skill).'
+                    type: string
+            required:
+                - text
         CPUStats:
             type: object
             properties:

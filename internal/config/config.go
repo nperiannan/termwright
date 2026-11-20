@@ -55,6 +55,10 @@ type AISettings struct {
 	Effort string `json:"effort,omitempty"`
 	// the agent tools turned off ("run", "open", "log", "record"); empty = all on
 	AgentToolsOff []string `json:"agentToolsOff,omitempty"`
+	// Instructions the AI follows in every chat (the team's rules, naming, change windows).
+	Instructions string `json:"instructions,omitempty"`
+	// SkillsOff: skills turned off (by name); the others are offered to the AI.
+	SkillsOff []string `json:"skillsOff,omitempty"`
 }
 
 // FileServersSettings: the TFTP, FTP and HTTP servers devices fetch files
@@ -282,6 +286,10 @@ type FolderDefault struct {
 	Account      string `json:"account,omitempty"`   // the account the folder's sessions log in with
 	Record       bool   `json:"record,omitempty"`    // record the sessions of the folder
 	SmartCard    string `json:"smartCard,omitempty"` // "any" or a key fingerprint
+	// AIInstructions the AI follows for the folder's sessions (added to the global ones).
+	AIInstructions string `json:"aiInstructions,omitempty"`
+	// AISkills: the only skills offered for the folder's sessions (empty: all).
+	AISkills []string `json:"aiSkills,omitempty"`
 }
 
 // BackupJob backs up the configuration of sessions, on demand or on a schedule.

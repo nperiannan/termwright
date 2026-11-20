@@ -54,6 +54,9 @@ type DeviceType struct {
 	// DetectCommand: the command whose output Detect is matched against after logging in, e.g.
 	// "show version" (empty: show version).
 	DetectCommand string `json:"detectCommand,omitempty"`
+	// AIInstructions the AI follows on sessions of this type (added to the global ones), e.g.
+	// "save configuration after every change".
+	AIInstructions string `json:"aiInstructions,omitempty"`
 	// Facts are values read from command output after connecting (model,
 	// version, serial, MAC, uptime, or any the user adds).
 	Facts []FactRule `json:"facts"`

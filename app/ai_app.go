@@ -239,6 +239,11 @@ func aiPrompt(r AIRequest, text string) (string, string) {
 		"Prefer show (read-only) commands; mark any command that changes the configuration or may interrupt traffic with a warning before it. " +
 		"Parts of the text were replaced with [secret] or [host-N] before it was sent to you; keep them as they are."
 	switch r.Kind {
+	case "skill":
+		sys := "You write AI skills for Termwright, a terminal for network engineers whose AI agent runs commands in device tabs (asking before changes). " +
+			"A skill is a SKILL.md: YAML front matter with name (lower case, digits and dashes), description (what it does and when to use it - the words a user would say; the agent sees only this until it loads the skill) and, when it is for certain platforms, device-types (e.g. EXOS, VOSS, Cisco IOS), then Markdown: a title and numbered steps with the exact commands for each platform, what to check after each, when to ask the user, and how to undo. " +
+			"Never put passwords, keys or communities in a skill: name the session or account instead. Answer with the whole SKILL.md in one ```markdown block and nothing else."
+		return sys, "The procedure: " + strings.TrimSpace(r.Question) + "\n\n" + text
 	case "apiscript", "apiprescript":
 		what := "test script (runs on the answer)"
 		if r.Kind == "apiprescript" {
