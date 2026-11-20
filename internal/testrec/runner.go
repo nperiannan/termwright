@@ -126,7 +126,11 @@ func stepName(s Step, i int) string {
 	case s.Run != nil:
 		return s.Run.Command
 	case s.HTTP != nil:
-		return strings.TrimSpace(strings.ToUpper(s.HTTP.Method) + " " + s.HTTP.URL)
+		m := strings.ToUpper(strings.TrimSpace(s.HTTP.Method))
+		if m == "" {
+			m = "GET"
+		}
+		return m + " " + s.HTTP.URL
 	}
 	return fmt.Sprintf("step %d", i+1)
 }
@@ -373,4 +377,23 @@ func JSONPath(doc any, path string) (any, bool) {
 		}
 	}
 	return cur, true
+}
+
+// StepAnswer is what RunOne got: the generated tests check it themselves.
+type StepAnswer struct {
+	// Output: the command's output or the HTTP body.
+	Output string `json:"output"`
+	// Status: the HTTP status.
+	Status int `json:"status,omitempty"`
+	// Ms: how long it took.
+	Ms int64 `json:"ms"`
+	// Error: why it could not run.
+	Error string `json:"error,omitempty"`
+}
+
+// RunOne runs one step's action (variables already filled in) without its checks - for the
+// generated tests, which send their steps to Termwright one by one.
+func RunOne(ctx context.Context, st Step, d Driver) StepAnswer {
+	sr := runStep(ctx, Step{Run: st.Run, HTTP: st.HTTP, Timeout: st.Timeout}, 0, d, map[string]string{})
+	return StepAnswer{Output: sr.Output, Status: sr.Status, Ms: sr.Ms, Error: sr.Error}
 }

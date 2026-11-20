@@ -292,6 +292,7 @@ export class Backend {
   testCase(file: string) { return this.call<TestCase>('TestCase', file); }
   testSave(file: string, c: TestCase) { return this.call<string>('TestSave', file, c); }
   runTests(r: { files?: string[]; vars?: Record<string, string>; confirmed?: boolean }) { return this.call<TestRunReport>('RunTests', r); }
+  testGenerateGo(file: string) { return this.call<string>('TestGenerateGo', file); }
   testLastRun() { return this.call<TestRunReport | null>('TestLastRun'); }
   keepAwakeStatus() { return this.call<{ active: boolean; error?: string }>('KeepAwakeStatus'); }
   aiImportInstructions() { return this.call<string>('AIImportInstructions'); }

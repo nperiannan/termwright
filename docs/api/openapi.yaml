@@ -2129,7 +2129,7 @@ paths:
             tags:
                 - Network tools
             summary: The tests tool
-            description: 'Termwright tests: YAML files in the tests folder (cases/), each a list of steps - a command on a saved session (run) or an HTTP request (http) - with checks on what came back (contains, matches, a field or JSON value equals / greater / less, status, time). list lists the tests; show gives one as YAML; run runs tests (files, or none for all) and returns pass/fail per step, writing a JUnit XML file and an HTML report under reports/; save writes a test from YAML; results gives the last run''s report. Runs log in with the sessions'' saved logins in the background; a run touching production sessions is asked first. Through the API it runs without asking.'
+            description: 'Termwright tests: YAML files in the tests folder (cases/), each a list of steps - a command on a saved session (run) or an HTTP request (http) - with checks on what came back (contains, matches, a field or JSON value equals / greater / less, status, time). list lists the tests; show gives one as YAML; run runs tests (files, or none for all) and returns pass/fail per step, writing a JUnit XML file and an HTML report under reports/; save writes a test from YAML (and its Go test); generate writes the Go tests again (go test ./cases/... in the tests folder runs them through Termwright); step runs one step without its checks and returns its answer as JSON (used by the generated Go tests); results gives the last run''s report. Runs log in with the sessions'' saved logins in the background; a run touching production sessions is asked first. Through the API it runs without asking.'
             requestBody:
                 required: true
                 content:
@@ -2144,6 +2144,8 @@ paths:
                                         - show
                                         - run
                                         - save
+                                        - generate
+                                        - step
                                         - results
                                     type: string
                                 file:
@@ -2154,6 +2156,9 @@ paths:
                                     items:
                                         type: string
                                     type: array
+                                step:
+                                    description: 'step: one step {run: {session, command, prompt}} or {http: {session, method, url, headers, body}}, timeout'
+                                    type: object
                                 vars:
                                     additionalProperties:
                                         type: string

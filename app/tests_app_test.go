@@ -45,6 +45,15 @@ func TestTestsTool(t *testing.T) {
 		t.Fatal(out, err)
 	}
 	f, _ := a.testsFolder()
+	if _, err := os.Stat(filepath.Join(f.Root, "cases", "api", "vlans_test.go")); err != nil {
+		t.Fatal("no Go test written:", err)
+	}
+	if _, err := os.Stat(filepath.Join(f.Root, "lib", "twtest", "twtest.go")); err != nil {
+		t.Fatal("no lib:", err)
+	}
+	if out, err := a.testsTool(ctx, map[string]any{"action": "step", "step": map[string]any{"http": map[string]any{"url": srv.URL + "/vlans"}}}, yes); err != nil || !strings.Contains(out, `"status":200`) {
+		t.Fatal(out, err)
+	}
 	if _, err := os.Stat(filepath.Join(f.Root, a.TestLastRun().Dir, "junit.xml")); err != nil {
 		t.Fatal(err)
 	}

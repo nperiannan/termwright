@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -67,7 +68,23 @@ func (a *App) TestSave(file string, c testrec.Case) (string, error) {
 	if _, n := aiRedact(string(b), false); n > 0 {
 		return "", errors.New("the test seems to hold a password, key or community: name a saved session instead - its login is in the credential store")
 	}
-	return f.Save(file, c)
+	rel, err := f.Save(file, c)
+	if err != nil {
+		return "", err
+	}
+	if _, err := f.WriteGo(rel); err != nil {
+		return rel, fmt.Errorf("saved %s, but its Go test was not written: %w", rel, err)
+	}
+	return rel, nil
+}
+
+// TestGenerateGo writes a test's Go file (and go.mod, lib/) again; it returns the Go file.
+func (a *App) TestGenerateGo(file string) (string, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return "", err
+	}
+	return f.WriteGo(file)
 }
 
 // TestRunRequest runs tests.
@@ -273,6 +290,48 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 			return "", err
 		}
 		return testsReportText(f, rep), nil
+	case "generate":
+		files := argStrs(args, "files")
+		if x := argStr(args, "file"); x != "" {
+			files = append(files, x)
+		}
+		if len(files) == 0 {
+			for _, c := range f.List() {
+				files = append(files, c.File)
+			}
+		}
+		var b strings.Builder
+		for _, file := range files {
+			g, err := f.WriteGo(file)
+			if err != nil {
+				fmt.Fprintf(&b, "%s: %v\n", file, err)
+				continue
+			}
+			fmt.Fprintf(&b, "%s → %s\n", file, g)
+		}
+		fmt.Fprintf(&b, "Run them in %s with: go test ./cases/...   (JUnit: go test -json ./cases/... | go run ./lib/junit > junit.xml)", f.Root)
+		return b.String(), nil
+	case "step":
+		// one step for the generated Go tests: they check the answer themselves
+		var st testrec.Step
+		raw, _ := json.Marshal(args["step"])
+		if err := json.Unmarshal(raw, &st); err != nil || (st.Run == nil) == (st.HTTP == nil) {
+			return "", errors.New("step needs run {session, command} or http {url}")
+		}
+		target := ""
+		if st.Run != nil {
+			target = st.Run.Session
+		} else {
+			target = st.HTTP.Session
+		}
+		if s, err := a.store.Get(target); err == nil && strings.EqualFold(s.Environment, "production") {
+			if err := ask("Test step on a production session", target+": "+testStepText(st), true); err != nil {
+				return "", err
+			}
+		}
+		ans := testrec.RunOne(ctx, st, testDriver{a})
+		j, _ := json.Marshal(ans)
+		return string(j), nil
 	case "results":
 		r := a.TestLastRun()
 		if r == nil {
@@ -280,8 +339,15 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 		}
 		return testsReportText(f, *r), nil
 	default:
-		return "", fmt.Errorf("unknown action %q (list, show, run, save, results)", act)
+		return "", fmt.Errorf("unknown action %q (list, show, run, save, generate, step, results)", act)
 	}
+}
+
+func testStepText(st testrec.Step) string {
+	if st.Run != nil {
+		return st.Run.Command
+	}
+	return strings.TrimSpace(st.HTTP.Method + " " + st.HTTP.URL)
 }
 
 func testsReportText(f testrec.Folder, rep testrec.RunReport) string {

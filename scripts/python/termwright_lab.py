@@ -815,6 +815,10 @@ class Tests:
         """Run tests (none: all). Returns pass/fail per step and the report's path (JUnit XML and HTML in reports/)."""
         return self._run(timeout=timeout, action="run", files=list(files) or None, vars=vars)
 
+    def generate(self, *files: str) -> str:
+        """Write the Go tests again (none: all); run them with go test ./cases/... in the tests folder."""
+        return self._run(action="generate", files=list(files) or None)
+
     def results(self) -> str:
         """The last run's report."""
         return self._run(action="results")
