@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import type { TopoRequest, TopoResult, LayoutRequest, LayoutResult, TestCase, TestCaseInfo, TestRunReport } from './models';
+import type { TopoRequest, TopoResult, LayoutRequest, LayoutResult, TestCase, TestCaseInfo, TestRunReport, TestsTree, TestsGitInfo } from './models';
 import { EmuEngines, EmuHostNIC, EmuTrex,
   EmuServer, EmuServerView,
   AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange, SNMPRequest, SNMPResult, SNMPMibNode, SNMPModule, SNMPSecretState, SNMPTrapState, SNMPTrapsView, HSendRequest, HResponse, HCollection, HCollectionInfo, HRunRequest, HRunResult, HHistoryItem, HRequest, AISkill, HEnv, HVar, HHostCookies, SyslogSettings, SyslogState, SyslogMsg, SyslogRule, SyslogQuery, SyslogSendIn } from './models';
@@ -291,7 +291,16 @@ export class Backend {
   testCases() { return this.call<TestCaseInfo[]>('TestCases'); }
   testCase(file: string) { return this.call<TestCase>('TestCase', file); }
   testSave(file: string, c: TestCase) { return this.call<string>('TestSave', file, c); }
-  runTests(r: { files?: string[]; vars?: Record<string, string>; confirmed?: boolean }) { return this.call<TestRunReport>('RunTests', r); }
+  testsTree() { return this.call<TestsTree>('TestsTree'); }
+  testsSignature() { return this.call<string>('TestsSignature'); }
+  testFile(rel: string) { return this.call<string>('TestFile', rel); }
+  testSaveYAML(rel: string, text: string) { return this.call<string>('TestSaveYAML', rel, text); }
+  testsOpenFolder() { return this.call<string>('TestsOpenFolder'); }
+  testsClone(repo: string) { return this.call<string>('TestsClone', repo); }
+  testsGit() { return this.call<TestsGitInfo>('TestsGit'); }
+  testsOpen(rel: string) { return this.call<void>('TestsOpen', rel); }
+  testsOpenInEditor(rel: string) { return this.call<void>('TestsOpenInEditor', rel); }
+  runTests(r: { files?: string[]; vars?: Record<string, string>; testbed?: string; confirmed?: boolean }) { return this.call<TestRunReport>('RunTests', r); }
   testGenerateGo(file: string) { return this.call<string>('TestGenerateGo', file); }
   testLastRun() { return this.call<TestRunReport | null>('TestLastRun'); }
   keepAwakeStatus() { return this.call<{ active: boolean; error?: string }>('KeepAwakeStatus'); }

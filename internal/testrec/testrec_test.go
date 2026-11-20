@@ -144,3 +144,27 @@ func TestJSONPath(t *testing.T) {
 		t.Fatal("found missing key")
 	}
 }
+
+func TestTreeTestbedSignature(t *testing.T) {
+	f := Folder{Root: t.TempDir()}
+	f.Init()
+	c, _ := Parse([]byte(sample))
+	f.Save("a", c)
+	os.WriteFile(filepath.Join(f.Root, "testbeds", "lab.yaml"), []byte("vlan: 7\nlab:\n  sw1: Lab/core-sw1\n"), 0o644)
+	sig := f.Signature()
+	tb, err := f.Testbed("lab.yaml")
+	if err != nil || tb["vlan"] != "7" || tb["lab.sw1"] != "Lab/core-sw1" {
+		t.Fatal(tb, err)
+	}
+	f.RunFiles(context.Background(), nil, &fake{}, tb, nil)
+	tr := f.Tree()
+	if len(tr.Cases) != 1 || len(tr.Testbeds) != 1 || len(tr.Reports) != 1 || tr.Reports[0].Failed != 1 {
+		t.Fatalf("%+v", tr) // vlan 7 is not in the fake's output, so the run fails
+	}
+	if f.Signature() == sig {
+		t.Fatal("signature did not change")
+	}
+	if _, err := f.ReadText("../x"); err == nil {
+		t.Fatal("read outside")
+	}
+}

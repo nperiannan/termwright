@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -288,4 +289,132 @@ func slug(s string) string {
 		}
 	}
 	return strings.Trim(b.String(), "-")
+}
+
+// Tree is what the Tests view lists: tests, testbeds and past runs.
+type Tree struct {
+	// Root: the tests folder.
+	Root string `json:"root"`
+	// Cases: the tests.
+	Cases []CaseInfo `json:"cases"`
+	// Testbeds: files in testbeds/ (relative to the folder).
+	Testbeds []string `json:"testbeds"`
+	// Reports: past runs, newest first (at most 30).
+	Reports []ReportInfo `json:"reports"`
+}
+
+// ReportInfo is a past run.
+type ReportInfo struct {
+	// Dir: its folder, relative, e.g. reports/2026-11-20_164000.
+	Dir string `json:"dir"`
+	// Passed cases.
+	Passed int `json:"passed"`
+	// Failed cases.
+	Failed int `json:"failed"`
+	// Ms: how long the run took.
+	Ms int64 `json:"ms"`
+}
+
+// Tree lists the folder.
+func (f Folder) Tree() Tree {
+	t := Tree{Root: f.Root, Cases: f.List(), Testbeds: []string{}, Reports: []ReportInfo{}}
+	if t.Cases == nil {
+		t.Cases = []CaseInfo{}
+	}
+	if es, err := os.ReadDir(filepath.Join(f.Root, "testbeds")); err == nil {
+		for _, e := range es {
+			if !e.IsDir() && isCaseFile(e.Name()) {
+				t.Testbeds = append(t.Testbeds, "testbeds/"+e.Name())
+			}
+		}
+	}
+	if es, err := os.ReadDir(filepath.Join(f.Root, "reports")); err == nil {
+		for i := len(es) - 1; i >= 0 && len(t.Reports) < 30; i-- {
+			if !es[i].IsDir() {
+				continue
+			}
+			ri := ReportInfo{Dir: "reports/" + es[i].Name()}
+			if b, err := os.ReadFile(filepath.Join(f.Root, "reports", es[i].Name(), "result.json")); err == nil {
+				var r RunReport
+				if json.Unmarshal(b, &r) == nil {
+					ri.Passed, ri.Failed, ri.Ms = r.Passed, r.Failed, r.Ms
+				}
+			}
+			t.Reports = append(t.Reports, ri)
+		}
+	}
+	return t
+}
+
+// Signature changes when a file under cases/, testbeds/ or reports/ is added, removed or changed:
+// the Tests view polls it to see edits made outside (an editor, git pull).
+func (f Folder) Signature() string {
+	h := fnv.New64a()
+	for _, d := range []string{"cases", "testbeds", "reports"} {
+		filepath.WalkDir(filepath.Join(f.Root, d), func(p string, e fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if fi, err := e.Info(); err == nil {
+				fmt.Fprintf(h, "%s|%d|%d\n", p, fi.Size(), fi.ModTime().UnixNano())
+			}
+			return nil
+		})
+	}
+	return fmt.Sprintf("%x", h.Sum64())
+}
+
+// ReadText reads a text file of the folder (a test's YAML or Go, a testbed, a report), at most 2 MB.
+func (f Folder) ReadText(rel string) (string, error) {
+	p, err := f.path(rel)
+	if err != nil {
+		return "", err
+	}
+	st, err := os.Stat(p)
+	if err != nil {
+		return "", err
+	}
+	if st.Size() > 2<<20 {
+		return "", fmt.Errorf("%s is larger than 2 MB", rel)
+	}
+	b, err := os.ReadFile(p)
+	return string(b), err
+}
+
+// Abs is rel as a path on disk (refused outside the folder).
+func (f Folder) Abs(rel string) (string, error) { return f.path(rel) }
+
+// Testbed reads a testbed file's values as variables: "name: value" lines, nested maps as
+// role.field (lab: {sw1: Lab/core-sw1} → {{sw1}}… and {{lab.sw1}}).
+func (f Folder) Testbed(rel string) (map[string]string, error) {
+	if rel == "" {
+		return nil, nil
+	}
+	if !strings.Contains(rel, "/") {
+		rel = "testbeds/" + rel
+	}
+	txt, err := f.ReadText(rel)
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]any
+	if err := yaml.Unmarshal([]byte(txt), &m); err != nil {
+		return nil, fmt.Errorf("%s: %w", rel, err)
+	}
+	out := map[string]string{}
+	var walk func(prefix string, v any)
+	walk = func(prefix string, v any) {
+		switch t := v.(type) {
+		case map[string]any:
+			for k, x := range t {
+				walk(strings.TrimPrefix(prefix+"."+k, "."), x)
+			}
+		case nil:
+			out[prefix] = ""
+		default:
+			out[prefix] = fmt.Sprint(t)
+		}
+	}
+	walk("", m)
+	return out, nil
 }

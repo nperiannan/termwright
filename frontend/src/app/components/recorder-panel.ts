@@ -97,15 +97,18 @@ export class RecorderPanel {
     this.rec.addCheck(i, e);
     this.adding.set(-1);
   }
-  label(e: TestExpect): string {
-    const cmp = [e.equals !== undefined ? `= ${e.equals}` : '', e.notEquals !== undefined ? `≠ ${e.notEquals}` : '', e.greater !== undefined ? `> ${e.greater}` : '', e.less !== undefined ? `< ${e.less}` : '', e.exists === false ? 'missing' : ''].filter(Boolean).join(' ');
-    if (e.contains) return `contains "${e.contains}"`;
-    if (e.notContains) return `no "${e.notContains}"`;
-    if (e.matches) return `matches ${e.matches}`;
-    if (e.status) return `status ${e.status}`;
-    if (e.json) return `${e.json} ${cmp || 'is there'}`;
-    if (e.field) return `${e.field} ${cmp || 'found'}`;
-    if (e.maxMs) return `≤ ${e.maxMs} ms`;
-    return '?';
-  }
+  label(e: TestExpect) { return expectLabel(e); }
+
+}
+
+export function expectLabel(e: TestExpect): string {
+  const cmp = [e.equals !== undefined ? `= ${e.equals}` : '', e.notEquals !== undefined ? `≠ ${e.notEquals}` : '', e.greater !== undefined ? `> ${e.greater}` : '', e.less !== undefined ? `< ${e.less}` : '', e.exists === false ? 'missing' : ''].filter(Boolean).join(' ');
+  if (e.contains) return `contains "${e.contains}"`;
+  if (e.notContains) return `no "${e.notContains}"`;
+  if (e.matches) return `matches ${e.matches}`;
+  if (e.status) return `status ${e.status}`;
+  if (e.json) return `${e.json} ${cmp || 'is there'}`;
+  if (e.field) return `${e.field} ${cmp || 'found'}`;
+  if (e.maxMs) return `≤ ${e.maxMs} ms`;
+  return '?';
 }

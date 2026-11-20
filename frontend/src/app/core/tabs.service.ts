@@ -34,7 +34,7 @@ export interface TabView {
   cols: number;
   rows: number;
   locked: boolean;
-  kind: 'terminal' | 'sftp' | 'rdp' | 'vnc' | 'player' | 'lab' | 'map' | 'snmp' | 'api' | 'syslog';
+  kind: 'terminal' | 'sftp' | 'rdp' | 'vnc' | 'player' | 'lab' | 'map' | 'snmp' | 'api' | 'syslog' | 'tests';
   /** Syslog tab: a page to show (send:<time>). */
   syslogPage?: string;
   /** API client tab: the API session it starts on. */
@@ -799,6 +799,19 @@ export class Tabs {
       id: 'syslog', title: '≋ Syslog', state: 'connected', message: '', info: 'Syslog',
       session: { ...s, name: 'Syslog', path: '' }, logFile: '', cols: 0, rows: 0, locked: false, kind: 'syslog', parentId: '', home: '', recording: false,
       syslogPage: page ? page + ':' + Date.now() : '',
+    };
+    this.tabs.update(l => [...l, tv]);
+    this.activeId.set(tv.id);
+  }
+
+  /** The Tests view (one tab). */
+  async openTests() {
+    const open = this.tabs().find(t => t.kind === 'tests');
+    if (open) { this.activeId.set(open.id); return; }
+    const s = await this.backend.newSessionDefaults();
+    const tv: TabView = {
+      id: 'tests', title: '✓ Tests', state: 'connected', message: '', info: 'Tests',
+      session: { ...s, name: 'Tests', path: '' }, logFile: '', cols: 0, rows: 0, locked: false, kind: 'tests', parentId: '', home: '', recording: false,
     };
     this.tabs.update(l => [...l, tv]);
     this.activeId.set(tv.id);

@@ -24,12 +24,13 @@ type netAsker func(title, msg string, danger bool) error
 var netTools = []mcpTool{
 	{"tests", "Termwright tests: YAML files in the tests folder (cases/), each a list of steps - a command on a saved session (run) or an HTTP request (http) - with checks on what came back (contains, matches, a field or JSON value equals / greater / less, status, time). list lists the tests; show gives one as YAML; run runs tests (files, or none for all) and returns pass/fail per step, writing a JUnit XML file and an HTML report under reports/; save writes a test from YAML (and its Go test); generate writes the Go tests again (go test ./cases/... in the tests folder runs them through Termwright); step runs one step without its checks and returns its answer as JSON (used by the generated Go tests); results gives the last run's report. Runs log in with the sessions' saved logins in the background; a run touching production sessions is asked first.",
 		mcpSchema(map[string]any{
-			"action": map[string]any{"type": "string", "enum": []string{"list", "show", "run", "save", "generate", "step", "results"}, "description": "what to do"},
-			"file":   map[string]any{"type": "string", "description": "show/save/run: a test file relative to the tests folder, e.g. cases/vlan/add-vlan.yaml (cases/ and .yaml may be left out)"},
-			"files":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "run: the tests to run (none: all)"},
-			"yaml":   map[string]any{"type": "string", "description": "save: the test as YAML"},
-			"step":   map[string]any{"type": "object", "description": "step: one step {run: {session, command, prompt}} or {http: {session, method, url, headers, body}}, timeout"},
-			"vars":   map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}, "description": "run: values for {{variables}} that win over the tests' own"},
+			"action":  map[string]any{"type": "string", "enum": []string{"list", "show", "run", "save", "generate", "step", "results"}, "description": "what to do"},
+			"file":    map[string]any{"type": "string", "description": "show/save/run: a test file relative to the tests folder, e.g. cases/vlan/add-vlan.yaml (cases/ and .yaml may be left out)"},
+			"files":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "run: the tests to run (none: all)"},
+			"yaml":    map[string]any{"type": "string", "description": "save: the test as YAML"},
+			"step":    map[string]any{"type": "object", "description": "step: one step {run: {session, command, prompt}} or {http: {session, method, url, headers, body}}, timeout"},
+			"testbed": map[string]any{"type": "string", "description": "run: a file in testbeds/ whose values are used as {{variables}}"},
+			"vars":    map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}, "description": "run: values for {{variables}} that win over the tests' own"},
 		}, "action")},
 	{"device", "A saved session's device facts and device type. facts: the model, version, serial number, MAC address, uptime and other facts read from it last time; refresh_facts logs in in the background (with the session's saved login) and reads them now with the device type's fact rules. identify logs in, runs the device types' detect commands (show version, display version …) and says which device type's Detect pattern matches; set_type sets the session's device type (asked first). types lists the device types with their Detect patterns. Nothing is typed in the user's tabs.",
 		mcpSchema(map[string]any{

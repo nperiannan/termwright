@@ -2159,6 +2159,9 @@ paths:
                                 step:
                                     description: 'step: one step {run: {session, command, prompt}} or {http: {session, method, url, headers, body}}, timeout'
                                     type: object
+                                testbed:
+                                    description: 'run: a file in testbeds/ whose values are used as {{variables}}'
+                                    type: string
                                 vars:
                                     additionalProperties:
                                         type: string

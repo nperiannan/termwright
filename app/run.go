@@ -304,6 +304,7 @@ func buildMenu(app *App, lang string) *menu.Menu {
 	add(apiM, "Import Postman, OpenAPI or cURL...", "api-import")
 
 	tsM := m.AddSubmenu(t("Tests"))
+	add(tsM, "Tests", "tests-open")
 	add(tsM, "Record a Test", "test-record")
 
 	slM := m.AddSubmenu(t("Syslog"))

@@ -59,6 +59,7 @@ import { LabService } from './core/lab.service';
 import { LabWizard } from './dialogs/lab-wizard';
 import { AIPanel } from './components/ai-panel';
 import { RecorderPanel } from './components/recorder-panel';
+import { TestsView } from './components/tests-view';
 import { Recorder } from './core/recorder.service';
 import { AIChat } from './core/ai-chat.service';
 import { ServersIndicator } from './components/servers-indicator';
@@ -82,7 +83,7 @@ import { FactTeach } from './dialogs/fact-teach';
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionsMenu, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, FilesPanel, WebOpenDialog, RemoteDiagDialog, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, FileServersDialog, NetCheckDialog, NameAfterDialog, LabDialog, LabWizard, ServersIndicator, AIPanel, RecorderPanel, TeamPushDialog, TeamReserveDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, LabWorkspace, NetworkMap, SnmpBrowser, ApiClient, SyslogView, Moved, HistoryDialog, Overlays, About, Welcome, LabWorkflow, FactTeach, Unlock],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, FileServersDialog, NetCheckDialog, NameAfterDialog, LabDialog, LabWizard, ServersIndicator, AIPanel, RecorderPanel, TestsView, TeamPushDialog, TeamReserveDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, LabWorkspace, NetworkMap, SnmpBrowser, ApiClient, SyslogView, Moved, HistoryDialog, Overlays, About, Welcome, LabWorkflow, FactTeach, Unlock],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -567,6 +568,7 @@ export class App implements OnInit {
       case 'api-client': void this.tabs.openApi(); break;
       case 'syslog-server': void this.tabs.openSyslog(); break;
       case 'test-record': this.rec.start(); break;
+      case 'tests-open': void this.tabs.openTests(); break;
       case 'syslog-send': void this.tabs.openSyslog('send'); break;
       case 'syslog-toggle': try {
         const st = await this.backend.syslogState();

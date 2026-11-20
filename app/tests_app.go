@@ -93,6 +93,8 @@ type TestRunRequest struct {
 	Files []string `json:"files,omitempty"`
 	// Vars: values for {{variables}} that win over the tests' own.
 	Vars map[string]string `json:"vars,omitempty"`
+	// Testbed: a file in testbeds/ whose values are used as {{variables}} (Vars win).
+	Testbed string `json:"testbed,omitempty"`
 	// Confirmed: the person agreed to run steps on production sessions.
 	Confirmed bool `json:"confirmed,omitempty"`
 }
@@ -117,7 +119,17 @@ func (a *App) runTests(ctx context.Context, r TestRunRequest, ask netAsker) (tes
 	if err != nil {
 		return testrec.RunReport{}, err
 	}
-	if prod := a.testsProduction(f, r.Files); len(prod) > 0 && !r.Confirmed {
+	if r.Testbed != "" {
+		tb, err := f.Testbed(r.Testbed)
+		if err != nil {
+			return testrec.RunReport{}, err
+		}
+		for k, v := range r.Vars {
+			tb[k] = v
+		}
+		r.Vars = tb
+	}
+	if prod := a.testsProduction(f, r.Files, r.Vars); len(prod) > 0 && !r.Confirmed {
 		if ask == nil {
 			return testrec.RunReport{}, fmt.Errorf("%w: %s", errTestsProduction, strings.Join(prod, ", "))
 		}
@@ -152,7 +164,7 @@ func testsWhich(files []string) string {
 }
 
 // testsProduction lists the production sessions the tests use.
-func (a *App) testsProduction(f testrec.Folder, files []string) []string {
+func (a *App) testsProduction(f testrec.Folder, files []string, vars map[string]string) []string {
 	if len(files) == 0 {
 		for _, c := range f.List() {
 			files = append(files, c.File)
@@ -164,12 +176,19 @@ func (a *App) testsProduction(f testrec.Folder, files []string) []string {
 		if err != nil {
 			continue
 		}
+		v := map[string]string{}
+		for k, x := range c.Vars {
+			v[k] = x
+		}
+		for k, x := range vars {
+			v[k] = x
+		}
 		for _, st := range c.Steps {
 			p := ""
 			if st.Run != nil {
-				p = testrec.Fill(st.Run.Session, c.Vars)
+				p = testrec.Fill(st.Run.Session, v)
 			} else if st.HTTP != nil {
-				p = testrec.Fill(st.HTTP.Session, c.Vars)
+				p = testrec.Fill(st.HTTP.Session, v)
 			}
 			if p == "" || slices.Contains(out, p) {
 				continue
@@ -285,7 +304,7 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 		}
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 		defer cancel()
-		rep, err := a.runTests(ctx, TestRunRequest{Files: files, Vars: vars}, ask)
+		rep, err := a.runTests(ctx, TestRunRequest{Files: files, Vars: vars, Testbed: argStr(args, "testbed")}, ask)
 		if err != nil && len(rep.Results) == 0 {
 			return "", err
 		}
