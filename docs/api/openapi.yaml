@@ -2,7 +2,7 @@
 openapi: 3.2.1
 info:
     title: Termwright local API
-    summary: The emulated lab of Termwright for scripts, test frameworks and CI on this computer.
+    summary: The emulated lab and the network tools (SNMP) of Termwright for scripts, test frameworks and CI on this computer.
     description: |-
         The emulated lab of Termwright (switch VMs on KVM hosts) for your own scripts, test frameworks and CI, on this computer only.
 
@@ -49,6 +49,14 @@ tags:
       summary: Tests
       parent: Traffic
       description: RFC 2544, RFC 2889 learning and convergence tests, and their runs.
+    - name: SNMP
+      description: 'SNMP v1, v2c and v3 with the saved sessions'' settings: get, walk, set, the MIBs and traps.'
+    - name: API client
+      description: 'The REST API client: send requests with saved API sessions, collections, runs, imports.'
+    - name: Syslog
+      description: 'The syslog server (UDP, TCP, TLS) and client: messages received, rules, test messages.'
+    - name: Network tools
+      description: The network tools the AI assistant and the Claude connector use (snmp, http, syslog), as JSON.
     - name: API
       description: This description.
 paths:
@@ -1190,6 +1198,1166 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/TrafficView'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /http/send:
+        post:
+            operationId: httpSend
+            tags:
+                - API client
+            summary: Send a request
+            description: 'Sends a request with a saved API session (Protocol API: base URL, authentication - API key, bearer token, login request, basic, OAuth 2.0 - and {{variables}}; the secrets come from the credential store and are masked in the answer) or as it is. A path goes after the session''s base URL; a login or OAuth token is fetched, kept in memory and renewed by itself. The request''s pre-request script and tests (a pm.* subset) run. Through the API a change on a production session is not asked (the scripts are the user''s own).'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HTTPSendRequest'
+                        examples:
+                            path:
+                                summary: GET a path of a saved API session (it logs in by itself)
+                                value:
+                                    session: APIs/Lab switches REST
+                                    request:
+                                        method: GET
+                                        url: /rest/restconf/data/openconfig-interfaces:interfaces
+                            patch:
+                                summary: PATCH with a JSON body and a test
+                                value:
+                                    session: APIs/Lab switches REST
+                                    request:
+                                        method: PATCH
+                                        url: /rest/restconf/data/openconfig-interfaces:interfaces/interface={{port}}/config
+                                        body:
+                                            mode: json
+                                            raw: '{"openconfig-interfaces:config": {"description": "uplink"}}'
+                                        tests: pm.test('ok', () => pm.response.to.be.ok)
+                                    vars:
+                                        port: "1:1"
+                            url:
+                                summary: Any URL, no session
+                                value:
+                                    request:
+                                        method: GET
+                                        url: https://example.com/api/health
+                                        headers:
+                                            - key: Accept
+                                              value: application/json
+            responses:
+                200:
+                    description: The answer (also when the server answered an error status; error says why nothing came back).
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HTTPResponse'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /http/collections:
+        get:
+            operationId: listCollections
+            tags:
+                - API client
+            summary: The collections
+            description: The API client's collections.
+            responses:
+                200:
+                    description: The collections.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/HTTPCollectionInfo'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+        post:
+            operationId: createCollection
+            tags:
+                - API client
+            summary: Add a collection
+            description: Saves a new collection (its id is made from its name).
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HTTPCollection'
+            responses:
+                201:
+                    description: The collection with its id.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HTTPCollection'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /http/collections/{collection}:
+        get:
+            operationId: getCollection
+            tags:
+                - API client
+            summary: A collection
+            description: A collection with its requests; ?format=postman gives it as a Postman v2.1 collection.
+            parameters:
+                - name: collection
+                  in: path
+                  required: true
+                  description: The collection's id or name.
+                  schema:
+                    type: string
+                - name: format
+                  in: query
+                  description: 'postman: as a Postman v2.1 collection.'
+                  schema:
+                    type: string
+                    enum:
+                        - termwright
+                        - postman
+            responses:
+                200:
+                    description: The collection.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HTTPCollection'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+        put:
+            operationId: putCollection
+            tags:
+                - API client
+            summary: Replace a collection
+            description: Replaces a collection (it keeps its id).
+            parameters:
+                - name: collection
+                  in: path
+                  required: true
+                  description: The collection's id or name.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HTTPCollection'
+            responses:
+                200:
+                    description: The collection.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HTTPCollection'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+        delete:
+            operationId: deleteCollection
+            tags:
+                - API client
+            summary: Delete a collection
+            description: Deletes a collection's file.
+            parameters:
+                - name: collection
+                  in: path
+                  required: true
+                  description: The collection's id or name.
+                  schema:
+                    type: string
+            responses:
+                204:
+                    description: Deleted.
+                404:
+                    $ref: '#/components/responses/NotFound'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /http/collections/{collection}/run:
+        post:
+            operationId: runCollection
+            tags:
+                - API client
+            summary: Run a collection
+            description: Runs a collection's requests in order (all, some, or one folder), iterations times or once per data row, with their scripts and tests; variables set by scripts carry to the next requests.
+            parameters:
+                - name: collection
+                  in: path
+                  required: true
+                  description: The collection's id or name.
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HTTPRunRequest'
+            responses:
+                200:
+                    description: Every request with its status and tests.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HTTPRunResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /http/import:
+        post:
+            operationId: importCollection
+            tags:
+                - API client
+            summary: Import
+            description: 'Reads one or more cURL commands, a Postman v2.0/v2.1 collection (folders, scripts, variables) or an OpenAPI 3 / Swagger 2 document (JSON or YAML: an example request for every operation) and saves it as a collection.'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HTTPImportIn'
+            responses:
+                201:
+                    description: The new collection.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HTTPCollection'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /http/history:
+        get:
+            operationId: httpHistory
+            tags:
+                - API client
+            summary: Requests sent
+            description: The last 300 requests sent, newest first (no answer bodies; secrets masked).
+            responses:
+                200:
+                    description: The requests.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/HTTPHistoryItem'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /http/environments:
+        get:
+            operationId: listEnvironments
+            tags:
+                - API client
+            summary: The environments
+            description: The API client's environments (Postman's environments), the globals (id globals) first. Secret values are never given, only whether one is set.
+            responses:
+                200:
+                    description: The environments.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/HTTPEnv'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+        post:
+            operationId: saveEnvironment
+            tags:
+                - API client
+            summary: Save an environment
+            description: 'Adds or replaces an environment (no id: a new one; id globals: the global variables). Secret values go to the computer''s credential store; an empty secret value keeps the saved one.'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HTTPEnv'
+            responses:
+                200:
+                    description: The environment.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HTTPEnv'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /http/variables:
+        post:
+            operationId: httpVariables
+            tags:
+                - API client
+            summary: Variables of a request
+            description: Every variable a request can use with the winning value and where it comes from (globals, collection, session, environment, local). Secret values are left out.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HTTPSendRequest'
+            responses:
+                200:
+                    description: The variables.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/HTTPVar'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /syslog:
+        get:
+            operationId: syslogState
+            tags:
+                - Syslog
+            summary: The syslog server
+            description: Whether Termwright's syslog server listens (UDP, TCP, TLS), its counts per severity and its senders.
+            responses:
+                200:
+                    description: Its state.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SyslogState'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /syslog/start:
+        post:
+            operationId: syslogStart
+            tags:
+                - Syslog
+            summary: Start the syslog server
+            description: Starts (or restarts) it with these settings, saved for the next time; no body uses the saved ones. Ports below 1024 may need administrator rights on macOS and Linux.
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SyslogSettings'
+                        examples:
+                            udp:
+                                summary: UDP 514 and TLS 6514, files per sender
+                                value:
+                                    udp: 514
+                                    tcp: 0
+                                    tls: 6514
+                                    saveFiles: true
+                                    perHost: true
+            responses:
+                200:
+                    description: Its state.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SyslogState'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /syslog/stop:
+        post:
+            operationId: syslogStop
+            tags:
+                - Syslog
+            summary: Stop the syslog server
+            description: Stops listening; the messages are kept until cleared.
+            responses:
+                200:
+                    description: Its state.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SyslogState'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /syslog/messages:
+        get:
+            operationId: syslogMessages
+            tags:
+                - Syslog
+            summary: Messages received
+            description: The messages that match, oldest first (the newest limit). Rules that hide a message leave it out.
+            parameters:
+                - name: q
+                  in: query
+                  description: Words that must all be in the message, its host or program; /regex/ for a regular expression.
+                  schema:
+                    type: string
+                - name: host
+                  in: query
+                  description: Only from this sender (address or host name).
+                  schema:
+                    type: string
+                - name: severity
+                  in: query
+                  description: 'This severity or worse: emerg, alert, crit, err, warning, notice, info, debug or 0-7.'
+                  schema:
+                    type: string
+                - name: minutes
+                  in: query
+                  description: Only the last minutes.
+                  schema:
+                    type: integer
+                - name: after
+                  in: query
+                  description: Only messages with a larger id (to follow new ones).
+                  schema:
+                    type: integer
+                - name: limit
+                  in: query
+                  description: At most this many (default 1000).
+                  schema:
+                    type: integer
+            responses:
+                200:
+                    description: The messages.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/SyslogView'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+        delete:
+            operationId: syslogClear
+            tags:
+                - Syslog
+            summary: Clear the messages
+            description: Forgets the messages received (the files stay).
+            responses:
+                204:
+                    description: Cleared.
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /syslog/send:
+        post:
+            operationId: syslogSend
+            tags:
+                - Syslog
+            summary: Send a test message
+            description: 'Sends a syslog message (RFC 5424 or 3164) over UDP, TCP or TLS to a syslog server: to check that a server receives, or to set off its alerts.'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SyslogSendIn'
+                        examples:
+                            test:
+                                summary: An error to a server
+                                value:
+                                    target: 10.0.0.5
+                                    facility: local7
+                                    severity: err
+                                    text: test from Termwright
+            responses:
+                200:
+                    description: The message as sent.
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    sent:
+                                        type: string
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /syslog/rules:
+        get:
+            operationId: syslogRules
+            tags:
+                - Syslog
+            summary: The syslog rules
+            description: Rules that highlight, alert on or hide messages; the first that matches wins.
+            responses:
+                200:
+                    description: The rules.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/SyslogRule'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+        put:
+            operationId: syslogSetRules
+            tags:
+                - Syslog
+            summary: Replace the syslog rules
+            description: 'Saves the rules ({"rules": [...]}).'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                rules:
+                                    type: array
+                                    items:
+                                        $ref: '#/components/schemas/SyslogRule'
+            responses:
+                200:
+                    description: The rules.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/SyslogRule'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /snmp:
+        post:
+            operationId: snmp
+            tags:
+                - SNMP
+            summary: Run an SNMP operation
+            description: 'get, getnext, bulk, walk or set against a saved session''s SNMP settings (session properties → SNMP: version, community or v3 user; the community and passwords from the credential store) or a target given here. OIDs can be names from the loaded MIBs (sysDescr.0, IF-MIB::ifTable, ifOperStatus). Values come back with names and readable values. A set needs writes allowed on the session; through the API it is not asked, production sessions too (the scripts are the user''s own).'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SNMPRequest'
+                        examples:
+                            walk:
+                                summary: Walk the interface table of a saved session
+                                value:
+                                    session: Lab/core-sw1
+                                    op: walk
+                                    oids:
+                                        - IF-MIB::ifTable
+                            get:
+                                summary: Read a few scalars
+                                value:
+                                    session: Lab/core-sw1
+                                    op: get
+                                    oids:
+                                        - sysDescr.0
+                                        - sysUpTime.0
+                                        - sysName.0
+                            v3:
+                                summary: An address and SNMPv3 credentials (not a saved session)
+                                value:
+                                    target:
+                                        address: 10.0.0.1
+                                        version: "3"
+                                        user: netops
+                                        auth: SHA-256
+                                        authPass: …
+                                        priv: AES
+                                        privPass: …
+                                    op: get
+                                    oids:
+                                        - sysDescr.0
+                            set:
+                                summary: 'Write: shut a port down'
+                                value:
+                                    session: Lab/core-sw1
+                                    op: set
+                                    values:
+                                        - oid: ifAdminStatus.5
+                                          value: down
+            responses:
+                200:
+                    description: The values.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SNMPResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /snmp/mib:
+        get:
+            operationId: searchMib
+            tags:
+                - SNMP
+            summary: Search the MIBs
+            description: Objects of the loaded MIBs (the standard IETF and IANA MIBs built in, and the user's own) whose name, module or OID matches q.
+            parameters:
+                - name: q
+                  in: query
+                  required: true
+                  description: A name (ifOper), a module (IF-MIB) or an OID prefix.
+                  schema:
+                    type: string
+            responses:
+                200:
+                    description: The objects (at most 200).
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/SNMPMibNode'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /snmp/mib/{object}:
+        get:
+            operationId: getMibObject
+            tags:
+                - SNMP
+            summary: A MIB object
+            description: 'One object of the loaded MIBs by name or OID: its syntax, enums, access, index, description.'
+            parameters:
+                - name: object
+                  in: path
+                  required: true
+                  description: A name (ifOperStatus, IF-MIB::ifOperStatus) or an OID.
+                  schema:
+                    type: string
+            responses:
+                200:
+                    description: The object.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SNMPMibNode'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /snmp/traps:
+        get:
+            operationId: listTraps
+            tags:
+                - SNMP
+            summary: Traps received
+            description: The trap receiver's state (start it in SNMP → Traps) and the notifications it got, newest first, with names from the MIBs.
+            responses:
+                200:
+                    description: The receiver and its notifications.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SNMPTrapsView'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /snmp/trap:
+        post:
+            operationId: sendTrap
+            tags:
+                - SNMP
+            summary: Send a trap
+            description: Sends a notification (v1, v2c or v3; v3 with Termwright's engine ID) to a trap receiver or a network management system, to test it.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SNMPTrapSendIn'
+                        examples:
+                            linkDown:
+                                summary: linkDown of port 3
+                                value:
+                                    address: 10.0.0.5
+                                    trapOid: IF-MIB::linkDown
+                                    values:
+                                        - oid: ifIndex.3
+                                          value: "3"
+                                        - oid: ifOperStatus.3
+                                          value: down
+            responses:
+                200:
+                    description: Sent.
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    sent:
+                                        type: string
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /tools:
+        get:
+            operationId: listNetTools
+            tags:
+                - Network tools
+            summary: The network tools
+            description: 'The network tools (snmp, http, syslog) with their arguments (JSON Schema): the same tools the in-app AI assistant and the Claude connector use. Each one is POST /tools/{name}.'
+            responses:
+                200:
+                    description: The tools.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/Tool'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /tools/device:
+        post:
+            operationId: net_device
+            tags:
+                - Network tools
+            summary: The device tool
+            description: 'A saved session''s device facts and device type. facts: the model, version, serial number, MAC address, uptime and other facts read from it last time; refresh_facts logs in in the background (with the session''s saved login) and reads them now with the device type''s fact rules. identify logs in, runs the device types'' detect commands (show version, display version …) and says which device type''s Detect pattern matches; set_type sets the session''s device type (asked first). types lists the device types with their Detect patterns. Nothing is typed in the user''s tabs. Through the API it runs without asking.'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    description: what to do
+                                    enum:
+                                        - facts
+                                        - refresh_facts
+                                        - identify
+                                        - set_type
+                                        - types
+                                    type: string
+                                session:
+                                    description: the saved session's path, e.g. Datacenter/Core/core-sw1
+                                    type: string
+                                type:
+                                    description: 'set_type: the device type''s name ("" clears it)'
+                                    type: string
+                            required:
+                                - action
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /tools/snmp:
+        post:
+            operationId: net_snmp
+            tags:
+                - Network tools
+            summary: The snmp tool
+            description: 'SNMP with a saved session''s SNMP settings (session properties → SNMP; v1, v2c or v3) or an address and credentials: get, getnext, bulk and walk read; set writes (asked first on a production session, and only when the session allows writes). Values come back with the MIB''s names and readable values (enum names, times, MAC addresses). mib_search and mib_info look objects up in the loaded MIBs (the standard IETF MIBs and the user''s own); traps lists the notifications the trap receiver got; send_trap sends a test notification to a receiver. Through the API it runs without asking.'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    description: what to do
+                                    enum:
+                                        - get
+                                        - getnext
+                                        - bulk
+                                        - walk
+                                        - set
+                                        - mib_search
+                                        - mib_info
+                                        - traps
+                                        - send_trap
+                                    type: string
+                                address:
+                                    description: 'instead of session: host or host:port'
+                                    type: string
+                                community:
+                                    description: with address, v1/v2c (default public)
+                                    type: string
+                                max:
+                                    description: 'walk: at most this many values (default 2000 here)'
+                                    type: integer
+                                oids:
+                                    description: 'OIDs or names: sysDescr.0, IF-MIB::ifTable, ifOperStatus, 1.3.6.1.2.1.2.2.1.8'
+                                    items:
+                                        type: string
+                                    type: array
+                                query:
+                                    description: 'mib_search: a name, module or OID; mib_info: one object'
+                                    type: string
+                                session:
+                                    description: a saved session's path (list_sessions); its SNMP settings and saved community / v3 passwords are used
+                                    type: string
+                                trap:
+                                    description: 'send_trap: the notification (IF-MIB::linkDown or an OID), sent to address (port 162) with values'
+                                    type: string
+                                values:
+                                    description: 'set: [{oid, value, type?}] - the type comes from the MIB when left out; an enum takes its name (down)'
+                                    items:
+                                        properties:
+                                            oid:
+                                                type: string
+                                            type:
+                                                type: string
+                                            value:
+                                                type: string
+                                        type: object
+                                    type: array
+                                version:
+                                    description: with address (default 2c)
+                                    enum:
+                                        - "1"
+                                        - 2c
+                                        - "3"
+                                    type: string
+                            required:
+                                - action
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /tools/http:
+        post:
+            operationId: net_http
+            tags:
+                - Network tools
+            summary: The http tool
+            description: 'The REST API client with saved API sessions (Protocol API: base URL, authentication - API key, bearer token, login, basic, OAuth 2.0 - and {{variables}}; secrets stay in the credential store) and collections. send sends one request (a path goes after the session''s base URL; the login token is fetched and renewed by itself) or a saved one (collection + request); POST, PUT, PATCH and DELETE on a production session are asked first. run runs a collection''s requests with their tests; collections / collection list them; save adds or replaces a request in a collection (made when missing), with its pre-request script (preScript) and tests in Postman''s pm.* style (pm.test, pm.expect, pm.response.json(), pm.variables.set); import reads a cURL command, a Postman collection or an OpenAPI document into a collection; history lists the last requests; environments lists the environments (Postman''s) and globals; variables lists the variables a request can use and where each comes from (secret values hidden). Through the API it runs without asking.'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    description: what to do
+                                    enum:
+                                        - send
+                                        - run
+                                        - collections
+                                        - collection
+                                        - save
+                                        - import
+                                        - history
+                                        - environments
+                                        - variables
+                                    type: string
+                                body:
+                                    description: 'send: a JSON value (sent as JSON) or text'
+                                collection:
+                                    description: a collection's id or name
+                                    type: string
+                                data:
+                                    description: 'run: CSV with a header line or a JSON array; one iteration per row'
+                                    type: string
+                                env:
+                                    description: production uses the variables' production values
+                                    enum:
+                                        - ""
+                                        - production
+                                    type: string
+                                environment:
+                                    description: 'send / run / variables: an environment''s id or name (environments lists them); its variables win over the session''s'
+                                    type: string
+                                folder:
+                                    description: 'run: only this folder'
+                                    type: string
+                                headers:
+                                    additionalProperties:
+                                        type: string
+                                    description: 'send: extra headers'
+                                    type: object
+                                iterations:
+                                    description: 'run: how many times'
+                                    type: integer
+                                method:
+                                    description: 'send: GET (default), POST, PUT, PATCH, DELETE, HEAD, OPTIONS'
+                                    type: string
+                                name:
+                                    description: 'import / save: the collection''s name'
+                                    type: string
+                                query:
+                                    additionalProperties:
+                                        type: string
+                                    description: 'send: query parameters'
+                                    type: object
+                                request:
+                                    description: 'send / run: a saved request''s id or name; save: the request object {name, folder, method, url, params, headers, body {mode, raw}, tests}'
+                                session:
+                                    description: an API session's path (list_sessions shows protocol API)
+                                    type: string
+                                text:
+                                    description: 'import: the cURL command, Postman collection or OpenAPI document'
+                                    type: string
+                                url:
+                                    description: 'send: a path (/rest/restconf/data/openconfig-interfaces:interfaces) or a full URL; {{variables}} work'
+                                    type: string
+                            required:
+                                - action
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /tools/syslog:
+        post:
+            operationId: net_syslog
+            tags:
+                - Network tools
+            summary: The syslog tool
+            description: 'The syslog server in Termwright (receives from devices over UDP, TCP and TLS while Termwright runs; senders are matched to saved sessions) and a syslog client. status: whether it listens, counts per severity, senders. messages: what was received, filtered by words or /regex/, sender, severity and minutes back (newest last). start / stop the server (ports: udp 514, tcp, tls 6514; ports below 1024 may need administrator rights - use 1514 then). send: a test message to a syslog server. clear forgets the messages. Through the API it runs without asking.'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    description: what to do
+                                    enum:
+                                        - status
+                                        - messages
+                                        - start
+                                        - stop
+                                        - send
+                                        - clear
+                                    type: string
+                                facility:
+                                    description: 'send: local7, user, … (default user)'
+                                    type: string
+                                host:
+                                    description: 'messages: only from this sender (address or host name)'
+                                    type: string
+                                limit:
+                                    description: 'messages: at most this many (default 200)'
+                                    type: integer
+                                minutes:
+                                    description: 'messages: only the last minutes'
+                                    type: integer
+                                proto:
+                                    description: 'send: transport (default udp)'
+                                    enum:
+                                        - udp
+                                        - tcp
+                                        - tls
+                                    type: string
+                                query:
+                                    description: 'messages: words that must all be in the message, or /regex/'
+                                    type: string
+                                severity:
+                                    description: 'messages: this severity or worse (emerg, alert, crit, err, warning, notice, info, debug or 0-7); send: the message''s severity'
+                                    type: string
+                                target:
+                                    description: 'send: the syslog server, host or host:port'
+                                    type: string
+                                tcp:
+                                    description: 'start: TCP port (0 off)'
+                                    type: integer
+                                text:
+                                    description: 'send: the message'
+                                    type: string
+                                tls:
+                                    description: 'start: TLS port (0 off)'
+                                    type: integer
+                                udp:
+                                    description: 'start: UDP port (default the saved one, 514)'
+                                    type: integer
+                            required:
+                                - action
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
                 422:
                     $ref: '#/components/responses/Unprocessable'
                 401:
@@ -4684,6 +5852,707 @@ components:
                 - loss
                 - latAvg
                 - latMax
+        HTTPBody:
+            type: object
+            properties:
+                mode:
+                    description: 'Mode: "" (none), json, text, xml, html, javascript, urlencoded, form (multipart), graphql, binary.'
+                    type: string
+                raw:
+                    description: 'Raw: the text of json, text, xml and the GraphQL query.'
+                    type: string
+                form:
+                    description: 'Form: the fields of urlencoded and form.'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPKeyValue'
+                graphqlVars:
+                    description: 'GraphQLVars: the GraphQL variables as JSON.'
+                    type: string
+                file:
+                    description: 'File: the path of the file sent as it is (binary).'
+                    type: string
+        HTTPCollection:
+            type: object
+            description: 'A collection of requests, kept as a JSON file (plain text: keep it in git, share it).'
+            properties:
+                id:
+                    description: 'ID: the file name without .json.'
+                    type: string
+                name:
+                    description: Name shown.
+                    type: string
+                session:
+                    description: 'Session: the API session it uses unless another is chosen.'
+                    type: string
+                vars:
+                    description: 'Vars: collection variables ({{name}}); no secrets.'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPKeyValue'
+                requests:
+                    description: Requests in order.
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPRequestDef'
+                auth:
+                    description: 'Auth of its requests that inherit: "" (the session''s), "none", "bearer", "basic" or "apikey".'
+                    type: string
+                authData:
+                    description: 'AuthData: the values of its authentication.'
+                    anyOf:
+                        - $ref: '#/components/schemas/HTTPReqAuth'
+                        - type: "null"
+                preScript:
+                    description: PreScript runs before each of its requests, before the request's own.
+                    type: string
+                tests:
+                    description: Tests run after each of its requests, before the request's own.
+                    type: string
+                description:
+                    description: 'Description: what it is for.'
+                    type: string
+            required:
+                - id
+                - name
+                - requests
+        HTTPCollectionInfo:
+            type: object
+            description: A collection in a list.
+            properties:
+                id:
+                    description: the collection's id (its file name)
+                    type: string
+                name:
+                    description: its name
+                    type: string
+                session:
+                    description: the API session it uses
+                    type: string
+                requests:
+                    type: integer
+            required:
+                - id
+                - name
+                - requests
+        HTTPCookie:
+            type: object
+            properties:
+                name:
+                    description: cookie name
+                    type: string
+                value:
+                    description: its value
+                    type: string
+                domain:
+                    description: its domain
+                    type: string
+                path:
+                    description: its path
+                    type: string
+                expires:
+                    description: when it expires (RFC 3339)
+                    type: string
+                httpOnly:
+                    description: not readable by scripts in a browser
+                    type: boolean
+                secure:
+                    type: boolean
+            required:
+                - name
+                - value
+        HTTPEnv:
+            type: object
+            description: 'An environment (Postman''s): named variables chosen in the API client; id globals holds the global variables.'
+            properties:
+                id:
+                    description: 'ID: its id ("globals" for the global variables).'
+                    type: string
+                name:
+                    description: Name shown.
+                    type: string
+                vars:
+                    description: 'Vars: its variables (secret values left out).'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPEnvVar'
+            required:
+                - id
+                - name
+                - vars
+        HTTPEnvVar:
+            type: object
+            description: A variable of an environment; a secret one's value stays in the credential store.
+            properties:
+                key:
+                    description: 'Key: the name.'
+                    type: string
+                value:
+                    description: 'Value: the value ("" in the file when Secret).'
+                    type: string
+                secret:
+                    description: 'Secret: kept in the credential store and masked where requests are shown.'
+                    type: boolean
+                off:
+                    description: 'Off: not used.'
+                    type: boolean
+                desc:
+                    description: 'Desc: a note.'
+                    type: string
+                hasValue:
+                    description: 'HasValue: a secret variable has a value in the credential store.'
+                    type: boolean
+            required:
+                - key
+                - value
+        HTTPHistoryItem:
+            type: object
+            description: A request sent (no answer body).
+            properties:
+                at:
+                    description: when it was sent
+                    type: string
+                    format: date-time
+                session:
+                    description: the API session
+                    type: string
+                env:
+                    description: '"" or production'
+                    type: string
+                collection:
+                    description: the collection it came from
+                    type: string
+                environment:
+                    description: Environment chosen when it was sent.
+                    type: string
+                request:
+                    $ref: '#/components/schemas/HTTPRequestDef'
+                    description: the request (the body cut at 16 KB)
+                url:
+                    description: the URL sent (secrets masked)
+                    type: string
+                status:
+                    description: 'the answer''s status (0: not sent)'
+                    type: integer
+                ms:
+                    description: how long it took
+                    type: integer
+                size:
+                    description: the answer's size in bytes
+                    type: integer
+                error:
+                    type: string
+            required:
+                - at
+                - request
+                - url
+                - status
+                - ms
+                - size
+        HTTPImportIn:
+            type: object
+            description: A cURL command, Postman collection or OpenAPI document to import.
+            properties:
+                text:
+                    description: 'Text: the cURL command(s), the Postman v2.1 collection or the OpenAPI 3 / Swagger 2 document (JSON or YAML).'
+                    type: string
+                name:
+                    description: 'Name of the collection (default: from the document).'
+                    type: string
+                session:
+                    description: 'Session: the API session the collection uses.'
+                    type: string
+            required:
+                - text
+        HTTPKeyValue:
+            type: object
+            properties:
+                key:
+                    description: 'Key: the name.'
+                    type: string
+                value:
+                    description: 'Value: the value; {{variables}} are replaced when sent.'
+                    type: string
+                off:
+                    description: 'Off: kept but not sent.'
+                    type: boolean
+                desc:
+                    description: 'Desc: a note.'
+                    type: string
+                type:
+                    description: 'Type of a multipart form field: "" (text) or "file" (Value is the file''s path).'
+                    type: string
+            required:
+                - key
+                - value
+        HTTPReqAuth:
+            type: object
+            description: A request's or collection's own authentication; values may be {{variables}}.
+            properties:
+                token:
+                    description: Token of a bearer token.
+                    type: string
+                user:
+                    description: User of basic authentication.
+                    type: string
+                password:
+                    description: Password of basic authentication.
+                    type: string
+                key:
+                    description: 'Key: the API key''s header or query parameter name.'
+                    type: string
+                value:
+                    description: Value of the API key.
+                    type: string
+                in:
+                    description: 'In: where the API key goes, "header" (default) or "query".'
+                    type: string
+        HTTPRequestDef:
+            type: object
+            description: 'A request: method, URL, parameters, headers, body, pre-request script and tests.'
+            properties:
+                id:
+                    description: 'ID: unique in its collection.'
+                    type: string
+                name:
+                    description: Name shown in the collection.
+                    type: string
+                folder:
+                    description: Folder in the collection ("Interfaces/Ports"), "" = top level.
+                    type: string
+                method:
+                    description: 'Method: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS or any other word.'
+                    type: string
+                url:
+                    description: 'URL: absolute, or a path (/rest/...) that goes after the session''s base URL.'
+                    type: string
+                params:
+                    description: 'Params: query parameters added to the URL.'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPKeyValue'
+                pathVars:
+                    description: 'PathVars: values of the :name parts of the URL''s path.'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPKeyValue'
+                headers:
+                    description: Headers sent with it.
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPKeyValue'
+                body:
+                    $ref: '#/components/schemas/HTTPBody'
+                    description: Body sent with it.
+                auth:
+                    description: 'Auth: "" inherits (the collection''s, else the session''s), "none", "bearer", "basic" or "apikey".'
+                    type: string
+                authData:
+                    description: 'AuthData: the values of its own authentication.'
+                    anyOf:
+                        - $ref: '#/components/schemas/HTTPReqAuth'
+                        - type: "null"
+                settings:
+                    description: Settings of the request.
+                    anyOf:
+                        - $ref: '#/components/schemas/HTTPSettings'
+                        - type: "null"
+                preScript:
+                    description: PreScript runs before it is sent (pm.variables.set ...).
+                    type: string
+                tests:
+                    description: Tests run on the answer (pm.test("ok", () => pm.response.to.have.status(200))).
+                    type: string
+                description:
+                    description: 'Description: what it does.'
+                    type: string
+            required:
+                - method
+                - url
+        HTTPResponse:
+            type: object
+            description: The answer, with the request as it was sent (secrets masked), timings, cookies and test results.
+            properties:
+                status:
+                    description: Status code (200), 0 when nothing came back.
+                    type: integer
+                statusText:
+                    description: 'StatusText: "200 OK".'
+                    type: string
+                proto:
+                    description: 'Proto: HTTP/1.1, HTTP/2.0.'
+                    type: string
+                headers:
+                    description: Headers of the answer.
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPKeyValue'
+                body:
+                    description: 'Body: text, or base64 when Base64.'
+                    type: string
+                base64:
+                    description: 'Base64: the body is binary.'
+                    type: boolean
+                contentType:
+                    description: ContentType of the body.
+                    type: string
+                size:
+                    description: Size of the body in bytes.
+                    type: integer
+                truncated:
+                    description: 'Truncated: the body was longer than kept (5 MB).'
+                    type: boolean
+                ms:
+                    description: 'Ms: the whole request in milliseconds.'
+                    type: integer
+                timing:
+                    $ref: '#/components/schemas/HTTPTiming'
+                    description: Timing per phase.
+                method:
+                    description: Method sent.
+                    type: string
+                url:
+                    description: URL sent (secret variables masked).
+                    type: string
+                reqHeaders:
+                    description: ReqHeaders as sent (authorization and secret variables masked).
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPKeyValue'
+                reqBody:
+                    description: ReqBody as sent (secret variables masked; first 64 KB).
+                    type: string
+                cookies:
+                    description: Cookies the server set.
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPCookie'
+                tests:
+                    description: 'Tests: the results of the request''s tests.'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPTestResult'
+                logs:
+                    description: 'Logs: console.log of its scripts.'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                vars:
+                    description: Vars set by its scripts (kept for the next requests of a run or the tab).
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
+                error:
+                    description: 'Error: why it could not be sent or what failed (the answer is still shown when there is one).'
+                    type: string
+                next:
+                    description: 'Next: the request a script chose to run next in a collection run (postman.setNextRequest).'
+                    type: string
+                nextSet:
+                    description: 'NextSet: a script chose the next request; Next "" ends the run.'
+                    type: boolean
+                skipped:
+                    description: 'Skipped: the pre-request script skipped it (pm.execution.skipRequest).'
+                    type: boolean
+                envSet:
+                    description: 'EnvSet: values the scripts set with pm.environment.set (kept in the chosen environment).'
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
+                globalSet:
+                    description: 'GlobalSet: values the scripts set with pm.globals.set (kept in the globals).'
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
+            required:
+                - status
+                - statusText
+                - headers
+                - body
+                - size
+                - ms
+                - timing
+                - method
+                - url
+                - reqHeaders
+        HTTPRunRequest:
+            type: object
+            description: 'What to run of a collection: requests, folder, iterations, data rows.'
+            properties:
+                collection:
+                    description: 'Collection: id or name.'
+                    type: string
+                session:
+                    description: 'Session: the API session (default: the collection''s).'
+                    type: string
+                env:
+                    description: 'Env: "" or "production".'
+                    type: string
+                environment:
+                    description: 'Environment: the id or name of an environment ("" none).'
+                    type: string
+                requests:
+                    description: 'Requests: ids or names to run, in the collection''s order ("" = all).'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                folder:
+                    description: 'Folder: only the requests in this folder (and below).'
+                    type: string
+                iterations:
+                    description: 'Iterations: how many times (default 1); Data rows override it.'
+                    type: integer
+                data:
+                    description: 'Data: CSV (first line = names) or a JSON array of objects; each row is one iteration''s variables.'
+                    type: string
+                delayMs:
+                    description: DelayMs between requests.
+                    type: integer
+                stopOnFail:
+                    description: 'StopOnFail: stop at the first failing request.'
+                    type: boolean
+                confirmed:
+                    description: 'Confirmed: the person agreed to the changes on a production session.'
+                    type: boolean
+            required:
+                - collection
+        HTTPRunResult:
+            type: object
+            description: 'A collection run: every request with its status and tests.'
+            properties:
+                steps:
+                    description: every request sent, in order
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPRunStep'
+                passed:
+                    description: requests that passed
+                    type: integer
+                failed:
+                    description: requests that failed
+                    type: integer
+                tests:
+                    description: tests run
+                    type: integer
+                ms:
+                    description: the whole run
+                    type: integer
+                stopped:
+                    description: 'Stopped: StopOnFail, or the run was cancelled.'
+                    type: boolean
+            required:
+                - steps
+                - passed
+                - failed
+                - tests
+                - ms
+        HTTPRunStep:
+            type: object
+            properties:
+                iteration:
+                    description: which iteration (1, 2, ...)
+                    type: integer
+                id:
+                    description: the request's id
+                    type: string
+                name:
+                    description: the request's name
+                    type: string
+                method:
+                    description: its method
+                    type: string
+                url:
+                    description: the URL sent
+                    type: string
+                status:
+                    description: 'the answer''s status (0: not sent)'
+                    type: integer
+                ms:
+                    description: how long it took
+                    type: integer
+                tests:
+                    description: its tests
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPTestResult'
+                error:
+                    description: why it failed or was not sent
+                    type: string
+                pass:
+                    description: 'Pass: answered, no 5xx, every test passed.'
+                    type: boolean
+            required:
+                - iteration
+                - id
+                - name
+                - method
+                - url
+                - status
+                - ms
+                - pass
+        HTTPSendRequest:
+            type: object
+            description: A request to send with an API session (its base URL, authentication and variables).
+            properties:
+                session:
+                    description: 'Session: an API session''s path (base URL, authentication, variables); "" sends the request as it is.'
+                    type: string
+                env:
+                    description: 'Env: "" (the session''s own values) or "production" (the variables'' production values).'
+                    type: string
+                collection:
+                    description: 'Collection: its variables are used too (id or name).'
+                    type: string
+                request:
+                    $ref: '#/components/schemas/HTTPRequestDef'
+                    description: Request to send.
+                environment:
+                    description: 'Environment: the id or name of an environment whose variables win over the session''s ("" none).'
+                    type: string
+                vars:
+                    description: 'Vars: values that win over the session''s and the collection''s (set by earlier scripts).'
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
+                timeout:
+                    description: Timeout in seconds (default 30).
+                    type: integer
+                noRedirects:
+                    description: 'NoRedirects: answer 3xx instead of following.'
+                    type: boolean
+                confirmed:
+                    description: 'Confirmed: the person agreed to a change on a production session.'
+                    type: boolean
+            required:
+                - request
+        HTTPSettings:
+            type: object
+            description: 'A request''s settings: HTTP version, certificate check, redirects, URL encoding, cookies, timeout.'
+            properties:
+                httpVersion:
+                    description: 'HTTPVersion: "" (automatic), "1.1" or "2".'
+                    type: string
+                verify:
+                    description: 'Verify: "" (the session''s choice), "on" (check the certificate) or "off" (accept any).'
+                    type: string
+                noRedirects:
+                    description: 'NoRedirects: answer 3xx instead of following.'
+                    type: boolean
+                followMethod:
+                    description: 'FollowMethod: follow a redirect with the original method and body (not GET).'
+                    type: boolean
+                followAuth:
+                    description: 'FollowAuth: keep the Authorization header when a redirect goes to another host.'
+                    type: boolean
+                removeReferer:
+                    description: 'RemoveReferer: send no Referer header after a redirect.'
+                    type: boolean
+                noEncode:
+                    description: 'NoEncode: send the query parameters as typed (not URL-encoded).'
+                    type: boolean
+                noCookies:
+                    description: 'NoCookies: neither send nor keep cookies.'
+                    type: boolean
+                maxRedirects:
+                    description: 'MaxRedirects followed (0: 10).'
+                    type: integer
+                timeoutMs:
+                    description: 'TimeoutMs of the request (0: the session''s, 30 s).'
+                    type: integer
+        HTTPTestResult:
+            type: object
+            properties:
+                name:
+                    description: the test's name (pm.test)
+                    type: string
+                pass:
+                    description: it passed
+                    type: boolean
+                error:
+                    type: string
+            required:
+                - name
+                - pass
+        HTTPTiming:
+            type: object
+            properties:
+                dns:
+                    description: name lookup
+                    type: number
+                connect:
+                    description: TCP connection
+                    type: number
+                tls:
+                    description: TLS handshake
+                    type: number
+                firstByte:
+                    description: from sending until the first byte of the answer
+                    type: number
+                total:
+                    type: number
+            required:
+                - dns
+                - connect
+                - tls
+                - firstByte
+                - total
+        HTTPVar:
+            type: object
+            description: A variable a request can use, and where its value comes from.
+            properties:
+                name:
+                    type: string
+                value:
+                    description: 'Value: "" for a secret (see Secret).'
+                    type: string
+                source:
+                    description: 'Source: globals, collection, session, environment or local (set by a script in this tab).'
+                    type: string
+                secret:
+                    description: 'Secret: its value is hidden.'
+                    type: boolean
+            required:
+                - name
+                - value
+                - source
         Host:
             type: object
             properties:
@@ -5608,6 +7477,358 @@ components:
                 - latAvg
                 - latMax
                 - errors
+        SNMPMibNode:
+            type: object
+            description: An object of the loaded MIBs.
+            properties:
+                oid:
+                    type: string
+                name:
+                    type: string
+                module:
+                    type: string
+                kind:
+                    type: string
+                syntax:
+                    type: string
+                base:
+                    type: string
+                enums:
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
+                hint:
+                    type: string
+                access:
+                    type: string
+                status:
+                    type: string
+                units:
+                    type: string
+                index:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                augments:
+                    type: string
+                objects:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                description:
+                    type: string
+                children:
+                    description: 'Children: it has objects below it.'
+                    type: boolean
+            required:
+                - oid
+                - name
+                - module
+                - kind
+                - children
+        SNMPRequest:
+            type: object
+            description: One SNMP operation against a saved session or a target.
+            properties:
+                session:
+                    description: 'Session: the path of a saved session whose SNMP settings are used.'
+                    type: string
+                target:
+                    description: 'Target: an address and credentials instead of a session. With a session as well, the secrets not given come from that session.'
+                    anyOf:
+                        - $ref: '#/components/schemas/SNMPTarget'
+                        - type: "null"
+                op:
+                    description: 'Op: get, getnext, bulk, walk or set.'
+                    type: string
+                oids:
+                    description: 'OIDs: numeric OIDs or names (sysDescr.0, IF-MIB::ifTable, ifOperStatus).'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                values:
+                    description: Values to write (op set).
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/SNMPValue'
+                maxRep:
+                    description: 'MaxRep: GetBulk''s max-repetitions (default 25).'
+                    type: integer
+                max:
+                    description: 'Max: at most this many values in a walk (default 10000).'
+                    type: integer
+                timeout:
+                    description: Timeout per try in seconds (default 3).
+                    type: integer
+                confirmed:
+                    description: 'Confirmed: the user confirmed a Set on a production session.'
+                    type: boolean
+            required:
+                - op
+        SNMPResult:
+            type: object
+            description: The values an SNMP operation returned, with the MIB's names.
+            properties:
+                rows:
+                    description: 'Rows: the values, in OID order for a walk.'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/SNMPRow'
+                address:
+                    description: Address the request went to.
+                    type: string
+                version:
+                    description: 'Version used: 1, 2c or 3.'
+                    type: string
+                engineId:
+                    description: 'EngineID: the agent''s v3 engine ID (hex).'
+                    type: string
+                ms:
+                    description: 'Ms: how long it took.'
+                    type: integer
+                requests:
+                    description: 'Requests: SNMP messages sent.'
+                    type: integer
+                truncated:
+                    description: 'Truncated: the walk stopped at max values.'
+                    type: boolean
+                unknown:
+                    description: 'Unknown: how many values no loaded MIB describes.'
+                    type: integer
+                suggest:
+                    description: 'Suggest: MIB modules to load for them (most likely first).'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+            required:
+                - rows
+                - address
+                - version
+                - ms
+                - requests
+        SNMPRow:
+            type: object
+            properties:
+                oid:
+                    description: 'OID: the numeric OID.'
+                    type: string
+                name:
+                    description: 'Name: MODULE::object.instance, or the OID when no loaded MIB knows it.'
+                    type: string
+                object:
+                    description: 'Object: the MIB object''s name (ifDescr).'
+                    type: string
+                module:
+                    description: 'Module: the MIB module (IF-MIB).'
+                    type: string
+                instance:
+                    description: 'Instance: what follows the object''s OID (the table index; 0 for a scalar).'
+                    type: string
+                type:
+                    description: 'Type: the SNMP type of the value (Integer, OctetString, Counter64…).'
+                    type: string
+                value:
+                    description: 'Value: the raw value as text.'
+                    type: string
+                display:
+                    description: 'Display: the value as a person reads it (enum names, time, MAC addresses, units).'
+                    type: string
+                unknown:
+                    description: 'Unknown: no loaded MIB describes this object (Object is then the nearest known branch and the path below it).'
+                    type: boolean
+                suggest:
+                    description: 'Suggest: the MIB module that most likely describes it (load it to see names and meanings).'
+                    type: string
+            required:
+                - oid
+                - name
+                - type
+                - value
+                - display
+        SNMPTarget:
+            type: object
+            properties:
+                address:
+                    description: 'Address: host or host:port (UDP 161).'
+                    type: string
+                version:
+                    description: 'Version: 1, 2c or 3.'
+                    type: string
+                community:
+                    description: Community for v1/v2c (default public).
+                    type: string
+                user:
+                    description: 'User: the v3 user.'
+                    type: string
+                auth:
+                    description: 'Auth: v3 authentication: MD5, SHA, SHA-224, SHA-256, SHA-384, SHA-512 or empty.'
+                    type: string
+                authPass:
+                    description: 'AuthPass: the v3 authentication password.'
+                    type: string
+                priv:
+                    description: 'Priv: v3 privacy: DES, AES, AES-192, AES-256 or empty.'
+                    type: string
+                privPass:
+                    description: 'PrivPass: the v3 privacy password.'
+                    type: string
+                context:
+                    description: 'Context: the v3 context name.'
+                    type: string
+            required:
+                - address
+        SNMPTrapSendIn:
+            type: object
+            properties:
+                address:
+                    description: 'Address: the receiver, host or host:port (162).'
+                    type: string
+                version:
+                    description: 'Version: 1, 2c (default) or 3.'
+                    type: string
+                community:
+                    description: Community for v1/v2c (default public).
+                    type: string
+                user:
+                    description: 'User, Auth, AuthPass, Priv, PrivPass: v3.'
+                    type: string
+                auth:
+                    type: string
+                authPass:
+                    type: string
+                priv:
+                    type: string
+                privPass:
+                    type: string
+                trapOid:
+                    description: 'TrapOID: the notification (IF-MIB::linkDown, or an OID).'
+                    type: string
+                values:
+                    description: Values sent with it (types from the MIB when left out).
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/SNMPValue'
+            required:
+                - address
+                - trapOid
+        SNMPTrapState:
+            type: object
+            properties:
+                on:
+                    description: 'On: the receiver listens.'
+                    type: boolean
+                port:
+                    description: 'Port: its UDP port.'
+                    type: integer
+                error:
+                    description: 'Error: why it could not start (a port in use, or below 1024 without permission).'
+                    type: string
+                count:
+                    description: 'Count: notifications received since it started.'
+                    type: integer
+            required:
+                - "on"
+                - port
+                - count
+        SNMPTrapView:
+            type: object
+            properties:
+                at:
+                    type: string
+                    format: date-time
+                from:
+                    type: string
+                version:
+                    type: string
+                community:
+                    type: string
+                user:
+                    type: string
+                kind:
+                    type: string
+                trapOid:
+                    type: string
+                uptime:
+                    type: integer
+                varbinds:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/Varbind'
+                note:
+                    type: string
+                name:
+                    description: 'Name: the notification''s name (IF-MIB::linkDown).'
+                    type: string
+                rows:
+                    description: 'Rows: its values with names.'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/SNMPRow'
+                session:
+                    description: 'Session: the saved session at that address, if any.'
+                    type: string
+            required:
+                - at
+                - from
+                - version
+                - kind
+                - trapOid
+                - uptime
+                - varbinds
+                - name
+                - rows
+        SNMPTrapsView:
+            type: object
+            description: The trap receiver and the notifications it got.
+            properties:
+                state:
+                    $ref: '#/components/schemas/SNMPTrapState'
+                    description: 'State: whether it listens, on which port.'
+                traps:
+                    description: 'Traps: the notifications, newest first.'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/SNMPTrapView'
+            required:
+                - state
+                - traps
+        SNMPValue:
+            type: object
+            properties:
+                oid:
+                    description: 'OID: a numeric OID or a name with its instance (ifAdminStatus.5, SNMPv2-MIB::sysContact.0).'
+                    type: string
+                type:
+                    description: 'Type: Integer, OctetString, Hex, ObjectIdentifier, IpAddress, Counter32, Gauge32, TimeTicks, Counter64 - or empty: from the MIB.'
+                    type: string
+                value:
+                    description: Value as text; an enumerated Integer takes its name too (down).
+                    type: string
+            required:
+                - oid
+                - value
         SessionResult:
             type: object
             description: 'A session stream''s TCP sessions: tried, connected, refused, timed out, their setup time and rate.'
@@ -5939,6 +8160,242 @@ components:
                 - rxRate
                 - running
                 - result
+        SyslogRule:
+            type: object
+            description: A rule that highlights, alerts on or hides syslog messages (the first that matches wins).
+            properties:
+                name:
+                    description: Name shown with the messages it matches.
+                    type: string
+                match:
+                    description: 'Match: words that must all be in the message, or /regex/ ("" = any).'
+                    type: string
+                maxSeverity:
+                    description: 'MaxSeverity: this severity or worse (0 emerg … 7 debug; -1 any).'
+                    type: integer
+                host:
+                    description: 'Host: only from this sender ("" any).'
+                    type: string
+                color:
+                    description: Color of the matching lines (red, amber, green, blue, purple; "" none).
+                    type: string
+                notify:
+                    description: 'Notify: a notification in Termwright for each one.'
+                    type: boolean
+                hide:
+                    description: 'Hide: not shown (noise).'
+                    type: boolean
+                off:
+                    description: 'Off: kept but not used.'
+                    type: boolean
+            required:
+                - name
+                - maxSeverity
+        SyslogSendIn:
+            type: object
+            description: A test message to send to a syslog server.
+            properties:
+                target:
+                    description: 'Target: host or host:port (514; 6514 for TLS).'
+                    type: string
+                proto:
+                    description: 'Proto: udp (default), tcp or tls.'
+                    type: string
+                format:
+                    description: 'Format: 5424 (default) or 3164.'
+                    type: string
+                facility:
+                    description: 'Facility: a name (local7) or number (default user).'
+                    type: string
+                severity:
+                    description: 'Severity: a name (err, warning) or number (default notice).'
+                    type: string
+                host:
+                    description: 'Host: the host name in the message (default this computer''s).'
+                    type: string
+                app:
+                    description: 'App: the program name (default termwright).'
+                    type: string
+                text:
+                    description: Text of the message.
+                    type: string
+                count:
+                    description: 'Count: send it this many times (1-1000).'
+                    type: integer
+                insecure:
+                    description: 'Insecure: TLS without checking the server''s certificate.'
+                    type: boolean
+            required:
+                - target
+                - text
+        SyslogSettings:
+            type: object
+            description: The syslog server's ports, files and start-up.
+            properties:
+                udp:
+                    description: UDP port (514; 0 = off). Ports below 1024 need administrator rights on macOS and Linux.
+                    type: integer
+                tcp:
+                    description: TCP port (0 = off; 514 or 601 usually).
+                    type: integer
+                tls:
+                    description: TLS port (0 = off; 6514 usually). A self-signed certificate is made unless Cert and Key are given.
+                    type: integer
+                cert:
+                    description: 'Cert: TLS certificate (PEM file).'
+                    type: string
+                key:
+                    description: 'Key: its private key (PEM file).'
+                    type: string
+                bind:
+                    description: 'Bind: the address to listen on ("" all).'
+                    type: string
+                saveFiles:
+                    description: 'SaveFiles: write every message to a file per day.'
+                    type: boolean
+                perHost:
+                    description: 'PerHost: one folder per sender.'
+                    type: boolean
+                folder:
+                    description: Folder for the files ("" = the syslog folder in Termwright's data folder).
+                    type: string
+                autoStart:
+                    description: 'AutoStart: start receiving when Termwright starts.'
+                    type: boolean
+                keep:
+                    description: 'Keep: messages kept in memory (default 50000).'
+                    type: integer
+            required:
+                - udp
+                - tcp
+                - tls
+        SyslogState:
+            type: object
+            description: Whether the syslog server listens, on what, and what it received.
+            properties:
+                on:
+                    description: 'On: it listens.'
+                    type: boolean
+                addrs:
+                    description: Addrs it listens on ("udp 0.0.0.0:514").
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                error:
+                    description: 'Error: why it could not start.'
+                    type: string
+                counts:
+                    description: Counts of messages per severity since it started (emerg … debug).
+                    type: array
+                    items:
+                        type: integer
+                    minItems: 8
+                    maxItems: 8
+                total:
+                    description: Total messages kept.
+                    type: integer
+                hosts:
+                    description: 'Hosts: senders and their message counts.'
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: integer
+                settings:
+                    $ref: '#/components/schemas/SyslogSettings'
+                    description: Settings in use.
+                folder:
+                    description: Folder the files are written to (when SaveFiles).
+                    type: string
+                since:
+                    description: 'Since: when it started.'
+                    type: string
+            required:
+                - "on"
+                - addrs
+                - counts
+                - total
+                - hosts
+                - settings
+        SyslogView:
+            type: object
+            description: A syslog message received, with the saved session of its sender and the rule it matched.
+            properties:
+                id:
+                    description: 'ID: increases with every message (to ask for the newer ones).'
+                    type: integer
+                at:
+                    description: 'At: when it was received.'
+                    type: string
+                    format: date-time
+                from:
+                    description: 'From: the sender''s address.'
+                    type: string
+                proto:
+                    description: 'Proto: udp, tcp or tls.'
+                    type: string
+                facility:
+                    description: 'Facility: 0-23 (16-23 are local0-local7).'
+                    type: integer
+                facilityName:
+                    description: 'FacilityName: kern, user, … local7.'
+                    type: string
+                severity:
+                    description: 'Severity: 0 emerg, 1 alert, 2 crit, 3 err, 4 warning, 5 notice, 6 info, 7 debug.'
+                    type: integer
+                severityName:
+                    description: 'SeverityName: emerg … debug.'
+                    type: string
+                time:
+                    description: Time the device put in it ("" when none or unreadable).
+                    type: string
+                host:
+                    description: Host the device names itself.
+                    type: string
+                app:
+                    description: 'App: the program (TAG / APP-NAME).'
+                    type: string
+                procId:
+                    description: 'ProcID: the process id.'
+                    type: string
+                msgId:
+                    description: 'MsgID: the message type (RFC 5424).'
+                    type: string
+                sd:
+                    description: 'SD: structured data (RFC 5424) as written.'
+                    type: string
+                text:
+                    description: 'Text: the message itself.'
+                    type: string
+                format:
+                    description: 'Format: 3164, 5424 or raw.'
+                    type: string
+                raw:
+                    description: 'Raw: the message as received.'
+                    type: string
+                session:
+                    description: 'Session: the saved session at the sender''s address.'
+                    type: string
+                rule:
+                    description: 'Rule: the first rule that matched.'
+                    type: string
+                color:
+                    description: Color of that rule.
+                    type: string
+            required:
+                - id
+                - at
+                - from
+                - proto
+                - facility
+                - facilityName
+                - severity
+                - severityName
+                - text
+                - format
+                - raw
         TestPort:
             type: object
             description: 'A test port: a sender and counter on a free switch port (no VM). It answers ARP, neighbour solicitations and ping at its addresses.'
@@ -6487,6 +8944,26 @@ components:
                 - cores
                 - diskGb
                 - saved
+        Varbind:
+            type: object
+            properties:
+                oid:
+                    type: string
+                type:
+                    type: string
+                int:
+                    type: integer
+                uint:
+                    type: integer
+                bytes:
+                    type: string
+                    contentEncoding: base64
+                value:
+                    type: string
+            required:
+                - oid
+                - type
+                - value
         StreamInput:
             type: object
             description: A stream to add or to replace one with. Only from is needed; the rest has defaults (udp, 128 bytes, 100 pps, 10 s, no loss allowed). from and to can be test port names or ids. Unknown fields are refused.

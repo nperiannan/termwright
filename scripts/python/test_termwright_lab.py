@@ -35,6 +35,38 @@ class Fake(BaseHTTPRequestHandler):
         path = self.path.split("?")[0].removeprefix("/api/v1/lab")
         v = st.setdefault("view", {"testers": [], "streams": [], "results": [], "running": False})
         m = self.command
+        if self.path.startswith("/api/v1/snmp"):
+            if self.path == "/api/v1/snmp" and m == "POST":
+                return self.reply(200, {"rows": [{"oid": "1.3.6.1.2.1.1.5.0", "name": "SNMPv2-MIB::sysName.0", "type": "OctetString",
+                                                  "value": "sw1", "display": "sw1"}], "address": "10.0.0.1:161", "version": "2c"})
+            if self.path.startswith("/api/v1/snmp/mib?"):
+                return self.reply(200, [{"oid": "1.3.6.1.2.1.2.2.1.8", "name": "ifOperStatus", "module": "IF-MIB"}])
+            if self.path == "/api/v1/snmp/mib/IF-MIB%3A%3AifOperStatus":
+                return self.reply(200, {"oid": "1.3.6.1.2.1.2.2.1.8", "name": "ifOperStatus"})
+            if self.path == "/api/v1/snmp/traps":
+                return self.reply(200, {"state": {"on": False, "port": 0, "count": 0}, "traps": []})
+        if self.path.startswith("/api/v1/syslog"):
+            if self.path.startswith("/api/v1/syslog/messages") and m == "GET":
+                return self.reply(200, [{"id": 7, "text": "1/1 link down", "severity": 3}])
+            if self.path == "/api/v1/syslog/send":
+                return self.reply(200, {"sent": "<187>1 ..."})
+            if self.path == "/api/v1/syslog":
+                return self.reply(200, {"on": False, "settings": {"udp": 514, "saveFiles": True}})
+            if self.path == "/api/v1/syslog/start":
+                return self.reply(200, {"on": True})
+        if self.path == "/api/v1/tools/device":
+            return self.reply(200, {"result": "Lab/edge-sw3 looks like Huawei VRP"})
+        if self.path.startswith("/api/v1/http"):
+            if self.path == "/api/v1/http/send":
+                return self.reply(200, {"status": 200, "body": '{"ok": true}', "ms": 3})
+            if self.path == "/api/v1/http/collections/Lab%20checks/run":
+                return self.reply(200, {"passed": 2, "failed": 0, "steps": []})
+            if self.path == "/api/v1/http/import":
+                return self.reply(201, {"id": "x", "requests": [{}]})
+            if self.path == "/api/v1/http/environments":
+                return self.reply(200, {"id": "dl2r1", "name": "dl2r1", "vars": []})
+            if self.path == "/api/v1/http/variables":
+                return self.reply(200, [{"name": "ep1", "value": "10.1.1.1", "source": "environment"}])
         if path == "/traffic/ports" and m == "POST":
             v["testers"].append({"id": "p%d" % (len(v["testers"]) + 1), "name": "Test port %d" % (len(v["testers"]) + 1)})
             return self.reply(201, v)
@@ -211,6 +243,50 @@ class ClientTest(unittest.TestCase):
         Fake.state["inst_end"] = "failed"
         with self.assertRaises(RuntimeError):
             self.lab.wait_install("ab12", timeout=10, poll=0.01)
+
+    def test_snmp(self):
+        r = self.lab.snmp.get("sysName.0", session="Core/sw1")
+        self.assertEqual(tw.SNMP.table(r), {"SNMPv2-MIB::sysName.0": "sw1"})
+        self.lab.snmp.walk("ifTable", address="10.0.0.1", community="public", max=50)
+        self.lab.snmp.set("ifAdminStatus.3", "down", session="Lab/sw2")
+        calls = [(p, b) for _, p, b in Fake.state["calls"] if p == "/api/v1/snmp"]
+        self.assertEqual(calls[0][1], {"op": "get", "session": "Core/sw1", "oids": ["sysName.0"]})
+        self.assertEqual(calls[1][1], {"op": "walk", "target": {"address": "10.0.0.1", "community": "public"}, "oids": ["ifTable"], "max": 50})
+        self.assertEqual(calls[2][1], {"op": "set", "session": "Lab/sw2", "values": [{"oid": "ifAdminStatus.3", "value": "down"}]})
+        self.assertEqual(self.lab.snmp.mib_search("ifOper")[0]["module"], "IF-MIB")
+        self.assertEqual(self.lab.snmp.mib("IF-MIB::ifOperStatus")["name"], "ifOperStatus")
+        self.assertFalse(self.lab.snmp.traps()["state"]["on"])
+
+    def test_http(self):
+        r = self.lab.http.post("/vlans", {"id": 10}, session="APIs/rest", params={"dry": 1})
+        self.assertTrue(tw.HTTP.json(r)["ok"])
+        self.assertEqual(self.lab.http.run("Lab checks", iterations=2)["passed"], 2)
+        self.lab.http.import_("curl https://x/y")
+        calls = {p: b for _, p, b in Fake.state["calls"]}
+        self.assertEqual(calls["/api/v1/http/send"], {"request": {"method": "POST", "url": "/vlans", "params": [{"key": "dry", "value": "1"}],
+                                                                  "body": {"mode": "json", "raw": '{"id": 10}'}}, "session": "APIs/rest"})
+        self.assertEqual(calls["/api/v1/http/collections/Lab%20checks/run"], {"iterations": 2})
+        self.assertEqual(calls["/api/v1/http/import"], {"text": "curl https://x/y"})
+        self.assertEqual(self.lab.http.save_environment("dl2r1", {"ep1": "10.1.1.1", "Bearer": "t"}, secret=["Bearer"])["id"], "dl2r1")
+        self.assertEqual(self.lab.http.variables(environment="dl2r1")[0]["source"], "environment")
+        self.lab.http.run("Lab checks", environment="dl2r1")
+        calls = {p: b for _, p, b in Fake.state["calls"]}
+        self.assertEqual(calls["/api/v1/http/environments"]["vars"][1], {"key": "Bearer", "value": "t", "secret": True})
+        self.assertEqual(calls["/api/v1/http/collections/Lab%20checks/run"], {"environment": "dl2r1"})
+
+    def test_devices(self):
+        self.assertIn("Huawei VRP", self.lab.devices.identify("Lab/edge-sw3"))
+        self.lab.devices.set_type("Lab/edge-sw3", "Huawei VRP")
+        calls = {p: b for _, p, b in Fake.state["calls"]}
+        self.assertEqual(calls["/api/v1/tools/device"], {"action": "set_type", "session": "Lab/edge-sw3", "type": "Huawei VRP"})
+
+    def test_syslog(self):
+        self.assertEqual(self.lab.syslog.messages("link down", severity="err")[0]["id"], 7)
+        self.assertTrue(self.lab.syslog.send("10.0.0.5", "hi", severity="err").startswith("<187>"))
+        self.assertTrue(self.lab.syslog.start(udp=1514)["on"])
+        calls = [(m, p, b) for m, p, b in Fake.state["calls"]]
+        self.assertIn(("GET", "/api/v1/syslog/messages?q=link+down&severity=err", None), calls)
+        self.assertIn(("POST", "/api/v1/syslog/start", {"udp": 1514, "saveFiles": True}), calls)
 
     def test_pps_for(self):
         self.assertEqual(tw.pps_for(1000, 64), 1488095)

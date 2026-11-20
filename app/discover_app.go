@@ -16,6 +16,7 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/termwright/termwright/internal/discover"
+	"github.com/termwright/termwright/internal/session"
 )
 
 // ---- device discovery ----
@@ -56,7 +57,10 @@ func (a *App) DiscoverStart(spec, community string) (map[string]any, error) {
 			Again: func(done, total int) {
 				wruntime.EventsEmit(a.ctx, "discover:again:"+id, map[string]int{"done": done, "total": total})
 			}},
-			func(r discover.Result) { wruntime.EventsEmit(a.ctx, "discover:found:"+id, r) },
+			func(r discover.Result) {
+				r.DeviceType, r.DetectMatch = session.MatchDeviceType(a.cfg.Get().DeviceTypes, r.EvidenceText())
+				wruntime.EventsEmit(a.ctx, "discover:found:"+id, r)
+			},
 			func(done, total int) {
 				wruntime.EventsEmit(a.ctx, "discover:progress:"+id, map[string]int{"done": done, "total": total})
 			})

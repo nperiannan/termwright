@@ -291,6 +291,24 @@ func buildMenu(app *App, lang string) *menu.Menu {
 	add(lab, "Appliances", "lab-appliances")
 	add(lab, "KVM Hosts", "lab-hosts")
 
+	snmpM := m.AddSubmenu(t("SNMP"))
+	add(snmpM, "SNMP Browser", "snmp-browser")
+	add(snmpM, "Trap Receiver", "snmp-traps")
+	snmpM.AddSeparator()
+	add(snmpM, "Load MIB Files...", "snmp-load-mib")
+
+	apiM := m.AddSubmenu(t("API"))
+	add(apiM, "API Client", "api-client")
+	add(apiM, "New API Session...", "api-new-session")
+	apiM.AddSeparator()
+	add(apiM, "Import Postman, OpenAPI or cURL...", "api-import")
+
+	slM := m.AddSubmenu(t("Syslog"))
+	add(slM, "Syslog Server", "syslog-server")
+	add(slM, "Start / Stop Receiving", "syslog-toggle")
+	slM.AddSeparator()
+	add(slM, "Send Test Message...", "syslog-send")
+
 	script := m.AddSubmenu(t("Script"))
 	add(script, "Command Library...", "command-library")
 	add(script, "Command History...", "history")

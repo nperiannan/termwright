@@ -1,0 +1,94 @@
+package app
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/termwright/termwright/internal/snmp"
+)
+
+// The SNMP tool against the package's test agent, given as an address (no saved session, no keychain).
+func TestSNMPTool(t *testing.T) {
+	ag := snmp.NewAgent("public", []byte{0x80, 0, 0x07, 0x7c, 3, 1, 2, 3, 4, 5, 6})
+	ag.Put(snmp.Varbind{OID: "1.3.6.1.2.1.1.1.0", Type: snmp.OctetString, Bytes: []byte("Extreme Networks Fabric Engine")})
+	ag.Put(snmp.Varbind{OID: "1.3.6.1.2.1.2.2.1.8.1", Type: snmp.Integer, Int: 1})
+	ag.Put(snmp.Varbind{OID: "1.3.6.1.2.1.2.2.1.8.2", Type: snmp.Integer, Int: 2})
+	addr, err := ag.Listen("127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ag.Close()
+	a := &App{}
+	ctx := context.Background()
+	out, err := a.netToolRun(ctx, "snmp", map[string]any{"action": "walk", "address": addr, "oids": []any{"IF-MIB::ifOperStatus"}}, nil)
+	if err != nil || !strings.Contains(out, "IF-MIB::ifOperStatus.2 = down (2)") || !strings.Contains(out, "IF-MIB::ifOperStatus.1 = up (1)") {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	out, err = a.netToolRun(ctx, "snmp", map[string]any{"action": "get", "address": addr, "oids": []any{"sysDescr.0"}}, nil)
+	if err != nil || !strings.Contains(out, "SNMPv2-MIB::sysDescr.0 = Extreme Networks Fabric Engine (OctetString)") {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	// a set is asked (the asker refuses here) before it is sent
+	asked := false
+	_, err = a.netToolRun(ctx, "snmp", map[string]any{"action": "set", "address": addr, "values": []any{map[string]any{"oid": "ifAdminStatus.1", "value": "down"}}},
+		func(title, msg string, danger bool) error { asked = true; return errEmuAsk })
+	if !asked || err != errEmuAsk {
+		t.Fatalf("set not asked: %v", err)
+	}
+	// the in-app AI: Read only stops a set and asks; auto runs it on a non-production target
+	st, err := a.NetAgentTool("snmp", map[string]any{"action": "set", "address": addr, "values": []any{map[string]any{"oid": "ifAdminStatus.1", "value": "down"}}}, "readonly", false)
+	if err != nil || !st.Ask {
+		t.Fatalf("readonly: %+v %v", st, err)
+	}
+	st, err = a.NetAgentTool("snmp", map[string]any{"action": "set", "address": addr, "values": []any{map[string]any{"oid": "ifAdminStatus.1", "value": "down"}}}, "auto", false)
+	if st.Ask || !strings.Contains(st.Out+fmt.Sprint(err), "notWritable") {
+		t.Fatalf("auto: %+v %v", st, err)
+	}
+	out, _ = a.netToolRun(ctx, "snmp", map[string]any{"action": "mib_search", "query": "ifOperStatus"}, nil)
+	if !strings.Contains(out, "IF-MIB::ifOperStatus  1.3.6.1.2.1.2.2.1.8") {
+		t.Fatal(out)
+	}
+	v, err := snmpValue(snmp.Standard(), SNMPValue{OID: "ifAdminStatus.3", Value: "testing"})
+	if err != nil || v.Type != snmp.Integer || v.Int != 3 || v.OID != "1.3.6.1.2.1.2.2.1.7.3" {
+		t.Fatalf("%+v %v", v, err)
+	}
+}
+
+// A trap sent with SNMPSendTrap reaches the trap receiver with its name from the MIB.
+func TestSNMPSendTrapToReceiver(t *testing.T) {
+	a := &App{}
+	pc, _ := net.ListenPacket("udp", "127.0.0.1:0")
+	port := pc.LocalAddr().(*net.UDPAddr).Port
+	pc.Close()
+	if _, err := a.SNMPTrapsStart(port); err != nil {
+		t.Fatal(err)
+	}
+	defer a.SNMPTrapsStop()
+	a.SNMPTrapsClear()
+	if err := a.SNMPSendTrap(SNMPTrapSendIn{Address: "127.0.0.1:" + fmt.Sprint(port), TrapOID: "IF-MIB::linkDown", Values: []SNMPValue{{OID: "ifOperStatus.3", Value: "down"}}}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for len(a.SNMPTraps().Traps) == 0 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	tr := a.SNMPTraps().Traps
+	if len(tr) != 1 || tr[0].Name != "IF-MIB::linkDown" || len(tr[0].Rows) != 1 || tr[0].Rows[0].Display != "down (2)" {
+		t.Fatalf("%+v", tr)
+	}
+}
+
+// A value no loaded MIB describes is marked, named by its branch, and the MIB to load is suggested.
+func TestSNMPUnknownSuggest(t *testing.T) {
+	r := snmpRow(snmp.Standard(), snmp.Varbind{OID: "1.3.6.1.4.1.2021.13.15.1.1.3.8", Type: snmp.Counter32, Uint: 5, Value: "5"})
+	if !r.Unknown || r.Suggest != "UCD-DISKIO-MIB" || r.Object != "enterprises.2021.13.15.1.1.3" || r.Instance != "8" {
+		t.Fatalf("%+v", r)
+	}
+	if r := snmpRow(snmp.Standard(), snmp.Varbind{OID: "1.3.6.1.2.1.2.2.1.8.3", Type: snmp.Integer, Int: 1, Value: "1"}); r.Unknown || r.Object != "ifOperStatus" {
+		t.Fatalf("%+v", r)
+	}
+}

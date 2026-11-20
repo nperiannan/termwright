@@ -36,6 +36,14 @@ func deviceFromOS(v string) string {
 		return "VOSS"
 	case strings.Contains(v, "exos") || strings.Contains(v, "extremexos"):
 		return "EXOS"
+	case strings.Contains(v, "nxos") || strings.Contains(v, "nx-os"):
+		return "Cisco NX-OS"
+	case strings.Contains(v, "huawei") || strings.Contains(v, "vrp"):
+		return "Huawei VRP"
+	case strings.Contains(v, "eltex"):
+		return "Eltex MES"
+	case strings.Contains(v, "icx") || strings.Contains(v, "ruckus") || strings.Contains(v, "brocade") || strings.Contains(v, "fastiron"):
+		return "Ruckus ICX"
 	case strings.Contains(v, "ios") || strings.Contains(v, "cisco"):
 		return "Cisco IOS"
 	case strings.Contains(v, "linux") || strings.Contains(v, "ubuntu") || strings.Contains(v, "rhel"):

@@ -444,7 +444,9 @@ Devices cabled to a console server (terminal server) get a session of protocol *
 
 ### Device facts
 
-Termwright reads a device's **model, OS version, serial number, MAC address and uptime** (and any value you add) after connecting, in a **background login** - nothing is typed in your tab. Version and uptime are read at every connect, the others once. They show when you hover over a tab, in the status bar (*VOSS 8.10.0.0 · up 41 days*), on the start page cards, in the Session Manager hover card, in the session side panel and in the HTML scrollback report. A MAC address found is saved with the session, so *Find by MAC Address* works. VOSS, EXOS, Cisco IOS and Linux come with the rules; right-click a session → **Refresh Device Facts** reads them now.
+Termwright reads a device's **model, OS version, serial number, MAC address and uptime** (and any value you add) after connecting, in a **background login** - nothing is typed in your tab. Version and uptime are read at every connect, the others once. They show when you hover over a tab, in the status bar (*VOSS 8.10.0.0 · up 41 days*), on the start page cards, in the Session Manager hover card, in the session side panel and in the HTML scrollback report. A MAC address found is saved with the session, so *Find by MAC Address* works. VOSS, EXOS, Cisco IOS (also IOS XE), Cisco NX-OS, Huawei VRP, Eltex MES, Ruckus ICX and Linux come with the rules (a device type you add gets its own: a command and a regular expression whose first group is the value); right-click a session → **Refresh Device Facts** reads them now.
+
+**Recognising the device type.** Each device type has a **Detect** pattern, a regular expression such as `(?i)huawei|\bvrp\b`, and a **detect command** such as `display version` (Global Options → Device Types; paste a banner or command output in the box below to test the pattern). Discover Devices picks the device type whose pattern matches what a device shows: its SSH or Telnet banner, SNMP system description and web page. Right-click a saved session → **Identify Device Type** logs in in the background, runs the detect commands and offers to set the type that matched. So a device type you make for any vendor is recognised without a built-in one. The AI assistant, MCP apps, the local API and Python can do the same with the `device` tool (facts, refresh_facts, identify, set_type, types). When several match, a network OS wins over a general-purpose one such as Linux (a switch may run OpenSSH).
 
 **Session Options → Device Facts** lists every fact - its value for this session, the command it comes from and whether it is read at every connect or once - with:
 
@@ -480,7 +482,7 @@ Sessions named by their address (`10.100.35.13`) can take the name the device gi
 ![Discover Devices - before the first scan](screenshots/discover-start.png)
 
 1. **Addresses**: the page opens with **Networks of this computer** - every network this computer has an address on (wired, Wi-Fi, VPN), one row each with the interface, its address, the network and how many addresses a scan covers. Click a row to fill the box (a network larger than a /22 gives the /24 around this computer; a VPN row is marked because the networks behind a VPN are not known here - type them yourself). *Refresh* reads them again after connecting a VPN. Or type your own: a network (`10.20.0.0/24`, or just `10.20.0.0` for its /24), a range (`10.20.0.10-80` or `10.20.0.10-10.20.1.20`) or single addresses, separated by commas or spaces, then **Scan** next to it (or Enter). Up to 1,024 addresses (a /22) per scan.
-2. **SNMP** (on by default): a read-only SNMP v2c community (`public` is filled in). **Show / Hide** next to it reveals what you typed. The community is used for this scan only and is not saved. Devices that answer report their system name, model and software - the most reliable information. If *no* device answers, a note says so: check the community, that SNMP is enabled, and that the devices' SNMP access list allows your computer.
+2. **SNMP** (on by default): a read-only SNMP v2c community (`public` is filled in). **Show / Hide** next to it reveals what you typed. The community is used for the scan; it is saved (in the computer's credential store) only with the SNMP sessions you add. Devices that answer report their system name, model and software - the most reliable information. If *no* device answers, a note says so: check the community, that SNMP is enabled, and that the devices' SNMP access list allows your computer. Devices that answer SNMP can be saved as **SNMP sessions** (they open in the SNMP Browser, with this community): when adding, *also an SNMP session for the N that answer SNMP* adds one next to each login session; right-click a device → **Add Only as an SNMP Session**; a device that answers only SNMP is added as an SNMP session.
 3. **Scan**. For every address Termwright collects, in parallel:
    - **Open ports**: SSH (22), Telnet (23), HTTP (80), HTTPS (443), SMB (445), RDP (3389), printing (9100, 631), SIP (5060).
    - **SSH greeting** (e.g. `OpenSSH_8.1`, `Mocana SSH`) and the **Telnet banner and login prompt** (Termwright answers the Telnet option negotiation, so devices show their banner, e.g. `ExtremeXOS (X440G2…) version 31.7 / login:`).
@@ -1350,6 +1352,105 @@ The Emulated and Simulated Labs have the same styles under **More → Arrange** 
 **Looks and views.** The *Look* box in the toolbar switches between Flow (default), Clean boxes, Soft cards, Focus, Zones and the classic Cards and Tiers. Choose the look a new map starts with on the welcome screen or in **Global Options → Network map style**. Every look keeps all the data: name, address, device type, ports, speeds, LAG, STP and unread devices (the side panel lists each device and why it could not be read). The *View* box colours the cables: **Speed** (10 Mbps–10 Gbps green, 25–100 Gbps blue, above 100 Gbps thick blue), **Health**, **STP**, **LAG** or **VLAN** (pick a VLAN in the box next to it; the cables and devices that carry it stand out, the rest is faded; EXOS and VOSS only). A port blocked by spanning tree is a green dashed cable with an amber dot on the blocking port (it still carries control traffic). Port numbers appear when you zoom in, and each look has its own legend.
 
 **While it reads.** Up to 16 devices are read at the same time; each shows how many of its 5 steps (connect, identify, neighbours, ports/STP/LAG, build map) are done.
+
+## 9c. SNMP Browser
+
+**Open it.** **SNMP → SNMP Browser**, or right-click a session → **Open SNMP Browser**. Choose the session at the top: the address and credentials come from the session's SNMP settings, shown next to it (for example *v3 authPriv · user netops · SHA-256 / AES-128*).
+
+**SNMP settings of a session.** Session properties → **SNMP** (or *SNMP settings…* in the browser):
+
+- **Version**: v1, v2c (default) or v3.
+- **Address · port**: empty uses the session's host name; the port is 161 unless you change it.
+- **v1 / v2c**: the **Community** (empty = `public`).
+- **v3**: **User**, **Security level** (noAuthNoPriv, authNoPriv, authPriv), **Authentication** (MD5, SHA, SHA-224, SHA-256, SHA-384, SHA-512) and **Privacy** (DES, AES-128, AES-192, AES-256) with their passwords (8 characters or more), and the **Context** if the device uses one.
+- **Writes (Set)**: off by default. On production sessions every Set asks first, also for the AI assistant in Fully autonomous mode.
+- **Test (sysDescr.0)** reads the device's description with what is on the page.
+
+The community and passwords are kept in the computer's credential store (Keychain, Credential Manager, Secret Service), never in the session file or an export. A saved one shows *🔒 saved*; type a new one to change it.
+
+**Run a request.** Pick the **Operation** (Get, Get Next, Get Bulk, Walk, Table, Set), type an object (`sysDescr.0`, `IF-MIB::ifTable`, `ifOperStatus.3` or a numeric OID) or click it in the **MIB tree**, and press **Run** (double-clicking an object runs it). **Max repetitions** is the GetBulk size; **Timeout** is per request. For **Set**, give the value (names of enumerations work: `down`, `testing`) and, if the MIB does not know the object, its type.
+
+**Values without a MIB.** A value that none of the loaded MIBs describes is marked **?** and named by the nearest known branch plus the path below it (for example `ucdExperimental.15.1.1.3`, index `8`). The note above the results names the MIB that most likely describes them (such as UCD-DISKIO-MIB for Net-SNMP disk counters): load it with **Load MIB Files…** and run again to see names, types and descriptions.
+
+**Results.** *Results* lists name, index, type, the readable value and the OID; up and down are coloured. *Table view* shows a walked table as rows (index) and columns (objects). *History* keeps this tab's requests; click one to run it again. **Export CSV** saves the results. Star an object (☆ in its details) to keep it in **Favourites**.
+
+**MIBs.** The standard IETF and IANA MIBs are built in (SNMPv2-MIB, IF-MIB, IP-MIB, IP-FORWARD-MIB, TCP-MIB, UDP-MIB, BRIDGE-MIB, Q-BRIDGE-MIB, LLDP-MIB, ENTITY-MIB, HOST-RESOURCES-MIB, RMON-MIB, RMON2-MIB, SNMP-FRAMEWORK and others), with every module they import, so none of them lists a missing MIB. **Load MIB…** (or **SNMP → Load MIB Files…**) adds vendor MIBs; choose all the files of a vendor at once so the ones they import are found. Loaded MIBs are kept in Termwright's data folder.
+
+**Several devices.** **+ Device** adds more sessions: Run sends the same request to each at once and the results get a Device column (Set runs on the first device only).
+
+**Compare.** Every walk is kept in History with its values. In **Compare** choose A and B (the same walk before and after a change, or two devices) and see what changed, what is only in A and only in B.
+
+**Poll.** Choose a value (`sysUpTime.0`, `ifHCInOctets.3`) or a column (`IF-MIB::ifHCInOctets` for every port; up to 8 lines), set the interval and press **Start Polling**: a chart draws it, counters as a rate per second, with last, min, max and average.
+
+**MIBs.** **MIBs…** lists every module: built in or loaded by you (with its file), how many objects it has, what it **needs** (the modules it imports: ✓ loaded, ✕ not loaded) and which loaded MIBs **use** it. The line at the top names the MIBs to load next; until they are loaded, objects that hang under them are not in the tree. **Show in Tree** opens the tree at the module. Removing a MIB that others import names them first. **Open Folder** shows the folder your MIB files are kept in; **Remove** stops loading one (its file is moved to the *removed* folder there, so it can be put back).
+
+**SNMP-only devices.** A device you reach only by SNMP can be a session of its own: New Session → Protocol → More… → **SNMP**, its address, and the SNMP page. Double-click opens it in the SNMP Browser. On v1 / v2c a **Write community** can be kept for Set (reads use the read community). Any terminal tab's right-click menu has **Open SNMP Browser** for its device.
+
+**Traps.** **SNMP → Trap Receiver** (or the *Traps* tab) listens on UDP 162. **Send Trap…** there sends a notification (v1, v2c or v3) with values to any receiver, to test it (on macOS and Linux a port below 1024 may need permission; use for example 1162 and point the devices there). Traps and informs of v1, v2c and v3 are shown newest first with their name from the MIBs and the session they came from; informs are answered. v3 traps use the users and passwords of your SNMP sessions.
+
+**AI assistant, MCP and scripts.** Turn on the **SNMP** tool in the agent's tool list and ask, for example, *"which ports of core-sw1 are down?"*: the agent walks `IF-MIB::ifOperStatus` with the session's credentials. Reads always run; a Set follows the agent's permission and always asks on production sessions. The same `snmp` tool is offered to MCP apps (Claude Desktop, Cursor, VS Code…), and the local API has `POST /api/v1/snmp` and `GET /api/v1/snmp/mib`, `/snmp/mib/{object}`, `/snmp/traps` (see the [API guide](API.md)); in Python, `Lab().snmp.walk("IF-MIB::ifOperStatus", session="Lab/core-sw1")`.
+
+## 9d. API client
+
+A REST client in the spirit of Postman, free and open source, with the logins kept in the Session Manager.
+
+**An API session.** **API → New API Session…** (or New Session → Protocol → More… → *REST API*):
+
+- **Base URL**: `https://10.0.0.1`; request paths go after it, and it is the `{{baseUrl}}` variable.
+- **Authentication**: *None*, *API key* (its name, sent in a header or the query), *Bearer token*, *Login* (a login request such as `POST /auth/token` with the user and password as JSON; the token is found in the answer, or give its place such as `data.token`, and sent as `Authorization: Bearer` or in a header you name such as `X-Auth-Token`), *Basic*, *OAuth 2.0* (token URL, client id and secret, scope; with a user it uses the password grant). Login and OAuth tokens are held in memory only and renewed before they expire, and once more after a 401.
+- **Test (send GET)** tries the settings before you save.
+- **Variables & TLS**: `{{name}}` variables, each with a Production value (used when the client's environment is Production) and a *Secret* box; *Accept any certificate* for lab devices; a CA file to trust.
+
+The password, key, token, client secret and the values of secret variables are kept in the computer's credential store, never in the session file, an export or a collection, and are shown as •••••••• wherever a request is shown.
+
+**Headers.** New requests start with `Accept: application/json` and `Cache-Control: no-cache`. The name box lists the common headers this request does not have yet (with what each is for), the value box the usual values of that header; both take anything you type. The grey lines are what Termwright adds by itself: the session's authorization, Host, Content-Type from the body, Accept-Encoding, Connection and User-Agent.
+
+**Send.** Double-click the API session (or right-click → **Open in API Client**, or **API → API Client**). Choose the method, type a path or a full URL and press **Send** (or Enter). The chips under the URL show the session, its authentication and TLS. **Params**, **Headers**, **Body** (JSON with Beautify, text, XML, URL-encoded, multipart with `@/path/to/file`, GraphQL), **Auth** (the session's or none), **Scripts** and **Code** (cURL, Python, JavaScript, PowerShell; secrets become environment variables). The answer has **Body** (pretty or raw), **Headers**, **Cookies** (kept per session), **Tests** and **Timeline** (DNS, connect, TLS, first byte, total, and the request as sent). Dynamic variables: `{{$guid}}`, `{{$timestamp}}`, `{{$isoTimestamp}}`, `{{$randomInt}}`.
+
+**Tabs.** Each request opens in a tab above the URL (a dot marks changes not saved; middle-click or ✕ closes it; **+** opens a new request). The request's name is above the URL; **Save ▾** has *Save As…* and *Duplicate in a New Tab*. Paste a cURL command into the URL box and it becomes the request.
+
+**Environments.** The button at the top right (*No Environment*) chooses an environment: a named set of variables, as in Postman, whose values win over the API session's. **Manage Environments…** adds, edits, imports (**Import Postman Environment…**, a file or pasted JSON), exports and deletes them; **Globals** are used by every request. Tick *Secret* for tokens and passwords: their values go to the computer's credential store and are never shown again (leave the box empty to keep the saved value). Scripts that call `pm.environment.set` or `pm.globals.set` keep their values in the chosen environment or the globals. The values win in this order: local (set by scripts in this tab) › environment › session › collection › globals. *Values: Production* still picks the session's production values.
+
+**Variables.** In the URL, `{{variables}}` with a value are green and those without one red (the chips also list them). The **{ }** button opens the variables panel: the request's variables with their values and sources, a box to give a missing one a value for this tab, and all variables by source.
+
+**Request tabs.** **Docs** (a description kept with the request), **Params** (query parameters in step with the URL; **Path Variables** for `:name` parts of the path such as `/vlans/:id`; **Bulk Edit** as `key:value` lines, `//` turns a line off), **Authorization** (*Inherit auth from parent* - the collection's, else the session's -, *No Auth*, *Bearer Token*, *Basic Auth*, *API Key* in a header or the query; use `{{variables}}`: a typed token or password is used to send but is not saved in a collection), **Headers** (*N hidden* shows the headers Termwright adds; **Bulk Edit**; **Presets** adds common headers or a set you saved), **Body** (none, form-data with *Text* or *File* fields, x-www-form-urlencoded, raw with JSON / Text / JavaScript / HTML / XML, binary file, GraphQL), **Scripts** (*Before request* and *After response*, with snippets and Write with AI), **Settings** (HTTP version, SSL certificate verification, follow redirects, follow the original method, keep Authorization or drop Referer on redirects, encode the URL, disable the cookie jar, maximum redirects, timeout) and **Code**. Green dots show the tabs that hold something.
+
+**Answer, console and cookies.** **Send ▾ → Send and Download** saves the answer to a file; the ⋯ menu of the answer saves it, copies the body or the request as cURL, or clears it. **Console** under the answer lists every request of the tab with its status and time; click one for its console.log lines and headers. **Cookies** (right of the request tabs) lists the cookies kept for the session and removes them.
+
+**Production.** On a production session, or with the environment set to Production, POST, PUT, PATCH and DELETE ask before they are sent (the runner and the AI assistant too); GET always runs.
+
+**Monochrome.** The half-filled circle at the top right of the answer shows the body in plain black (light theme) or white (dark theme) instead of colours, for easier reading; click it again for colours (the default).
+
+**Tests and scripts.** The Scripts tab has **Tests** (run on the answer) and a **Pre-request script**, in Postman's style: `pm.test("ok", () => pm.response.to.have.status(200))`, `pm.expect(pm.response.json().items).to.have.lengthOf(3)`, `pm.variables.set("id", pm.response.json().id)` (used as `{{id}}` by the next requests), `console.log(...)`. *Add a snippet…* writes common ones. **Write with AI**: describe what the script must check (*"every interface is UP and the answer is under 300 ms"*), choose Tests or Pre-request, and the AI assistant writes it from the request and its last answer (send the request first); check it, then Send. Secrets are removed before anything goes to the AI.
+
+**Collection settings.** Right-click a collection → **Edit Collection…** (or *Authorization…*, *Variables…*): its name, description and session; an **Authorization** for the requests that inherit; **Scripts** run before and after every request, before the request's own; and its **Variables** (saved in the file, so no secrets).
+
+**Collections.** **Save** keeps a request in a collection (a new one, or an existing one, in a folder). Collections are plain JSON files in Termwright's data folder (`api/collections`): keep them in git or send them to a colleague; they never hold secrets. Right-click a collection: **Run Collection…**, New Request, Rename, Use the Chosen Session, **Export…** (Termwright JSON) or **Export for Postman…**, Delete. Right-click a request: Open, Run, Rename, Duplicate, Delete.
+
+**Run a collection.** Choose the session, the environment, the iterations, a delay, *Stop at the first failure*, and optionally data: CSV with a header line or a JSON array of objects; each row is one iteration and its columns are variables (`pm.iterationData.get("name")` or `{{name}}`). A script chooses the next request with `postman.setNextRequest("Request name")` (repeat a request, jump ahead; `null` ends the iteration; at most 10 000 requests per iteration) and skips one with `pm.execution.skipRequest()`; `pm.sendRequest(...)` sends another request from a script. The results list every request with its status, time and failed tests.
+
+**Import.** **Import** (or **API → Import Postman, OpenAPI or cURL…**) takes pasted text or a file:
+
+- a **Postman collection** (v2.0 / v2.1): folders, parameters, path variables, headers, bodies (with files and binary), the collection's, folders' and requests' authorization (bearer, basic, API key, an OAuth 2.0 access token), collection variables, pre-request and test scripts, request settings;
+- a **Postman environment** or globals export (also in Environments);
+- an **OpenAPI 3 or Swagger 2** document, YAML or JSON (such as `openapi.yaml`): one request per operation, in folders by tag, `{{baseUrl}}` from the servers, path parameters as variables, example bodies made from the schemas;
+- one or more **cURL** commands (as copied from a browser's developer tools).
+
+**AI assistant, MCP and scripts.** Turn on the **API client** tool in the agent's tool list and ask, for example, *"list the interfaces of the lab switches through RESTCONF"*: the agent sends with the session's login (it never asks you for tokens). Changes follow the agent's permission and always ask on production sessions. MCP apps get the same `http` tool, the local API has `POST /api/v1/http/send` and the `/http/collections…` routes (see the [API guide](API.md)), and Python has `Lab().http` ([Python guide](PYTHON.md)).
+
+## 9e. Syslog server
+
+Termwright receives syslog from your devices while it runs, so you do not need a separate syslog server such as Kiwi.
+
+**Start.** **Syslog → Syslog Server**, then **Start Receiving** (or **Syslog → Start / Stop Receiving**). **Settings**: the UDP port (514), a TCP port (one message per line or octet-counted) and a TLS port (6514; your certificate and key, or a self-signed one), the address to listen on, *Save every message to a file per day* (optionally one folder per sender, in a folder you choose) and *Start receiving when Termwright starts*. On macOS and Linux a port below 1024 may need administrator rights: if it does not start, use 1514 and point the devices there. Then set each device's logging host to this computer.
+
+**Read.** New messages appear at the bottom (*Follow*; *Pause* holds the list and counts what arrives). Each line shows when it arrived, the sender (the saved session's name when its address belongs to one), the severity in colour, facility, host, program and text. The severity buttons count the messages since the start; click one to show it and worse. Search with words (all must be in the message) or `/regex/`, choose a sender or a severity. Click a line for its details (device time, process, structured data, the raw message), **Connect** to the session, **Only This Sender** or **Copy**. **Export** saves what is shown as CSV (or text with a .log / .txt name); **Clear** forgets the messages (files stay).
+
+**Rules.** The first rule that matches a message colours its line, sends a **notification** (also when the Syslog tab is closed) or **hides** it (noise such as keepalives). A rule matches words or a `/regex/`, a severity or worse, and a sender.
+
+**Send Test Message.** To a syslog server (this one at 127.0.0.1, or another): UDP, TCP or TLS, RFC 5424 or 3164, facility, severity, host name, program, text, and how many times.
+
+**AI assistant, MCP and scripts.** Turn on the **Syslog** tool in the agent's tool list and ask, for example, *"what errors did the switches log in the last 30 minutes?"*. MCP apps get the same `syslog` tool, the local API has `/api/v1/syslog…` (see the [API guide](API.md)), and in Python `Lab().syslog.wait_for("link down", timeout=60)` waits for a message in a test.
 
 ## 10. Automation: logon actions, triggers, scripts
 

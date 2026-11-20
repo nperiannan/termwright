@@ -58,6 +58,23 @@ var families = []family{
 		serial:   res(`System [Ss]erial [Nn]umber\s*:\s*(\S+)`, `Processor board ID (\S+)`),
 		mac:      res(`Base [Ee]thernet MAC [Aa]ddress\s*:\s*([0-9a-fA-F:.-]{12,17})`),
 		hostname: res(`^(\S+) uptime is`), paging: "terminal length 0"},
+	{name: "huawei", commands: []string{"display version", "display esn", "display bridge mac-address"},
+		model:    res(`^(?:HUAWEI|Huawei) (\S+).*\buptime is`),
+		version:  res(`VRP \(R\) software,\s*Version (\S+(?: \([^)]+\))?)`),
+		serial:   res(`ESN of [^:]*:\s*(\S+)`),
+		mac:      res(`(?i)bridge MAC address\s*:\s*([0-9a-fA-F:.-]{12,17})`),
+		hostname: res(`^\s*sysname (\S+)`, `^<([^<>\s]+)>`), paging: "screen-length 0 temporary"},
+	{name: "eltex", commands: []string{"show system", "show version", "show system id"},
+		model:    res(`System Description:\s*(\S+)`),
+		version:  res(`^\s*Version:\s*(\S+)`, `SW version\s+(\S+)`),
+		serial:   res(`(?i)serial number\s*:\s*([A-Z0-9]{6,})`, `^\s*1\s+([A-Z0-9]{6,})\s*$`),
+		mac:      res(`System MAC Address:\s*([0-9a-fA-F:.-]{12,17})`),
+		hostname: res(`System Name:\s*(\S+)`), paging: "terminal datadump"},
+	{name: "icx", commands: []string{"show version"},
+		model:    res(`HW:\s*(?:Stackable\s+)?(\S+)`),
+		version:  res(`SW: Version (\S+)`),
+		serial:   res(`Serial\s*#:\s*(\S+)`),
+		hostname: res(`^hostname (\S+)`), paging: "skip-page-display"},
 	{name: "linux", commands: []string{"cat /etc/os-release", "uname -sr"},
 		version: res(`PRETTY_NAME="?([^"\n]+)"?`)},
 }
@@ -70,6 +87,12 @@ func Family(deviceType string) string {
 		return "voss"
 	case strings.Contains(d, "exos") || strings.Contains(d, "switch engine") || strings.Contains(d, "extremexos"):
 		return "exos"
+	case strings.Contains(d, "huawei") || strings.Contains(d, "vrp"):
+		return "huawei"
+	case strings.Contains(d, "eltex") || strings.HasPrefix(d, "mes"):
+		return "eltex"
+	case strings.Contains(d, "icx") || strings.Contains(d, "ruckus") || strings.Contains(d, "brocade") || strings.Contains(d, "fastiron"):
+		return "icx"
 	case strings.Contains(d, "cisco") || strings.Contains(d, "ios") || strings.Contains(d, "nx-os") || strings.Contains(d, "nxos"):
 		return "cisco"
 	case strings.Contains(d, "linux") || strings.Contains(d, "ubuntu") || strings.Contains(d, "debian") || strings.Contains(d, "centos") || strings.Contains(d, "rhel"):

@@ -58,6 +58,18 @@ export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
       { label: 'Overview', action: 'lab-overview' }, { label: 'Traffic Generator', action: 'lab-traffic' },
       { label: 'Appliances', action: 'lab-appliances' }, { label: 'KVM Hosts', action: 'lab-hosts' },
     ] },
+    { title: 'SNMP', items: [
+      { label: 'SNMP Browser', action: 'snmp-browser' }, { label: 'Trap Receiver', action: 'snmp-traps' }, { sep: true },
+      { label: 'Load MIB Files...', action: 'snmp-load-mib' },
+    ] },
+    { title: 'API', items: [
+      { label: 'API Client', action: 'api-client' }, { label: 'New API Session...', action: 'api-new-session' }, { sep: true },
+      { label: 'Import Postman, OpenAPI or cURL...', action: 'api-import' },
+    ] },
+    { title: 'Syslog', items: [
+      { label: 'Syslog Server', action: 'syslog-server' }, { label: 'Start / Stop Receiving', action: 'syslog-toggle' }, { sep: true },
+      { label: 'Send Test Message...', action: 'syslog-send' },
+    ] },
     { title: 'Script', items: [
       { label: 'Command Library...', action: 'command-library', keys: k('E') }, { label: 'Command History...', action: 'history', keys: k('Y') }, { sep: true },
       { label: 'Run Script...', action: 'run-script' }, { label: 'Cancel Running Scripts', action: 'cancel-scripts' }, { sep: true },
@@ -86,6 +98,13 @@ export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
 
 /** The icon a menu entry gets when it names none: from the words of its label (first match wins). */
 const ICON_RULES: [RegExp, string][] = [
+  [/snmp/i, 'radar'], [/api client|rest api/i, 'globe'], [/syslog/i, 'log'], [/^send test message|^send trap/i, 'forward'],
+  [/remote desktop/i, 'monitor'], [/console server ports/i, 'serial'], [/forget saved password|key login|passwords/i, 'key'],
+  [/send group|send command to all/i, 'buttons'], [/files panel/i, 'files-panel'], [/^record|recording/i, 'record'], [/^log session|^log /i, 'log'],
+  [/^compare/i, 'compare'], [/timestamps/i, 'clock'], [/auto scroll/i, 'autoscroll'], [/^clear screen|^clear scrollback|^reset terminal/i, 'clear'],
+  [/^session options|^global options/i, 'options'], [/web page|web interface/i, 'globe'], [/^lock/i, 'lock'], [/^unlock/i, 'unlock'],
+  [/^send break/i, 'alert'], [/^next tab|^previous tab/i, 'tabs'], [/device facts/i, 'device'], [/^move/i, 'forward'],
+  [/^set up|^diagnose/i, 'wrench'], [/^run|^replay/i, 'play'],
   [/favourite/i, 'star'], [/^delete|^remove|^empty trash|^clear recent/i, 'trash'], [/^wake/i, 'power'],
   [/topology/i, 'topology'], [/^back up|backup/i, 'database'], [/checklist/i, 'checklist'], [/^run and collect|^collect/i, 'play'],
   [/^push|^share|^upload/i, 'upload'], [/^new folder/i, 'folder-plus'], [/^new |^add /i, 'plus'], [/^edit all|^bulk edit/i, 'notes-edit'], [/^name after/i, 'tag'], [/^rename|^edit/i, 'edit'],

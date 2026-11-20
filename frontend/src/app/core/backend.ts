@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import type { TopoRequest, TopoResult, LayoutRequest, LayoutResult } from './models';
 import { EmuEngines, EmuHostNIC, EmuTrex,
   EmuServer, EmuServerView,
-  AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange } from './models';
+  AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange, SNMPRequest, SNMPResult, SNMPMibNode, SNMPModule, SNMPSecretState, SNMPTrapState, SNMPTrapsView, HSendRequest, HResponse, HCollection, HCollectionInfo, HRunRequest, HRunResult, HHistoryItem, HRequest, HEnv, HVar, HHostCookies, SyslogSettings, SyslogState, SyslogMsg, SyslogRule, SyslogQuery, SyslogSendIn } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -258,6 +258,66 @@ export class Backend {
   emuSetUplink(id: string, port: string, on: boolean) { return this.call<LabView>('EmuSetUplink', id, port, on); }
   emuSetIconStyle(id: string, style: string) { return this.call<LabView>('EmuSetIconStyle', id, style); }
   emuAgentText() { return this.call<string>('EmuAgentText'); }
+  // ---- syslog ----
+  syslogSettings() { return this.call<SyslogSettings>('SyslogSettingsGet'); }
+  syslogStart(s: SyslogSettings) { return this.call<SyslogState>('SyslogStart', s); }
+  syslogStop() { return this.call<void>('SyslogStop'); }
+  syslogState() { return this.call<SyslogState>('SyslogState'); }
+  syslogMessages(q: SyslogQuery) { return this.call<SyslogMsg[]>('SyslogMessages', q); }
+  syslogClear() { return this.call<void>('SyslogClear'); }
+  syslogRules() { return this.call<SyslogRule[]>('SyslogRules'); }
+  syslogSetRules(r: SyslogRule[]) { return this.call<void>('SyslogSetRules', r); }
+  syslogSend(m: SyslogSendIn) { return this.call<string>('SyslogSend', m); }
+  syslogExport(q: SyslogQuery) { return this.call<string>('SyslogExport', q); }
+  // ---- API client ----
+  httpSend(r: HSendRequest) { return this.call<HResponse>('HTTPSend', r); }
+  httpTest(session: Session, path: string, secret: string, url = '/') { return this.call<HResponse>('HTTPTest', { session, path, secret, url }); }
+  httpSecrets(path: string) { return this.call<{ secret: boolean; vars: string[] }>('HTTPSecrets', path); }
+  /** null keeps a secret, '' removes it; keep: the secret variables the session still has. */
+  httpSetSecrets(path: string, secret: string | null, vars: { name: string; value: string | null; prod: string | null }[], keep: string[]) { return this.call<void>('HTTPSetSecrets', { path, secret, vars, keep }); }
+  httpToken(path: string, env: string) { return this.call<{ held: boolean; expires?: string }>('HTTPToken', path, env); }
+  httpCollections() { return this.call<HCollectionInfo[]>('HTTPCollections'); }
+  httpCollection(id: string) { return this.call<HCollection>('HTTPCollection', id); }
+  httpSaveCollection(c: HCollection) { return this.call<HCollection>('HTTPSaveCollection', c); }
+  httpDeleteCollection(id: string) { return this.call<void>('HTTPDeleteCollection', id); }
+  httpImport(text: string, name: string, session: string) { return this.call<HCollection>('HTTPImport', text, name, session); }
+  httpImportFile(session: string) { return this.call<HCollection>('HTTPImportFile', session); }
+  httpExportFile(id: string, format: string) { return this.call<string>('HTTPExportFile', id, format); }
+  httpCode(r: HSendRequest, lang: string) { return this.call<string>('HTTPCode', r, lang); }
+  httpRun(r: HRunRequest) { return this.call<HRunResult>('HTTPRun', r); }
+  httpHistory() { return this.call<HHistoryItem[]>('HTTPHistory'); }
+  httpClearHistory() { return this.call<void>('HTTPClearHistory'); }
+  identifyDeviceType(path: string) { return this.call<{ type: string; current: string; command?: string; matched?: string; tried: string[] }>('IdentifyDeviceType', path); }
+  httpParseCurl(text: string) { return this.call<HRequest>('HTTPParseCurl', text); }
+  httpEnvironments() { return this.call<HEnv[]>('HTTPEnvironments'); }
+  httpSaveEnvironment(e: HEnv) { return this.call<HEnv>('HTTPSaveEnvironment', e); }
+  httpDeleteEnvironment(id: string) { return this.call<void>('HTTPDeleteEnvironment', id); }
+  httpImportEnvironment(text: string, name: string) { return this.call<HEnv>('HTTPImportEnvironment', text, name); }
+  httpImportEnvironmentFile() { return this.call<HEnv>('HTTPImportEnvironmentFile'); }
+  httpExportEnvironmentFile(id: string) { return this.call<string>('HTTPExportEnvironmentFile', id); }
+  httpVariables(r: HSendRequest) { return this.call<HVar[]>('HTTPVariables', r); }
+  httpCookies(session: string) { return this.call<HHostCookies[]>('HTTPCookies', session); }
+  httpDeleteCookie(session: string, host: string, name: string) { return this.call<void>('HTTPDeleteCookie', session, host, name); }
+  httpSaveResponse(body: string, base64: boolean, name: string) { return this.call<string>('HTTPSaveResponse', body, base64, name); }
+  // ---- SNMP ----
+  snmpRun(r: SNMPRequest) { return this.call<SNMPResult>('SNMPRun', r); }
+  snmpSecrets(path: string) { return this.call<SNMPSecretState>('SNMPSecrets', path); }
+  /** null keeps a secret, '' removes it. */
+  snmpSetSecrets(path: string, community: string | null, authPass: string | null, privPass: string | null, writeCommunity: string | null = null) { return this.call<void>('SNMPSetSecrets', { path, community, authPass, privPass, writeCommunity }); }
+  snmpMibChildren(oid: string) { return this.call<SNMPMibNode[]>('SNMPMibChildren', oid); }
+  snmpMibInfo(name: string) { return this.call<SNMPMibNode>('SNMPMibInfo', name); }
+  snmpMibSearch(q: string) { return this.call<SNMPMibNode[]>('SNMPMibSearch', q); }
+  snmpMibModules() { return this.call<SNMPModule[]>('SNMPMibModules'); }
+  snmpLoadMibs() { return this.call<string[]>('SNMPLoadMIBs'); }
+  snmpRemoveMib(module: string) { return this.call<void>('SNMPRemoveMIB', module); }
+  snmpTrapsStart(port: number) { return this.call<SNMPTrapState>('SNMPTrapsStart', port); }
+  snmpTrapsStop() { return this.call<void>('SNMPTrapsStop'); }
+  snmpTraps() { return this.call<SNMPTrapsView>('SNMPTraps'); }
+  snmpMibFolder() { return this.call<string>('SNMPMibFolder'); }
+  snmpSendTrap(t: { address: string; version?: string; community?: string; user?: string; auth?: string; authPass?: string; priv?: string; privPass?: string; trapOid: string; values?: { oid: string; type?: string; value: string }[] }) { return this.call<void>('SNMPSendTrap', t); }
+  snmpTrapsClear() { return this.call<void>('SNMPTrapsClear'); }
+  /** The in-app AI's network tools (snmp): mode is the agent permission; ask = the step needs the user's yes. */
+  netAgentTool(name: string, args: Record<string, unknown>, mode: string, approved: boolean) { return this.call<EmuToolStep>('NetAgentTool', name, args, mode, approved); }
   emuAgentTool(name: string, args: Record<string, unknown>, approved: boolean) { return this.call<EmuToolStep>('EmuAgentTool', name, args, approved); }
   emuConsoleTail(id: string) { return this.call<string>('EmuConsoleTail', id); }
   labAdd(r: LabRequest) { return this.call<LabView>('LabAdd', r); }

@@ -2,7 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Autofocus } from '../core/autofocus';
 import { Backend, errText } from '../core/backend';
-import { BAUD_RATES, PROTOCOLS, defaultPort } from '../core/models';
+import { protoLabel, BAUD_RATES, PROTOCOLS, defaultPort } from '../core/models';
 import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { SerialPortPicker } from '../components/serial-port-picker';
@@ -25,8 +25,7 @@ import { parseConnectLine } from '../core/connect-string';
         <div class="f"><span>Protocol</span>
           <div class="seg">
             @for (p of mainProtos; track p) { <button type="button" [class.on]="protocol === p" (click)="protocol = p; onProto()">{{ p === 'SSH2' ? 'SSH' : p }}</button> }
-            <select name="otherp" [ngModel]="mainProtos.includes(protocol) ? '' : protocol" (ngModelChange)="$event && (protocol = $event) && onProto()">
-              <option value="">More…</option>@for (p of otherProtos; track p) { <option [value]="p">{{ p }}</option> }</select>
+            <button type="button" class="more-p" [class.on]="!mainProtos.includes(protocol)" (click)="protoMenu($event)" aria-haspopup="menu" title="More protocols">{{ mainProtos.includes(protocol) ? 'More…' : protoLabel(protocol) }}<span class="cv">▾</span></button>
           </div></div>
         @if (protocol === 'Serial') {
           <div class="f"><span>Serial port</span><app-serial-port-picker [(value)]="comPort" /></div>
@@ -138,7 +137,11 @@ export class QuickConnect {
   legacy = false;
 
   readonly mainProtos = ['SSH2', 'Telnet', 'Serial', 'RDP'];
-  readonly otherProtos = PROTOCOLS.filter(p => !['SSH2', 'Telnet', 'Serial', 'RDP'].includes(p));
+  readonly otherProtos = PROTOCOLS.filter(p => !['SSH2', 'Telnet', 'Serial', 'RDP', 'API', 'SNMP'].includes(p));
+  readonly protoLabel = protoLabel;
+  protoMenu(ev: MouseEvent) {
+    this.ui.showMenu(ev, this.otherProtos.map(p => ({ label: (this.protocol === p ? '✓ ' : '') + protoLabel(p), icon: '', action: () => { this.protocol = p; this.onProto(); } })));
+  }
   line = '';
 
   /** The connect line fills the fields. */

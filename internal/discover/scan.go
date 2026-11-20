@@ -66,9 +66,19 @@ type Result struct {
 	Vendor       string   `json:"vendor"`
 	OS           string   `json:"os"`
 	Platform     string   `json:"platform"` // network OS named by any evidence: EXOS, VOSS, NX-OS, …
-	Evidence     []string `json:"evidence"` // what the kind and vendor are based on
-	Protocol     string   `json:"protocol"` // SSH2, Telnet or "" when no login port is open
-	Port         int      `json:"port"`
+	// DeviceType: the user's device type whose Detect pattern matched the evidence ("" none).
+	DeviceType string `json:"deviceType,omitempty"`
+	// DetectMatch: the text that pattern matched.
+	DetectMatch string   `json:"detectMatch,omitempty"`
+	Evidence    []string `json:"evidence"` // what the kind and vendor are based on
+	Protocol    string   `json:"protocol"` // SSH2, Telnet or "" when no login port is open
+	Port        int      `json:"port"`
+}
+
+// EvidenceText is everything a device showed of itself, for device type detection.
+func (r Result) EvidenceText() string {
+	parts := []string{r.SysDescr, r.Banner, r.Telnet, r.Web.Server, r.Web.Title, r.Web.Realm, r.Web.Cert, strings.Join(r.Web.Hints, " "), r.SIP, r.OS, r.Vendor, r.Platform, strings.Join(r.Evidence, "\n")}
+	return strings.Join(parts, "\n")
 }
 
 // Scan checks addrs and calls found for every device that answers and

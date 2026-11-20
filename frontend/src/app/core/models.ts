@@ -19,6 +19,11 @@ export interface Session {
   jumpOff?: boolean; offJump?: string; proxyOff?: boolean; offProxy?: { type: '' | 'socks5' | 'http'; host: string; port: number; user: string } | null;
   autoReconnect: boolean; x11Forward: boolean; agentForward: boolean;
   consoleServer?: string; consolePort?: number; consoleMethod?: string; consoleUser?: string; consoleBase?: number; consoleProtocol?: string;
+  /** SNMP (the browser, the map and discovery): version '' = v2c, '1', '2c', '3'; the community and v3 passwords are in the credential store. */
+  /** REST API session (protocol 'API'): the secret and secret variables' values are in the credential store. */
+  apiBaseUrl?: string; apiAuth?: string; apiKeyName?: string; apiKeyIn?: string; apiLogin?: string; apiTokenPath?: string; apiTokenUrl?: string;
+  apiClientId?: string; apiScope?: string; apiInsecure?: boolean; apiCaFile?: string; apiVars?: APIVar[];
+  snmpVersion?: string; snmpPort?: number; snmpHost?: string; snmpUser?: string; snmpAuth?: string; snmpPriv?: string; snmpContext?: string; snmpWrite?: boolean;
   environment?: string; rdpDomain?: string; rdpFullScreen?: boolean; rdpSize?: string; vncViewOnly?: boolean; keywordSet: string; fontFamily: string; fontSize: number; backspace: '' | 'bs'; logonScript: string; serialDtr: boolean; serialRts: boolean;
   logonArgs: string; useLogonScript: boolean; automateLogon: boolean; initialCr: boolean; loginAgain?: boolean;
   remoteCommand: string; useRemoteCommand: boolean; openAs: '' | 'sftp'; deviceType: string; ownLogin: boolean; account?: string; sftpToTarget: boolean; sftpOn?: '' | 'jump' | 'target'; filesPanel?: boolean;
@@ -30,7 +35,7 @@ export interface Session {
 /** A login profile for a kind of device (EXOS, VOSS, Cisco IOS …). */
 export interface DeviceType {
   name: string; icon?: string; protocol: string; port: number; username: string; credential: string; initialCr: boolean;
-  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string; tunnel?: string; webCheck?: string; webHttp?: string; webHttps?: string; webOn?: string; webSave?: string; aiReadOnly?: string;
+  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string; detect?: string; detectCommand?: string; tunnel?: string; webCheck?: string; webHttp?: string; webHttps?: string; webOn?: string; webSave?: string; aiReadOnly?: string;
   facts?: FactRule[] | null;
 }
 /** A value read from command output after connecting: the first group of regex. every = at each connect. */
@@ -177,7 +182,7 @@ export interface UpdateInfo {
 }
 
 /** A device found by File → Discover Devices. */
-export interface DiscoverResult {
+export interface DiscoverResult { deviceType?: string; detectMatch?: string;
   ip: string; name: string; dns: string; sysName: string; sysDescr: string; sysObjectId: string; services: string[];
   banner: string; telnet: string; web: { server: string; title: string; realm: string; cert: string; hints: string[] | null };
   sip: string; mdns: string; mdnsServices?: string[] | null; coap?: string; mac: string; macVendor: string; self: boolean; kind: string; vendor: string; os: string; platform?: string; evidence: string[] | null;
@@ -222,7 +227,7 @@ export interface ImportSource { app: string; path: string; what: string; }
 
 export interface FileFilter { displayName: string; pattern: string; }
 
-export const PROTOCOLS = ['SSH2', 'Telnet', 'Serial', 'Local Shell', 'Raw', 'Console', 'RDP', 'VNC', 'WOL'] as const;
+export const PROTOCOLS = ['SSH2', 'Telnet', 'Serial', 'Local Shell', 'Raw', 'Console', 'RDP', 'VNC', 'WOL', 'API', 'SNMP'] as const;
 /** Console server access methods (Console sessions). */
 export const CONSOLE_METHODS: { id: string; label: string }[] = [
   { id: 'opengear-ssh', label: 'SSH as user:portNN (Opengear)' },
@@ -256,6 +261,11 @@ export interface HistoryEntry { cmd: string; session?: string; title?: string; d
 export interface RemoteInfo { id: string; kind: 'rdp' | 'vnc'; title: string; addr: string; via: string; client: string; wsUrl: string; hasPass: boolean; note: string; session: Session; }
 export const EMULATIONS = ['Xterm', 'VT100', 'VT102', 'VT220', 'ANSI', 'Linux'] as const;
 export const BAUD_RATES = [300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
+
+/** How a protocol is named in the protocol choice. */
+export function protoLabel(p: string): string {
+  return ({ SSH2: 'SSH', WOL: 'Wake-on-LAN', API: 'REST API', 'Local Shell': 'Local Shell' } as Record<string, string>)[p] ?? p;
+}
 
 export function defaultPort(protocol: string): number {
   return protocol === 'Telnet' ? 23 : protocol === 'SSH2' ? 22 : protocol === 'RDP' ? 3389 : protocol === 'VNC' ? 5900 : 0;
@@ -296,7 +306,7 @@ export const ACTIONS: Record<string, string> = {
   'layout-tabs': 'Tabbed View', 'layout-tile-v': 'Tile Side by Side', 'layout-tile-h': 'Tile Stacked', 'layout-grid': 'Tile Grid',
   'send-break': 'Send Break', 'send-file': 'Send Text File...', 'save-selection': 'Save Selection As...',
   'xmodem': 'Send XMODEM...', 'xmodem-receive': 'Receive XMODEM...', 'scp-upload': 'SCP Upload File...', 'scp-upload-folder': 'SCP Upload Folder...', 'scp-download': 'SCP Download...',
-  'ymodem-send': 'Send YMODEM...', 'ymodem-receive': 'Receive YMODEM', passwords: 'Passwords & Accounts...', 'check-updates': 'Check for Updates...', 'key-setup': 'Set Up Key Login...', 'remote-desktop': 'Set Up Remote Desktop...', 'quick-open': 'Quick Open...', welcome: 'Welcome...', 'new-session': 'New Session...', 'capture-screen': 'Save Screen As Image...', 'teach-fact': 'Save Selection as Device Fact...', 'toggle-icon-style': 'Tile / Glyph Icons', 'command-library': 'Command Library...', 'net-check': 'Network Check...', 'sim-lab': 'Simulated Lab...', 'lab-emu': 'Emulated Lab', 'lab-sim': 'Simulated Lab', 'lab-overview': 'Lab Overview', 'lab-traffic': 'Traffic Generator', 'lab-appliances': 'Appliances', 'lab-hosts': 'KVM Hosts', 'connect-ai': 'Connect an AI App...', 'workspaces': 'Workspaces...',
+  'ymodem-send': 'Send YMODEM...', 'ymodem-receive': 'Receive YMODEM', passwords: 'Passwords & Accounts...', 'check-updates': 'Check for Updates...', 'key-setup': 'Set Up Key Login...', 'remote-desktop': 'Set Up Remote Desktop...', 'quick-open': 'Quick Open...', welcome: 'Welcome...', 'new-session': 'New Session...', 'capture-screen': 'Save Screen As Image...', 'teach-fact': 'Save Selection as Device Fact...', 'toggle-icon-style': 'Tile / Glyph Icons', 'command-library': 'Command Library...', 'net-check': 'Network Check...', 'sim-lab': 'Simulated Lab...', 'lab-emu': 'Emulated Lab', 'lab-sim': 'Simulated Lab', 'lab-overview': 'Lab Overview', 'lab-traffic': 'Traffic Generator', 'lab-appliances': 'Appliances', 'lab-hosts': 'KVM Hosts', 'snmp-browser': 'SNMP Browser', 'snmp-traps': 'SNMP Trap Receiver', 'snmp-load-mib': 'Load MIB Files...', 'api-client': 'API Client', 'api-new-session': 'New API Session...', 'api-import': 'Import Postman, OpenAPI or cURL...', 'syslog-server': 'Syslog Server', 'syslog-toggle': 'Start / Stop Syslog Receiving', 'syslog-send': 'Send Syslog Test Message...', 'connect-ai': 'Connect an AI App...', 'workspaces': 'Workspaces...',
   'save-workspace': 'Save Workspace...', 'compare': 'Compare Outputs...',
   'zoom-in': 'Zoom In', 'zoom-out': 'Zoom Out', 'global-options': 'Global Options', 'session-options': 'Session Options',
 };
@@ -499,7 +509,7 @@ export interface LabHubCfg { rev: number; ports?: Record<string, LabHubPort> | n
 export interface LabHubDetail { id: string; running: boolean; in: number[]; macs: { mac: string; vlan: number; port: number; age: number }[]; cfg?: LabHubCfg | null; sshOk: boolean; error?: string; }
 
 /** Device types whose SSH server does not pass connections on (TCP forwarding) unless their setting says it does. */
-const NO_TUNNEL = ['exos', 'voss', 'cisco ios'];
+const NO_TUNNEL = ['exos', 'voss', 'cisco ios', 'cisco nx-os', 'huawei vrp', 'eltex mes', 'ruckus icx'];
 /** Whether a session of this device type can open a web page through its SSH server (Open Web Page Through This Session). */
 export function dtTunnels(types: DeviceType[] | null | undefined, name: string | undefined): boolean {
   if (!name) return true;
@@ -520,3 +530,50 @@ export interface TopoResult { map: TopoMap; changes: TopoChange[] | null; needsC
 export interface LayoutNode { id: string; w: number; h: number; x: number; y: number; pinned?: boolean; ghost?: boolean; }
 export interface LayoutRequest { style: string; nodes: LayoutNode[]; edges: { a: string; b: string }[]; root?: string; width?: number; }
 export interface LayoutResult { style: string; nodes: LayoutNode[] | null; }
+
+/** SNMP (app/snmp_app.go). */
+export interface SNMPTarget { address: string; version?: string; community?: string; user?: string; auth?: string; authPass?: string; priv?: string; privPass?: string; context?: string; }
+export interface SNMPValue { oid: string; type?: string; value: string; }
+export interface SNMPRequest { session?: string; target?: SNMPTarget; op: string; oids?: string[]; values?: SNMPValue[]; maxRep?: number; max?: number; timeout?: number; confirmed?: boolean; }
+export interface SNMPRow { oid: string; name: string; object?: string; module?: string; instance?: string; type: string; value: string; display: string; unknown?: boolean; suggest?: string; }
+export interface SNMPResult { rows: SNMPRow[]; address: string; version: string; engineId?: string; ms: number; requests: number; truncated?: boolean; unknown?: number; suggest?: string[]; }
+export interface SNMPMibNode { oid: string; name: string; module: string; kind: string; syntax?: string; base?: string; enums?: Record<string, string>; hint?: string; access?: string; status?: string; units?: string; index?: string[]; augments?: string; objects?: string[]; description?: string; children: boolean; }
+export interface SNMPModule { name: string; builtIn: boolean; file?: string; objects?: number; unplaced?: string[]; imports?: string[]; missing?: string[]; dependents?: string[]; root?: string; }
+export interface SNMPSecretState { community: boolean; writeCommunity?: boolean; auth: boolean; priv: boolean; }
+export interface SNMPTrapState { on: boolean; port: number; error?: string; count: number; }
+export interface SNMPTrapView { at: string; from: string; version: string; community?: string; user?: string; kind: string; trapOid: string; uptime: number; note?: string; name: string; rows: SNMPRow[]; session?: string; }
+export interface SNMPTrapsView { state: SNMPTrapState; traps: SNMPTrapView[]; }
+
+/** API client (internal/apiclient, app/http_app.go). */
+export interface APIVar { name: string; value: string; prod?: string; secret?: boolean; }
+export interface HKV { key: string; value: string; off?: boolean; desc?: string; type?: string; }
+export interface HBody { mode?: string; raw?: string; form?: HKV[]; graphqlVars?: string; file?: string; }
+export interface HReqAuth { token?: string; user?: string; password?: string; key?: string; value?: string; in?: string; }
+export interface HSettings { httpVersion?: string; verify?: string; noRedirects?: boolean; followMethod?: boolean; followAuth?: boolean; removeReferer?: boolean; noEncode?: boolean; noCookies?: boolean; maxRedirects?: number; timeoutMs?: number; }
+export interface HRequest { id?: string; name?: string; folder?: string; method: string; url: string; params?: HKV[]; pathVars?: HKV[]; headers?: HKV[]; body?: HBody; auth?: string; authData?: HReqAuth;
+  settings?: HSettings; preScript?: string; tests?: string; description?: string; }
+export interface HCollection { id: string; name: string; session?: string; vars?: HKV[]; requests: HRequest[]; description?: string; auth?: string; authData?: HReqAuth; preScript?: string; tests?: string; }
+export interface HEnvVar { key: string; value: string; secret?: boolean; off?: boolean; desc?: string; hasValue?: boolean; }
+export interface HEnv { id: string; name: string; vars: HEnvVar[]; }
+export interface HVar { name: string; value: string; source: string; secret?: boolean; }
+export interface HHostCookies { host: string; cookies: HCookie[]; }
+export interface HCollectionInfo { id: string; name: string; session?: string; requests: number; }
+export interface HTestResult { name: string; pass: boolean; error?: string; }
+export interface HCookie { name: string; value: string; domain?: string; path?: string; expires?: string; httpOnly?: boolean; secure?: boolean; }
+export interface HResponse { status: number; statusText: string; proto?: string; headers: HKV[]; body: string; base64?: boolean; contentType?: string; size: number; truncated?: boolean;
+  ms: number; timing: { dns: number; connect: number; tls: number; firstByte: number; total: number }; method: string; url: string; reqHeaders: HKV[]; reqBody?: string;
+  cookies?: HCookie[]; tests?: HTestResult[]; logs?: string[]; vars?: Record<string, string>; error?: string; skipped?: boolean; envSet?: Record<string, string>; globalSet?: Record<string, string>; }
+export interface HSendRequest { session?: string; env?: string; collection?: string; environment?: string; request: HRequest; vars?: Record<string, string>; timeout?: number; noRedirects?: boolean; confirmed?: boolean; }
+export interface HRunStep { iteration: number; id: string; name: string; method: string; url: string; status: number; ms: number; tests?: HTestResult[]; error?: string; pass: boolean; }
+export interface HRunResult { steps: HRunStep[]; passed: number; failed: number; tests: number; ms: number; stopped?: boolean; }
+export interface HRunRequest { collection: string; session?: string; env?: string; environment?: string; requests?: string[]; folder?: string; iterations?: number; data?: string; delayMs?: number; stopOnFail?: boolean; confirmed?: boolean; }
+export interface HHistoryItem { at: string; session?: string; env?: string; collection?: string; request: HRequest; url: string; status: number; ms: number; size: number; error?: string; }
+
+/** Syslog (app/syslog_app.go). */
+export interface SyslogSettings { udp: number; tcp: number; tls: number; cert?: string; key?: string; bind?: string; saveFiles?: boolean; perHost?: boolean; folder?: string; autoStart?: boolean; keep?: number; }
+export interface SyslogState { on: boolean; addrs: string[]; error?: string; counts: number[]; total: number; hosts: Record<string, number>; settings: SyslogSettings; folder?: string; since?: string; }
+export interface SyslogMsg { id: number; at: string; from: string; proto: string; facility: number; facilityName: string; severity: number; severityName: string; time?: string; host?: string; app?: string;
+  procId?: string; msgId?: string; sd?: string; text: string; format: string; raw: string; session?: string; rule?: string; color?: string; }
+export interface SyslogRule { name: string; match?: string; maxSeverity: number; host?: string; color?: string; notify?: boolean; hide?: boolean; off?: boolean; }
+export interface SyslogQuery { after?: number; text?: string; host?: string; maxSeverity?: number; limit?: number; }
+export interface SyslogSendIn { target: string; proto?: string; format?: string; facility?: string; severity?: string; host?: string; app?: string; text: string; count?: number; insecure?: boolean; }

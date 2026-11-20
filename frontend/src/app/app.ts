@@ -1,7 +1,7 @@
 import { A11y } from './core/a11y';
 import { Component, ElementRef, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Backend } from './core/backend';
+import { Backend, errText } from './core/backend';
 import { SessionOps } from './core/session-ops.service';
 import { i18n, previewLanguages, setPreviewLanguages, tr } from './core/i18n';
 import { Tabs, TabView } from './core/tabs.service';
@@ -44,6 +44,9 @@ import { Moved } from './dialogs/moved';
 import { PlayerView } from './components/player-view';
 import { LabWorkspace } from './components/lab-workspace';
 import { NetworkMap } from './components/network-map';
+import { SnmpBrowser } from './components/snmp-browser';
+import { ApiClient } from './components/api-client';
+import { SyslogView } from './components/syslog-view';
 import { ConsolePorts } from './dialogs/console-ports';
 import { HistoryDialog } from './dialogs/history';
 import { KeySetupDialog } from './dialogs/key-setup-dialog';
@@ -77,7 +80,7 @@ import { FactTeach } from './dialogs/fact-teach';
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionsMenu, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, FilesPanel, WebOpenDialog, RemoteDiagDialog, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, FileServersDialog, NetCheckDialog, NameAfterDialog, LabDialog, LabWizard, ServersIndicator, AIPanel, TeamPushDialog, TeamReserveDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, LabWorkspace, NetworkMap, Moved, HistoryDialog, Overlays, About, Welcome, LabWorkflow, FactTeach, Unlock],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, FileServersDialog, NetCheckDialog, NameAfterDialog, LabDialog, LabWizard, ServersIndicator, AIPanel, TeamPushDialog, TeamReserveDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, LabWorkspace, NetworkMap, SnmpBrowser, ApiClient, SyslogView, Moved, HistoryDialog, Overlays, About, Welcome, LabWorkflow, FactTeach, Unlock],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -445,6 +448,8 @@ export class App implements OnInit {
     // the download count asks GitHub (cached for six hours); not when update checks are turned off
     if (this.ui.settings()?.updateChannel !== 'off') this.backend.downloadCount().then(n => this.downloads.set(n > 0 ? n : 0)).catch(() => {});
     this.backend.on('menu', (a: string) => void this.action(a));
+    this.backend.on('syslog:alert', (m: { rule: string; from: string; host?: string; severity: string; text: string }) =>
+      this.ui.toast(`${m.rule}: ${m.host || m.from} ${m.severity} - ${m.text}`, ['emerg', 'alert', 'crit', 'err'].includes(m.severity) ? 'error' : 'info', 8000, [{ label: tr('Show'), run: () => void this.tabs.openSyslog() }]));
     // the session files changed on disk (sync, git pull, another Termwright): the Session Manager follows by itself
     let treeTimer: ReturnType<typeof setTimeout> | undefined;
     this.backend.on('sessions:changed', () => { clearTimeout(treeTimer); treeTimer = setTimeout(() => void this.ui.refreshTree(), 400); });
@@ -555,6 +560,19 @@ export class App implements OnInit {
       case 'lab-sim': this.openLab('sim'); break;
       case 'lab-overview': case 'lab-traffic': case 'lab-appliances': case 'lab-hosts':
         this.labs.goto.set({ kind: 'emu', page: a.slice(4) as 'overview' | 'traffic' | 'appliances' | 'hosts' }); this.openLab('emu'); break;
+      case 'snmp-browser': { const t = this.tabs.active(); void this.tabs.openSnmp(t?.kind === 'terminal' ? t.session.path : '', t?.kind === 'terminal' ? t.session.name : ''); break; }
+      case 'api-client': void this.tabs.openApi(); break;
+      case 'syslog-server': void this.tabs.openSyslog(); break;
+      case 'syslog-send': void this.tabs.openSyslog('send'); break;
+      case 'syslog-toggle': try {
+        const st = await this.backend.syslogState();
+        if (st.on) { await this.backend.syslogStop(); this.ui.toast(tr('Syslog: stopped receiving'), 'info'); }
+        else { const n = await this.backend.syslogStart(await this.backend.syslogSettings()); this.ui.toast(tr('Syslog: receiving on {0}', n.addrs.join(', ')), 'success'); }
+      } catch (e) { this.ui.toast(errText(e), 'error'); } break;
+      case 'api-new-session': await this.ui.newSession(this.ui.currentFolder(), true, 'API'); break;
+      case 'api-import': await this.tabs.openApi(); this.ui.apiImportAsked.set(Date.now()); break;
+      case 'snmp-traps': void this.tabs.openSnmp('', '', 'traps'); break;
+      case 'snmp-load-mib': try { const m = await this.backend.snmpLoadMibs(); if (m?.length) this.ui.toast(tr('Loaded {0}', m.join(', ')), 'success'); } catch (e) { this.ui.toast(errText(e), 'error'); } break;
       case 'ai-assistant': void this.openAI(); break;
       case 'backups': this.ui.backupTargets.set(null); this.ui.open('backups'); break;
       case 'checklists': this.ui.open('checklists'); break;
@@ -752,6 +770,18 @@ export class App implements OnInit {
 
   tabMenu(ev: MouseEvent, t: TabView) {
     this.tabs.activeId.set(t.id);
+    // tool tabs (API client, SNMP Browser, Syslog, map, lab, player) have no connection or scrollback
+    if (!['terminal', 'sftp', 'rdp', 'vnc'].includes(t.kind)) {
+      const path = t.kind === 'api' ? t.apiSession : t.kind === 'snmp' ? t.snmpSession : '';
+      this.ui.showMenu(ev, [
+        ...(path ? [{ label: 'Session Options...', action: () => void this.ui.editSession(path, undefined, true) }, { separator: true }] : []),
+        { label: 'Rename Tab...', action: async () => { const n = await this.ui.input('Rename Tab', 'Tab title', t.title); if (n) this.tabs.patch(t.id, { title: n }); } },
+        { separator: true },
+        { label: 'Close', action: () => this.tabs.close(t.id) },
+        { label: 'Close Other Tabs', action: async () => { for (const o of this.tabs.tabs().filter(x => x.id !== t.id)) await this.tabs.close(o.id); } },
+      ]);
+      return;
+    }
     this.ui.showMenu(ev, [
       { label: 'Reconnect', action: () => this.tabs.reconnect(t.id) },
       { label: 'Disconnect', action: () => this.tabs.disconnect(t.id), disabled: t.state !== 'connected' || t.kind === 'sftp' },
@@ -773,6 +803,8 @@ export class App implements OnInit {
       ] : []),
       ...(t.kind === 'terminal' && t.session.hostname && (t.session.protocol === 'Telnet' || t.session.protocol === 'SSH2' || t.session.protocol === 'Raw')
         ? [{ label: 'Open Web Interface...', action: () => this.ui.openWeb(t.session, t.id, 'device') }] : []),
+      ...(t.kind === 'terminal' && t.session.path && t.session.protocol !== 'Local Shell' && t.session.protocol !== 'Serial'
+        ? [{ label: 'Open SNMP Browser', action: () => void this.tabs.openSnmp(t.session.path, t.session.name) }] : []),
       ...(t.kind === 'terminal' && t.session.mac ? [{ label: 'Wake Up (Wake-on-LAN)', action: () => void this.tabs.wake(t.session, t.id, t.state === 'connected' ? 'none' : 'reconnect') }] : []),
       { separator: true },
       { label: t.logFile ? 'Stop Logging' : 'Log Session...', action: () => this.tabs.toggleLog(t.id) },

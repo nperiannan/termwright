@@ -3,8 +3,8 @@
 <h1 align="center">Termwright</h1>
 
 <p align="center">
-  <b>AI-powered network access, automation, emulation and reservation platform.</b><br/>
-  SSH · Telnet · Serial · SFTP · RDP · VNC · WoL · Discover · Collaborate - on Windows, macOS and Linux.
+  <b>AI-powered network access, automation, monitoring, emulation and reservation platform.</b><br/>
+  SSH · Telnet · Serial · SFTP · RDP · VNC · WoL · SNMP · Syslog · REST API · Discover · Collaborate - on Windows, macOS and Linux.
 </p>
 
 <p align="center">
@@ -28,9 +28,9 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-<p align="center"><img src="docs/assets/termwright-demo.gif" alt="Termwright demo: the AI explains why ports are down, then a traffic run in the emulated lab with live loss and latency" width="900"></p>
+<p align="center"><img src="docs/assets/termwright-demo.gif" alt="Termwright demo: discovery, Wake-on-LAN, SSH and the AI assistant, one command to many tabs, a script, SFTP, the emulated lab and traffic generator, the SNMP Browser, the syslog server, the REST API client and teams" width="900"></p>
 
-<p align="center"><i>Asking the AI about a switch's output, then a traffic run in the emulated lab - recorded with simulated devices.</i> <a href="docs/assets/termwright-demo.mp4">Watch the 1-minute demo (MP4)</a></p>
+<p align="center"><i>Discover Devices, Wake-on-LAN, SSH and the AI assistant, one command to every tab, a script, SFTP, the emulated lab and traffic generator, the SNMP Browser, the syslog server, the REST API client and teams - recorded with simulated devices.</i> <a href="docs/assets/termwright-demo.mp4">Watch the 2-minute demo (MP4)</a></p>
 
 ![Termwright - start page with 3D cards and the Session Manager in the Glacier style](docs/screenshots/glacier-start-dark.png)
 
@@ -100,7 +100,7 @@ Termwright began as a terminal and session manager for network engineers. Today 
 - Jump hosts (chainable), proxies and port forwarding; device web interfaces opened through the SSH connection
 - RDP and VNC, also through a jump host - and RDP or VNC set up on a Linux machine over SSH
 - Device discovery with device type and network OS detection; device facts (model, version, serial number, MAC address, uptime); *Name After Devices*
-- Automatic login per device type (EXOS, VOSS, Cisco IOS, Linux or your own) and shared accounts
+- Automatic login per device type (EXOS, VOSS, Cisco IOS and NX-OS, Huawei VRP, Eltex MES, Ruckus ICX, Linux or your own) and shared accounts
 - Which devices answer, for every session or one folder; devices that moved to a new address found by their MAC
 - Environments (production, staging, lab or your own) with colours and safeguards
 - Built-in TFTP, FTP and HTTP servers for images, licences and configurations; Network Check (reachability, traceroute, iPerf3)
@@ -111,6 +111,18 @@ Termwright began as a terminal and session manager for network engineers. Today 
 
 And much more - see the [feature list](docs/FEATURES.md).
 
+## SNMP, syslog and REST API
+
+- **SNMP Browser**: v1, v2c and v3 against saved sessions, a MIB tree with the standard MIBs built in and vendor MIBs loaded from files, Walk, Table, Compare, Poll with a live chart, Set, Send Trap, and a trap receiver
+- **Syslog server**: UDP, TCP and TLS, senders matched to saved sessions, search, severity filters, colour / notify / hide rules, files per sender, and a test sender
+- **REST API client** in the spirit of Postman: API sessions with their login in the credential store, request tabs, collections, environments and globals (Postman import and export), per-request authorization, `pm.*` scripts and tests with `setNextRequest`, a collection runner, OpenAPI and cURL import, code export
+- All three are tools for the AI assistant, MCP apps, the local REST API and Python
+
+| | |
+|---|---|
+| ![SNMP Browser](docs/screenshots/snmp-browser.png) <br/>*SNMP Browser: the MIB tree and a walk of the interface table* | ![SNMP polling](docs/screenshots/snmp-poll.png) <br/>*Polling counters with a live chart* |
+| ![Syslog server](docs/screenshots/syslog.png) <br/>*Syslog server: live messages, severities, rules and senders* | ![REST API client](docs/screenshots/api-client.png) <br/>*REST API client: a collection, an environment and the variables panel* |
+
 ## Overview
 
 Termwright is a native desktop program, not a web service. It is written in Go, with an Angular and xterm.js interface, and ships as a single binary for each platform. Sessions are plain-text files that you own. Passwords are kept in the operating system's keychain or your password manager, never in session files. Without the optional AI assistant, team server or sync folder, nothing is sent anywhere except to the hosts you connect to.
@@ -119,6 +131,7 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
 
 ## Recent releases
 
+- **0.42** - the **SNMP Browser** (v1, v2c, v3, MIBs, walk, tables, polling, traps), a **REST API client** like Postman (collections, environments, scripts, tests, Postman and OpenAPI import) and a **syslog server**, all usable by the AI assistant; device types for **Huawei VRP**, **Eltex MES**, **Ruckus ICX** and **Cisco NX-OS**, and a **Detect** pattern per device type so Discover Devices recognises any vendor; a new 2-minute demo.
 - **0.41** - the **Network Map**: the real network drawn from your sessions (LLDP, CDP, EDP, STP, LAG, VLAN) in eight styles, live reading progress, cable and device details; the AI agent's fully autonomous mode asks only on production sessions.
 - **0.40.1** - downloads you can **verify** (`SHA256SUMS` and build provenance), a security policy, contributor guide and issue forms, a [FAQ](docs/FAQ.md), a demo, and the Android build no longer fails when Maven Central rate-limits.
 - **0.40** - **Linux** gets one title bar in Termwright's theme with the menus, window buttons and tabs on their own row; a status bar with the cursor, selection, size, CAP and NUM; the AI chat box as VS Code's; the **Emulated Lab guide**; the source moved into `app/`.
@@ -139,8 +152,11 @@ Every change is in the [changelog](CHANGELOG.md).
 | SSH authentication | Password and keyboard-interactive. Public keys: OpenSSH, encrypted, and PuTTY `.ppk`. SSH certificates, FIDO2 security keys, PIV / PKCS#11 smart cards, Kerberos (GSSAPI), the SSH agent. `known_hosts` verification with prompts for new and changed keys. |
 | Key management | Generate Ed25519, RSA 4096 or ECDSA keys. Install them on Linux, macOS, BSD and Windows OpenSSH servers, test the key-only login, then switch the session to it. |
 | Device types | Per-platform login profiles: login steps for Telnet and serial, after-login steps for every protocol (for example `enable`, paging off), and credentials inherited or overridden per session. |
-| Device facts | Model, version, serial number, MAC address, uptime and custom values, read in a background login. Built-in rules for VOSS, EXOS, Cisco IOS and Linux. |
+| Device facts | Model, version, serial number, MAC address, uptime and custom values, read in a background login. Built-in rules for VOSS, EXOS, Cisco IOS and NX-OS, Huawei VRP, Eltex MES, Ruckus ICX and Linux. |
 | Session management | Wake-on-LAN (also through a jump host); folders with defaults; favourites and recents; environments, with confirmation before multi-tab sends to production; reachability checks; bulk edit; workspaces; Quick Open; drag and drop. |
+| Syslog | A syslog server (UDP, TCP, TLS; RFC 3164 and 5424) with live view, senders matched to saved sessions, search, severity filters, colour / notify / hide rules and daily files, plus a test message sender; usable from the AI assistant, MCP apps, the local API and Python. |
+| API client | A free REST client in the spirit of Postman: API sessions with API key, bearer, login-request, basic and OAuth 2.0 authentication (secrets in the credential store), `{{variables}}` with Postman-style environments and globals (import Postman environments), request tabs, per-request and per-collection authorization, request settings, collections as plain JSON files, `pm.*` tests and pre-request scripts with `setNextRequest` and `sendRequest`, a collection runner with data files, a console, import of Postman collections, OpenAPI / Swagger (YAML or JSON) and cURL, code export; usable from the AI assistant, MCP apps, the local API and Python. |
+| SNMP | SNMP Browser for v1, v2c and v3 (Get, Walk, Table, Set) with a MIB tree, the standard MIBs built in and vendor MIBs loaded from files, a trap receiver, credentials kept in the computer's credential store; usable from the AI assistant, MCP apps, the local API and Python. |
 | Discovery | Scans a network or range (up to /22): open ports, SSH and Telnet banners, web servers and certificates, SIP, SNMP v2c, DNS, MAC vendor. Each result shows its evidence, a guessed kind, a device type and *Connect ▾*; selected devices are added as sessions. Discovery never logs in. |
 | Emulated lab | QEMU/KVM on one or several Linux hosts: real images (qcow2, GNS3 appliances, a public catalogue, cloud images, Install from ISO), device packs with port layouts and personas, consoles and SSH sessions per device, cables within and between hosts, live moves, fast start, checkpoints, history with Revert, CPU sharing and limits; Linux PCs, L2 switches, hubs, lab servers (HTTP, FTP, TFTP, DHCP, RADIUS, DNS), a route generator (OSPF, BGP) and ESP32 microcontrollers. |
 | Traffic generator | Test ports on switch ports, on a host's network card cabled to a real switch, or on a TRex server; UDP, TCP, ICMP, ARP, raw and pcap streams and real TCP sessions with VLAN, 802.1p and DSCP, fixed, increasing, random or IMIX sizes and changing fields; latency, jitter, loss, order and per-flow counts; RFC 2544 (throughput, latency, frame loss, back-to-back), RFC 2889 learning, convergence and iperf3 tests; 802.1X and DHCP clients, multicast, LACP, LLDP and spanning tree; packet capture and decode; a test library and HTML, PDF and Excel reports; a built-in and a fast engine. |

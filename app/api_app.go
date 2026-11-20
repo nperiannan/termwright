@@ -18,8 +18,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/termwright/termwright/internal/apiclient"
 	"github.com/termwright/termwright/internal/config"
 	"github.com/termwright/termwright/internal/emu"
+	"github.com/termwright/termwright/internal/syslog"
 	"gopkg.in/yaml.v3"
 )
 
@@ -81,6 +83,14 @@ func (a *App) apiHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 		route, arg = "/lab/tools/{tool}", seg[2]
 	} else if len(seg) == 3 && seg[0] == "lab" && seg[1] == "screen" {
 		route, arg = "/lab/screen/{id}", seg[2]
+	} else if len(seg) == 2 && seg[0] == "tools" {
+		route, arg = "/tools/{tool}", seg[1]
+	} else if len(seg) == 3 && seg[0] == "snmp" && seg[1] == "mib" {
+		route, arg = "/snmp/mib/{object}", seg[2]
+	} else if len(seg) == 3 && seg[0] == "http" && seg[1] == "collections" {
+		route, arg = "/http/collections/{collection}", seg[2]
+	} else if len(seg) == 4 && seg[0] == "http" && seg[1] == "collections" && seg[3] == "run" {
+		route, arg = "/http/collections/{collection}/run", seg[2]
 	}
 	ms, ok := apiRoutes[route]
 	if !ok {
@@ -98,6 +108,216 @@ func (a *App) apiHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 		apiOut(w, http.StatusOK, v, err)
 	case "/lab/tools":
 		apiOut(w, http.StatusOK, apiTools(), nil)
+	case "/tools":
+		apiOut(w, http.StatusOK, apiNetTools(), nil)
+	case "/tools/{tool}":
+		if !isNetTool(arg) {
+			apiProblem(w, http.StatusNotFound, "no-tool", "No tool "+arg+" (GET /api/v1/tools lists them).")
+			return
+		}
+		out, err := a.netToolRun(r.Context(), arg, body, func(string, string, bool) error { return nil })
+		apiOut(w, http.StatusOK, map[string]string{"result": out}, err)
+	case "/snmp":
+		var req SNMPRequest
+		if err := apiDecode(body, &req); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		req.Confirmed = true // the scripts are the user's own
+		res, err := a.snmpRun(r.Context(), req)
+		apiOut(w, http.StatusOK, res, err)
+	case "/snmp/mib":
+		apiOut(w, http.StatusOK, a.SNMPMibSearch(r.URL.Query().Get("q")), nil)
+	case "/snmp/mib/{object}":
+		n, err := a.SNMPMibInfo(arg)
+		if err != nil {
+			apiProblem(w, http.StatusNotFound, "not-found", err.Error())
+			return
+		}
+		apiOut(w, http.StatusOK, n, nil)
+	case "/snmp/traps":
+		apiOut(w, http.StatusOK, a.SNMPTraps(), nil)
+	case "/snmp/trap":
+		var in SNMPTrapSendIn
+		if err := apiDecode(body, &in); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		err := a.SNMPSendTrap(in)
+		apiOut(w, http.StatusOK, map[string]string{"sent": in.TrapOID}, err)
+	case "/http/send":
+		var req HTTPSendRequest
+		if err := apiDecode(body, &req); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		req.Confirmed = true // the scripts are the user's own
+		res, err := a.httpSend(r.Context(), req)
+		apiOut(w, http.StatusOK, res, err)
+	case "/http/collections":
+		if r.Method == http.MethodGet {
+			apiOut(w, http.StatusOK, a.HTTPCollections(), nil)
+			return
+		}
+		var c apiclient.Collection
+		if err := apiDecode(body, &c); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		c.ID = ""
+		c, err := a.HTTPSaveCollection(c)
+		apiOut(w, http.StatusCreated, c, err)
+	case "/http/collections/{collection}":
+		switch r.Method {
+		case http.MethodGet:
+			c, err := a.HTTPCollection(arg)
+			if err != nil {
+				apiProblem(w, http.StatusNotFound, "not-found", err.Error())
+				return
+			}
+			if r.URL.Query().Get("format") == "postman" {
+				t, err := a.HTTPExportText(c.ID, "postman")
+				if err == nil {
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = w.Write([]byte(t))
+					return
+				}
+			}
+			apiOut(w, http.StatusOK, c, nil)
+		case http.MethodPut:
+			var c apiclient.Collection
+			if err := apiDecode(body, &c); err != nil {
+				apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+				return
+			}
+			old, err := a.HTTPCollection(arg)
+			if err != nil {
+				apiProblem(w, http.StatusNotFound, "not-found", err.Error())
+				return
+			}
+			c.ID = old.ID
+			c, err = a.HTTPSaveCollection(c)
+			apiOut(w, http.StatusOK, c, err)
+		case http.MethodDelete:
+			c, err := a.HTTPCollection(arg)
+			if err != nil {
+				apiProblem(w, http.StatusNotFound, "not-found", err.Error())
+				return
+			}
+			if err := a.HTTPDeleteCollection(c.ID); err != nil {
+				apiOut(w, http.StatusOK, nil, err)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		}
+	case "/http/collections/{collection}/run":
+		var req HTTPRunRequest
+		if err := apiDecode(body, &req); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		req.Collection, req.Confirmed = arg, true
+		res, err := a.httpRun(r.Context(), req)
+		apiOut(w, http.StatusOK, res, err)
+	case "/http/import":
+		var in HTTPImportIn
+		if err := apiDecode(body, &in); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		c, err := a.HTTPImport(in.Text, in.Name, in.Session)
+		if err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		apiOut(w, http.StatusCreated, c, nil)
+	case "/http/history":
+		apiOut(w, http.StatusOK, a.HTTPHistory(), nil)
+	case "/http/environments":
+		if r.Method == http.MethodGet {
+			apiOut(w, http.StatusOK, a.HTTPEnvironments(), nil)
+			return
+		}
+		var in HTTPEnv
+		if err := apiDecode(body, &in); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		e, err := a.HTTPSaveEnvironment(in)
+		apiOut(w, http.StatusOK, e, err)
+	case "/http/variables":
+		var in HTTPSendRequest
+		if err := apiDecode(body, &in); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		vs, err := a.HTTPVariables(in)
+		apiOut(w, http.StatusOK, vs, err)
+	case "/syslog":
+		apiOut(w, http.StatusOK, a.SyslogState(), nil)
+	case "/syslog/start":
+		set := a.SyslogSettingsGet()
+		if len(body) > 0 {
+			if err := apiDecode(body, &set); err != nil {
+				apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+				return
+			}
+		}
+		st, err := a.SyslogStart(set)
+		apiOut(w, http.StatusOK, st, err)
+	case "/syslog/stop":
+		a.SyslogStop()
+		apiOut(w, http.StatusOK, a.SyslogState(), nil)
+	case "/syslog/messages":
+		if r.Method == http.MethodDelete {
+			a.SyslogClear()
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		qv := r.URL.Query()
+		q := syslog.Query{Text: qv.Get("q"), Host: qv.Get("host")}
+		fmt.Sscan(qv.Get("after"), &q.After)
+		fmt.Sscan(qv.Get("limit"), &q.Limit)
+		if sv := qv.Get("severity"); sv != "" {
+			n := syslog.SeverityOf(sv)
+			if n < 0 {
+				apiProblem(w, http.StatusBadRequest, "bad-request", "unknown severity "+sv)
+				return
+			}
+			q.MaxSeverity = &n
+		}
+		var mins int
+		if fmt.Sscan(qv.Get("minutes"), &mins); mins > 0 {
+			q.Since = time.Now().Add(-time.Duration(mins) * time.Minute)
+		}
+		l, err := a.SyslogMessages(q)
+		if err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		apiOut(w, http.StatusOK, l, nil)
+	case "/syslog/send":
+		var in SyslogSendIn
+		if err := apiDecode(body, &in); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		msg, err := a.SyslogSend(in)
+		apiOut(w, http.StatusOK, map[string]string{"sent": msg}, err)
+	case "/syslog/rules":
+		if r.Method == http.MethodGet {
+			apiOut(w, http.StatusOK, a.SyslogRules(), nil)
+			return
+		}
+		var in struct {
+			Rules []SyslogRule `json:"rules"`
+		}
+		if err := apiDecode(body, &in); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		err := a.SyslogSetRules(in.Rules)
+		apiOut(w, http.StatusOK, a.SyslogRules(), err)
 	case "/lab/tools/{tool}":
 		a.apiTool(w, "lab_"+arg, body)
 	case "/lab/screen/{id}":
@@ -288,6 +508,21 @@ var apiRoutes = map[string][]string{
 	"/lab/traffic/streams": {"POST"}, "/lab/traffic/streams/{id}": {"PUT", "DELETE"},
 	"/lab/traffic/tests": {"GET", "POST"}, "/lab/traffic/tests/{id}": {"PUT", "DELETE"}, "/lab/traffic/tests/{id}/run": {"POST"},
 	"/lab/traffic/runs": {"GET"}, "/lab/traffic/runs/{id}": {"GET"}, "/lab/traffic/runs/stop": {"POST"},
+	"/tools": {"GET"}, "/tools/{tool}": {"POST"}, "/snmp": {"POST"}, "/snmp/mib": {"GET"}, "/snmp/mib/{object}": {"GET"}, "/snmp/traps": {"GET"}, "/snmp/trap": {"POST"},
+	"/http/send": {"POST"}, "/http/collections": {"GET", "POST"}, "/http/collections/{collection}": {"GET", "PUT", "DELETE"},
+	"/http/collections/{collection}/run": {"POST"}, "/http/import": {"POST"}, "/http/history": {"GET"},
+	"/http/environments": {"GET", "POST"}, "/http/variables": {"POST"},
+	"/syslog": {"GET"}, "/syslog/start": {"POST"}, "/syslog/stop": {"POST"}, "/syslog/messages": {"GET", "DELETE"}, "/syslog/send": {"POST"}, "/syslog/rules": {"GET", "PUT"},
+}
+
+// HTTPImportIn imports a cURL command, a Postman collection or an OpenAPI document as a collection.
+type HTTPImportIn struct {
+	// Text: the cURL command(s), the Postman v2.1 collection or the OpenAPI 3 / Swagger 2 document (JSON or YAML).
+	Text string `json:"text"`
+	// Name of the collection (default: from the document).
+	Name string `json:"name,omitempty"`
+	// Session: the API session the collection uses.
+	Session string `json:"session,omitempty"`
 }
 
 // apiOpenAPIYAML is docs/api/openapi.yaml (Use).
@@ -750,3 +985,22 @@ Tools:
 	b.WriteString("  " + strings.Join(names, ", ") + "\n")
 	return b.String()
 }()
+
+// SNMPTrapsView is the trap receiver and what it got.
+type SNMPTrapsView struct {
+	// State: whether it listens, on which port.
+	State SNMPTrapState `json:"state"`
+	// Traps: the notifications, newest first.
+	Traps []SNMPTrapView `json:"traps"`
+}
+
+// apiNetTools lists the network tools for the API's callers.
+func apiNetTools() []apiToolInfo {
+	var out []apiToolInfo
+	for _, t := range netTools {
+		p, _ := t.InputSchema["properties"].(map[string]any)
+		req, _ := t.InputSchema["required"].([]string)
+		out = append(out, apiToolInfo{t.Name, t.Description, p, req})
+	}
+	return out
+}

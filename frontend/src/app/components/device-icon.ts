@@ -70,7 +70,7 @@ export function deviceKindOf(deviceType: string | undefined): DeviceKind | '' {
   if (/firewall|fortigate|fortios|palo|pan-?os|asa\b|pfsense|opnsense|srx|checkpoint|sonicwall/.test(t)) return 'firewall';
   if (/wireless|wi-?fi|\bap\b|access point|wing|aruba ?os|unifi/.test(t)) return 'wireless';
   if (/router|ios-?xr|junos|mikrotik|routeros|vyos|edgeos|isr|asr/.test(t)) return 'router';
-  if (/voss|exos|boss|switch|nx-?os|\bios\b|eos|cumulus|sonic|fabric|extreme|cisco|arista|aruba|procurve|comware|dell ?os|icx|fastiron|slx|netiron/.test(t)) return 'switch';
+  if (/voss|exos|boss|switch|nx-?os|\bios\b|eos|cumulus|sonic|fabric|extreme|cisco|arista|aruba|procurve|comware|dell ?os|icx|fastiron|slx|netiron|huawei|vrp|eltex|\bmes\d/.test(t)) return 'switch';
   if (/linux|ubuntu|debian|centos|rhel|red hat|fedora|alpine|unix|bsd|solaris|aix|server|esxi/.test(t)) return 'server';
   if (/windows|macos|mac os|desktop|laptop/.test(t)) return 'computer';
   if (/nas|synology|qnap|truenas|storage/.test(t)) return 'nas';

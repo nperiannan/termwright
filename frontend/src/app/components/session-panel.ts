@@ -2,7 +2,7 @@ import { filesPanelFor } from '../core/device-kind';
 import { Component, HostListener, computed, effect, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend, errText } from '../core/backend';
-import { BAUD_RATES, PROTOCOLS, Session, SessionNode, defaultPort } from '../core/models';
+import { protoLabel, BAUD_RATES, PROTOCOLS, Session, SessionNode, defaultPort } from '../core/models';
 import { accountChoice, defaultLogin, defaultText, setAccountChoice, userOf } from '../core/accounts';
 import { envList } from '../core/env';
 import { Tabs } from '../core/tabs.service';
@@ -43,10 +43,7 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
         <div class="f"><span>Protocol</span>
           <div class="seg">
             @for (p of main; track p) { <button type="button" [class.on]="s.protocol === p" (click)="setProto(p)">{{ p === 'SSH2' ? 'SSH' : p }}</button> }
-            <select name="other" [class.on]="!main.includes(s.protocol)" [ngModel]="main.includes(s.protocol) ? '' : s.protocol" (ngModelChange)="$event && setProto($event)">
-              <option value="">More…</option>
-              @for (p of others; track p) { <option [value]="p">{{ p === 'WOL' ? 'Wake-on-LAN' : p }}</option> }
-            </select>
+            <button type="button" class="more-p" [class.on]="!main.includes(s.protocol)" (click)="protoMenu($event)" aria-haspopup="menu" title="More protocols">{{ main.includes(s.protocol) ? 'More…' : protoLabel(s.protocol) }}<span class="cv">▾</span></button>
           </div>
         </div>
         @switch (s.protocol) {
@@ -398,9 +395,16 @@ export class SessionPanel {
     }).catch(() => {});
   }
 
+  readonly protoLabel = protoLabel;
+  protoMenu(ev: MouseEvent) {
+    const s = this.s;
+    if (!s) return;
+    this.ui.showMenu(ev, this.others.map(p => ({ label: (s.protocol === p ? '✓ ' : '') + protoLabel(p), icon: '', action: () => this.setProto(p) })));
+  }
   setProto(p: string) {
     if (!this.s) return;
     this.s.protocol = p;
+    if (p === 'API' || p === 'SNMP') { this.s.deviceType = ''; this.more(''); return; } // their settings are on the full editor's pages
     if (p === 'WOL') { this.s.deviceType = ''; if (!this.s.wolNetwork && this.s.hostname) this.s.wolNetwork = this.s.hostname.replace(/\.\d+$/, '.0/24'); }
     this.s.port = defaultPort(p) || this.s.port;
     if (p === 'Console' && !this.s.consoleMethod) { this.s.consoleMethod = 'opengear-ssh'; this.s.initialCr = true; }
@@ -432,7 +436,7 @@ export class SessionPanel {
 
   devKind() { return this.s?.protocol === 'WOL' ? null : deviceKindOf(this.s?.deviceType); }
   protoKind(): SessionKind {
-    const m: Record<string, SessionKind> = { Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc', WOL: 'wol' };
+    const m: Record<string, SessionKind> = { Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc', WOL: 'wol', API: 'api', SNMP: 'snmp' };
     return m[this.s?.protocol ?? ''] ?? (this.s?.openAs === 'sftp' ? 'sftp' : 'ssh');
   }
   envColor() { return this.envs().find(e => e.id === this.s?.environment)?.color ?? null; }

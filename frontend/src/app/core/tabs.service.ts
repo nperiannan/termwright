@@ -34,7 +34,14 @@ export interface TabView {
   cols: number;
   rows: number;
   locked: boolean;
-  kind: 'terminal' | 'sftp' | 'rdp' | 'vnc' | 'player' | 'lab' | 'map';
+  kind: 'terminal' | 'sftp' | 'rdp' | 'vnc' | 'player' | 'lab' | 'map' | 'snmp' | 'api' | 'syslog';
+  /** Syslog tab: a page to show (send:<time>). */
+  syslogPage?: string;
+  /** API client tab: the API session it starts on. */
+  apiSession?: string;
+  /** SNMP Browser tab: the saved session it starts on ('' = choose one); snmpPage opens a page (results, traps). */
+  snmpSession?: string;
+  snmpPage?: string;
   /** Network Map tab: what it maps. */
   mapTargets?: string[];
   mapScope?: string;
@@ -630,6 +637,8 @@ export class Tabs {
       const node = this.ui.findNode(path);
       if (isRemoteDesktop(node?.protocol)) { await this.openRemote(path, null); return; }
       if (node?.protocol === 'WOL') { await this.wol.wake(await this.backend.getSession(path)); return; }
+      if (node?.protocol === 'API') { await this.openApi(path, node.name); return; }
+      if (node?.protocol === 'SNMP') { await this.openSnmp(path, node.name); return; }
       if ((this.ui.settings()?.teams ?? []).length && node && !(await this.injector.get(TeamStatusService).allowConnect(node))) return; // reserved by someone else
       if (as !== 'terminal') {
         const s = await this.backend.getSession(path);
@@ -776,6 +785,52 @@ export class Tabs {
       id, title: '⛓ ' + name, state: 'connected', message: '', info: name,
       session: { ...s, name, path: '' }, logFile: '', cols: 0, rows: 0, locked: false, kind: 'map', parentId: '', home: '', recording: false,
       mapTargets: targets, mapScope: scope, mapTitle: title, mapOpened: opened,
+    };
+    this.tabs.update(l => [...l, tv]);
+    this.activeId.set(tv.id);
+  }
+
+  /** The syslog server's tab (one). page 'send' opens the test message form. */
+  async openSyslog(page = '') {
+    const open = this.tabs().find(t => t.kind === 'syslog');
+    if (open) { if (page) this.patch(open.id, { syslogPage: page + ':' + Date.now() }); this.activeId.set(open.id); return; }
+    const s = await this.backend.newSessionDefaults();
+    const tv: TabView = {
+      id: 'syslog', title: '≋ Syslog', state: 'connected', message: '', info: 'Syslog',
+      session: { ...s, name: 'Syslog', path: '' }, logFile: '', cols: 0, rows: 0, locked: false, kind: 'syslog', parentId: '', home: '', recording: false,
+      syslogPage: page ? page + ':' + Date.now() : '',
+    };
+    this.tabs.update(l => [...l, tv]);
+    this.activeId.set(tv.id);
+  }
+
+  /** The API client: one tab per API session (path '' = the plain client, which picks a session). */
+  async openApi(path = '', name = '') {
+    const id = 'api-' + (path || 'client');
+    const open = this.tabs().find(t => t.id === id) || (!path ? this.tabs().find(t => t.kind === 'api') : undefined);
+    if (open) { this.activeId.set(open.id); return; }
+    const s = await this.backend.newSessionDefaults();
+    const title = 'API' + (name ? ': ' + name : ' Client');
+    const tv: TabView = {
+      id, title: '{ } ' + title, state: 'connected', message: '', info: title,
+      session: { ...s, name: title, path: '' }, logFile: '', cols: 0, rows: 0, locked: false, kind: 'api', parentId: '', home: '', recording: false,
+      apiSession: path,
+    };
+    this.tabs.update(l => [...l, tv]);
+    this.activeId.set(tv.id);
+  }
+
+  /** The SNMP Browser: one tab per session (path '' = the plain browser). page 'traps' shows the trap receiver. */
+  async openSnmp(path = '', name = '', page = '') {
+    const id = 'snmp-' + (path || 'browser');
+    const open = this.tabs().find(t => t.id === id) || (!path ? this.tabs().find(t => t.kind === 'snmp') : undefined);
+    if (open) { if (page) this.patch(open.id, { snmpPage: page + ':' + Date.now() }); this.activeId.set(open.id); return; }
+    const s = await this.backend.newSessionDefaults();
+    const title = 'SNMP' + (name ? ': ' + name : ' Browser');
+    const tv: TabView = {
+      id, title: '◈ ' + title, state: 'connected', message: '', info: title,
+      session: { ...s, name: title, path: '' }, logFile: '', cols: 0, rows: 0, locked: false, kind: 'snmp', parentId: '', home: '', recording: false,
+      snmpSession: path, snmpPage: page ? page + ':' + Date.now() : '',
     };
     this.tabs.update(l => [...l, tv]);
     this.activeId.set(tv.id);

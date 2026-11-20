@@ -239,6 +239,14 @@ func aiPrompt(r AIRequest, text string) (string, string) {
 		"Prefer show (read-only) commands; mark any command that changes the configuration or may interrupt traffic with a warning before it. " +
 		"Parts of the text were replaced with [secret] or [host-N] before it was sent to you; keep them as they are."
 	switch r.Kind {
+	case "apiscript", "apiprescript":
+		what := "test script (runs on the answer)"
+		if r.Kind == "apiprescript" {
+			what = "pre-request script (runs before the request is sent; pm.response does not exist there)"
+		}
+		sys := "You write Termwright API client scripts in JavaScript (ES5.1 plus arrow functions, const and let; no require, no async, no fetch). " + pmReference +
+			"\nAnswer with the whole " + what + " in one ```javascript block and nothing else; keep any lines of the current script that still fit, and name each pm.test clearly."
+		return sys, "What the script must do: " + strings.TrimSpace(r.Question) + "\n\n" + text
 	case "explain":
 		q := strings.TrimSpace(r.Question)
 		switch {

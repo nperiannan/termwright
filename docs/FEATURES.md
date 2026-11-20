@@ -146,7 +146,7 @@ Without a team Termwright works on its own and sends nothing anywhere.
 
 ## Device types (login profiles)
 
-- **Built-in profiles**: EXOS, VOSS, Cisco IOS and Linux; add your own.
+- **Built-in profiles**: EXOS, VOSS, Cisco IOS, Cisco NX-OS, Huawei VRP, Eltex MES, Ruckus (Brocade) ICX and Linux, with login, paging off, configuration backup and device facts; add your own, with a **Detect** pattern that Discover Devices and *Identify Device Type* use to recognise it.
 - **Own username and password** per device type (keychain, password manager, or *No password*).
 - **Login steps** for Telnet / Serial / Raw and **after-login steps** for every protocol (`enable`, paging off).
 - **Remember for device type**: a password typed at a login prompt can be saved for the whole device type.
@@ -343,4 +343,20 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **A shortcut for nearly every menu command** (e.g. Disconnect, Clear Screen, Auto Scroll, Timestamps, Log Session, Open SFTP Tab, Save Screen As Image, Save Selection as Device Fact); Help → Keyboard Shortcuts lists them with a search box.
 - `Mod` = Cmd on macOS, Ctrl+Shift on Windows/Linux: `O` sessions, `Q` quick connect, `L` local shell, `R` reconnect, `W` close tab, `P` SFTP tab, `F` find, `S` save scrollback, `M` session manager, `K` command window, `B` button bar, `E` command library, `Y` command history, `J` recording marker, `G` Quick Open.
 
+- **Syslog server** (Syslog menu): UDP, TCP (newline or octet-counted) and TLS (own or self-signed certificate); RFC 3164 and 5424; live list with saved session of each sender, severity counts and filters, words or /regex/ search, pause / follow, details, Connect, Export CSV / text; rules that colour, notify or hide; daily files (per sender); start with Termwright.
+- **Syslog client**: test messages (RFC 5424 or 3164, any facility and severity, UDP / TCP / TLS, many at once).
+- **Syslog for automation**: the in-app AI agent, MCP apps, the local REST API (`/api/v1/syslog…`) and the Python client (`wait_for` a message in tests).
+- **API scripts by the AI**: Write with AI in the Scripts tab; the agent writes and runs `pm.*` tests. **Monochrome body** button for plain black / white answers.
+- **API client** (API menu; double-click an API session): requests with any method, parameters, headers and bodies (JSON, text, XML, forms, multipart with files, GraphQL); answers as coloured JSON, headers, cookies, tests and a timing timeline; history; code as cURL, Python, JavaScript or PowerShell.
+- **API sessions** (protocol REST API): base URL, API key, bearer token, login request (token found in the answer, renewed by itself), basic, OAuth 2.0; `{{variables}}` with Production values; secret variables; any-certificate and own-CA TLS. Secrets in the OS credential store, masked everywhere.
+- **Collections and runner**: plain JSON files with folders; Postman-style `pm.*` tests and pre-request scripts (`postman.setNextRequest`, `pm.sendRequest`, `pm.execution.skipRequest`); collection authorization, scripts and variables; Run Collection with an environment, iterations, CSV / JSON data, delay, stop on failure.
+- **Like Postman**: request tabs; Docs, Params with path variables and bulk edit, Authorization (inherit, none, bearer, basic, API key) per request and per collection, Headers with hidden auto headers and presets, Body (form-data with files, URL-encoded, raw JSON / Text / JavaScript / HTML / XML, binary, GraphQL), Scripts before and after, request Settings (HTTP version, certificates, redirects, URL encoding, cookies, timeout); environments and globals with secret values in the credential store; coloured `{{variables}}` and a variables panel; console; cookie manager; Send and Download; paste cURL into the URL.
+- **Import and export**: Postman v2.0 / v2.1 collections and environments, OpenAPI 3 and Swagger 2 (YAML or JSON), cURL; export for Postman v2.1.
+- **API client for automation**: the in-app AI agent, MCP apps, the local REST API (`/api/v1/http…`) and the Python client; changes on production sessions always ask.
+- **SNMP Browser** (SNMP menu, or right-click a session → Open SNMP Browser): Get, Get Next, Get Bulk, Walk, Table and Set; SNMP v1, v2c, v3 (MD5, SHA-1, SHA-2; DES, AES-128/192/256); MIB tree with search and object details; 24 IETF/IANA MIBs built in, vendor MIBs from files; readable values (enum names, speeds, MAC addresses); Table view, History, Favourites, Export CSV.
+- **SNMP Browser extras**: several devices at once, Compare two walks, Poll with a live chart (counter rates), Send Trap (v1/v2c/v3), MIBs window (modules, problems, open folder, remove).
+- **SNMP sessions** and a separate write community; Open SNMP Browser from a terminal tab.
+- **SNMP credentials in the session**: session properties → SNMP (version, address, port, community or v3 user and protocols, context, Allow Set, Test); the community and v3 passwords are in the OS credential store.
+- **Trap receiver**: v1, v2c and v3 traps and informs on any UDP port, named from the MIBs, matched to sessions.
+- **SNMP for automation**: the in-app AI agent, MCP apps, the local REST API (`/api/v1/snmp…`, `/api/v1/tools`) and the Python client; a Set needs Allow Set, and production sessions always ask.
 - **Network Map**: live topology from your sessions (LLDP, CDP, EDP, STP, LAG; EXOS, VOSS, Cisco, Arista, Junos; CLI or SNMP), auto-arranged, zoom, export to JPEG, PDF or HTML. The labs have the same Arrange styles.

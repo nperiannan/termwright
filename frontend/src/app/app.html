@@ -85,6 +85,12 @@
               @defer (on immediate) { <app-lab-workspace [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" /> } @placeholder { <div class="lab-loading">Loading the lab…</div> }
             } @else if (t.kind === 'map') {
               @defer (on immediate) { <app-network-map [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" /> } @placeholder { <div class="lab-loading">Loading the map…</div> }
+            } @else if (t.kind === 'syslog') {
+              @defer (on immediate) { <app-syslog-view [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" /> } @placeholder { <div class="lab-loading">Loading…</div> }
+            } @else if (t.kind === 'api') {
+              @defer (on immediate) { <app-api-client [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" /> } @placeholder { <div class="lab-loading">Loading…</div> }
+            } @else if (t.kind === 'snmp') {
+              @defer (on immediate) { <app-snmp-browser [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" /> } @placeholder { <div class="lab-loading">Loading…</div> }
             } @else if (t.kind === 'player') {
               <app-player-view [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" />
             } @else if (t.filesPanel && t.session.protocol === 'SSH2') {
@@ -114,7 +120,7 @@
             <div class="home-brand">
               <img class="logo" [src]="ui.lightUi() ? 'icon.svg' : 'icon-dark.svg'" alt="" width="40" height="40" />
               <h1>Termwright</h1>
-              <div class="tag"><b>AI-powered network access, automation, emulation and reservation platform</b><span translate="no">SSH · Telnet · Serial · SFTP · RDP · VNC · WoL · Discover · Collaborate</span></div>
+              <div class="tag"><b>AI-powered network access, automation, monitoring, emulation and reservation platform</b><span translate="no">SSH · Telnet · Serial · SFTP · RDP · VNC · SNMP · Syslog · REST API · Collaborate</span></div>
             </div>
             <label [class]="'bigsearch qs-' + qaStyle()">
               <app-icon name="find" [size]="18" />

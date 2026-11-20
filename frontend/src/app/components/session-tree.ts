@@ -749,6 +749,8 @@ export class SessionTree implements AfterViewInit, OnDestroy {
   protoName(n: SessionNode) { return protoName(n); }
   protoIcon(n: SessionNode): SessionKind {
     switch (n.protocol) {
+      case 'API': return 'api';
+      case 'SNMP': return 'snmp';
       case 'Serial': return 'serial';
       case 'Console': return 'console';
       case 'Local Shell': return 'shell';
@@ -853,8 +855,8 @@ export class SessionTree implements AfterViewInit, OnDestroy {
               { label: `Connect SFTP Session to ${n.hostname}`, action: () => void this.tabs.openSession(n.path, 'sftp', 'jump') },
               { label: `Connect SFTP Session to ${n.hopTarget} (through ${n.hostname})`, action: () => void this.tabs.openSession(n.path, 'sftp', 'target') },
             ] : [{ label: 'Connect SFTP Session', action: () => void this.tabs.openSession(n.path, 'sftp') }]),
-          ] : n.protocol === 'WOL' ? [] : [{ label: 'Connect', action: () => this.connect(n) }]),
-          ...(n.hostname && n.protocol !== 'RDP' && n.protocol !== 'VNC' ? [
+          ] : n.protocol === 'WOL' ? [] : n.protocol === 'API' ? [{ label: 'Open in API Client', action: () => void this.tabs.openApi(n.path, n.name) }] : n.protocol === 'SNMP' ? [{ label: 'Open in SNMP Browser', action: () => void this.tabs.openSnmp(n.path, n.name) }] : [{ label: 'Connect', action: () => this.connect(n) }]),
+          ...(n.hostname && n.protocol !== 'RDP' && n.protocol !== 'VNC' && n.protocol !== 'API' ? [
             ...(n.protocol === 'SSH2' ? [{ label: 'Open Web Page Through This Session...', disabled: !dtTunnels(this.ui.settings()?.deviceTypes, n.deviceType), hint: dtTunnels(this.ui.settings()?.deviceTypes, n.deviceType) ? undefined : 'no forwarding', action: () => void this.openWeb(n.path, 'session') }] : []),
             ...(n.protocol === 'SSH2' ? [{ label: 'Set Up Remote Desktop...', action: () => void this.remoteDesktop.openFor(n.path) }] : []),
             ...(n.protocol === 'SSH2' ? [{ label: 'Diagnose Remote Desktop...', action: () => this.ui.openRemoteDiag(n.path, n.name, 'SSH2') }] : []),
@@ -866,16 +868,19 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           ...(n.protocol === 'WOL' && n.hostname ? [{ label: 'Check Now (ping)', action: () => this.wol.checkNow(n.path) }] : []),
           { separator: true },
           { label: 'Environment' + this.envSuffix(n.environment ?? '', envOf(n.path, '', this.ui.settings()?.folderDefaults)) + '...', action: () => void this.chooseEnv(n) },
-          ...(n.protocol === 'SSH2' || n.protocol === 'Telnet' ? [{ label: 'Refresh Device Facts', action: () => void this.ui.refreshFacts(n.path, true) }] : []),
+          ...(n.protocol === 'SSH2' || n.protocol === 'Telnet' ? [{ label: 'Refresh Device Facts', action: () => void this.ui.refreshFacts(n.path, true) }, { label: 'Identify Device Type', icon: 'find', action: () => void this.ui.identifyDeviceType(n.path) }] : []),
           ...((n.protocol === 'SSH2' || n.protocol === 'Telnet') && !n.team && isAddressName(n.name, n.hostname) ? [{ label: 'Name After Device...', action: () => this.nameAfter([n.path], n.path) }] : []),
           { label: this.isFav(n.path) ? 'Remove from Favourites' : 'Add to Favourites', action: () => this.setFav([n.path], !this.isFav(n.path)) },
           ...(sec === 'recent' ? [{ label: 'Remove from Recent', action: () => this.ui.removeRecent(n.path) }] : []),
-          ...(n.protocol === 'RDP' || n.protocol === 'VNC' || n.protocol === 'Local Shell' || n.protocol === 'WOL' ? [] : [
+          ...(n.protocol === 'RDP' || n.protocol === 'VNC' || n.protocol === 'Local Shell' || n.protocol === 'WOL' || n.protocol === 'API' ? [] : [
             { label: 'Show Topology (directly connected)', action: () => this.showTopology([n.path], n.name, 'd:' + n.path) },
-            { label: 'Back Up Configuration', action: () => this.backUp([n.path]) },
-            { label: 'Change Checklist...', action: () => this.checklist([n.path]) },
+            ...(n.protocol === 'SNMP' ? [] : [
+              { label: 'Open SNMP Browser', action: () => void this.tabs.openSnmp(n.path, n.name) },
+              { label: 'Back Up Configuration', action: () => this.backUp([n.path]) },
+              { label: 'Change Checklist...', action: () => this.checklist([n.path]) },
+            ]),
           ]),
-          ...(n.protocol === 'RDP' || n.protocol === 'VNC' || n.protocol === 'Local Shell' || n.protocol === 'Serial' || n.protocol === 'WOL' ? [] : [
+          ...(n.protocol === 'RDP' || n.protocol === 'VNC' || n.protocol === 'Local Shell' || n.protocol === 'Serial' || n.protocol === 'WOL' || n.protocol === 'API' || n.protocol === 'SNMP' ? [] : [
             { label: 'Run and Collect...', action: () => this.collect([n.path]) },
           ]),
           ...(n.protocol === 'SSH2' || n.protocol === 'Telnet' ? [

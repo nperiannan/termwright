@@ -60,10 +60,39 @@ Settings, and turning one on does not turn on the other.
 | `GET /lab/traffic/runs` | The running test and the last 20 runs | 200 `TestRun[]` |
 | `GET /lab/traffic/runs/{run}?format=json\|csv\|html\|text` | A run's progress and results (`latest` for the newest) | 200 |
 | `POST /lab/traffic/runs/stop` | Stops the running test | 200 |
+| `POST /snmp` | An SNMP request: `op` (`get`, `getnext`, `bulk`, `walk`, `table`, `set`), `oids` or `values`, and a saved `session` (its address and credentials) or a `target` | 200 `SNMPResult` |
+| `GET /snmp/mib?q=` | Searches the loaded MIBs by name or OID | 200 `SNMPMibNode[]` |
+| `GET /snmp/mib/{object}` | One object (`IF-MIB::ifOperStatus`, `sysDescr`, an OID): syntax, values, access, description | 200 `SNMPMibNode` |
+| `POST /snmp/trap` | Sends a test notification (v1, v2c, v3) to a receiver | 200 |
+| `GET /snmp/traps` | The trap receiver's state and the traps received, newest first | 200 `SNMPTrapsView` |
+| `POST /http/send` | Sends a request with a saved API `session` (base URL, login, variables) or as it is: `{"session": "APIs/rest", "request": {"method": "GET", "url": "/rest/..."}}`; its tests run | 200 `HTTPResponse` |
+| `GET /http/collections`, `POST /http/collections` | The API client's collections; add one | 200 / 201 |
+| `GET`, `PUT`, `DELETE /http/collections/{collection}` | One collection (`?format=postman` for Postman v2.1); replace; delete | 200 / 204 |
+| `POST /http/collections/{collection}/run` | Runs it (requests, folder, iterations, CSV / JSON data) with its tests | 200 `HTTPRunResult` |
+| `POST /http/import` | Imports a Postman collection, an OpenAPI / Swagger document or cURL (`{"text": "..."}`) | 201 `HTTPCollection` |
+| `GET /http/history` | The requests sent, newest first | 200 |
+| `GET /http/environments` | The environments, the globals (id `globals`) first; secret values never given | 200 |
+| `POST /http/environments` | Add or replace an environment (secret values go to the credential store) | 200 |
+| `POST /http/variables` | The variables a request can use, with their values and sources (secrets left out) | 200 |
+| `GET /syslog` | The syslog server: listening, counts per severity, senders | 200 `SyslogState` |
+| `POST /syslog/start`, `POST /syslog/stop` | Starts (with settings, or the saved ones) or stops it | 200 `SyslogState` |
+| `GET /syslog/messages?q=&host=&severity=&minutes=&after=&limit=`, `DELETE /syslog/messages` | Messages received (words or /regex/, sender, severity or worse); clear them | 200 `[SyslogView]` / 204 |
+| `POST /syslog/send` | Sends a test message to a syslog server | 200 |
+| `GET`, `PUT /syslog/rules` | Rules that colour, notify or hide | 200 |
+| `GET /tools` | The network tools (`device`, `snmp`, `http`, `syslog`) with their arguments (JSON Schema), the same as the MCP connector's | 200 `Tool[]` |
+| `POST /tools/{tool}` | Runs a network tool; the body holds its arguments (`device`: a saved session's facts and device type - facts, refresh_facts, identify, set_type, types) | 200 `{"result": text}` |
 
 `{port}` and `{stream}` take a name (`Test port 1`, `voice`) or an id. In a
 stream, `from` and `to` take names too. The OpenAPI document has every field,
 its meaning and examples.
+
+A Set through `POST /snmp` needs *Allow Set* in the session's SNMP settings.
+The community and the v3 passwords of a session never leave the computer's
+credential store: the API uses them but does not return them.
+
+```sh
+curl -s -H "Authorization: Bearer $KEY" -d '{"session":"Lab/core-sw1","op":"walk","oids":["IF-MIB::ifOperStatus"]}' $API/snmp
+```
 
 ## A traffic test with curl
 

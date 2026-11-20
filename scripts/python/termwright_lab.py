@@ -98,10 +98,15 @@ class Lab:
             self.api, self.key = find_endpoint()
         self.timeout = timeout
         self.traffic = Traffic(self)
+        self.snmp = SNMP(self)
+        self.http = HTTP(self)
+        self.syslog = Syslog(self)
+        self.devices = Devices(self)
 
     # ---- plain requests ----
-    def request(self, method: str, path: str, body: Any = None, timeout: Optional[float] = None, raw: bool = False, binary: bool = False, **params):
-        url = self.api + "/lab" + path
+    def request(self, method: str, path: str, body: Any = None, timeout: Optional[float] = None, raw: bool = False, binary: bool = False,
+                root: bool = False, **params):
+        url = self.api + ("" if root else "/lab") + path
         q = {k: v for k, v in params.items() if v is not None}
         if q:
             url += "?" + urllib.parse.urlencode(q)
@@ -602,6 +607,226 @@ class Traffic:
         return self.lab.request("GET", "/traffic/runs/" + run, raw=fmt != "json", format=fmt)
 
 
+class SNMP:
+    """SNMP against a saved session (its community / v3 passwords stay in the OS credential store) or an address.
+    Results are dicts: rows (oid, name, type, value, display), address, version, ms, requests, truncated."""
+
+    def __init__(self, lab: Lab):
+        self.lab = lab
+
+    def run(self, op: str, *oids: str, session: Optional[str] = None, address: Optional[str] = None,
+            version: Optional[str] = None, community: Optional[str] = None, values: Optional[list] = None,
+            max: Optional[int] = None, max_rep: Optional[int] = None, timeout: Optional[int] = None) -> dict:
+        body: dict = {"op": op}
+        if session:
+            body["session"] = session
+        if address:
+            body["target"] = {k: v for k, v in {"address": address, "version": version, "community": community}.items() if v}
+        if oids:
+            body["oids"] = list(oids)
+        if values:
+            body["values"] = values
+        for k, v in (("max", max), ("maxRep", max_rep), ("timeout", timeout)):
+            if v is not None:
+                body[k] = v
+        return self.lab.request("POST", "/snmp", body, root=True)
+
+    def get(self, *oids: str, **target) -> dict:
+        return self.run("get", *oids, **target)
+
+    def walk(self, oid: str = "1.3.6.1.2.1", **target) -> dict:
+        return self.run("walk", oid, **target)
+
+    def bulk(self, *oids: str, **target) -> dict:
+        return self.run("bulk", *oids, **target)
+
+    def set(self, oid: str, value: Any, type: str = "", **target) -> dict:
+        """Write one value (the session must allow writes). type is optional: the MIB gives it, enum names work."""
+        v = {"oid": oid, "value": str(value)}
+        if type:
+            v["type"] = type
+        return self.run("set", values=[v], **target)
+
+    def mib_search(self, q: str) -> list:
+        return self.lab.request("GET", "/snmp/mib", root=True, q=q) or []
+
+    def mib(self, obj: str) -> dict:
+        return self.lab.request("GET", "/snmp/mib/" + urllib.parse.quote(obj, safe=""), root=True)
+
+    def send_trap(self, address: str, trap_oid: str, values: Optional[list] = None, version: str = "2c", community: str = "public", **v3) -> dict:
+        """Send a test notification (values: [{"oid": "ifOperStatus.3", "value": "down"}]; v3: user, auth, authPass, priv, privPass)."""
+        body = {"address": address, "trapOid": trap_oid, "version": version, "community": community, "values": values or [], **v3}
+        return self.lab.request("POST", "/snmp/trap", body, root=True)
+
+    def traps(self) -> dict:
+        """The trap receiver's state and the traps it has received, newest first."""
+        return self.lab.request("GET", "/snmp/traps", root=True)
+
+    @staticmethod
+    def table(result: dict) -> dict:
+        """{oid name: display} of a result."""
+        return {r["name"]: r["display"] for r in result.get("rows") or []}
+
+
+class HTTP:
+    """The REST API client with saved API sessions (base URL, login and secrets stay in Termwright) and collections."""
+
+    def __init__(self, lab: Lab):
+        self.lab = lab
+
+    def send(self, url: str, method: str = "GET", session: Optional[str] = None, env: str = "", headers: Optional[dict] = None,
+             params: Optional[dict] = None, json_body: Any = None, text: Optional[str] = None, tests: str = "",
+             vars: Optional[dict] = None, collection: Optional[str] = None, timeout: Optional[int] = None, environment: str = "") -> dict:
+        """Send a request; a path goes after the session's base URL. Returns status, headers, body, ms, tests...
+        environment: an environment's id or name (its variables win over the session's)."""
+        req: dict = {"method": method.upper(), "url": url}
+        if headers:
+            req["headers"] = [{"key": k, "value": str(v)} for k, v in headers.items()]
+        if params:
+            req["params"] = [{"key": k, "value": str(v)} for k, v in params.items()]
+        if json_body is not None:
+            req["body"] = {"mode": "json", "raw": json.dumps(json_body)}
+        elif text is not None:
+            req["body"] = {"mode": "text", "raw": text}
+        if tests:
+            req["tests"] = tests
+        body = {"request": req}
+        for k, v in (("session", session), ("env", env), ("vars", vars), ("collection", collection), ("timeout", timeout), ("environment", environment)):
+            if v:
+                body[k] = v
+        return self.lab.request("POST", "/http/send", body, root=True, timeout=max(self.lab.timeout, (timeout or 30) + 30))
+
+    def get(self, url: str, **kw) -> dict:
+        return self.send(url, "GET", **kw)
+
+    def post(self, url: str, json_body: Any = None, **kw) -> dict:
+        return self.send(url, "POST", json_body=json_body, **kw)
+
+    @staticmethod
+    def json(res: dict) -> Any:
+        """The answer's body as JSON."""
+        return json.loads(res.get("body") or "null")
+
+    def collections(self) -> list:
+        return self.lab.request("GET", "/http/collections", root=True) or []
+
+    def collection(self, name: str) -> dict:
+        return self.lab.request("GET", "/http/collections/" + urllib.parse.quote(name, safe=""), root=True)
+
+    def save_collection(self, collection: dict) -> dict:
+        if collection.get("id"):
+            return self.lab.request("PUT", "/http/collections/" + urllib.parse.quote(collection["id"], safe=""), collection, root=True)
+        return self.lab.request("POST", "/http/collections", collection, root=True)
+
+    def run(self, collection: str, session: Optional[str] = None, env: str = "", requests: Optional[list] = None, folder: str = "",
+            iterations: int = 0, data: str = "", stop_on_fail: bool = False, environment: str = "") -> dict:
+        """Run a collection (postman.setNextRequest works); returns steps, passed, failed, tests."""
+        body = {k: v for k, v in {"session": session, "env": env, "requests": requests, "folder": folder, "iterations": iterations,
+                                  "data": data, "stopOnFail": stop_on_fail, "environment": environment}.items() if v}
+        return self.lab.request("POST", "/http/collections/" + urllib.parse.quote(collection, safe="") + "/run", body, root=True, timeout=3600)
+
+    def import_(self, text: str, name: str = "", session: str = "") -> dict:
+        """Import a cURL command, a Postman collection or an OpenAPI document as a collection."""
+        return self.lab.request("POST", "/http/import", {k: v for k, v in {"text": text, "name": name, "session": session}.items() if v}, root=True)
+
+    def history(self) -> list:
+        return self.lab.request("GET", "/http/history", root=True) or []
+
+    def environments(self) -> list:
+        """The environments (Postman's), the globals (id "globals") first; secret values are never given."""
+        return self.lab.request("GET", "/http/environments", root=True) or []
+
+    def save_environment(self, name: str, variables: dict, secret: Optional[list] = None, id: str = "") -> dict:
+        """Add or replace an environment from {name: value}; names in secret go to the credential store."""
+        sec = set(secret or [])
+        vs = [{"key": k, "value": str(v), "secret": k in sec} for k, v in variables.items()]
+        return self.lab.request("POST", "/http/environments", {"id": id, "name": name, "vars": vs}, root=True)
+
+    def variables(self, session: Optional[str] = None, collection: Optional[str] = None, environment: str = "", env: str = "") -> list:
+        """Every variable a request can use, with its value and source (secret values left out)."""
+        body = {k: v for k, v in {"session": session, "collection": collection, "environment": environment, "env": env,
+                                  "request": {"method": "GET", "url": ""}}.items() if v}
+        return self.lab.request("POST", "/http/variables", body, root=True) or []
+
+
+class Devices:
+    """Device facts and device types of saved sessions (logs in in the background with the saved login)."""
+
+    def __init__(self, lab: "Lab"):
+        self.lab = lab
+
+    def _run(self, **args) -> str:
+        r = self.lab.request("POST", "/tools/device", {k: v for k, v in args.items() if v is not None}, root=True, timeout=max(self.lab.timeout, 150))
+        return r["result"] if isinstance(r, dict) and "result" in r else r
+
+    def facts(self, session: str, refresh: bool = False) -> str:
+        """The device facts (model, version, serial number, MAC address, uptime ...); refresh reads them now."""
+        return self._run(action="refresh_facts" if refresh else "facts", session=session)
+
+    def identify(self, session: str) -> str:
+        """Which device type's Detect pattern matches what the device shows (show version, display version ...)."""
+        return self._run(action="identify", session=session)
+
+    def set_type(self, session: str, device_type: str) -> str:
+        """Set a session's device type (asked in Termwright on a production session or when changes ask)."""
+        return self._run(action="set_type", session=session, type=device_type)
+
+    def types(self) -> str:
+        """The device types with their Detect patterns and commands."""
+        return self._run(action="types")
+
+
+class Syslog:
+    """Termwright's syslog server (UDP, TCP, TLS) and client."""
+
+    def __init__(self, lab: Lab):
+        self.lab = lab
+
+    def status(self) -> dict:
+        return self.lab.request("GET", "/syslog", root=True)
+
+    def start(self, udp: Optional[int] = None, tcp: Optional[int] = None, tls: Optional[int] = None, **settings) -> dict:
+        """Start (or restart) it; no arguments use the saved settings. Ports below 1024 may need administrator rights."""
+        body = {k: v for k, v in {"udp": udp, "tcp": tcp, "tls": tls, **settings}.items() if v is not None}
+        if body:
+            cur = self.status().get("settings") or {}
+            body = {**cur, **body}
+        return self.lab.request("POST", "/syslog/start", body or None, root=True)
+
+    def stop(self) -> dict:
+        return self.lab.request("POST", "/syslog/stop", {}, root=True)
+
+    def messages(self, q: str = "", host: str = "", severity: str = "", minutes: int = 0, after: int = 0, limit: int = 0) -> list:
+        """Messages received, oldest first: words or /regex/ in q, a sender, this severity or worse, the last minutes."""
+        return self.lab.request("GET", "/syslog/messages", root=True, q=q or None, host=host or None, severity=severity or None,
+                                minutes=minutes or None, after=after or None, limit=limit or None) or []
+
+    def wait_for(self, q: str, timeout: float = 60, **kw) -> dict:
+        """Wait until a message matching q arrives (after now); returns it."""
+        start = max([m["id"] for m in self.messages(limit=1)] or [0])
+        end = time.time() + timeout
+        while time.time() < end:
+            got = self.messages(q, after=start, **kw)
+            if got:
+                return got[0]
+            time.sleep(1)
+        raise TimeoutError("no syslog message matching %r" % q)
+
+    def clear(self) -> None:
+        self.lab.request("DELETE", "/syslog/messages", root=True)
+
+    def send(self, target: str, text: str, severity: str = "notice", facility: str = "user", proto: str = "udp", **kw) -> str:
+        """Send a test message to a syslog server; returns it as sent."""
+        body = {"target": target, "text": text, "severity": severity, "facility": facility, "proto": proto, **kw}
+        return self.lab.request("POST", "/syslog/send", body, root=True)["sent"]
+
+    def rules(self) -> list:
+        return self.lab.request("GET", "/syslog/rules", root=True) or []
+
+    def set_rules(self, rules: list) -> list:
+        return self.lab.request("PUT", "/syslog/rules", {"rules": rules}, root=True)
+
+
 # Every (method, path) the client calls: a test checks them against docs/api/openapi.yaml.
 ENDPOINTS = [
     ("GET", "/lab"), ("GET", "/lab/tools"),
@@ -616,4 +841,9 @@ ENDPOINTS = [
     ("GET", "/lab/traffic/tests"), ("POST", "/lab/traffic/tests"), ("PUT", "/lab/traffic/tests/{test}"),
     ("DELETE", "/lab/traffic/tests/{test}"), ("POST", "/lab/traffic/tests/{test}/run"),
     ("GET", "/lab/traffic/runs"), ("GET", "/lab/traffic/runs/{run}"), ("POST", "/lab/traffic/runs/stop"),
+    ("POST", "/snmp"), ("GET", "/snmp/mib"), ("GET", "/snmp/mib/{object}"), ("GET", "/snmp/traps"), ("POST", "/snmp/trap"),
+    ("POST", "/http/send"), ("GET", "/http/collections"), ("POST", "/http/collections"), ("GET", "/http/collections/{collection}"),
+    ("PUT", "/http/collections/{collection}"), ("POST", "/http/collections/{collection}/run"), ("POST", "/http/import"), ("GET", "/http/history"),
+    ("GET", "/syslog"), ("POST", "/syslog/start"), ("POST", "/syslog/stop"), ("GET", "/syslog/messages"), ("DELETE", "/syslog/messages"),
+    ("POST", "/syslog/send"), ("GET", "/syslog/rules"), ("PUT", "/syslog/rules"),
 ]

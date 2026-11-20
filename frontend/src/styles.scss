@@ -373,3 +373,20 @@ app-lab-workspace {
 .tw-spin { transform-box: fill-box; transform-origin: center; animation: tw-spin 3s linear infinite; }
 @keyframes tw-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .tw-spin { animation: none; } }
+
+/* A drop-down drawn by Termwright (same height as the text boxes and buttons next to it, also in macOS WebKit). */
+select.fs { -webkit-appearance: none; appearance: none; height: 30px; min-height: 30px; box-sizing: border-box; padding: 0 26px 0 10px; line-height: 28px; cursor: pointer;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%238b8e96' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat; background-position: right 9px center; }
+select.fs:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* HTTP methods in their colours */
+.m-GET { --mc: #16a34a; } .m-POST { --mc: #d97706; } .m-PUT { --mc: #2563eb; } .m-PATCH { --mc: #7c3aed; } .m-DELETE { --mc: #dc2626; } .m-HEAD, .m-OPTIONS { --mc: #64748b; }
+:root:not(.light) .m-GET { --mc: #34d399; } :root:not(.light) .m-POST { --mc: #fbbf24; } :root:not(.light) .m-PUT { --mc: #60a5fa; } :root:not(.light) .m-PATCH { --mc: #c084fc; } :root:not(.light) .m-DELETE { --mc: #f87171; } :root:not(.light) .m-HEAD, :root:not(.light) .m-OPTIONS { --mc: #94a3b8; }
+select.method { color: var(--mc); font-weight: 700; border-color: color-mix(in srgb, var(--mc) 55%, transparent); background-color: color-mix(in srgb, var(--mc) 13%, var(--input-bg)); }
+select.method option { color: var(--text); background: var(--input-bg); font-weight: 400; }
+/* segmented buttons: the focus ring only for the keyboard, so a clicked button does not look chosen */
+.seg button:focus:not(:focus-visible) { outline: none; box-shadow: none; }
+
+/* the "More…" protocol button of a segmented protocol choice (opens Termwright's own menu) */
+.seg .more-p { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+.seg .more-p .cv { font-size: 9px; color: var(--muted); }
