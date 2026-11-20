@@ -114,6 +114,8 @@ var menuRU = map[string]string{
 	"New API Session...":                      "Новая API-сессия...",
 	"Import Postman, OpenAPI or cURL...":      "Импорт Postman, OpenAPI или cURL...",
 	"Syslog":                                  "Syslog",
+	"Tests":                                   "Тесты",
+	"Record a Test":                           "Записать тест",
 	"Syslog Server":                           "Сервер syslog",
 	"Start / Stop Receiving":                  "Начать / остановить приём",
 	"Send Test Message...":                    "Отправить тестовое сообщение...",

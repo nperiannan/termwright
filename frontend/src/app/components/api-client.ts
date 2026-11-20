@@ -10,6 +10,7 @@ import { Combo, ComboOption } from './combo';
 import { HTTP_HEADERS, headerValues } from '../core/http-headers';
 import { CodeArea } from './code-area';
 import { VarInput } from './var-input';
+import { Recorder } from '../core/recorder.service';
 import { ApiAuth, AUTH_TYPES } from './api-auth';
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
@@ -661,6 +662,7 @@ export class ApiClient implements OnInit, OnDestroy {
   readonly visible = input(true);
   private readonly backend = inject(Backend);
   readonly ui = inject(Ui);
+  private readonly rec = inject(Recorder);
 
   readonly methods = METHODS; readonly modes = MODES; readonly langs = LANGS; readonly snippets = SNIPPETS;
   readonly reqTabs = [{ k: 'docs', l: 'Docs' }, { k: 'params', l: 'Params' }, { k: 'auth', l: 'Authorization' }, { k: 'headers', l: 'Headers' }, { k: 'body', l: 'Body' }, { k: 'scripts', l: 'Scripts' }, { k: 'settings', l: 'Settings' }, { k: 'code', l: 'Code' }];
@@ -1146,6 +1148,11 @@ export class ApiClient implements OnInit, OnDestroy {
       }
       this.res.set(res);
       this.log(res);
+      if (this.rec.recording()) {
+        const q = r.request, h: Record<string, string> = {};
+        for (const x of q.headers ?? []) if (!x.off && x.key) h[x.key] = x.value;
+        this.rec.http({ session: r.session || undefined, environment: this.envName() || undefined, collection: r.collection, method: q.method, url: q.url, headers: Object.keys(h).length ? h : undefined, body: q.body?.raw || undefined }, res.status, res.ms, res.body);
+      }
       Object.assign(this.vars, res.vars ?? {});
       if (res.envSet || res.globalSet || res.vars) { void this.loadEnvs(); void this.refreshVars(); }
       if (download && res.status) void this.saveRes(res);

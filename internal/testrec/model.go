@@ -52,6 +52,8 @@ type HTTPStep struct {
 	Session string `yaml:"session,omitempty" json:"session,omitempty"`
 	// Environment: an API client environment's name whose variables are used.
 	Environment string `yaml:"environment,omitempty" json:"environment,omitempty"`
+	// Collection: an API client collection (id or name) whose variables are used.
+	Collection string `yaml:"collection,omitempty" json:"collection,omitempty"`
 	// Method: GET (default), POST, PUT, PATCH, DELETE …
 	Method string `yaml:"method,omitempty" json:"method,omitempty"`
 	// URL: a path after the session's base URL, or a full URL.

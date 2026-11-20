@@ -303,6 +303,9 @@ func buildMenu(app *App, lang string) *menu.Menu {
 	apiM.AddSeparator()
 	add(apiM, "Import Postman, OpenAPI or cURL...", "api-import")
 
+	tsM := m.AddSubmenu(t("Tests"))
+	add(tsM, "Record a Test", "test-record")
+
 	slM := m.AddSubmenu(t("Syslog"))
 	add(slM, "Syslog Server", "syslog-server")
 	add(slM, "Start / Stop Receiving", "syslog-toggle")

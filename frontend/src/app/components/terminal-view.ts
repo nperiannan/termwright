@@ -18,6 +18,7 @@ import { accountChoice, defaultLogin } from '../core/accounts';
 import { DeviceIcon, deviceKindOf } from './device-icon';
 import { Icon } from './icon';
 import { History, commandOfLine } from '../core/history.service';
+import { Recorder, ExpectKind } from '../core/recorder.service';
 import { FormsModule } from '@angular/forms';
 
 /** Black or white, whichever is more readable on the given background. */
@@ -227,6 +228,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
   private cprSent?: { text: string; at: number; typed: boolean };
   private cprSeen = '';
   private history = inject(History);
+  readonly rec = inject(Recorder);
 
   // ---- send bar (serial tabs; any tab from the right-click menu) ----
   readonly serial = computed(() => this.tab().session.protocol === 'Serial');
@@ -287,6 +289,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     if (text.trim()) {
       this.sent = [text, ...this.sent.filter(x => x !== text)].slice(0, 100);
       this.history.add(text, { session: t.session.path, title: t.title, deviceType: t.session.deviceType });
+      if (this.term && t.kind === 'terminal') this.rec.command(t.id, t.session.path, text, this.term);
     }
     this.sentIdx = -1;
     this.sendText.set('');
@@ -344,6 +347,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     const cmd = commandOfLine(text);
     if (cmd) this.history.add(cmd, { session: t.session.path, title: t.title, deviceType: t.session.deviceType });
     if (cmd) this.tabs.afterCommand(t.id, cmd);
+    if (cmd && t.kind === 'terminal') this.rec.command(t.id, t.session.path, cmd, term);
   }
   readonly labels = FIX_LABELS;
   /** Modern layout, before the first successful connect: a card instead of an empty terminal. */
@@ -818,7 +822,19 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       return;
     }
     const t = this.term;
+    const sel = t?.getSelection().trim() ?? '';
+    const ex = (kind: ExpectKind) => this.rec.expectSelection(id, sel, kind);
+    const field = this.rec.recording() && sel ? this.rec.fieldOf(id, sel) : null;
+    const expect = this.rec.recording() && sel && this.tab().kind === 'terminal' ? [
+      { label: tr('Expect this: contains "{0}"', sel.length > 30 ? sel.slice(0, 30) + '…' : sel), action: () => ex('contains') },
+      ...(field ? [{ label: tr('Expect this: field = "{0}"', sel.length > 24 ? sel.slice(0, 24) + '…' : sel), action: () => ex('field') }] : []),
+      { label: 'Expect this: matches a pattern', action: () => ex('matches') },
+      { label: 'Expect this: does not contain', action: () => ex('notContains') },
+      { label: 'Save as Test Variable...', action: () => ex('save') },
+      { separator: true },
+    ] : [];
     this.ui.showMenu(ev, [
+      ...expect,
       { label: 'Copy', action: () => void this.tabs.copy(), disabled: !t?.hasSelection() },
       { label: 'Paste', action: () => void this.tabs.paste(id) },
       { label: 'Select All', action: () => t?.selectAll() },

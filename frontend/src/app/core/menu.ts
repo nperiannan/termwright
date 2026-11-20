@@ -66,6 +66,9 @@ export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
       { label: 'API Client', action: 'api-client' }, { label: 'New API Session...', action: 'api-new-session' }, { sep: true },
       { label: 'Import Postman, OpenAPI or cURL...', action: 'api-import' },
     ] },
+    { title: 'Tests', items: [
+      { label: 'Record a Test', action: 'test-record' },
+    ] },
     { title: 'Syslog', items: [
       { label: 'Syslog Server', action: 'syslog-server' }, { label: 'Start / Stop Receiving', action: 'syslog-toggle' }, { sep: true },
       { label: 'Send Test Message...', action: 'syslog-send' },

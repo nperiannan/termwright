@@ -198,7 +198,7 @@ func (d testDriver) HTTP(ctx context.Context, h testrec.HTTPStep) (testrec.HTTPA
 		}
 	}
 	// a production run was confirmed before it started
-	res, err := d.a.httpSend(ctx, HTTPSendRequest{Session: h.Session, Environment: h.Environment, Request: req, Confirmed: true})
+	res, err := d.a.httpSend(ctx, HTTPSendRequest{Session: h.Session, Environment: h.Environment, Collection: h.Collection, Request: req, Confirmed: true})
 	if err != nil {
 		return testrec.HTTPAnswer{}, err
 	}

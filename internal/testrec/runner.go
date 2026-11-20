@@ -203,7 +203,7 @@ func Fill(s string, v map[string]string) string {
 }
 
 func fillHTTP(h HTTPStep, v map[string]string) HTTPStep {
-	h.Session, h.Environment, h.URL, h.Body = Fill(h.Session, v), Fill(h.Environment, v), Fill(h.URL, v), Fill(h.Body, v)
+	h.Session, h.Environment, h.Collection, h.URL, h.Body = Fill(h.Session, v), Fill(h.Environment, v), Fill(h.Collection, v), Fill(h.URL, v), Fill(h.Body, v)
 	h.Method = strings.ToUpper(strings.TrimSpace(h.Method))
 	if len(h.Headers) > 0 {
 		m := make(map[string]string, len(h.Headers))

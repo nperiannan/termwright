@@ -202,6 +202,7 @@
       }
     </div>
   </section>
+  @if (rec.on()) { <app-recorder-panel /> }
   @if (aiChat.open() && aiChat.dock() !== 'left') { <app-ai-panel /> }
   @if (ui.panel(); as p) { <app-session-panel [edit]="p" /> }
 </div>
