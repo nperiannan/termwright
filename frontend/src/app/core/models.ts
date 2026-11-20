@@ -35,7 +35,7 @@ export interface Session {
 /** A login profile for a kind of device (EXOS, VOSS, Cisco IOS …). */
 export interface DeviceType {
   name: string; icon?: string; protocol: string; port: number; username: string; credential: string; initialCr: boolean;
-  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string; tunnel?: string; webCheck?: string; webHttp?: string; webHttps?: string; webOn?: string; webSave?: string; aiReadOnly?: string;
+  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string; detect?: string; detectCommand?: string; tunnel?: string; webCheck?: string; webHttp?: string; webHttps?: string; webOn?: string; webSave?: string; aiReadOnly?: string;
   facts?: FactRule[] | null;
 }
 /** A value read from command output after connecting: the first group of regex. every = at each connect. */
@@ -182,7 +182,7 @@ export interface UpdateInfo {
 }
 
 /** A device found by File → Discover Devices. */
-export interface DiscoverResult {
+export interface DiscoverResult { deviceType?: string; detectMatch?: string;
   ip: string; name: string; dns: string; sysName: string; sysDescr: string; sysObjectId: string; services: string[];
   banner: string; telnet: string; web: { server: string; title: string; realm: string; cert: string; hints: string[] | null };
   sip: string; mdns: string; mdnsServices?: string[] | null; coap?: string; mac: string; macVendor: string; self: boolean; kind: string; vendor: string; os: string; platform?: string; evidence: string[] | null;

@@ -1,6 +1,9 @@
 package session
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 // DeviceType is a reusable login profile for a kind of device (EXOS, VOSS,
 // Cisco IOS, Linux …). A session or a Quick Connect picks one by name, so a
@@ -43,6 +46,14 @@ type DeviceType struct {
 	// one per line, e.g. "show"); empty = the built-in list (show, display,
 	// ping, traceroute… - or the usual read-only commands for Linux).
 	AIReadOnly string `json:"aiReadOnly,omitempty"`
+	// Detect: a regular expression that recognises this kind of device in what it shows of itself:
+	// its SSH or Telnet banner, SNMP system description and web page when Discover Devices scans,
+	// and the output of DetectCommand after logging in (Identify Device Type). Empty = never chosen
+	// by itself.
+	Detect string `json:"detect,omitempty"`
+	// DetectCommand: the command whose output Detect is matched against after logging in, e.g.
+	// "show version" (empty: show version).
+	DetectCommand string `json:"detectCommand,omitempty"`
 	// Facts are values read from command output after connecting (model,
 	// version, serial, MAC, uptime, or any the user adds).
 	Facts []FactRule `json:"facts"`
@@ -274,6 +285,73 @@ func BuiltinDeviceTypes() []DeviceType {
 	}
 	for i := range list {
 		list[i].Facts = BuiltinFacts(list[i].Name)
+		list[i].Detect, list[i].DetectCommand = BuiltinDetect(list[i].Name)
 	}
 	return list
 }
+
+// BuiltinDetect is the detection pattern and command of a built-in device type ("" when none).
+func BuiltinDetect(name string) (pattern, command string) {
+	switch strings.ToUpper(name) {
+	case "EXOS":
+		return `(?i)extremexos|\bexos\b|switch ?engine|summit ?x?\d`, "show version"
+	case "VOSS":
+		return `(?i)\bvoss\b|vsp-?\d{3,4}|fabric ?engine|virtual services platform`, "show sys-info"
+	case "CISCO IOS":
+		return `(?i)cisco ios|ios[- ]xe`, "show version"
+	case "CISCO NX-OS":
+		return `(?i)nx-os|cisco nexus`, "show version"
+	case "HUAWEI VRP":
+		return `(?i)huawei versatile routing platform|\bvrp\b|huawei`, "display version"
+	case "ELTEX MES":
+		return `(?i)eltex|\bmes ?\d{4}`, "show system"
+	case "RUCKUS ICX":
+		return `(?i)ruckus|brocade|fastiron|\bicx ?\d{4}`, "show version"
+	case "LINUX":
+		return `(?i)\blinux\b|ubuntu|debian|centos|red ?hat|rocky|almalinux|fedora|suse`, "uname -a"
+	}
+	return "", ""
+}
+
+// DetectCmd is the command whose output identifies this type after logging in.
+func (d DeviceType) DetectCmd() string {
+	if c := strings.TrimSpace(d.DetectCommand); c != "" {
+		return c
+	}
+	return "show version"
+}
+
+// MatchDeviceType returns the device type whose Detect pattern matches text, and the text it matched.
+// A type that looks for a general-purpose OS (Linux) wins only when no network OS matches, because a
+// switch can run OpenSSH or mention Linux; otherwise the first in the list wins. Bad patterns are
+// skipped.
+func MatchDeviceType(types []DeviceType, text string) (name, matched string) {
+	var later, laterM string
+	for _, d := range types {
+		p := strings.TrimSpace(d.Detect)
+		if p == "" || strings.TrimSpace(text) == "" {
+			continue
+		}
+		re, err := regexp.Compile(`(?m)` + p)
+		if err != nil {
+			continue
+		}
+		m := re.FindString(text)
+		if m == "" {
+			continue
+		}
+		if generalOS.MatchString(d.Name) || generalOS.MatchString(p) && !networkOS.MatchString(p) {
+			if later == "" {
+				later, laterM = d.Name, m
+			}
+			continue
+		}
+		return d.Name, m
+	}
+	return later, laterM
+}
+
+var (
+	generalOS = regexp.MustCompile(`(?i)\b(linux|ubuntu|debian|centos|windows)\b`)
+	networkOS = regexp.MustCompile(`(?i)exos|voss|cisco|nx-os|junos|eos|huawei|vrp|eltex|icx|ruckus|brocade`)
+)

@@ -146,7 +146,7 @@ Without a team Termwright works on its own and sends nothing anywhere.
 
 ## Device types (login profiles)
 
-- **Built-in profiles**: EXOS, VOSS, Cisco IOS, Cisco NX-OS, Huawei VRP, Eltex MES, Ruckus (Brocade) ICX and Linux, with login, paging off, configuration backup and device facts; add your own.
+- **Built-in profiles**: EXOS, VOSS, Cisco IOS, Cisco NX-OS, Huawei VRP, Eltex MES, Ruckus (Brocade) ICX and Linux, with login, paging off, configuration backup and device facts; add your own, with a **Detect** pattern that Discover Devices and *Identify Device Type* use to recognise it.
 - **Own username and password** per device type (keychain, password manager, or *No password*).
 - **Login steps** for Telnet / Serial / Raw and **after-login steps** for every protocol (`enable`, paging off).
 - **Remember for device type**: a password typed at a login prompt can be saved for the whole device type.

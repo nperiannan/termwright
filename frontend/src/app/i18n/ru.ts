@@ -4813,6 +4813,12 @@ const ru: Record<string, string> = {
   'REST client like Postman: collections, environments, tests, OpenAPI import': 'REST-клиент как Postman: коллекции, окружения, тесты, импорт OpenAPI',
   'Discover': 'Обнаружение',
   'network scans, device types, topology maps, Wake-on-LAN': 'сканирование сети, типы устройств, карты топологии, Wake-on-LAN',
+  'Detect (regex)': 'Распознавание (regex)',
+  'Identify Device Type': 'Определить тип устройства',
+  'Set Device Type': 'Задать тип устройства',
+  'Paste a banner or show version output to test the pattern': 'Вставьте баннер или вывод show version, чтобы проверить шаблон',
+  'The pattern is not a valid regular expression': 'Шаблон не является допустимым регулярным выражением',
+  'No match': 'Нет совпадения',
 };
 
 export default ru;

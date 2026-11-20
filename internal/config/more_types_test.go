@@ -30,3 +30,24 @@ func TestMoreTypesAddedOnce(t *testing.T) {
 		t.Fatal("Linux put back")
 	}
 }
+
+// Settings saved before 0.42 give the built-in types their Detect pattern once; a pattern set by the
+// user stays, and a type of the user's own gets none.
+func TestDetectAddedOnce(t *testing.T) {
+	dir := t.TempDir()
+	old := `{"factRulesAdded":true,"hostnameFactAdded":true,"deviceTypes":[{"name":"EXOS"},{"name":"VOSS","detect":"mine"},{"name":"Zyxel"}]}`
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, d := range m.Get().DeviceTypes {
+		got[d.Name] = d.Detect
+	}
+	if !m.Get().DetectAdded || got["EXOS"] == "" || got["VOSS"] != "mine" || got["Zyxel"] != "" || got["Huawei VRP"] == "" {
+		t.Fatalf("%v", got)
+	}
+}

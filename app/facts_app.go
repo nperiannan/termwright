@@ -223,3 +223,103 @@ func ApplyFactRules(rules []session.FactRule, cmds, outs []string) map[string]st
 	}
 	return got
 }
+
+// DeviceTypeMatch is what Identify Device Type found.
+type DeviceTypeMatch struct {
+	// Type: the device type whose Detect pattern matched ("" none).
+	Type string `json:"type"`
+	// Current: the session's device type now.
+	Current string `json:"current"`
+	// Command: the command whose output matched.
+	Command string `json:"command,omitempty"`
+	// Matched: the text the pattern matched.
+	Matched string `json:"matched,omitempty"`
+	// Tried: the commands that were run.
+	Tried []string `json:"tried"`
+}
+
+// IdentifyDeviceType logs in to a session in the background, runs the device types' detect commands
+// (show version, display version …) and returns the type whose Detect pattern matches the output.
+// Nothing is changed; the caller sets the type.
+func (a *App) IdentifyDeviceType(path string) (DeviceTypeMatch, error) {
+	if err := a.ready(); err != nil {
+		return DeviceTypeMatch{}, err
+	}
+	s, err := a.store.Get(path)
+	if err != nil {
+		return DeviceTypeMatch{}, err
+	}
+	out := DeviceTypeMatch{Current: s.DeviceType, Tried: []string{}}
+	s = a.withFolderDefaults(s)
+	if s.Protocol != session.ProtoSSH2 && s.Protocol != session.ProtoTelnet {
+		return out, fmt.Errorf("a device type is identified over SSH2 or Telnet")
+	}
+	types := a.cfg.Get().DeviceTypes
+	// the current type's command first, then each other command once
+	var cmds []string
+	seen := map[string]bool{}
+	add := func(c string) {
+		if c = strings.TrimSpace(c); c != "" && !seen[c] {
+			seen[c] = true
+			cmds = append(cmds, c)
+		}
+	}
+	for _, d := range types {
+		if strings.EqualFold(d.Name, s.DeviceType) && strings.TrimSpace(d.Detect) != "" {
+			add(d.DetectCmd())
+		}
+	}
+	add("show version")
+	for _, d := range types {
+		if strings.TrimSpace(d.Detect) != "" {
+			add(d.DetectCmd())
+		}
+	}
+	if len(cmds) > 6 {
+		cmds = cmds[:6]
+	}
+	prompt := ""
+	if a.terms.DeviceType != nil && s.DeviceType != "" {
+		if dt, ok := a.terms.DeviceType(s.DeviceType); ok {
+			prompt = dt.Prompt
+		}
+	}
+	s2, err := a.consoleSession(s)
+	if err != nil {
+		return out, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	outs, err := a.terms.CaptureEach(ctx, s2, cmds, prompt)
+	if err != nil {
+		return out, err
+	}
+	out.Tried = cmds
+	// each type is matched against the output of its own command first, then against all of it
+	byCmd := map[string]string{}
+	all := ""
+	for i, c := range cmds {
+		if i < len(outs) {
+			byCmd[c] = outs[i]
+			all += outs[i] + "\n"
+		}
+	}
+	for _, d := range types {
+		if strings.TrimSpace(d.Detect) == "" {
+			continue
+		}
+		if name, m := session.MatchDeviceType([]session.DeviceType{d}, byCmd[d.DetectCmd()]); name != "" && !strings.EqualFold(d.Name, "linux") {
+			out.Type, out.Command, out.Matched = name, d.DetectCmd(), m
+			return out, nil
+		}
+	}
+	if name, m := session.MatchDeviceType(types, all); name != "" {
+		out.Type, out.Matched = name, m
+		for _, d := range types {
+			if d.Name == name {
+				out.Command = d.DetectCmd()
+			}
+		}
+	}
+	return out, nil
+}

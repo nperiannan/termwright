@@ -10,8 +10,8 @@ import (
 func TestMoreDeviceTypeFacts(t *testing.T) {
 	out := map[string]map[string]string{
 		"Huawei VRP": {
-			"display version": "Huawei Versatile Routing Platform Software\nVRP (R) software, Version 5.170 (S5735 V200R019C10SPC500)\nCopyright (C) 2000-2020 HUAWEI TECH Co., Ltd.\nHUAWEI S5735-L24P4S-A Routing Switch uptime is 12 weeks, 3 days, 1 hour, 2 minutes\n",
-			"display esn":     "ESN of slot 0: 2102351931P0K3000032\n",
+			"display version":            "Huawei Versatile Routing Platform Software\nVRP (R) software, Version 5.170 (S5735 V200R019C10SPC500)\nCopyright (C) 2000-2020 HUAWEI TECH Co., Ltd.\nHUAWEI S5735-L24P4S-A Routing Switch uptime is 12 weeks, 3 days, 1 hour, 2 minutes\n",
+			"display esn":                "ESN of slot 0: 2102351931P0K3000032\n",
 			"display bridge mac-address": "System bridge MAC address: 00e0-fc12-3456\n",
 			"display current-configuration | include sysname": " sysname AGG-SW-01\n",
 		},
@@ -21,7 +21,7 @@ func TestMoreDeviceTypeFacts(t *testing.T) {
 			"show system id": "Unit    Serial number\n---- -----------------\n1       ES5D000123\n",
 		},
 		"Ruckus ICX": {
-			"show version": "  Copyright (c) Ruckus Networks, Inc. All rights reserved.\n    UNIT 1: compiled on Mar 17 2023\n        SW: Version 08.0.95hT213\n  HW: Stackable ICX7150-48P-4X1G\n  Serial  #:FEK3220P0AX\n  The system uptime is 41 days 3 hours 2 minutes 4 seconds\n",
+			"show version":                           "  Copyright (c) Ruckus Networks, Inc. All rights reserved.\n    UNIT 1: compiled on Mar 17 2023\n        SW: Version 08.0.95hT213\n  HW: Stackable ICX7150-48P-4X1G\n  Serial  #:FEK3220P0AX\n  The system uptime is 41 days 3 hours 2 minutes 4 seconds\n",
 			"show running-config | include hostname": "hostname icx-access-3\n",
 		},
 		"Cisco NX-OS": {
@@ -61,5 +61,34 @@ func TestMoreDeviceTypeFacts(t *testing.T) {
 				t.Errorf("%s %s = %q, want %q", typ, k, got[k], v)
 			}
 		}
+	}
+}
+
+// Detect patterns pick a device type from what a device shows; a user's own type works without any
+// built-in one, a general-purpose OS (Linux) only wins when nothing else matches, and a bad pattern is
+// skipped.
+func TestMatchDeviceType(t *testing.T) {
+	types := append(BuiltinDeviceTypes(), DeviceType{Name: "Zyxel GS", Detect: `(?i)zyxel|\bgs1920`}, DeviceType{Name: "Broken", Detect: `(`})
+	cases := map[string]string{
+		"SSH-2.0-OpenSSH_7.4 Linux 5520-24T ExtremeXOS version 32.1":                  "EXOS",
+		"Huawei Versatile Routing Platform Software\nVRP (R) software, Version 5.170": "Huawei VRP",
+		"MES2324B 28-port 1G/10G Managed Switch":                                      "Eltex MES",
+		"Ruckus Wireless ICX7150-48P Router":                                          "Ruckus ICX",
+		"Cisco Nexus Operating System (NX-OS) Software":                               "Cisco NX-OS",
+		"Cisco IOS XE Software, Version 17.03.04":                                     "Cisco IOS",
+		"ZyXEL GS1920-24HP":  "Zyxel GS",
+		"Ubuntu 22.04.3 LTS": "Linux",
+		"a printer":          "",
+	}
+	for text, want := range cases {
+		if got, _ := MatchDeviceType(types, text); got != want {
+			t.Errorf("%q: %q, want %q", text, got, want)
+		}
+	}
+	if _, m := MatchDeviceType(types, "VRP (R) software"); m != "VRP" {
+		t.Errorf("matched %q", m)
+	}
+	if (DeviceType{}).DetectCmd() != "show version" {
+		t.Error("default detect command")
 	}
 }

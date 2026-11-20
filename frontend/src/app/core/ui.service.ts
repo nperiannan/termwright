@@ -257,6 +257,27 @@ export class Ui {
     } catch (e) { if (all) this.error(e); return null; }
   }
 
+  /** Identify Device Type: logs in in the background, matches the device types' Detect patterns and offers to set the one found. */
+  async identifyDeviceType(path: string) {
+    const name = path.split('/').pop() ?? path;
+    this.toast(`Identifying ${name}…`, 'info', 4000);
+    try {
+      const m = await this.backend.identifyDeviceType(path);
+      if (!m.type) {
+        this.toast(`No device type matched the output of ${m.tried.join(', ')}. Add a Detect pattern to a device type (Global Options → Device Types).`, 'info', 9000);
+        return;
+      }
+      if (m.type === m.current) { this.toast(`${name} is already ${m.type} (matched "${m.matched ?? ''}")`, 'success'); return; }
+      const ok = await this.confirm('Set Device Type', `The output of ${m.command ?? ''} matched ${m.type} ("${m.matched ?? ''}"). Set the device type of ${name} to ${m.type}${m.current ? ' instead of ' + m.current : ''}?`, 'Set Device Type');
+      if (!ok) return;
+      const s = await this.backend.getSession(path);
+      s.deviceType = m.type;
+      await this.backend.saveSession(s, path);
+      await this.refreshTree();
+      this.toast(`${s.name} is now ${m.type}`, 'success');
+    } catch (e) { this.error(e); }
+  }
+
   /** Keeps the window's copy of the facts current (the backend stores them). */
   setFactsLocal(path: string, f: Record<string, string>) {
     const s = this.settings();

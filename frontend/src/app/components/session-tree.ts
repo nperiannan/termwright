@@ -868,7 +868,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           ...(n.protocol === 'WOL' && n.hostname ? [{ label: 'Check Now (ping)', action: () => this.wol.checkNow(n.path) }] : []),
           { separator: true },
           { label: 'Environment' + this.envSuffix(n.environment ?? '', envOf(n.path, '', this.ui.settings()?.folderDefaults)) + '...', action: () => void this.chooseEnv(n) },
-          ...(n.protocol === 'SSH2' || n.protocol === 'Telnet' ? [{ label: 'Refresh Device Facts', action: () => void this.ui.refreshFacts(n.path, true) }] : []),
+          ...(n.protocol === 'SSH2' || n.protocol === 'Telnet' ? [{ label: 'Refresh Device Facts', action: () => void this.ui.refreshFacts(n.path, true) }, { label: 'Identify Device Type', icon: 'find', action: () => void this.ui.identifyDeviceType(n.path) }] : []),
           ...((n.protocol === 'SSH2' || n.protocol === 'Telnet') && !n.team && isAddressName(n.name, n.hostname) ? [{ label: 'Name After Device...', action: () => this.nameAfter([n.path], n.path) }] : []),
           { label: this.isFav(n.path) ? 'Remove from Favourites' : 'Add to Favourites', action: () => this.setFav([n.path], !this.isFav(n.path)) },
           ...(sec === 'recent' ? [{ label: 'Remove from Recent', action: () => this.ui.removeRecent(n.path) }] : []),

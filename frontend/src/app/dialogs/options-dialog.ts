@@ -426,6 +426,14 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                       <code>admin</code> has an empty password - you will not be asked again.</div>
                   }
                   <label>Prompt (regex)</label><input name="dtpr" class="mono" [(ngModel)]="d.prompt" placeholder="e.g. :\\d+[>#] ?$" />
+                  <label>Detect (regex)</label>
+                  <div class="webd">
+                    <div class="row2"><input name="dtdt" class="mono" [(ngModel)]="d.detect" placeholder="e.g. (?i)huawei|\\bvrp\\b" title="Recognises this kind of device: matched against what Discover Devices sees (SSH and Telnet banners, SNMP system description, web page) and, with Identify Device Type, against the output of the command beside it" />
+                      <input name="dtdc" class="mono" [(ngModel)]="d.detectCommand" placeholder="show version" title="Identify Device Type runs it after logging in and matches the pattern against its output" /></div>
+                    <div class="row2"><input name="dtdx" class="mono" [(ngModel)]="detectSample" placeholder="Paste a banner or show version output to test the pattern" />
+                      <span class="hint" [class.bad]="detectTest(d) === 'bad'">{{ detectTest(d) === 'bad' ? 'The pattern is not a valid regular expression' : detectTest(d) ? 'Matches: ' + detectTest(d) : detectSample.trim() ? 'No match' : '' }}</span></div>
+                  </div>
+                  <label></label><div class="hint">Discover Devices picks this device type when the pattern matches a device, and right-click a session → <b>Identify Device Type</b> checks a saved session. One pattern per kind of device is enough - no built-in type needed.</div>
                   <label>Backup commands</label>
                   <textarea name="dtbk" class="mono" rows="2" [(ngModel)]="d.backupCommands"
                     [placeholder]="backupDefault(d.name) || 'Commands that print the configuration, one per line, e.g. show running-config'"></textarea>
@@ -785,6 +793,17 @@ export class OptionsDialog implements OnInit {
     };
     const c = d[name.toLowerCase()]?.[k];
     return c ? c + '  (built-in)' : '';
+  }
+  detectSample = '';
+  /** What the device type's Detect pattern matches in the sample ('bad': not a valid pattern). Go's (?i) at the start becomes the i flag. */
+  detectTest(d: { detect?: string }): string {
+    const p = (d.detect ?? '').trim(), t = this.detectSample;
+    if (!p || !t.trim()) return '';
+    try {
+      const ci = /^\(\?i\)/.test(p);
+      const m = new RegExp(ci ? p.slice(4) : p, ci ? 'im' : 'm').exec(t);
+      return m ? m[0] : '';
+    } catch { return 'bad'; }
   }
   backupDefault(name: string) {
     const d: Record<string, string> = { exos: 'show configuration', voss: 'show running-config', 'cisco ios': 'show running-config' };

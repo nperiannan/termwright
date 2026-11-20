@@ -287,6 +287,7 @@ export class Backend {
   httpRun(r: HRunRequest) { return this.call<HRunResult>('HTTPRun', r); }
   httpHistory() { return this.call<HHistoryItem[]>('HTTPHistory'); }
   httpClearHistory() { return this.call<void>('HTTPClearHistory'); }
+  identifyDeviceType(path: string) { return this.call<{ type: string; current: string; command?: string; matched?: string; tried: string[] }>('IdentifyDeviceType', path); }
   httpParseCurl(text: string) { return this.call<HRequest>('HTTPParseCurl', text); }
   httpEnvironments() { return this.call<HEnv[]>('HTTPEnvironments'); }
   httpSaveEnvironment(e: HEnv) { return this.call<HEnv>('HTTPSaveEnvironment', e); }

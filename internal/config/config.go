@@ -139,6 +139,7 @@ type Settings struct {
 	FactRulesAdded       bool                         `json:"factRulesAdded"`       // set once when the built-in device types got their fact rules (0.21.0)
 	HostnameFactAdded    bool                         `json:"hostnameFactAdded"`    // set once when the built-in device types got the Hostname fact (0.34.0)
 	MoreTypesAdded       bool                         `json:"moreTypesAdded"`       // set once when the device types of 0.42.0 were added (NX-OS, Huawei VRP, Eltex MES, Ruckus ICX)
+	DetectAdded          bool                         `json:"detectAdded"`          // set once when the built-in device types got their Detect pattern (0.42.0)
 	KeywordsOn           bool                         `json:"keywordsOn"`
 	Language             string                       `json:"language"`                  // interface language: "" = English, "ru" = Russian (partial)
 	IconStyle            string                       `json:"iconStyle"`                 // device and session icons: "" = coloured tiles, "glyph" = the symbol only
@@ -478,8 +479,15 @@ func Load(dataDir string) (*Manager, error) {
 	m := &Manager{dataDir: dataDir, cur: Defaults(dataDir)}
 	data, err := os.ReadFile(m.file())
 	if err == nil {
+		// decoding into the default list would keep a default type's fields that a saved type leaves
+		// out (an empty Detect, web check …), so the saved list is decoded on its own
+		defTypes := m.cur.DeviceTypes
+		m.cur.DeviceTypes = nil
 		if err := json.Unmarshal(data, &m.cur); err != nil {
 			return nil, err
+		}
+		if m.cur.DeviceTypes == nil {
+			m.cur.DeviceTypes = defTypes
 		}
 	} else if !os.IsNotExist(err) {
 		return nil, err
@@ -535,6 +543,16 @@ func Load(dataDir string) (*Manager, error) {
 			}
 		}
 		m.cur.HostnameFactAdded, changed = true, true
+	}
+	// Device type detection (0.42.0): the built-in types get their Detect pattern and command once
+	// (a pattern set afterwards stays).
+	if !m.cur.DetectAdded {
+		for i, d := range m.cur.DeviceTypes {
+			if strings.TrimSpace(d.Detect) == "" {
+				m.cur.DeviceTypes[i].Detect, m.cur.DeviceTypes[i].DetectCommand = session.BuiltinDetect(d.Name)
+			}
+		}
+		m.cur.DetectAdded, changed = true, true
 	}
 	// More built-in device types (0.42.0): Cisco NX-OS, Huawei VRP, Eltex MES and Ruckus ICX are added
 	// once to existing settings that have no device type of that name.

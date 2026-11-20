@@ -660,6 +660,8 @@ export class DiscoverDialog implements OnDestroy {
   private guessType(d: DiscoverResult): string {
     const types = this.deviceTypes();
     if (!types.length || !d.protocol || d.protocol === 'RDP' || d.protocol === 'VNC') return '';
+    // a device type's own Detect pattern matched (checked by Termwright against everything the device showed)
+    if (d.deviceType && types.some(t => t.name === d.deviceType)) return d.deviceType;
     const named = (words: string[]) => types.find(t => words.some(w => t.name.toLowerCase().includes(w)));
     // the network OS any evidence named wins over a generic "Linux" from OpenSSH
     if (d.platform) {
