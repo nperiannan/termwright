@@ -242,7 +242,7 @@ const ru: Record<string, string> = {
   'More': 'Ещё',
   'Workspaces': 'Рабочие области',
   'Built for the people who design, operate, and troubleshoot networks.': 'Для тех, кто проектирует, эксплуатирует сети и устраняет в них неполадки.',
-  'AI-powered network access, automation, emulation and reservation platform': 'Платформа с ИИ для доступа к сетям, автоматизации, эмуляции и резервирования',
+  'AI-powered network access, automation, monitoring, emulation and reservation platform': 'Платформа с ИИ для доступа к сетям, автоматизации, мониторинга, эмуляции и бронирования',
   'The open-source terminal and session manager for network and infrastructure teams.': 'Терминал и менеджер сессий с открытым исходным кодом для сетевых и инфраструктурных команд.',
   'Version': 'Версия',
   '· {0} available': '· доступна {0}',
@@ -282,7 +282,7 @@ const ru: Record<string, string> = {
   'Remove from Favourites': 'Убрать из избранного',
   '⬇ Downloaded {0} times from GitHub': '⬇ Загружено с GitHub: {0} {0|раз|раза|раз}',
   '⬇ Downloaded {0} time from GitHub': '⬇ Загружено с GitHub: {0} {0|раз|раза|раз}',
-  'A free, open-source, AI-powered platform for network and system engineers: terminal, session manager, file transfer, lab emulator and team sharing - one app for Windows, Linux and macOS.': 'Бесплатная платформа с открытым исходным кодом и ИИ для сетевых и системных инженеров: терминал, менеджер сессий, передача файлов, эмулятор лаборатории и командная работа - одно приложение для Windows, Linux и macOS.',
+  'A free, open-source, AI-powered platform for network and system engineers: terminal, session manager, file transfer, SNMP, syslog and REST API tools, lab emulator and team sharing - one app for Windows, Linux and macOS.': 'Бесплатная платформа с открытым кодом и ИИ для сетевых и системных инженеров: терминал, менеджер сессий, передача файлов, инструменты SNMP, syslog и REST API, эмулятор лабораторий и командная работа - одно приложение для Windows, Linux и macOS.',
   'SSH2, Telnet, Serial, RDP, VNC, local shell; jump hosts and proxies': 'SSH2, Telnet, Serial, RDP, VNC, локальная оболочка; промежуточные узлы и прокси',
   'folders, device types, workspaces, import from other programs': 'папки, типы устройств, рабочие области, импорт из других программ',
   'logon actions, triggers, scripts, command library, alerts': 'действия при входе, триггеры, скрипты, библиотека команд, оповещения',
@@ -4808,6 +4808,11 @@ const ru: Record<string, string> = {
   'Clear All Cookies': 'Удалить все cookies',
   'Remove All': 'Удалить все',
   'No cookies.': 'Нет cookies.',
+  'SNMP browser v1/v2c/v3 with MIBs, polling and traps; syslog server': 'SNMP-браузер v1/v2c/v3 с MIB, опросом и трапами; сервер syslog',
+  'APIs': 'API',
+  'REST client like Postman: collections, environments, tests, OpenAPI import': 'REST-клиент как Postman: коллекции, окружения, тесты, импорт OpenAPI',
+  'Discover': 'Обнаружение',
+  'network scans, device types, topology maps, Wake-on-LAN': 'сканирование сети, типы устройств, карты топологии, Wake-on-LAN',
 };
 
 export default ru;

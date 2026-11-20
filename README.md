@@ -3,8 +3,8 @@
 <h1 align="center">Termwright</h1>
 
 <p align="center">
-  <b>AI-powered network access, automation, emulation and reservation platform.</b><br/>
-  SSH · Telnet · Serial · SFTP · RDP · VNC · WoL · Discover · Collaborate - on Windows, macOS and Linux.
+  <b>AI-powered network access, automation, monitoring, emulation and reservation platform.</b><br/>
+  SSH · Telnet · Serial · SFTP · RDP · VNC · WoL · SNMP · Syslog · REST API · Discover · Collaborate - on Windows, macOS and Linux.
 </p>
 
 <p align="center">
