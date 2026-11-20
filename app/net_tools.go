@@ -22,6 +22,14 @@ import (
 type netAsker func(title, msg string, danger bool) error
 
 var netTools = []mcpTool{
+	{"tests", "Termwright tests: YAML files in the tests folder (cases/), each a list of steps - a command on a saved session (run) or an HTTP request (http) - with checks on what came back (contains, matches, a field or JSON value equals / greater / less, status, time). list lists the tests; show gives one as YAML; run runs tests (files, or none for all) and returns pass/fail per step, writing a JUnit XML file and an HTML report under reports/; save writes a test from YAML; results gives the last run's report. Runs log in with the sessions' saved logins in the background; a run touching production sessions is asked first.",
+		mcpSchema(map[string]any{
+			"action": map[string]any{"type": "string", "enum": []string{"list", "show", "run", "save", "results"}, "description": "what to do"},
+			"file":   map[string]any{"type": "string", "description": "show/save/run: a test file relative to the tests folder, e.g. cases/vlan/add-vlan.yaml (cases/ and .yaml may be left out)"},
+			"files":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "run: the tests to run (none: all)"},
+			"yaml":   map[string]any{"type": "string", "description": "save: the test as YAML"},
+			"vars":   map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}, "description": "run: values for {{variables}} that win over the tests' own"},
+		}, "action")},
 	{"device", "A saved session's device facts and device type. facts: the model, version, serial number, MAC address, uptime and other facts read from it last time; refresh_facts logs in in the background (with the session's saved login) and reads them now with the device type's fact rules. identify logs in, runs the device types' detect commands (show version, display version …) and says which device type's Detect pattern matches; set_type sets the session's device type (asked first). types lists the device types with their Detect patterns. Nothing is typed in the user's tabs.",
 		mcpSchema(map[string]any{
 			"action":  map[string]any{"type": "string", "enum": []string{"facts", "refresh_facts", "identify", "set_type", "types"}, "description": "what to do"},
@@ -97,6 +105,8 @@ func (a *App) netToolRun(ctx context.Context, name string, args map[string]any, 
 		return a.syslogTool(args)
 	case "device":
 		return a.deviceTool(ctx, args, ask)
+	case "tests":
+		return a.testsTool(ctx, args, ask)
 	}
 	return "", fmt.Errorf("no tool %s", name)
 }
@@ -228,6 +238,9 @@ func netWrites(name string, args map[string]any) bool {
 	switch name {
 	case "device":
 		return strings.EqualFold(argStr(args, "action"), "set_type")
+	case "tests":
+		act := strings.ToLower(argStr(args, "action"))
+		return act == "run" || act == "save"
 	case "snmp":
 		return strings.EqualFold(argStr(args, "action"), "set")
 	case "http":
@@ -300,6 +313,9 @@ func netAgentText(tools []string) string {
 	}
 	if b.Len() > 0 && slices.Contains(tools, "device") {
 		b.WriteString(`For example: device {"action":"identify","session":"Lab/edge-sw3"} or device {"action":"refresh_facts","session":"Lab/edge-sw3"}. Use identify when a session has no device type or a wrong one, then set_type.` + "\n")
+	}
+	if b.Len() > 0 && slices.Contains(tools, "tests") {
+		b.WriteString(`For example: tests {"action":"list"}, tests {"action":"show","file":"cases/vlan/add-vlan.yaml"} or tests {"action":"run","files":["cases/smoke.yaml"]}. To write a test, save YAML: name, steps of run {session, command} or http {session, method, url, body}, each with expect (contains, notContains, matches, field + equals/greater/less, json + equals/greater/less/exists, status, maxMs) and save {var, field|json} for later {{var}}. Sessions are saved session paths; never put passwords in a test.` + "\n")
 	}
 	if b.Len() > 0 && slices.Contains(tools, "syslog") {
 		b.WriteString(`For example: syslog {"action":"messages","severity":"warning","minutes":30} or syslog {"action":"messages","host":"10.127.34.33","query":"link down"}.` + "\n")

@@ -102,6 +102,7 @@ class Lab:
         self.http = HTTP(self)
         self.syslog = Syslog(self)
         self.devices = Devices(self)
+        self.tests = Tests(self)
 
     # ---- plain requests ----
     def request(self, method: str, path: str, body: Any = None, timeout: Optional[float] = None, raw: bool = False, binary: bool = False,
@@ -786,6 +787,37 @@ class Devices:
     def types(self) -> str:
         """The device types with their Detect patterns and commands."""
         return self._run(action="types")
+
+
+class Tests:
+    """Termwright tests: YAML files in the tests folder (cases/), run against saved sessions and API sessions."""
+
+    def __init__(self, lab: "Lab"):
+        self.lab = lab
+
+    def _run(self, timeout: Optional[float] = None, **args) -> str:
+        r = self.lab.request("POST", "/tools/tests", {k: v for k, v in args.items() if v is not None}, root=True, timeout=timeout or max(self.lab.timeout, 150))
+        return r["result"] if isinstance(r, dict) and "result" in r else r
+
+    def list(self) -> str:
+        """The tests: file, name, number of steps, tags."""
+        return self._run(action="list")
+
+    def show(self, file: str) -> str:
+        """One test as YAML (file relative to the tests folder; cases/ and .yaml may be left out)."""
+        return self._run(action="show", file=file)
+
+    def save(self, file: str, yaml_text: str) -> str:
+        """Write a test from YAML (never with passwords: name saved sessions)."""
+        return self._run(action="save", file=file, yaml=yaml_text)
+
+    def run(self, *files: str, vars: Optional[dict] = None, timeout: float = 1800) -> str:
+        """Run tests (none: all). Returns pass/fail per step and the report's path (JUnit XML and HTML in reports/)."""
+        return self._run(timeout=timeout, action="run", files=list(files) or None, vars=vars)
+
+    def results(self) -> str:
+        """The last run's report."""
+        return self._run(action="results")
 
 
 class Syslog:

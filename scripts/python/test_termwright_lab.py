@@ -56,6 +56,8 @@ class Fake(BaseHTTPRequestHandler):
                 return self.reply(200, {"on": True})
         if self.path == "/api/v1/ai/skills":
             return self.reply(200, [{"name": "troubleshoot-port", "description": "Port down or flapping", "on": True}] if self.command == "GET" else {"name": "add-vlan"})
+        if self.path == "/api/v1/tools/tests":
+            return self.reply(200, {"result": "1 passed, 0 failed in 0.4 s"})
         if self.path == "/api/v1/tools/device":
             return self.reply(200, {"result": "Lab/edge-sw3 looks like Huawei VRP"})
         if self.path.startswith("/api/v1/http"):
@@ -285,6 +287,11 @@ class ClientTest(unittest.TestCase):
         self.lab.devices.set_type("Lab/edge-sw3", "Huawei VRP")
         calls = {p: b for _, p, b in Fake.state["calls"]}
         self.assertEqual(calls["/api/v1/tools/device"], {"action": "set_type", "session": "Lab/edge-sw3", "type": "Huawei VRP"})
+
+    def test_tests(self):
+        self.assertTrue(self.lab.tests.run("cases/smoke.yaml", vars={"vlan": "42"}).startswith("1 passed"))
+        calls = {p: b for _, p, b in Fake.state["calls"]}
+        self.assertEqual(calls["/api/v1/tools/tests"], {"action": "run", "files": ["cases/smoke.yaml"], "vars": {"vlan": "42"}})
 
     def test_syslog(self):
         self.assertEqual(self.lab.syslog.messages("link down", severity="err")[0]["id"], 7)

@@ -579,3 +579,17 @@ export interface SyslogMsg { id: number; at: string; from: string; proto: string
 export interface SyslogRule { name: string; match?: string; maxSeverity: number; host?: string; color?: string; notify?: boolean; hide?: boolean; off?: boolean; }
 export interface SyslogQuery { after?: number; text?: string; host?: string; maxSeverity?: number; limit?: number; }
 export interface SyslogSendIn { target: string; proto?: string; format?: string; facility?: string; severity?: string; host?: string; app?: string; text: string; count?: number; insecure?: boolean; }
+
+/** Tests (internal/testrec): a YAML test case, its list entry and a run's report. */
+export interface TestExpect { contains?: string; notContains?: string; matches?: string; field?: string; json?: string; status?: number; maxMs?: number; equals?: string; notEquals?: string; greater?: number; less?: number; exists?: boolean; }
+export interface TestStep {
+  name?: string; run?: { session: string; command: string; prompt?: string };
+  http?: { session?: string; environment?: string; method?: string; url: string; headers?: Record<string, string>; body?: string };
+  expect?: TestExpect[]; save?: { var: string; field?: string; json?: string }[]; timeout?: number; continueOnFail?: boolean;
+}
+export interface TestCase { name?: string; description?: string; tags?: string[]; vars?: Record<string, string>; steps: TestStep[]; }
+export interface TestCaseInfo { file: string; name: string; description?: string; tags?: string[]; steps: number; error?: string; }
+export interface TestCheckResult { what: string; passed: boolean; got?: string; }
+export interface TestStepResult { name: string; kind: string; target?: string; sent?: string; status?: number; output?: string; ms: number; passed: boolean; skipped?: boolean; error?: string; checks?: TestCheckResult[]; }
+export interface TestResult { case: string; file?: string; start: string; ms: number; passed: boolean; error?: string; steps: TestStepResult[]; }
+export interface TestRunReport { dir: string; passed: number; failed: number; ms: number; results: TestResult[]; }
