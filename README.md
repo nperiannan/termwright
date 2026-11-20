@@ -131,6 +131,7 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
 
 ## Recent releases
 
+- **0.42** - the **SNMP Browser** (v1, v2c, v3, MIBs, walk, tables, polling, traps), a **REST API client** like Postman (collections, environments, scripts, tests, Postman and OpenAPI import) and a **syslog server**, all usable by the AI assistant; device types for **Huawei VRP**, **Eltex MES**, **Ruckus ICX** and **Cisco NX-OS**, and a **Detect** pattern per device type so Discover Devices recognises any vendor; a new 2-minute demo.
 - **0.41** - the **Network Map**: the real network drawn from your sessions (LLDP, CDP, EDP, STP, LAG, VLAN) in eight styles, live reading progress, cable and device details; the AI agent's fully autonomous mode asks only on production sessions.
 - **0.40.1** - downloads you can **verify** (`SHA256SUMS` and build provenance), a security policy, contributor guide and issue forms, a [FAQ](docs/FAQ.md), a demo, and the Android build no longer fails when Maven Central rate-limits.
 - **0.40** - **Linux** gets one title bar in Termwright's theme with the menus, window buttons and tabs on their own row; a status bar with the cursor, selection, size, CAP and NUM; the AI chat box as VS Code's; the **Emulated Lab guide**; the source moved into `app/`.

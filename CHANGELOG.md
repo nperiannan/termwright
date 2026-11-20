@@ -2,7 +2,7 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
-## Unreleased
+## 0.42.0 (2026-11-20)
 
 - **Device facts and type for the AI assistant, MCP apps and scripts**: a `device` tool (facts, refresh_facts, identify, set_type, types) for the in-app agent (*Device facts and type* in its tool list), the MCP connector and the local API (`POST /api/v1/tools/device`); setting a device type follows the agent's permission. Python has `lab.devices.facts()`, `identify()`, `set_type()` and `types()`.
 - **Device type detection you can set**: each device type has a **Detect** pattern (a regular expression) and a **detect command** (Global Options → Device Types, with a box to test the pattern on pasted output). Discover Devices picks the type whose pattern matches what a device shows (SSH and Telnet banners, SNMP system description, web page), before its own guess; right-click a session → **Identify Device Type** logs in in the background, runs the detect commands (`show version`, `display version` …) and offers to set the type that matched. A device type you make for any vendor is recognised this way - no built-in type needed. The built-in types get their patterns once; a general-purpose OS (Linux) is chosen only when no network OS matches.
