@@ -22,9 +22,9 @@ import (
 type netAsker func(title, msg string, danger bool) error
 
 var netTools = []mcpTool{
-	{"snmp", "SNMP with a saved session's SNMP settings (session properties → SNMP; v1, v2c or v3) or an address and credentials: get, getnext, bulk and walk read; set writes (asked first on a production session, and only when the session allows writes). Values come back with the MIB's names and readable values (enum names, times, MAC addresses). mib_search and mib_info look objects up in the loaded MIBs (the standard IETF MIBs and the user's own); traps lists the notifications the trap receiver got.",
+	{"snmp", "SNMP with a saved session's SNMP settings (session properties → SNMP; v1, v2c or v3) or an address and credentials: get, getnext, bulk and walk read; set writes (asked first on a production session, and only when the session allows writes). Values come back with the MIB's names and readable values (enum names, times, MAC addresses). mib_search and mib_info look objects up in the loaded MIBs (the standard IETF MIBs and the user's own); traps lists the notifications the trap receiver got; send_trap sends a test notification to a receiver.",
 		mcpSchema(map[string]any{
-			"action":    map[string]any{"type": "string", "enum": []string{"get", "getnext", "bulk", "walk", "set", "mib_search", "mib_info", "traps"}, "description": "what to do"},
+			"action":    map[string]any{"type": "string", "enum": []string{"get", "getnext", "bulk", "walk", "set", "mib_search", "mib_info", "traps", "send_trap"}, "description": "what to do"},
 			"session":   map[string]any{"type": "string", "description": "a saved session's path (list_sessions); its SNMP settings and saved community / v3 passwords are used"},
 			"address":   map[string]any{"type": "string", "description": "instead of session: host or host:port"},
 			"version":   map[string]any{"type": "string", "enum": []string{"1", "2c", "3"}, "description": "with address (default 2c)"},
@@ -33,6 +33,7 @@ var netTools = []mcpTool{
 			"values":    map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{"oid": map[string]any{"type": "string"}, "type": map[string]any{"type": "string"}, "value": map[string]any{"type": "string"}}}, "description": "set: [{oid, value, type?}] - the type comes from the MIB when left out; an enum takes its name (down)"},
 			"max":       map[string]any{"type": "integer", "description": "walk: at most this many values (default 2000 here)"},
 			"query":     map[string]any{"type": "string", "description": "mib_search: a name, module or OID; mib_info: one object"},
+			"trap":      map[string]any{"type": "string", "description": "send_trap: the notification (IF-MIB::linkDown or an OID), sent to address (port 162) with values"},
 		}, "action")},
 	{"http", "The REST API client with saved API sessions (Protocol API: base URL, authentication - API key, bearer token, login, basic, OAuth 2.0 - and {{variables}}; secrets stay in the credential store) and collections. send sends one request (a path goes after the session's base URL; the login token is fetched and renewed by itself) or a saved one (collection + request); POST, PUT, PATCH and DELETE on a production session are asked first. run runs a collection's requests with their tests; collections / collection list them; save adds or replaces a request in a collection (made when missing), with its pre-request script (preScript) and tests in Postman's pm.* style (pm.test, pm.expect, pm.response.json(), pm.variables.set); import reads a cURL command, a Postman collection or an OpenAPI document into a collection; history lists the last requests.",
 		mcpSchema(map[string]any{
@@ -133,6 +134,23 @@ func (a *App) snmpTool(ctx context.Context, args map[string]any, ask netAsker) (
 			}
 		}
 		return b.String(), nil
+	}
+	if act == "send_trap" {
+		in := SNMPTrapSendIn{Address: argStr(args, "address"), Version: argStr(args, "version"), Community: argStr(args, "community"), TrapOID: argStr(args, "trap")}
+		if l, ok := args["values"].([]any); ok {
+			for _, x := range l {
+				if m, ok := x.(map[string]any); ok {
+					in.Values = append(in.Values, SNMPValue{OID: argStr(m, "oid"), Type: argStr(m, "type"), Value: fmt.Sprint(m["value"])})
+				}
+			}
+		}
+		if in.Address == "" || in.TrapOID == "" {
+			return "", errors.New("send_trap needs address and trap")
+		}
+		if err := a.SNMPSendTrap(in); err != nil {
+			return "", err
+		}
+		return "Sent " + in.TrapOID + " to " + in.Address + ".", nil
 	}
 	r := SNMPRequest{Session: argStr(args, "session"), Op: act, OIDs: argStrs(args, "oids"), Max: argInt(args, "max", 2000, 20000)}
 	if ad := argStr(args, "address"); ad != "" {

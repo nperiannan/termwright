@@ -86,6 +86,27 @@ func Standard() *MIB {
 	return stdMIB
 }
 
+// Unplaced lists, per module, the objects that could not be placed in the tree and the parent each waits
+// for (usually an object of a module that is not loaded: load the vendor's other MIB files too).
+func (m *MIB) Unplaced() map[string][]string {
+	out := map[string][]string{}
+	for _, n := range m.pending {
+		if len(n.parentRef) > 0 && n.parentRef[0] != "#trap" {
+			out[n.Module] = append(out[n.Module], n.Name+" (needs "+n.parentRef[0]+")")
+		}
+	}
+	return out
+}
+
+// Counts is how many objects each module has in the tree.
+func (m *MIB) Counts() map[string]int {
+	out := map[string]int{}
+	for _, n := range m.byOID {
+		out[n.Module]++
+	}
+	return out
+}
+
 // Clone copies the MIB (to load private modules without changing the shared one).
 func (m *MIB) Clone() *MIB {
 	m.mu.RLock()

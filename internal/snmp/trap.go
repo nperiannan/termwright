@@ -1,6 +1,8 @@
 package snmp
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"net"
 	"strings"
@@ -140,6 +142,27 @@ func SendTrap(cfg Config, trapOID string, uptime uint64, vbs []Varbind) error {
 	}
 	defer c.Close()
 	var b []byte
+	if cfg.Version == V3 { // the sender is the authoritative engine of a trap (RFC 3414)
+		if cfg.Priv != PrivNone && cfg.Auth == AuthNone {
+			return errors.New("snmp: privacy needs authentication")
+		}
+		eid := LocalEngineID
+		u := &usm{user: cfg.User, auth: cfg.Auth, priv: cfg.Priv, engineID: eid, boots: 1, time: int64(uptime / 100)}
+		var sb [8]byte
+		_, _ = rand.Read(sb[:])
+		u.salt = binary.BigEndian.Uint64(sb[:])
+		if err := u.localize(cfg.AuthPass, cfg.PrivPass); err != nil {
+			return err
+		}
+		all := append([]Varbind{{OID: "1.3.6.1.2.1.1.3.0", Type: TimeTicks, Uint: uptime}, {OID: "1.3.6.1.6.3.1.1.4.1.0", Type: ObjectID, Value: trapOID}}, vbs...)
+		m := Message{Version: V3, MsgID: randID(), EngineID: eid, Boots: 1, Time: u.time, User: cfg.User, ContextID: eid, Context: cfg.Context,
+			PDU: PDU{Type: PDUTrapV2, RequestID: randID(), Varbinds: all}}
+		if b, err = encodeV3(m, u); err != nil {
+			return err
+		}
+		_, err = c.Write(b)
+		return err
+	}
 	if cfg.Version == V1 {
 		ent := strings.TrimSuffix(parentOf(trapOID), ".0") // RFC 3584: enterprise.0.specific
 		p := PDU{Type: PDUTrapV1, TrapV1: &TrapV1{Enterprise: ent, AgentAddr: "0.0.0.0", Generic: 6, Specific: int(atoiU(lastOf(trapOID))), TimeStamp: uptime}, Varbinds: vbs}
@@ -154,6 +177,9 @@ func SendTrap(cfg Config, trapOID string, uptime uint64, vbs []Varbind) error {
 	_, err = c.Write(b)
 	return err
 }
+
+// LocalEngineID is Termwright's SNMP engine ID (enterprise 8072 format, text "termwright"): v3 traps it sends use it.
+var LocalEngineID = append([]byte{0x80, 0x00, 0x1f, 0x88, 0x04}, []byte("termwright")...)
 
 func parentOf(o string) string {
 	if i := strings.LastIndexByte(o, '.'); i > 0 {

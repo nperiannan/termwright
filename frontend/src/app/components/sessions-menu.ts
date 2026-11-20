@@ -105,7 +105,7 @@ export class SessionsMenu implements AfterViewInit {
   proto(n: SessionNode): SessionKind {
     switch (n.protocol) {
       case 'Serial': return 'serial'; case 'Console': return 'console'; case 'Local Shell': return 'shell';
-      case 'Telnet': return 'telnet'; case 'Raw': return 'raw'; case 'RDP': return 'rdp'; case 'VNC': return 'vnc'; case 'WOL': return 'wol'; case 'API': return 'api';
+      case 'Telnet': return 'telnet'; case 'Raw': return 'raw'; case 'RDP': return 'rdp'; case 'VNC': return 'vnc'; case 'WOL': return 'wol'; case 'API': return 'api'; case 'SNMP': return 'snmp';
       default: return n.openAs === 'sftp' ? 'sftp' : 'ssh';
     }
   }

@@ -6,6 +6,8 @@ import { TabView } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { SessionSelect } from './session-select';
+import { Combo, ComboOption } from './combo';
+import { HTTP_HEADERS, headerValues } from '../core/http-headers';
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const MODES = [{ v: '', l: 'None' }, { v: 'json', l: 'JSON' }, { v: 'text', l: 'Text' }, { v: 'xml', l: 'XML' }, { v: 'urlencoded', l: 'Form URL-encoded' }, { v: 'form', l: 'Multipart form' }, { v: 'graphql', l: 'GraphQL' }];
@@ -25,7 +27,7 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
 /** The API client: requests with an API session's base URL, login and variables; collections, history, tests, runner, import, code. */
 @Component({
   selector: 'app-api-client',
-  imports: [FormsModule, SessionSelect],
+  imports: [FormsModule, SessionSelect, Combo],
   template: `
   <div class="ac">
     <div class="side">
@@ -72,12 +74,12 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
 
     <div class="main">
       <div class="bar">
-        <select class="meth" [ngModel]="draft().req.method" (ngModelChange)="setReq({ method: $event })" [class]="'meth ' + draft().req.method">
+        <select [ngModel]="draft().req.method" (ngModelChange)="setReq({ method: $event })" [class]="'fs method meth m-' + draft().req.method" title="Method">
           @for (m of methods; track m) { <option [value]="m">{{ m }}</option> }</select>
         <input class="url" [ngModel]="draft().req.url" (ngModelChange)="setReq({ url: $event })" (keydown.enter)="send()" placeholder="/path after the session's base URL, or https://…" spellcheck="false" translate="no" />
         <app-session-select class="sess" [value]="path()" (changed)="choose($event)" [filter]="apiFilter" [allowNone]="true" noneLabel="No session (send the URL as it is)"
           placeholder="No session" title="Choose an API session" hint="Its base URL, login and variables are used." emptyText="No API session yet: API → New API Session." />
-        <select class="env" [ngModel]="env()" (ngModelChange)="env.set($event); loadToken()" title="Which values of the session's variables">
+        <select class="fs env" [ngModel]="env()" (ngModelChange)="env.set($event); loadToken()" title="Which values of the session's variables">
           <option value="">Env: {{ sessEnvName() }}</option><option value="production">Env: Production</option></select>
         <button type="button" class="pri" (click)="send()" [disabled]="busy() || !draft().req.url.trim()">{{ busy() ? 'Sending…' : 'Send' }}</button>
         <button type="button" (click)="save()" [title]="draft().coll ? 'Save to the collection' : 'Save to a collection'">Save{{ draft().dirty ? ' •' : '' }}</button>
@@ -116,16 +118,20 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
                 <table class="kv"><thead><tr><th></th><th>Key</th><th>Value</th><th>Description</th><th></th></tr></thead><tbody>
                   @for (p of draft().req.headers ?? []; track $index) {
                     <tr><td><input type="checkbox" [ngModel]="!p.off" (ngModelChange)="p.off = !$event; touch()" /></td>
-                      <td><input [(ngModel)]="p.key" (ngModelChange)="touch()" spellcheck="false" list="hdrs" /></td><td><input [(ngModel)]="p.value" (ngModelChange)="touch()" spellcheck="false" /></td>
+                      <td><app-combo class="hc" [value]="p.key" (valueChange)="p.key = $event; touch()" [options]="keyOpts(p.key)" placeholder="Header name" emptyText="All common headers are used - type any name" [name]="'hk' + $index" /></td>
+                      <td><app-combo class="hc" [value]="p.value" (valueChange)="p.value = $event; touch()" [options]="valueOpts(p.key)" placeholder="Value" emptyText="Type the value" [name]="'hv' + $index" /></td>
                       <td><input [(ngModel)]="p.desc" (ngModelChange)="touch()" /></td><td><a class="x" (click)="del(draft().req.headers!, $index)">✕</a></td></tr>
                   }
                   @if (sess()?.apiAuth && draft().req.auth !== 'none') { <tr class="auto"><td></td><td>{{ authHeader() }}</td><td>••••••••</td><td>🔒 from the session</td><td></td></tr> }
                   @if (bodyType(); as ct) { @if (!hasHeader('Content-Type')) { <tr class="auto"><td></td><td>Content-Type</td><td>{{ ct }}</td><td>from the Body</td><td></td></tr> } }
+                  @if (!hasHeader('Host')) { <tr class="auto"><td></td><td>Host</td><td>{{ hostOf() || '(from the URL)' }}</td><td>from the URL</td><td></td></tr> }
+                  @if (!hasHeader('Accept-Encoding')) { <tr class="auto"><td></td><td>Accept-Encoding</td><td>gzip</td><td>added by Termwright</td><td></td></tr> }
+                  @if (!hasHeader('Connection')) { <tr class="auto"><td></td><td>Connection</td><td>keep-alive</td><td>added by Termwright</td><td></td></tr> }
                   @if (!hasHeader('User-Agent')) { <tr class="auto"><td></td><td>User-Agent</td><td>Termwright</td><td>added by Termwright</td><td></td></tr> }
                 </tbody></table>
                 <datalist id="hdrs">@for (h of commonHeaders; track h) { <option [value]="h"></option> }</datalist>
                 <div class="modes"><button type="button" class="add0" (click)="add('headers')">+ Add Header</button>
-                  <select [ngModel]="''" (ngModelChange)="$event !== '' && addPreset(+$event)" title="Headers most APIs use">
+                  <select class="fs" [ngModel]="''" (ngModelChange)="$event !== '' && addPreset(+$event)" title="Headers most APIs use">
                     <option value="">Add a common header…</option>
                     @for (h of presets; track $index) { <option [value]="$index" [disabled]="hasHeader(h.key, h.value)">{{ h.key }}: {{ h.value }}  ({{ h.desc }})</option> }
                   </select></div>
@@ -163,18 +169,18 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
                 <div class="scr">
                   <div class="aiw"><span class="ai-ic">✦</span>
                     <input [(ngModel)]="aiAskText" (keydown.enter)="writeWithAI()" [disabled]="aiBusy()" placeholder="Describe the tests or script you want, e.g. every port of 1:1-1:4 is UP and the answer is under 300 ms" />
-                    <select [(ngModel)]="aiTarget" title="Which script"><option value="tests">Tests</option><option value="pre">Pre-request</option></select>
+                    <select class="fs" [(ngModel)]="aiTarget" title="Which script"><option value="tests">Tests</option><option value="pre">Pre-request</option></select>
                     <button type="button" (click)="writeWithAI()" [disabled]="aiBusy() || !aiAskText.trim()">{{ aiBusy() ? 'Writing…' : 'Write with AI' }}</button></div>
                   @if (aiNote()) { <div class="mut pad0">{{ aiNote() }}</div> }
                   <div class="sh"><b>Tests</b> <span class="mut">run on the answer (pm.test, pm.expect, pm.response, pm.variables)</span><span class="sp"></span>
-                    <select [ngModel]="''" (ngModelChange)="$event !== '' && snippet(+$event)"><option value="">Add a snippet…</option>@for (s of snippets; track $index) { <option [value]="$index">{{ s.l }}</option> }</select></div>
+                    <select class="fs" [ngModel]="''" (ngModelChange)="$event !== '' && snippet(+$event)"><option value="">Add a snippet…</option>@for (s of snippets; track $index) { <option [value]="$index">{{ s.l }}</option> }</select></div>
                   <textarea class="code" [ngModel]="draft().req.tests" (ngModelChange)="setReq({ tests: $event })" spellcheck="false" translate="no" placeholder="pm.test('ok', () => pm.response.to.have.status(200));"></textarea>
                   <div class="sh"><b>Pre-request script</b> <span class="mut">runs before it is sent (pm.variables.set)</span></div>
                   <textarea class="code small" [ngModel]="draft().req.preScript" (ngModelChange)="setReq({ preScript: $event })" spellcheck="false" translate="no"></textarea>
                 </div>
               }
               @case ('code') {
-                <div class="modes"><select [ngModel]="lang()" (ngModelChange)="lang.set($event); loadCode()">@for (l of langs; track l.v) { <option [value]="l.v">{{ l.l }}</option> }</select>
+                <div class="modes"><select class="fs" [ngModel]="lang()" (ngModelChange)="lang.set($event); loadCode()">@for (l of langs; track l.v) { <option [value]="l.v">{{ l.l }}</option> }</select>
                   <a class="lk" (click)="copy(code())">Copy</a><span class="mut">Secrets are environment variables in the code, never written out.</span></div>
                 <pre class="out" translate="no">{{ code() }}</pre>
               }
@@ -193,7 +199,7 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
                   [title]="mono() ? 'Monochrome on: plain black text (light theme) or white (dark theme). Click for colours.' : 'Monochrome: show the body in plain black (light theme) or white (dark theme) instead of colours'">
                   <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor" /></svg>
                 </button>
-                <select class="pretty" [ngModel]="pretty() ? 'p' : 'r'" (ngModelChange)="pretty.set($event === 'p')"><option value="p">Pretty</option><option value="r">Raw</option></select>
+                <select class="fs pretty" [ngModel]="pretty() ? 'p' : 'r'" (ngModelChange)="pretty.set($event === 'p')"><option value="p">Pretty</option><option value="r">Raw</option></select>
                 <button type="button" (click)="copy(r.body)">Copy</button>
               }
             }
@@ -251,7 +257,7 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
       <div class="ov" (click)="saveOpen.set(false)"><div class="dlg sm" (click)="$event.stopPropagation()">
         <h3>Save Request</h3>
         <label>Name<input [(ngModel)]="saveName" /></label>
-        <label>Collection<select [(ngModel)]="saveColl"><option value="">New collection…</option>@for (c of colls(); track c.id) { <option [value]="c.id">{{ c.name }}</option> }</select></label>
+        <label>Collection<select class="fs" [(ngModel)]="saveColl"><option value="">New collection…</option>@for (c of colls(); track c.id) { <option [value]="c.id">{{ c.name }}</option> }</select></label>
         @if (!saveColl) { <label>New collection's name<input [(ngModel)]="saveNewColl" /></label> }
         <label>Folder (optional)<input [(ngModel)]="saveFolder" placeholder="Interfaces/Ports" /></label>
         <div class="btns"><span class="sp"></span><button type="button" (click)="saveOpen.set(false)">Cancel</button><button type="button" class="pri" (click)="saveAs()" [disabled]="!saveName.trim() || (!saveColl && !saveNewColl.trim())">Save</button></div>
@@ -261,8 +267,8 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
       <div class="ov" (click)="!running() && runColl.set(null)"><div class="dlg wide" (click)="$event.stopPropagation()">
         <h3 translate="no">Run {{ c.name }}{{ runFolder ? ' / ' + runFolder : '' }}</h3>
         <div class="row">
-          <label>Session<select [(ngModel)]="runSession"><option value="">{{ c.session ? 'The collection\\'s (' + c.session + ')' : 'No session' }}</option>@for (s of sessions(); track s.path) { <option [value]="s.path">{{ s.path }}</option> }</select></label>
-          <label>Env<select [(ngModel)]="runEnv"><option value="">Session's</option><option value="production">Production</option></select></label>
+          <label>Session<select class="fs" [(ngModel)]="runSession"><option value="">{{ c.session ? 'The collection\\'s (' + c.session + ')' : 'No session' }}</option>@for (s of sessions(); track s.path) { <option [value]="s.path">{{ s.path }}</option> }</select></label>
+          <label>Env<select class="fs" [(ngModel)]="runEnv"><option value="">Session's</option><option value="production">Production</option></select></label>
           <label>Iterations<input type="number" min="1" [(ngModel)]="runIter" style="width: 60px" /></label>
           <label>Delay (ms)<input type="number" min="0" [(ngModel)]="runDelay" style="width: 70px" /></label>
           <label class="chk"><input type="checkbox" [(ngModel)]="runStop" /> Stop at the first failure</label>
@@ -336,6 +342,8 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
     .kv.ro td { font-family: var(--mono); font-size: 12px; padding: 5px 10px; word-break: break-all; } .kv.ro td:first-child { width: auto; color: var(--muted); white-space: nowrap; }
     .kv tr.auto td { color: var(--muted); font-size: 12px; padding: 6px; }
     .x { cursor: pointer; color: var(--muted); }
+    .hc ::ng-deep input { font-family: var(--mono); font-size: 12px; border-color: transparent; background: transparent; width: 100%; }
+    .hc ::ng-deep input:focus { border-color: var(--accent); background: var(--input-bg); }
     .add { margin: 8px; } .add0 { margin: 0; }
     .modes { display: flex; gap: 12px; align-items: center; padding: 8px 12px; flex-wrap: wrap; } .modes label { display: inline-flex; gap: 4px; align-items: center; color: var(--muted); }
     textarea.code { width: calc(100% - 20px); margin: 0 10px 8px; min-height: 120px; font: 12px var(--mono); box-sizing: border-box; resize: vertical; }
@@ -392,6 +400,12 @@ export class ApiClient implements OnInit, OnDestroy {
     { key: 'If-Match', value: '"etag"', desc: 'only if not changed' },
     { key: 'Connection', value: 'close', desc: 'no keep-alive' },
   ];
+  /** Header names not used yet in this request (the row's own stays), with what each is for. */
+  keyOpts(cur: string): ComboOption[] {
+    const used = new Set((this.draft().req.headers ?? []).map(h => h.key.toLowerCase()));
+    return HTTP_HEADERS.filter(h => !used.has(h.key.toLowerCase()) || h.key.toLowerCase() === cur.toLowerCase()).map(h => ({ value: h.key, hint: h.desc }));
+  }
+  valueOpts(key: string): ComboOption[] { return headerValues(key).map(v => ({ value: v })); }
   hasHeader(k: string, v?: string) { return (this.draft().req.headers ?? []).some(h => !h.off && h.key.toLowerCase() === k.toLowerCase() && (v === undefined || h.value === v)); }
   addPreset(i: number) {
     const p = this.presets[i];
@@ -399,6 +413,10 @@ export class ApiClient implements OnInit, OnDestroy {
     const same = hs.find(h => h.key.toLowerCase() === p.key.toLowerCase());
     if (same) same.value = p.value; else hs.push({ key: p.key, value: p.value });
     this.setReq({ headers: hs });
+  }
+  hostOf() {
+    const u = this.draft().req.url.trim(), base = this.sess()?.apiBaseUrl ?? '';
+    try { return new URL(/^https?:/i.test(u) ? u : base).host; } catch { return ''; }
   }
   bodyType() { const m = this.draft().req.body?.mode; return ({ json: 'application/json', text: 'text/plain', xml: 'application/xml', urlencoded: 'application/x-www-form-urlencoded', form: 'multipart/form-data', graphql: 'application/json' } as Record<string, string>)[m ?? ''] ?? ''; }
   readonly commonHeaders = ['Accept', 'Content-Type', 'Authorization', 'Cache-Control', 'If-Match', 'If-None-Match', 'User-Agent', 'X-Request-Id', 'X-Auth-Token', 'X-API-Key'];
@@ -756,7 +774,7 @@ export class ApiClient implements OnInit, OnDestroy {
 
 function readMono(): boolean { try { return localStorage.getItem('tw.api.mono') === '1'; } catch { return false; } }
 
-function newReq(): HRequest { return { method: 'GET', url: '', params: [], headers: [{ key: 'Accept', value: 'application/json' }], body: { mode: '' } }; }
+function newReq(): HRequest { return { method: 'GET', url: '', params: [], headers: [{ key: 'Accept', value: 'application/json' }, { key: 'Cache-Control', value: 'no-cache' }], body: { mode: '' } }; }
 
 function flat(n: SessionNode | null, out: SessionNode[] = []): SessionNode[] {
   if (!n) return out;

@@ -137,6 +137,14 @@ func (a *App) apiHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 		apiOut(w, http.StatusOK, n, nil)
 	case "/snmp/traps":
 		apiOut(w, http.StatusOK, a.SNMPTraps(), nil)
+	case "/snmp/trap":
+		var in SNMPTrapSendIn
+		if err := apiDecode(body, &in); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		err := a.SNMPSendTrap(in)
+		apiOut(w, http.StatusOK, map[string]string{"sent": in.TrapOID}, err)
 	case "/http/send":
 		var req HTTPSendRequest
 		if err := apiDecode(body, &req); err != nil {
@@ -480,7 +488,7 @@ var apiRoutes = map[string][]string{
 	"/lab/traffic/streams": {"POST"}, "/lab/traffic/streams/{id}": {"PUT", "DELETE"},
 	"/lab/traffic/tests": {"GET", "POST"}, "/lab/traffic/tests/{id}": {"PUT", "DELETE"}, "/lab/traffic/tests/{id}/run": {"POST"},
 	"/lab/traffic/runs": {"GET"}, "/lab/traffic/runs/{id}": {"GET"}, "/lab/traffic/runs/stop": {"POST"},
-	"/tools": {"GET"}, "/tools/{tool}": {"POST"}, "/snmp": {"POST"}, "/snmp/mib": {"GET"}, "/snmp/mib/{object}": {"GET"}, "/snmp/traps": {"GET"},
+	"/tools": {"GET"}, "/tools/{tool}": {"POST"}, "/snmp": {"POST"}, "/snmp/mib": {"GET"}, "/snmp/mib/{object}": {"GET"}, "/snmp/traps": {"GET"}, "/snmp/trap": {"POST"},
 	"/http/send": {"POST"}, "/http/collections": {"GET", "POST"}, "/http/collections/{collection}": {"GET", "PUT", "DELETE"},
 	"/http/collections/{collection}/run": {"POST"}, "/http/import": {"POST"}, "/http/history": {"GET"},
 	"/syslog": {"GET"}, "/syslog/start": {"POST"}, "/syslog/stop": {"POST"}, "/syslog/messages": {"GET", "DELETE"}, "/syslog/send": {"POST"}, "/syslog/rules": {"GET", "PUT"},

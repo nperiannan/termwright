@@ -2,14 +2,14 @@ import { Component, OnDestroy, OnInit, computed, effect, inject, input, signal }
 import { FormsModule } from '@angular/forms';
 import { SlicePipe } from '@angular/common';
 import { Backend, errText } from '../core/backend';
-import { Session, SessionNode, SNMPMibNode, SNMPResult, SNMPRow, SNMPTrapsView } from '../core/models';
+import { Session, SessionNode, SNMPMibNode, SNMPModule, SNMPResult, SNMPRow, SNMPTrapsView } from '../core/models';
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { SessionSelect } from './session-select';
 
 interface TreeItem { node: SNMPMibNode; depth: number; open: boolean; }
-interface HistItem { at: number; op: string; oid: string; session: string; n: number; ms: number; err?: string; }
+interface HistItem { at: number; op: string; oid: string; session: string; n: number; ms: number; err?: string; rows?: SNMPRow[]; }
 
 const OPS: { v: string; l: string }[] = [
   { v: 'get', l: 'Get' }, { v: 'getnext', l: 'Get Next' }, { v: 'bulk', l: 'Get Bulk' },
@@ -33,18 +33,22 @@ const FAV_KEY = 'tw.snmp.favourites';
           <span class="cred" [class.v3]="ver() === '3'" translate="no">{{ credText() }}</span>
           <button type="button" class="setb" (click)="openSettings(s.path)" title="Version, community or v3 user and passwords, port, writes">⚙ SNMP Settings</button>
         }
+        @for (x of extra(); track x) { <span class="chip2" translate="no">+ {{ x.split('/').pop() }}<a (click)="dropExtra(x)" title="Remove this device">✕</a></span> }
+        @if (path()) {
+          <app-session-select class="addd" [value]="''" (changed)="addExtra($event)" [filter]="snmpFilter" title="Run on more devices" placeholder="+ Device"
+            hint="The same request runs on every device chosen; the results get a Device column." />
+        }
         <span class="sp"></span>
-        <button type="button" (click)="loadMib()">Load MIB…</button>
+        <button type="button" (click)="openMibs()" title="The MIB files: built in and loaded, where they are, load and remove">MIBs…</button>
         <button type="button" (click)="view.set('traps')">Traps</button>
-        <button type="button" (click)="exportCsv()" [disabled]="!result()?.rows?.length">Export CSV</button>
       </div>
       <div class="bar">
         <label class="op">Operation
-          <select [(ngModel)]="op">@for (o of ops; track o.v) { <option [value]="o.v">{{ o.l }}</option> }</select>
+          <select class="fs" [(ngModel)]="op">@for (o of ops; track o.v) { <option [value]="o.v">{{ o.l }}</option> }</select>
         </label>
         <input class="oid" [(ngModel)]="oid" (keydown.enter)="run()" placeholder="OID or name: sysDescr.0, IF-MIB::ifTable, 1.3.6.1.2.1.2.2" spellcheck="false" translate="no" />
         @if (op === 'set') {
-          <select class="ty" [(ngModel)]="setType" title="Type (empty = from the MIB)">@for (t of setTypes; track t) { <option [value]="t">{{ t || 'Type from MIB' }}</option> }</select>
+          <select class="fs ty" [(ngModel)]="setType" title="Type (empty = from the MIB)">@for (t of setTypes; track t) { <option [value]="t">{{ t || 'Type from MIB' }}</option> }</select>
           <input class="val" [(ngModel)]="setValue" (keydown.enter)="run()" placeholder="Value (enum names work: up, down)" spellcheck="false" />
         }
         @if (op === 'bulk' || op === 'walk' || op === 'table') {
@@ -99,14 +103,26 @@ const FAV_KEY = 'tw.snmp.favourites';
           <div class="tabs">
             <a [class.on]="view() === 'results'" (click)="view.set('results')">Results <i>{{ result()?.rows?.length ?? 0 }}</i></a>
             <a [class.on]="view() === 'table'" (click)="view.set('table')">Table view</a>
+            <a [class.on]="view() === 'compare'" (click)="view.set('compare')">Compare</a>
+            <a [class.on]="view() === 'poll'" (click)="view.set('poll')">Poll{{ polling() ? ' ●' : '' }}</a>
             <a [class.on]="view() === 'traps'" (click)="view.set('traps')">Traps <i>{{ traps().traps.length }}</i></a>
             <a [class.on]="view() === 'history'" (click)="view.set('history')">History</a>
+            <span class="sp"></span><button type="button" class="tbtn" (click)="exportCsv()" [disabled]="!result()?.rows?.length">Export CSV</button>
           </div>
           <div class="body">
             @if (error()) { <div class="err">{{ error() }}</div> }
             @switch (view()) {
               @case ('results') {
-                @if (result(); as r) {
+                @if (multi().length > 1) {
+                  <table><thead><tr><th>Device</th><th>Name</th><th>Index</th><th>Type</th><th>Value</th></tr></thead><tbody>
+                    @for (d of multi(); track d.session) {
+                      @if (d.err) { <tr><td translate="no">{{ d.session.split('/').pop() }}</td><td colspan="4" class="bad">{{ d.err }}</td></tr> }
+                      @for (x of d.rows; track $index) {
+                        <tr (click)="oid = x.oid" translate="no"><td>{{ d.session.split('/').pop() }}</td><td>{{ x.object || x.name }}</td><td>{{ x.instance }}</td><td>{{ x.type }}</td><td [class]="tone(x)">{{ x.display }}</td></tr>
+                      }
+                    }
+                  </tbody></table>
+                } @else if (result(); as r) {
                   <table><thead><tr><th>Name</th><th>Index</th><th>Type</th><th>Value</th><th>OID</th></tr></thead><tbody>
                     @for (x of r.rows; track $index) {
                       <tr (click)="oid = x.oid" translate="no"><td>{{ x.object || x.name }}</td><td>{{ x.instance }}</td><td>{{ x.type }}</td>
@@ -122,6 +138,38 @@ const FAV_KEY = 'tw.snmp.favourites';
                   </tbody></table>
                 } @else { <div class="empty">Walk a table (for example IF-MIB::ifTable) to see it as rows and columns.</div> }
               }
+              @case ('compare') {
+                <div class="tbar">
+                  <label>A <select class="fs cmp" [ngModel]="cmpA()" (ngModelChange)="cmpA.set($event)">@for (o of cmpOpts(); track o.k) { <option [value]="o.k">{{ o.l }}</option> }</select></label>
+                  <label>B <select class="fs cmp" [ngModel]="cmpB()" (ngModelChange)="cmpB.set($event)">@for (o of cmpOpts(); track o.k) { <option [value]="o.k">{{ o.l }}</option> }</select></label>
+                  <label class="chk"><input type="checkbox" [ngModel]="onlyDiff()" (ngModelChange)="onlyDiff.set($event)" /> Only differences</label>
+                  <span class="sp"></span><span class="mut">{{ diff().changed }} changed · {{ diff().onlyA }} only in A · {{ diff().onlyB }} only in B</span>
+                </div>
+                @if (cmpOpts().length < 2) { <div class="empty">Compare two walks: run the same walk twice (before and after a change), or on two devices (+ Device), then choose A and B here.</div> }
+                @else {
+                  <table><thead><tr><th>Object</th><th>A</th><th>B</th><th></th></tr></thead><tbody>
+                    @for (d of diff().rows; track d.k) { <tr translate="no" [class]="'d-' + d.kind"><td>{{ d.k }}</td><td>{{ d.a ?? '' }}</td><td>{{ d.b ?? '' }}</td><td class="mut">{{ d.kind === 'same' ? '' : d.kind === 'changed' ? 'changed' : d.kind === 'a' ? 'only in A' : 'only in B' }}</td></tr> }
+                  </tbody></table>
+                }
+              }
+              @case ('poll') {
+                <div class="tbar">
+                  <span class="mut">Reads</span><b class="mono" translate="no">{{ pollOid || oid || '(choose an object)' }}</b>
+                  <label class="sm">every <input type="number" min="1" max="3600" [(ngModel)]="pollSecs" /> s</label>
+                  @if (polling()) { <button type="button" (click)="stopPoll()">Stop</button> } @else { <button type="button" class="pri" (click)="startPoll()" [disabled]="!path() || !oid.trim()">▶ Start Polling</button> }
+                  <button type="button" (click)="clearPoll()" [disabled]="!series().length">Clear</button>
+                  <span class="sp"></span><span class="mut">Counters are shown per second; {{ pollN() }} samples</span>
+                </div>
+                @if (series().length) {
+                  <svg class="chart" viewBox="0 0 1000 260" preserveAspectRatio="none">
+                    @for (g of grid(); track $index) { <line x1="0" x2="1000" [attr.y1]="g.y" [attr.y2]="g.y" class="gl" /><text x="4" [attr.y]="g.y - 3" class="gt">{{ g.l }}</text> }
+                    @for (sr of series(); track sr.key; let i = $index) { <polyline [attr.points]="line(sr)" fill="none" [attr.stroke]="color(i)" stroke-width="2" vector-effect="non-scaling-stroke" /> }
+                  </svg>
+                  <table><thead><tr><th></th><th>Object</th><th>Last</th><th>Min</th><th>Max</th><th>Average</th></tr></thead><tbody>
+                    @for (sr of series(); track sr.key; let i = $index) { <tr translate="no"><td><span class="dot" [style.background]="color(i)"></span></td><td>{{ sr.key }}{{ sr.rate ? ' /s' : '' }}</td><td>{{ fmt(sr.pts[sr.pts.length - 1]?.v) }}</td><td>{{ fmt(stat(sr).min) }}</td><td>{{ fmt(stat(sr).max) }}</td><td>{{ fmt(stat(sr).avg) }}</td></tr> }
+                  </tbody></table>
+                } @else { <div class="empty">Choose a value to watch (sysUpTime.0, ifHCInOctets.3, or a column such as IF-MIB::ifHCInOctets for every port) and press Start Polling. Counters are drawn as a rate per second.</div> }
+              }
               @case ('traps') {
                 <div class="tbar">
                   @if (traps().state.on) {
@@ -130,8 +178,25 @@ const FAV_KEY = 'tw.snmp.favourites';
                     <label class="sm">UDP port <input type="number" [(ngModel)]="trapPort" /></label><button type="button" class="pri" (click)="trapStart()">Start Receiver</button>
                     @if (traps().state.error) { <span class="bad">{{ traps().state.error }}</span> }
                   }
-                  <span class="sp"></span><button type="button" (click)="trapClear()" [disabled]="!traps().traps.length">Clear</button>
+                  <span class="sp"></span><button type="button" (click)="sendOpen.set(!sendOpen())" [class.on]="sendOpen()">Send Trap…</button><button type="button" (click)="trapClear()" [disabled]="!traps().traps.length">Clear</button>
                 </div>
+                @if (sendOpen()) {
+                  <div class="sendt">
+                    <label>To<input [(ngModel)]="tr.address" placeholder="receiver host or host:port (162)" spellcheck="false" /></label>
+                    <label>Version<select class="fs" [(ngModel)]="tr.version"><option value="1">v1</option><option value="2c">v2c</option><option value="3">v3</option></select></label>
+                    @if (tr.version !== '3') { <label>Community<input [(ngModel)]="tr.community" placeholder="public" /></label> }
+                    @else {
+                      <label>User<input [(ngModel)]="tr.user" /></label>
+                      <label>Auth<select class="fs" [(ngModel)]="tr.auth"><option value="">none</option>@for (a of auths; track a) { <option [value]="a">{{ a }}</option> }</select></label>
+                      <label>Auth password<input type="password" [(ngModel)]="tr.authPass" /></label>
+                      <label>Priv<select class="fs" [(ngModel)]="tr.priv"><option value="">none</option>@for (a of privs; track a) { <option [value]="a">{{ a }}</option> }</select></label>
+                      <label>Priv password<input type="password" [(ngModel)]="tr.privPass" /></label>
+                    }
+                    <label class="w2">Notification<input [(ngModel)]="tr.trapOid" placeholder="IF-MIB::linkDown, SNMPv2-MIB::coldStart or an OID" spellcheck="false" /></label>
+                    <label class="w3">Values (one per line: object = value)<textarea [(ngModel)]="trapVals" rows="3" placeholder="ifIndex.3 = 3&#10;ifOperStatus.3 = down" spellcheck="false"></textarea></label>
+                    <div class="w3 btns"><span class="mut">{{ trapMsg() }}</span><span class="sp"></span><button type="button" class="pri" (click)="sendTrap()" [disabled]="!tr.address.trim() || !tr.trapOid.trim()">Send</button></div>
+                  </div>
+                }
                 @for (t of traps().traps; track $index) {
                   <div class="trap" translate="no">
                     <div class="th"><b>{{ t.name || t.trapOid }}</b><span>{{ t.kind }} · v{{ t.version }} · {{ t.session || t.from }} · {{ t.at | slice:11:19 }}</span></div>
@@ -157,16 +222,44 @@ const FAV_KEY = 'tw.snmp.favourites';
           </div>
         </div>
       </div>
+      @if (mibOpen()) {
+        <div class="ov" (click)="mibOpen.set(false)"><div class="dlg" (click)="$event.stopPropagation()">
+          <div class="dh"><h3>MIBs</h3><span class="mut">{{ mibs().length }} modules · {{ userMibs() }} of yours</span><span class="sp"></span><a class="x" (click)="mibOpen.set(false)">✕</a></div>
+          <div class="mut">The standard IETF and IANA MIBs are built in. Your MIB files are kept in <span class="mono" translate="no">{{ mibFolder() }}</span>.</div>
+          <div class="tbar"><input class="q2" [(ngModel)]="mibQ" placeholder="Filter modules or files" spellcheck="false" /><span class="sp"></span>
+            <button type="button" (click)="showMibFolder()" title="Open the folder in the file manager">Open Folder</button><button type="button" class="pri" (click)="loadMib()">Load MIB Files…</button></div>
+          <div class="mtab"><table><thead><tr><th>Module</th><th>From</th><th>Objects</th><th>Problems</th><th></th></tr></thead><tbody>
+            @for (m of mibShown(); track m.name) {
+              <tr translate="no"><td>{{ m.name }}</td><td class="mut">{{ m.builtIn ? 'built in' : m.file }}</td><td>{{ m.objects }}</td>
+                <td>@if (m.unplaced?.length) { <span class="warn" [title]="m.unplaced!.join('\n')">{{ m.unplaced!.length }} objects need a MIB that is not loaded</span> }</td>
+                <td>@if (!m.builtIn) { <a class="x" (click)="removeMib(m)" title="Stop loading it (the file is moved to the removed folder)">Remove</a> }</td></tr>
+            }
+          </tbody></table></div>
+        </div></div>
+      }
     </div>
   `,
   styles: [`
-    :host { display: block; height: 100%; }
+    :host { display: block; height: 100%; position: relative; }
     .sb { height: 100%; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; box-sizing: border-box; background: var(--bg); color: var(--text); font-size: 13px; }
     .head, .bar, .tbar, .foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     h2 { margin: 0 6px 0 0; font-size: 17px; font-weight: 600; }
     .sp { flex: 1; }
-    .sess { width: 340px; max-width: 40vw; }
+    .sess { width: 300px; max-width: 34vw; } .head { flex-wrap: nowrap; } .cred { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; } .tbtn { height: 26px; margin: 4px 0; }
     .setb { height: 30px; }
+    .chip2 { border: 1px solid var(--border); border-radius: 12px; padding: 2px 6px 2px 10px; font-size: 12px; display: inline-flex; gap: 6px; align-items: center; }
+    .chip2 a { cursor: pointer; color: var(--muted); } .addd { width: 130px; } button.on { border-color: var(--accent); color: var(--accent); }
+    .cmp { max-width: 380px; margin-left: 6px; } .chk { gap: 5px; }
+    tr.d-changed td { background: color-mix(in srgb, var(--warn) 12%, transparent); } tr.d-a td { background: color-mix(in srgb, var(--danger) 10%, transparent); } tr.d-b td { background: color-mix(in srgb, var(--ok) 10%, transparent); }
+    .chart { width: 100%; height: 240px; display: block; border-bottom: 1px solid var(--line); } .gl { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; } .gt { fill: var(--faint); font-size: 11px; }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+    .sendt { display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)); gap: 8px 12px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+    .sendt label { flex-direction: column; align-items: stretch; gap: 4px; font-size: 12px; } .sendt textarea { font-family: var(--mono); font-size: 12px; }
+    .w2 { grid-column: span 2; } .w3 { grid-column: span 3; } .btns { display: flex; gap: 8px; align-items: center; }
+    .ov { position: absolute; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 20; }
+    .dlg { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 14px 16px; width: min(900px, 94%); max-height: 86%; display: flex; flex-direction: column; gap: 8px; }
+    .dlg h3 { margin: 0; font-size: 15px; } .dh { display: flex; gap: 10px; align-items: baseline; } .x { cursor: pointer; color: var(--muted); }
+    .q2 { width: 260px; } .mtab { overflow: auto; min-height: 0; flex: 1; border: 1px solid var(--line); border-radius: var(--r); } .warn { color: var(--warn); font-size: 12px; cursor: help; }
     .cred { border: 1px solid var(--border); border-radius: 12px; padding: 2px 10px; color: var(--muted); font-size: 12px; }
     .cred.v3 { border-color: color-mix(in srgb, var(--ok) 55%, transparent); color: var(--ok); }
     .lnk { color: var(--accent); cursor: pointer; font-size: 12px; }
@@ -197,7 +290,7 @@ const FAV_KEY = 'tw.snmp.favourites';
     .star { margin-left: 6px !important; cursor: pointer; color: var(--warn); }
     .favs { max-height: 160px; } .favs .tn { padding: 3px 12px; }
     .right { min-width: 0; }
-    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); padding: 0 10px; }
+    .tabs { display: flex; gap: 4px; align-items: center; border-bottom: 1px solid var(--border); padding: 0 10px; }
     .tabs a { padding: 9px 12px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; }
     .tabs a.on { color: var(--text); border-bottom-color: var(--accent); }
     .tabs i { font-style: normal; font-size: 11px; color: var(--faint); margin-left: 4px; }
@@ -242,7 +335,9 @@ export class SnmpBrowser implements OnInit, OnDestroy {
   readonly lastOp = signal('');
   readonly error = signal('');
   readonly busy = signal(false);
-  readonly view = signal<'results' | 'table' | 'traps' | 'history'>('results');
+  readonly view = signal<'results' | 'table' | 'compare' | 'poll' | 'traps' | 'history'>('results');
+  readonly extra = signal<string[]>([]);
+  readonly multi = signal<{ session: string; rows: SNMPRow[]; err?: string }[]>([]);
   readonly traps = signal<SNMPTrapsView>({ state: { on: false, port: 0, count: 0 }, traps: [] });
   readonly hist = signal<HistItem[]>([]);
   readonly pivot = computed(() => pivot(this.result()?.rows ?? []));
@@ -264,7 +359,7 @@ export class SnmpBrowser implements OnInit, OnDestroy {
     this.traps.set(await this.backend.snmpTraps().catch(() => this.traps()));
     this.off = this.backend.on('snmp:trap', () => void this.backend.snmpTraps().then(v => this.traps.set(v)).catch(() => {}));
   }
-  ngOnDestroy() { this.off?.(); clearTimeout(this.searchT); }
+  ngOnDestroy() { this.off?.(); clearTimeout(this.searchT); clearInterval(this.pollTimer); }
 
   async choose(p: string) {
     this.path.set(p);
@@ -332,6 +427,8 @@ export class SnmpBrowser implements OnInit, OnDestroy {
       ...(op === 'set' ? { values: [{ oid, type: this.setType, value: this.setValue }] } : { oids: [oid] }),
     };
     const t0 = Date.now();
+    if (this.extra().length && op !== 'set') { await this.runMany(req, op, oid); return; }
+    this.multi.set([]);
     try {
       let r: SNMPResult;
       try {
@@ -346,13 +443,150 @@ export class SnmpBrowser implements OnInit, OnDestroy {
       this.result.set(r);
       this.lastOp.set(op);
       if (this.view() !== 'table' || op !== 'table') this.view.set(op === 'table' ? 'table' : 'results');
-      this.addHist({ at: Date.now(), op, oid, session: this.path(), n: r.rows.length, ms: r.ms });
+      this.addHist({ at: Date.now(), op, oid, session: this.path(), n: r.rows.length, ms: r.ms, rows: r.rows.slice(0, 5000) });
     } catch (e) {
       this.error.set(errText(e));
       this.addHist({ at: Date.now(), op, oid, session: this.path(), n: 0, ms: Date.now() - t0, err: errText(e) });
     }
     this.busy.set(false);
   }
+  /** The same request on every chosen device at once; each device's rows are kept for Compare. */
+  private async runMany(req: { session: string; op: string; oids?: string[]; timeout: number; maxRep: number }, op: string, oid: string) {
+    const all = [this.path(), ...this.extra()];
+    const res = await Promise.all(all.map(async sess => {
+      try { const r = await this.backend.snmpRun({ ...req, session: sess }); return { session: sess, rows: r.rows, ms: r.ms }; }
+      catch (e) { return { session: sess, rows: [] as SNMPRow[], err: errText(e), ms: 0 }; }
+    }));
+    this.multi.set(res);
+    const first = res[0];
+    this.result.set(first.err ? null : { rows: first.rows, address: '', version: this.ver(), ms: first.ms, requests: 0 });
+    this.lastOp.set(op);
+    this.view.set('results');
+    for (const r of [...res].reverse()) this.addHist({ at: Date.now() + res.indexOf(r), op, oid, session: r.session, n: r.rows.length, ms: r.ms, err: r.err, rows: r.rows.slice(0, 5000) });
+    const ok = res.filter(r => !r.err).length;
+    if (ok < res.length) this.error.set(tr('{0} of {1} devices answered', ok, res.length));
+    this.busy.set(false);
+  }
+  addExtra(p: string) { if (p && p !== this.path() && !this.extra().includes(p)) this.extra.update(l => [...l, p]); }
+  dropExtra(p: string) { this.extra.update(l => l.filter(x => x !== p)); if (!this.extra().length) this.multi.set([]); }
+
+  // ---- Compare: two walks (history items with their rows) ----
+  readonly cmpA = signal('');
+  readonly cmpB = signal('');
+  readonly onlyDiff = signal(true);
+  readonly cmpOpts = computed(() => this.hist().filter(h => h.rows?.length).map(h => ({ k: String(h.at), l: `${this.time(h.at)} · ${h.session.split('/').pop()} · ${h.op} ${h.oid} (${h.n})` })));
+  readonly diff = computed(() => {
+    const opts = this.cmpOpts();
+    const ka = this.cmpA() || opts[1]?.k || '', kb = this.cmpB() || opts[0]?.k || '';
+    const A = this.hist().find(h => String(h.at) === ka)?.rows ?? [], B = this.hist().find(h => String(h.at) === kb)?.rows ?? [];
+    const key = (r: SNMPRow) => (r.object ? r.object + (r.instance ? '.' + r.instance : '') : r.name);
+    const ma = new Map(A.map(r => [key(r), r.display])), mb = new Map(B.map(r => [key(r), r.display]));
+    const rows: { k: string; a?: string; b?: string; kind: 'same' | 'changed' | 'a' | 'b' }[] = [];
+    let changed = 0, onlyA = 0, onlyB = 0;
+    for (const [k, a] of ma) {
+      const b = mb.get(k);
+      const kind = b === undefined ? 'a' : a === b ? 'same' : 'changed';
+      if (kind === 'a') onlyA++; else if (kind === 'changed') changed++;
+      if (!this.onlyDiff() || kind !== 'same') rows.push({ k, a, b, kind });
+    }
+    for (const [k, b] of mb) if (!ma.has(k)) { onlyB++; rows.push({ k, b, kind: 'b' }); }
+    return { rows, changed, onlyA, onlyB };
+  });
+
+  // ---- Poll: a value (or a column) read every few seconds, drawn as a chart ----
+  pollSecs = 5; pollOid = '';
+  readonly polling = signal(false);
+  readonly series = signal<{ key: string; rate: boolean; pts: { t: number; v: number }[]; last?: { t: number; raw: number } }[]>([]);
+  readonly pollN = signal(0);
+  private pollTimer: ReturnType<typeof setInterval> | undefined;
+  startPoll() {
+    this.pollOid = this.oid.trim();
+    if (!this.pollOid || !this.path()) return;
+    this.polling.set(true);
+    void this.pollOnce();
+    this.pollTimer = setInterval(() => void this.pollOnce(), Math.max(1, Number(this.pollSecs) || 5) * 1000);
+  }
+  stopPoll() { this.polling.set(false); clearInterval(this.pollTimer); }
+  clearPoll() { this.series.set([]); this.pollN.set(0); }
+  private async pollOnce() {
+    const scalar = /\.\d+$/.test(this.pollOid) && !/^[\d.]+$/.test(this.pollOid) || /\.0$/.test(this.pollOid);
+    try {
+      const r = await this.backend.snmpRun({ session: this.path(), op: scalar ? 'get' : 'walk', oids: [this.pollOid], max: 64, timeout: Number(this.timeout) || 3 });
+      const now = Date.now();
+      const list = [...this.series()];
+      for (const row of r.rows.slice(0, 8)) {
+        const raw = Number(row.value);
+        if (!isFinite(raw)) continue;
+        const key = (row.object ? row.object + (row.instance ? '.' + row.instance : '') : row.name);
+        let sr = list.find(x => x.key === key);
+        if (!sr) { sr = { key, rate: /^Counter/i.test(row.type), pts: [] }; list.push(sr); }
+        if (sr.rate) {
+          if (sr.last && now > sr.last.t) { const d = raw - sr.last.raw; sr.pts = [...sr.pts, { t: now, v: Math.max(0, d) / ((now - sr.last.t) / 1000) }]; }
+          sr.last = { t: now, raw };
+        } else sr.pts = [...sr.pts, { t: now, v: raw }];
+        if (sr.pts.length > 180) sr.pts = sr.pts.slice(-180);
+      }
+      this.series.set(list.map(x => ({ ...x })));
+      this.pollN.update(n => n + 1);
+    } catch (e) { this.error.set(errText(e)); this.stopPoll(); }
+  }
+  private range() {
+    const vs = this.series().flatMap(s => s.pts.map(p => p.v));
+    const lo = Math.min(0, ...vs), hi = Math.max(1, ...vs);
+    return { lo, hi: hi === lo ? lo + 1 : hi };
+  }
+  private tRange() { const ts = this.series().flatMap(s => s.pts.map(p => p.t)); return { a: Math.min(...ts), b: Math.max(...ts) }; }
+  line(sr: { pts: { t: number; v: number }[] }) {
+    const { lo, hi } = this.range(), { a, b } = this.tRange(), w = Math.max(1, b - a);
+    return sr.pts.map(p => `${((p.t - a) / w) * 1000},${250 - ((p.v - lo) / (hi - lo)) * 235}`).join(' ');
+  }
+  grid() { const { lo, hi } = this.range(); return [0, 0.25, 0.5, 0.75, 1].map(f => ({ y: 250 - f * 235, l: this.fmt(lo + f * (hi - lo)) })); }
+  stat(sr: { pts: { v: number }[] }) { const v = sr.pts.map(p => p.v); return v.length ? { min: Math.min(...v), max: Math.max(...v), avg: v.reduce((x, y) => x + y, 0) / v.length } : { min: NaN, max: NaN, avg: NaN }; }
+  fmt(v: number | undefined) {
+    if (v === undefined || !isFinite(v)) return '';
+    const a = Math.abs(v);
+    return a >= 1e9 ? (v / 1e9).toFixed(2) + ' G' : a >= 1e6 ? (v / 1e6).toFixed(2) + ' M' : a >= 1e4 ? (v / 1e3).toFixed(1) + ' k' : Number.isInteger(v) ? String(v) : v.toFixed(2);
+  }
+  color(i: number) { return ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#14b8a6', '#ec4899', '#64748b'][i % 8]; }
+
+  // ---- Send a trap ----
+  readonly auths = ['MD5', 'SHA', 'SHA-224', 'SHA-256', 'SHA-384', 'SHA-512'];
+  readonly privs = ['DES', 'AES-128', 'AES-192', 'AES-256'];
+  readonly sendOpen = signal(false);
+  readonly trapMsg = signal('');
+  tr = { address: '127.0.0.1:162', version: '2c', community: 'public', user: '', auth: '', authPass: '', priv: '', privPass: '', trapOid: 'IF-MIB::linkDown' };
+  trapVals = 'ifIndex.3 = 3\nifAdminStatus.3 = up\nifOperStatus.3 = down';
+  async sendTrap() {
+    const values = this.trapVals.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const i = l.indexOf('='); return i < 0 ? { oid: l, value: '' } : { oid: l.slice(0, i).trim(), value: l.slice(i + 1).trim() }; });
+    try {
+      await this.backend.snmpSendTrap({ ...this.tr, values });
+      this.trapMsg.set(tr('Sent {0} to {1}', this.tr.trapOid, this.tr.address));
+    } catch (e) { this.trapMsg.set(errText(e)); }
+  }
+
+  // ---- MIBs ----
+  readonly mibOpen = signal(false);
+  readonly mibs = signal<SNMPModule[]>([]);
+  readonly mibFolder = signal('');
+  mibQ = '';
+  async openMibs() {
+    this.mibOpen.set(true);
+    this.mibs.set(await this.backend.snmpMibModules().catch(() => []));
+    this.mibFolder.set(await this.backend.snmpMibFolder().catch(() => ''));
+  }
+  userMibs() { return this.mibs().filter(m => !m.builtIn).length; }
+  mibShown() { const q = this.mibQ.trim().toLowerCase(); return this.mibs().filter(m => !q || m.name.toLowerCase().includes(q) || (m.file ?? '').toLowerCase().includes(q)); }
+  async removeMib(m: SNMPModule) {
+    if (!(await this.ui.confirm(tr('Remove {0}', m.name), tr('Stop loading {0}? Its file {1} is moved to the removed folder next to the MIB files, so it can be put back.', m.name, m.file ?? ''), tr('Remove'), true))) return;
+    try { await this.backend.snmpRemoveMib(m.name); await this.afterMibs(); } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  showMibFolder() { void this.backend.showInFolder(this.mibFolder()).catch(e => this.ui.toast(errText(e), 'error')); }
+  private async afterMibs() {
+    this.mibs.set(await this.backend.snmpMibModules().catch(() => []));
+    this.modules.set(this.mibs().length);
+    this.items.set(this.items().map(i => ({ ...i, open: false })).filter(i => i.depth === 0));
+  }
+
   private addHist(h: HistItem) { this.hist.update(l => [h, ...l].slice(0, 100)); }
   replay(h: HistItem) { this.op = h.op; this.oid = h.oid; void this.choose(h.session).then(() => this.run()); }
 
@@ -361,8 +595,7 @@ export class SnmpBrowser implements OnInit, OnDestroy {
       const mods = await this.backend.snmpLoadMibs();
       if (mods?.length) {
         this.ui.toast(tr('Loaded {0}', mods.join(', ')), 'success');
-        this.modules.set((await this.backend.snmpMibModules()).length);
-        this.items.set(this.items().map(i => ({ ...i, open: false })).filter(i => i.depth === 0));
+        await this.afterMibs();
       }
     } catch (e) { this.ui.toast(errText(e), 'error'); }
   }

@@ -141,7 +141,7 @@ export class SessionSelect {
   enter() { const v = this.visible(); const c = v.includes(this.cursor()) ? this.cursor() : v[0]; if (c) this.pick(c); }
   folderOf(p: string) { const i = p.lastIndexOf('/'); return i < 0 ? '' : p.slice(0, i); }
   kindOf(p: string): SessionKind {
-    return ({ Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc', WOL: 'wol', API: 'api' } as Record<string, SessionKind>)[p] ?? 'ssh';
+    return ({ Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc', WOL: 'wol', API: 'api', SNMP: 'snmp' } as Record<string, SessionKind>)[p] ?? 'ssh';
   }
   hl(s: string) {
     const q = this.query.trim(); if (!q || !s) return [{ t: s, m: false }];

@@ -147,7 +147,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   <div class="seg">
                     @for (p of mainProtos; track p) { <button type="button" [class.on]="s.protocol === p" (click)="s.protocol = p; protocolChanged()">{{ p === 'SSH2' ? 'SSH' : p }}</button> }
                     <select name="otherp" [ngModel]="mainProtos.includes(s.protocol) ? '' : s.protocol" (ngModelChange)="$event && (s.protocol = $event) && protocolChanged()">
-                      <option value="">More…</option>@for (p of otherProtos; track p) { <option [value]="p">{{ p === 'WOL' ? 'Wake-on-LAN' : p === 'API' ? 'REST API' : p }}</option> }</select>
+                      <option value="">More…</option>@for (p of otherProtos; track p) { <option [value]="p">{{ p === 'WOL' ? 'Wake-on-LAN' : p === 'API' ? 'REST API' : p === 'SNMP' ? 'SNMP only' : p }}</option> }</select>
                   </div>
                 
                 </div>
@@ -254,6 +254,10 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   <div class="row"><button type="button" (click)="wakeNow()" [disabled]="!s.mac">Wake Now</button>
                     <span class="hint">Double-click the session (or Connect) sends the magic packet and then pings the device, or searches the network for its MAC address and saves the address it finds.</span></div>
                 }
+                @if (s.protocol === 'SNMP') {
+                  <div class="f o3 wide"><label>Address</label><input name="snmponlyhost" [(ngModel)]="s.hostname" placeholder="host name or IP address" spellcheck="false" />
+                    <div class="hint">A device reached only by SNMP: it opens in the SNMP Browser. Set the version, community or v3 user on the <a class="lk" (click)="openSnmpPage()">SNMP</a> page.</div></div>
+                }
                 @if (s.protocol === 'API') {
                   <div class="f o3 wide"><label>Base URL</label><input name="apibase" [(ngModel)]="s.apiBaseUrl" placeholder="https://10.0.0.1 (request paths go after it)" spellcheck="false" /></div>
                   <div class="f o5 wide"><label>Authentication</label>
@@ -351,7 +355,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                       <button type="button" (click)="ui.open('passwords')">{{ au.account ? 'Edit Account…' : 'Accounts…' }}</button></div>
                   }
                 }
-                @if (s.protocol !== 'WOL' && s.protocol !== 'API' && (s.protocol === 'SSH2' || (!remote() && s.protocol !== 'Local Shell'))) {
+                @if (s.protocol !== 'WOL' && s.protocol !== 'API' && s.protocol !== 'SNMP' && (s.protocol === 'SSH2' || (!remote() && s.protocol !== 'Local Shell'))) {
                   <label class="o5">{{ '' }}</label>
                   <div class="checks o5">
                     @if (!remote() && s.protocol !== 'Local Shell') {
@@ -596,6 +600,10 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   <label>Community</label>
                   <div class="row"><input name="snmpcomm" [type]="isShown('comm') ? 'text' : 'password'" autocomplete="off" [(ngModel)]="snmpComm" [placeholder]="snmpSec().community ? '•••••••• (saved; type to change)' : 'public'" /> <button type="button" class="eye" (click)="toggleShow('comm')" [title]="isShown('comm') ? 'Hide' : 'Show what you typed'" [attr.aria-pressed]="isShown('comm')">@if (isShown('comm')) { <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="2" fill="currentColor"/><path d="M2.5 13.5l11-11" stroke="currentColor" stroke-width="1.3"/></svg> } @else { <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg> }</button>
                     @if (snmpSec().community) { <span class="vault">🔒 saved</span><button type="button" (click)="snmpComm = ''; snmpClear.community = true">Remove</button> }</div>
+                  <label>Write community</label>
+                  <div><div class="row"><input name="snmpwcomm" [type]="isShown('wcomm') ? 'text' : 'password'" autocomplete="off" [(ngModel)]="snmpWComm" [placeholder]="snmpSec().writeCommunity ? '•••••••• (saved; type to change)' : 'only when Set needs its own (often private)'" /> <button type="button" class="eye" (click)="toggleShow('wcomm')" [title]="isShown('wcomm') ? 'Hide' : 'Show what you typed'" [attr.aria-pressed]="isShown('wcomm')">@if (isShown('wcomm')) { <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="2" fill="currentColor"/><path d="M2.5 13.5l11-11" stroke="currentColor" stroke-width="1.3"/></svg> } @else { <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg> }</button>
+                    @if (snmpSec().writeCommunity) { <span class="vault">🔒 saved</span><button type="button" (click)="snmpWComm = ''; snmpClear.wcommunity = true">Remove</button> }</div>
+                    <div class="hint">Used for Set; reads use the community above. Empty: Set uses the community above too.</div></div>
                 } @else {
                   <label>User</label>
                   <input name="snmpuser" [(ngModel)]="s.snmpUser" spellcheck="false" />
@@ -811,7 +819,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
         @if (error()) { <span class="err">{{ error() }}</span> }
         <span class="spacer"></span>
         <button type="button" (click)="ui.close()">Cancel</button>
-        <button type="button" (click)="save(true)">{{ s.protocol === 'WOL' ? 'Save &amp; Wake' : s.protocol === 'API' ? 'Save &amp; Open' : 'Save &amp; Connect' }}</button>
+        <button type="button" (click)="save(true)">{{ s.protocol === 'WOL' ? 'Save &amp; Wake' : s.protocol === 'API' || s.protocol === 'SNMP' ? 'Save &amp; Open' : 'Save &amp; Connect' }}</button>
         <button type="submit" class="primary">Save</button>
       </div>
     </form>
@@ -943,9 +951,9 @@ export class SessionEditor implements OnInit {
 
   wakeNow() { if (this.s) void this.tabs.wake(structuredClone(this.s), '', 'none'); }
   /** Who logs in (Account). */
-  canLogin() { return !!this.s && !['Local Shell', 'VNC', 'WOL', 'API'].includes(this.s.protocol); }
+  canLogin() { return !!this.s && !['Local Shell', 'VNC', 'WOL', 'API', 'SNMP'].includes(this.s.protocol); }
   ownFields() {
-    if (!this.s || this.s.protocol === 'WOL' || this.s.protocol === 'API') return false;
+    if (!this.s || this.s.protocol === 'WOL' || this.s.protocol === 'API' || this.s.protocol === 'SNMP') return false;
     if (!this.canLogin()) return true;
     const c = accountChoice(this.s);
     return c === '-' || (c === '' && defaultLogin(this.ui.settings(), this.s).kind === 'own');
@@ -1185,12 +1193,12 @@ export class SessionEditor implements OnInit {
 
   remote() { return this.s?.protocol === 'RDP' || this.s?.protocol === 'VNC'; }
   /** Sessions without a terminal (remote desktops, Wake-on-LAN). */
-  noTerm() { return this.remote() || this.s?.protocol === 'WOL' || this.s?.protocol === 'API'; }
+  noTerm() { return this.remote() || this.s?.protocol === 'WOL' || this.s?.protocol === 'API' || this.s?.protocol === 'SNMP'; }
   readonly mainProtos = ['SSH2', 'Telnet', 'Serial', 'RDP', 'VNC'];
   readonly otherProtos = PROTOCOLS.filter(p => !['SSH2', 'Telnet', 'Serial', 'RDP', 'VNC'].includes(p));
   devKind() { return this.s?.protocol === 'WOL' ? null : deviceKindOf(this.s?.deviceType); }
   protoKind(): SessionKind {
-    const m: Record<string, SessionKind> = { Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc', WOL: 'wol', API: 'api' };
+    const m: Record<string, SessionKind> = { Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc', WOL: 'wol', API: 'api', SNMP: 'snmp' };
     return m[this.s?.protocol ?? ''] ?? (this.s?.openAs === 'sftp' ? 'sftp' : 'ssh');
   }
   /** Under the title (modern layout): folder, protocol and where it connects. */
@@ -1203,9 +1211,9 @@ export class SessionEditor implements OnInit {
   // ---- SNMP page ----
   readonly snmpAuths = ['MD5', 'SHA', 'SHA-224', 'SHA-256', 'SHA-384', 'SHA-512'];
   readonly snmpPrivs = ['DES', 'AES-128', 'AES-192', 'AES-256'];
-  snmpComm = ''; snmpAuthPw = ''; snmpPrivPw = '';
-  snmpClear = { community: false };
-  readonly snmpSec = signal({ community: false, auth: false, priv: false });
+  snmpComm = ''; snmpWComm = ''; snmpAuthPw = ''; snmpPrivPw = '';
+  snmpClear = { community: false, wcommunity: false };
+  readonly snmpSec = signal({ community: false, writeCommunity: false, auth: false, priv: false });
   readonly snmpBusy = signal(false);
   readonly snmpMsg = signal<{ ok: boolean; text: string } | null>(null);
   snmpOk() { const p = this.s?.protocol ?? ''; return !!p && !['RDP', 'VNC', 'Local Shell', 'WOL', 'Serial', 'API'].includes(p); }
@@ -1240,7 +1248,7 @@ export class SessionEditor implements OnInit {
   }
   openSnmpPage() {
     this.page.set('snmp');
-    if (this.oldPath) this.backend.snmpSecrets(this.oldPath).then(v => this.snmpSec.set(v)).catch(() => {});
+    if (this.oldPath) this.backend.snmpSecrets(this.oldPath).then(v => this.snmpSec.set({ ...v, writeCommunity: !!v.writeCommunity })).catch(() => {});
   }
   /** The typed SNMP secrets: null keeps the saved one, '' removes it. */
   private snmpSecrets(): [string | null, string | null, string | null] {
@@ -1332,6 +1340,7 @@ export class SessionEditor implements OnInit {
     if (this.remote() && ['logon', 'terminal', 'log', 'forward', 'auth', 'serial', 'local'].includes(this.page())) this.page.set('connection');
     this.s.port = defaultPort(this.s.protocol) || this.s.port;
     if (this.s.protocol === 'API') { this.s.deviceType = ''; this.page.set('connection'); this.loadApiSecrets(); }
+    if (this.s.protocol === 'SNMP') { this.s.port = 0; if (!['connection', 'snmp'].includes(this.page())) this.page.set('connection'); }
     if (this.s.protocol === 'WOL') { this.s.deviceType = ''; if (this.page() !== 'firewall') this.page.set('connection'); if (!this.s.wolNetwork && /^\d+\.\d+\.\d+\.\d+$/.test(this.s.hostname)) this.s.wolNetwork = this.s.hostname.replace(/\.\d+$/, '.0/24'); }
     if (this.s.protocol === 'Console' && !this.s.consoleMethod) { this.s.consoleMethod = 'opengear-ssh'; this.s.initialCr = true; }
   }
@@ -1453,7 +1462,7 @@ export class SessionEditor implements OnInit {
       s.apiBaseUrl = s.apiBaseUrl.trim();
       try { s.hostname = new URL(s.apiBaseUrl.replace(/\{\{[^}]*\}\}/g, 'x')).host; } catch { /* shown as it is */ }
     }
-    if (['SSH2', 'Telnet', 'Raw'].includes(s.protocol) && !s.hostname.trim()) {
+    if (['SSH2', 'Telnet', 'Raw', 'SNMP'].includes(s.protocol) && !s.hostname.trim()) {
       this.page.set('connection'); this.error.set('Please enter a hostname.'); return;
     }
     if (s.protocol === 'Serial' && !s.comPort.trim()) { this.page.set('serial'); this.error.set('Please choose a serial port.'); return; }
@@ -1480,7 +1489,8 @@ export class SessionEditor implements OnInit {
       const saved = await storeSession(this.ui, this.backend, this.tabs, s, this.oldPath, this.tabId,
         { pw: this.pw, noPw: this.noPw, wasEmpty: this.pwState() === 'empty' });
       const [comm, ap, pp] = this.snmpSecrets();
-      if (comm !== null || ap !== null || pp !== null) await this.backend.snmpSetSecrets(saved.path, comm, ap, pp);
+      const wc = this.snmpWComm ? this.snmpWComm : this.snmpClear.wcommunity ? '' : null;
+      if (comm !== null || ap !== null || pp !== null || wc !== null) await this.backend.snmpSetSecrets(saved.path, comm, ap, pp, wc);
       if (s.protocol === 'API') {
         const secretVars = (s.apiVars ?? []).filter(v => v.secret).map(v => v.name);
         const vars = secretVars.map(n => ({ name: n, value: this.apiVarSec[n]?.value || null, prod: this.apiVarSec[n]?.prod || null }));

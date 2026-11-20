@@ -291,7 +291,7 @@ export class Backend {
   snmpRun(r: SNMPRequest) { return this.call<SNMPResult>('SNMPRun', r); }
   snmpSecrets(path: string) { return this.call<SNMPSecretState>('SNMPSecrets', path); }
   /** null keeps a secret, '' removes it. */
-  snmpSetSecrets(path: string, community: string | null, authPass: string | null, privPass: string | null) { return this.call<void>('SNMPSetSecrets', { path, community, authPass, privPass }); }
+  snmpSetSecrets(path: string, community: string | null, authPass: string | null, privPass: string | null, writeCommunity: string | null = null) { return this.call<void>('SNMPSetSecrets', { path, community, authPass, privPass, writeCommunity }); }
   snmpMibChildren(oid: string) { return this.call<SNMPMibNode[]>('SNMPMibChildren', oid); }
   snmpMibInfo(name: string) { return this.call<SNMPMibNode>('SNMPMibInfo', name); }
   snmpMibSearch(q: string) { return this.call<SNMPMibNode[]>('SNMPMibSearch', q); }
@@ -301,6 +301,8 @@ export class Backend {
   snmpTrapsStart(port: number) { return this.call<SNMPTrapState>('SNMPTrapsStart', port); }
   snmpTrapsStop() { return this.call<void>('SNMPTrapsStop'); }
   snmpTraps() { return this.call<SNMPTrapsView>('SNMPTraps'); }
+  snmpMibFolder() { return this.call<string>('SNMPMibFolder'); }
+  snmpSendTrap(t: { address: string; version?: string; community?: string; user?: string; auth?: string; authPass?: string; priv?: string; privPass?: string; trapOid: string; values?: { oid: string; type?: string; value: string }[] }) { return this.call<void>('SNMPSendTrap', t); }
   snmpTrapsClear() { return this.call<void>('SNMPTrapsClear'); }
   /** The in-app AI's network tools (snmp): mode is the agent permission; ask = the step needs the user's yes. */
   netAgentTool(name: string, args: Record<string, unknown>, mode: string, approved: boolean) { return this.call<EmuToolStep>('NetAgentTool', name, args, mode, approved); }

@@ -391,7 +391,7 @@ func openAPIDoc(t *testing.T) om {
 	g := &schemaGen{docs: fieldDocs(t), comps: map[string]om{}}
 	for _, ty := range []any{EmuView{}, EmuTrafficView{}, emu.Stream{}, emu.Tester{}, apiToolInfo{}, emu.TrafficTest{}, EmuTestRun{}, EmuEngines{}, EmuHostNIC{}, SNMPRequest{}, SNMPResult{}, SNMPMibNode{}, SNMPTrapsView{},
 		HTTPSendRequest{}, apiclient.Response{}, apiclient.Collection{}, apiclient.CollectionInfo{}, HTTPRunRequest{}, apiclient.RunResult{}, HTTPImportIn{}, HTTPHistoryItem{},
-		SyslogState{}, SyslogSettings{}, SyslogView{}, SyslogSendIn{}, SyslogRule{}} {
+		SyslogState{}, SyslogSettings{}, SyslogView{}, SyslogSendIn{}, SyslogRule{}, SNMPTrapSendIn{}} {
 		g.schema(reflect.TypeOf(ty))
 	}
 	std := append([]kv{}, errs("401", "403", "405")...)
@@ -612,6 +612,9 @@ func openAPIDoc(t *testing.T) om {
 			kv{"responses", append(om{{"200", resp("The object.", "SNMPMibNode")}}, append(errs("404"), std...)...)})}}},
 		kv{"/snmp/traps", om{{"get", op("listTraps", "SNMP", "Traps received", "The trap receiver's state (start it in SNMP → Traps) and the notifications it got, newest first, with names from the MIBs.",
 			kv{"responses", append(om{{"200", resp("The receiver and its notifications.", "SNMPTrapsView")}}, std...)})}}},
+		kv{"/snmp/trap", om{{"post", op("sendTrap", "SNMP", "Send a trap", "Sends a notification (v1, v2c or v3; v3 with Termwright's engine ID) to a trap receiver or a network management system, to test it.",
+			kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", om{{"$ref", "#/components/schemas/SNMPTrapSendIn"}}}, {"examples", om{{"linkDown", ex("linkDown of port 3", om{{"address", "10.0.0.5"}, {"trapOid", "IF-MIB::linkDown"}, {"values", []om{{{"oid", "ifIndex.3"}, {"value", "3"}}, {{"oid", "ifOperStatus.3"}, {"value", "down"}}}}})}}}}}}}}},
+			kv{"responses", append(om{{"200", om{{"description", "Sent."}, {"content", om{{"application/json", om{{"schema", om{{"type", "object"}, {"properties", om{{"sent", om{{"type", "string"}}}}}}}}}}}}}}, append(errs("400", "422"), std...)...)})}}},
 		kv{"/tools", om{{"get", op("listNetTools", "Network tools", "The network tools", "The network tools (snmp, http, syslog) with their arguments (JSON Schema): the same tools the in-app AI assistant and the Claude connector use. Each one is POST /tools/{name}.",
 			kv{"responses", append(om{{"200", om{{"description", "The tools."}, {"content", om{{"application/json", om{{"schema", om{{"type", "array"}, {"items", om{{"$ref", "#/components/schemas/Tool"}}}}}}}}}}}}, std...)})}}},
 	)

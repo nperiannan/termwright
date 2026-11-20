@@ -21,6 +21,7 @@ const (
 	ProtoConsole = "Console" // a port of a console server (another saved session)
 	ProtoWOL     = "WOL"     // Wake-on-LAN: wakes the device, then watches it (no terminal)
 	ProtoAPI     = "API"     // a REST API: opened in the API client (no terminal)
+	ProtoSNMP    = "SNMP"    // a device reached only by SNMP: opened in the SNMP Browser (no terminal)
 )
 
 // Keys used in the interoperable session file format. Keys prefixed with

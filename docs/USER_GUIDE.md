@@ -1372,7 +1372,17 @@ The community and passwords are kept in the computer's credential store (Keychai
 
 **MIBs.** The standard IETF and IANA MIBs are built in (SNMPv2-MIB, IF-MIB, IP-MIB, IP-FORWARD-MIB, TCP-MIB, UDP-MIB, BRIDGE-MIB, Q-BRIDGE-MIB, LLDP-MIB, ENTITY-MIB, HOST-RESOURCES-MIB, SNMP-FRAMEWORK and others). **Load MIB…** (or **SNMP → Load MIB Files…**) adds vendor MIBs; choose all the files of a vendor at once so the ones they import are found. Loaded MIBs are kept in Termwright's data folder.
 
-**Traps.** **SNMP → Trap Receiver** (or the *Traps* tab) listens on UDP 162 (on macOS and Linux a port below 1024 may need permission; use for example 1162 and point the devices there). Traps and informs of v1, v2c and v3 are shown newest first with their name from the MIBs and the session they came from; informs are answered. v3 traps use the users and passwords of your SNMP sessions.
+**Several devices.** **+ Device** adds more sessions: Run sends the same request to each at once and the results get a Device column (Set runs on the first device only).
+
+**Compare.** Every walk is kept in History with its values. In **Compare** choose A and B (the same walk before and after a change, or two devices) and see what changed, what is only in A and only in B.
+
+**Poll.** Choose a value (`sysUpTime.0`, `ifHCInOctets.3`) or a column (`IF-MIB::ifHCInOctets` for every port; up to 8 lines), set the interval and press **Start Polling**: a chart draws it, counters as a rate per second, with last, min, max and average.
+
+**MIBs.** **MIBs…** lists every module: built in or loaded by you (with its file), how many objects it has, and objects that need a MIB that is not loaded (load the vendor's other files). **Open Folder** shows the folder your MIB files are kept in; **Remove** stops loading one (its file is moved to the *removed* folder there, so it can be put back).
+
+**SNMP-only devices.** A device you reach only by SNMP can be a session of its own: New Session → Protocol → More… → **SNMP only**, its address, and the SNMP page. Double-click opens it in the SNMP Browser. On v1 / v2c a **Write community** can be kept for Set (reads use the read community). Any terminal tab's right-click menu has **Open SNMP Browser** for its device.
+
+**Traps.** **SNMP → Trap Receiver** (or the *Traps* tab) listens on UDP 162. **Send Trap…** there sends a notification (v1, v2c or v3) with values to any receiver, to test it (on macOS and Linux a port below 1024 may need permission; use for example 1162 and point the devices there). Traps and informs of v1, v2c and v3 are shown newest first with their name from the MIBs and the session they came from; informs are answered. v3 traps use the users and passwords of your SNMP sessions.
 
 **AI assistant, MCP and scripts.** Turn on the **SNMP** tool in the agent's tool list and ask, for example, *"which ports of core-sw1 are down?"*: the agent walks `IF-MIB::ifOperStatus` with the session's credentials. Reads always run; a Set follows the agent's permission and always asks on production sessions. The same `snmp` tool is offered to MCP apps (Claude Desktop, Cursor, VS Code…), and the local API has `POST /api/v1/snmp` and `GET /api/v1/snmp/mib`, `/snmp/mib/{object}`, `/snmp/traps` (see the [API guide](API.md)); in Python, `Lab().snmp.walk("IF-MIB::ifOperStatus", session="Lab/core-sw1")`.
 
@@ -1388,6 +1398,8 @@ A REST client in the spirit of Postman, free and open source, with the logins ke
 - **Variables & TLS**: `{{name}}` variables, each with a Production value (used when the client's environment is Production) and a *Secret* box; *Accept any certificate* for lab devices; a CA file to trust.
 
 The password, key, token, client secret and the values of secret variables are kept in the computer's credential store, never in the session file, an export or a collection, and are shown as •••••••• wherever a request is shown.
+
+**Headers.** New requests start with `Accept: application/json` and `Cache-Control: no-cache`. The name box lists the common headers this request does not have yet (with what each is for), the value box the usual values of that header; both take anything you type. The grey lines are what Termwright adds by itself: the session's authorization, Host, Content-Type from the body, Accept-Encoding, Connection and User-Agent.
 
 **Send.** Double-click the API session (or right-click → **Open in API Client**, or **API → API Client**). Choose the method, type a path or a full URL and press **Send** (or Enter). The chips under the URL show the session, its authentication and TLS. **Params**, **Headers**, **Body** (JSON with Beautify, text, XML, URL-encoded, multipart with `@/path/to/file`, GraphQL), **Auth** (the session's or none), **Scripts** and **Code** (cURL, Python, JavaScript, PowerShell; secrets become environment variables). The answer has **Body** (pretty or raw), **Headers**, **Cookies** (kept per session), **Tests** and **Timeline** (DNS, connect, TLS, first byte, total, and the request as sent). Dynamic variables: `{{$guid}}`, `{{$timestamp}}`, `{{$isoTimestamp}}`, `{{$randomInt}}`.
 

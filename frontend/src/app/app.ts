@@ -770,6 +770,18 @@ export class App implements OnInit {
 
   tabMenu(ev: MouseEvent, t: TabView) {
     this.tabs.activeId.set(t.id);
+    // tool tabs (API client, SNMP Browser, Syslog, map, lab, player) have no connection or scrollback
+    if (!['terminal', 'sftp', 'rdp', 'vnc'].includes(t.kind)) {
+      const path = t.kind === 'api' ? t.apiSession : t.kind === 'snmp' ? t.snmpSession : '';
+      this.ui.showMenu(ev, [
+        ...(path ? [{ label: 'Session Options...', action: () => void this.ui.editSession(path, undefined, true) }, { separator: true }] : []),
+        { label: 'Rename Tab...', action: async () => { const n = await this.ui.input('Rename Tab', 'Tab title', t.title); if (n) this.tabs.patch(t.id, { title: n }); } },
+        { separator: true },
+        { label: 'Close', action: () => this.tabs.close(t.id) },
+        { label: 'Close Other Tabs', action: async () => { for (const o of this.tabs.tabs().filter(x => x.id !== t.id)) await this.tabs.close(o.id); } },
+      ]);
+      return;
+    }
     this.ui.showMenu(ev, [
       { label: 'Reconnect', action: () => this.tabs.reconnect(t.id) },
       { label: 'Disconnect', action: () => this.tabs.disconnect(t.id), disabled: t.state !== 'connected' || t.kind === 'sftp' },
@@ -791,6 +803,8 @@ export class App implements OnInit {
       ] : []),
       ...(t.kind === 'terminal' && t.session.hostname && (t.session.protocol === 'Telnet' || t.session.protocol === 'SSH2' || t.session.protocol === 'Raw')
         ? [{ label: 'Open Web Interface...', action: () => this.ui.openWeb(t.session, t.id, 'device') }] : []),
+      ...(t.kind === 'terminal' && t.session.path && t.session.protocol !== 'Local Shell' && t.session.protocol !== 'Serial'
+        ? [{ label: 'Open SNMP Browser', action: () => void this.tabs.openSnmp(t.session.path, t.session.name) }] : []),
       ...(t.kind === 'terminal' && t.session.mac ? [{ label: 'Wake Up (Wake-on-LAN)', action: () => void this.tabs.wake(t.session, t.id, t.state === 'connected' ? 'none' : 'reconnect') }] : []),
       { separator: true },
       { label: t.logFile ? 'Stop Logging' : 'Log Session...', action: () => this.tabs.toggleLog(t.id) },

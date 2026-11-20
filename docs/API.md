@@ -63,6 +63,7 @@ Settings, and turning one on does not turn on the other.
 | `POST /snmp` | An SNMP request: `op` (`get`, `getnext`, `bulk`, `walk`, `table`, `set`), `oids` or `values`, and a saved `session` (its address and credentials) or a `target` | 200 `SNMPResult` |
 | `GET /snmp/mib?q=` | Searches the loaded MIBs by name or OID | 200 `SNMPMibNode[]` |
 | `GET /snmp/mib/{object}` | One object (`IF-MIB::ifOperStatus`, `sysDescr`, an OID): syntax, values, access, description | 200 `SNMPMibNode` |
+| `POST /snmp/trap` | Sends a test notification (v1, v2c, v3) to a receiver | 200 |
 | `GET /snmp/traps` | The trap receiver's state and the traps received, newest first | 200 `SNMPTrapsView` |
 | `POST /http/send` | Sends a request with a saved API `session` (base URL, login, variables) or as it is: `{"session": "APIs/rest", "request": {"method": "GET", "url": "/rest/..."}}`; its tests run | 200 `HTTPResponse` |
 | `GET /http/collections`, `POST /http/collections` | The API client's collections; add one | 200 / 201 |

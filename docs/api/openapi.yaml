@@ -1896,6 +1896,50 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /snmp/trap:
+        post:
+            operationId: sendTrap
+            tags:
+                - SNMP
+            summary: Send a trap
+            description: Sends a notification (v1, v2c or v3; v3 with Termwright's engine ID) to a trap receiver or a network management system, to test it.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SNMPTrapSendIn'
+                        examples:
+                            linkDown:
+                                summary: linkDown of port 3
+                                value:
+                                    address: 10.0.0.5
+                                    trapOid: IF-MIB::linkDown
+                                    values:
+                                        - oid: ifIndex.3
+                                          value: "3"
+                                        - oid: ifOperStatus.3
+                                          value: down
+            responses:
+                200:
+                    description: Sent.
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    sent:
+                                        type: string
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /tools:
         get:
             operationId: listNetTools
@@ -1924,7 +1968,7 @@ paths:
             tags:
                 - Network tools
             summary: The snmp tool
-            description: 'SNMP with a saved session''s SNMP settings (session properties → SNMP; v1, v2c or v3) or an address and credentials: get, getnext, bulk and walk read; set writes (asked first on a production session, and only when the session allows writes). Values come back with the MIB''s names and readable values (enum names, times, MAC addresses). mib_search and mib_info look objects up in the loaded MIBs (the standard IETF MIBs and the user''s own); traps lists the notifications the trap receiver got. Through the API it runs without asking.'
+            description: 'SNMP with a saved session''s SNMP settings (session properties → SNMP; v1, v2c or v3) or an address and credentials: get, getnext, bulk and walk read; set writes (asked first on a production session, and only when the session allows writes). Values come back with the MIB''s names and readable values (enum names, times, MAC addresses). mib_search and mib_info look objects up in the loaded MIBs (the standard IETF MIBs and the user''s own); traps lists the notifications the trap receiver got; send_trap sends a test notification to a receiver. Through the API it runs without asking.'
             requestBody:
                 required: true
                 content:
@@ -1943,6 +1987,7 @@ paths:
                                         - mib_search
                                         - mib_info
                                         - traps
+                                        - send_trap
                                     type: string
                                 address:
                                     description: 'instead of session: host or host:port'
@@ -1963,6 +2008,9 @@ paths:
                                     type: string
                                 session:
                                     description: a saved session's path (list_sessions); its SNMP settings and saved community / v3 passwords are used
+                                    type: string
+                                trap:
+                                    description: 'send_trap: the notification (IF-MIB::linkDown or an OID), sent to address (port 162) with values'
                                     type: string
                                 values:
                                     description: 'set: [{oid, value, type?}] - the type comes from the MIB when left out; an enum takes its name (down)'
@@ -7301,6 +7349,42 @@ components:
                     type: string
             required:
                 - address
+        SNMPTrapSendIn:
+            type: object
+            properties:
+                address:
+                    description: 'Address: the receiver, host or host:port (162).'
+                    type: string
+                version:
+                    description: 'Version: 1, 2c (default) or 3.'
+                    type: string
+                community:
+                    description: Community for v1/v2c (default public).
+                    type: string
+                user:
+                    description: 'User, Auth, AuthPass, Priv, PrivPass: v3.'
+                    type: string
+                auth:
+                    type: string
+                authPass:
+                    type: string
+                priv:
+                    type: string
+                privPass:
+                    type: string
+                trapOid:
+                    description: 'TrapOID: the notification (IF-MIB::linkDown, or an OID).'
+                    type: string
+                values:
+                    description: Values sent with it (types from the MIB when left out).
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/SNMPValue'
+            required:
+                - address
+                - trapOid
         SNMPTrapState:
             type: object
             properties:

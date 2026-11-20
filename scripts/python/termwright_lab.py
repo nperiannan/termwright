@@ -652,6 +652,11 @@ class SNMP:
     def mib(self, obj: str) -> dict:
         return self.lab.request("GET", "/snmp/mib/" + urllib.parse.quote(obj, safe=""), root=True)
 
+    def send_trap(self, address: str, trap_oid: str, values: Optional[list] = None, version: str = "2c", community: str = "public", **v3) -> dict:
+        """Send a test notification (values: [{"oid": "ifOperStatus.3", "value": "down"}]; v3: user, auth, authPass, priv, privPass)."""
+        body = {"address": address, "trapOid": trap_oid, "version": version, "community": community, "values": values or [], **v3}
+        return self.lab.request("POST", "/snmp/trap", body, root=True)
+
     def traps(self) -> dict:
         """The trap receiver's state and the traps it has received, newest first."""
         return self.lab.request("GET", "/snmp/traps", root=True)
@@ -791,7 +796,7 @@ ENDPOINTS = [
     ("GET", "/lab/traffic/tests"), ("POST", "/lab/traffic/tests"), ("PUT", "/lab/traffic/tests/{test}"),
     ("DELETE", "/lab/traffic/tests/{test}"), ("POST", "/lab/traffic/tests/{test}/run"),
     ("GET", "/lab/traffic/runs"), ("GET", "/lab/traffic/runs/{run}"), ("POST", "/lab/traffic/runs/stop"),
-    ("POST", "/snmp"), ("GET", "/snmp/mib"), ("GET", "/snmp/mib/{object}"), ("GET", "/snmp/traps"),
+    ("POST", "/snmp"), ("GET", "/snmp/mib"), ("GET", "/snmp/mib/{object}"), ("GET", "/snmp/traps"), ("POST", "/snmp/trap"),
     ("POST", "/http/send"), ("GET", "/http/collections"), ("POST", "/http/collections"), ("GET", "/http/collections/{collection}"),
     ("PUT", "/http/collections/{collection}"), ("POST", "/http/collections/{collection}/run"), ("POST", "/http/import"), ("GET", "/http/history"),
     ("GET", "/syslog"), ("POST", "/syslog/start"), ("POST", "/syslog/stop"), ("GET", "/syslog/messages"), ("DELETE", "/syslog/messages"),

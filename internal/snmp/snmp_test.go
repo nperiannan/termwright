@@ -207,6 +207,15 @@ func TestTraps(t *testing.T) {
 	if err != nil || tr.TrapOID != "1.3.6.1.4.1.1916.4.1.0.5" || tr.Version != "1" {
 		t.Fatalf("v1: %+v %v", tr, err)
 	}
+	// v3 authPriv, sent with Termwright's engine ID
+	if err := SendTrap(Config{Address: addr, Version: V3, User: "trapper", Auth: AuthSHA256, AuthPass: "authpass1", Priv: PrivAES, PrivPass: "privpass1"}, "1.3.6.1.6.3.1.1.5.4", 500, nil); err != nil {
+		t.Fatal(err)
+	}
+	n, from, _ = pc.ReadFrom(buf)
+	tr, _, err = DecodeTrap(buf[:n], from.String(), []TrapUser{{User: "trapper", Auth: AuthSHA256, AuthPass: "authpass1", Priv: PrivAES, PrivPass: "privpass1"}})
+	if err != nil || tr.TrapOID != "1.3.6.1.6.3.1.1.5.4" || tr.Version != "3" || tr.User != "trapper" {
+		t.Fatalf("v3: %+v %v", tr, err)
+	}
 	// an inform gets its answer
 	b, _ := encodeCommunity(V2c, "traps", PDU{Type: PDUInform, RequestID: 77, Varbinds: []Varbind{{OID: "1.3.6.1.6.3.1.1.4.1.0", Type: ObjectID, Value: "1.3.6.1.6.3.1.1.5.4"}}})
 	tr, reply, err = DecodeTrap(b, "x", nil)

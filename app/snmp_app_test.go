@@ -3,8 +3,10 @@ package app
 import (
 	"context"
 	"fmt"
+	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/termwright/termwright/internal/snmp"
 )
@@ -53,5 +55,29 @@ func TestSNMPTool(t *testing.T) {
 	v, err := snmpValue(snmp.Standard(), SNMPValue{OID: "ifAdminStatus.3", Value: "testing"})
 	if err != nil || v.Type != snmp.Integer || v.Int != 3 || v.OID != "1.3.6.1.2.1.2.2.1.7.3" {
 		t.Fatalf("%+v %v", v, err)
+	}
+}
+
+// A trap sent with SNMPSendTrap reaches the trap receiver with its name from the MIB.
+func TestSNMPSendTrapToReceiver(t *testing.T) {
+	a := &App{}
+	pc, _ := net.ListenPacket("udp", "127.0.0.1:0")
+	port := pc.LocalAddr().(*net.UDPAddr).Port
+	pc.Close()
+	if _, err := a.SNMPTrapsStart(port); err != nil {
+		t.Fatal(err)
+	}
+	defer a.SNMPTrapsStop()
+	a.SNMPTrapsClear()
+	if err := a.SNMPSendTrap(SNMPTrapSendIn{Address: "127.0.0.1:" + fmt.Sprint(port), TrapOID: "IF-MIB::linkDown", Values: []SNMPValue{{OID: "ifOperStatus.3", Value: "down"}}}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for len(a.SNMPTraps().Traps) == 0 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	tr := a.SNMPTraps().Traps
+	if len(tr) != 1 || tr[0].Name != "IF-MIB::linkDown" || len(tr[0].Rows) != 1 || tr[0].Rows[0].Display != "down (2)" {
+		t.Fatalf("%+v", tr)
 	}
 }

@@ -28,12 +28,14 @@ import (
 // SNMP secrets live in the credential store beside the login password, never in the session file.
 func snmpKey(kind, path string) string { return "snmp-" + kind + ":" + path }
 
-var snmpSecretKinds = []string{"community", "auth", "priv"}
+var snmpSecretKinds = []string{"community", "wcommunity", "auth", "priv"}
 
 // SNMPSecretState says which SNMP secrets are saved for a session (never the secrets themselves).
 type SNMPSecretState struct {
-	// Community: a v1/v2c community is saved.
+	// Community: a v1/v2c (read) community is saved.
 	Community bool `json:"community"`
+	// WriteCommunity: a separate v1/v2c community for Set is saved.
+	WriteCommunity bool `json:"writeCommunity"`
 	// Auth: a v3 authentication password is saved.
 	Auth bool `json:"auth"`
 	// Priv: a v3 privacy password is saved.
@@ -45,15 +47,18 @@ func (a *App) SNMPSecrets(path string) SNMPSecretState {
 	_, c := secrets.Lookup(snmpKey("community", path))
 	_, au := secrets.Lookup(snmpKey("auth", path))
 	_, p := secrets.Lookup(snmpKey("priv", path))
-	return SNMPSecretState{c, au, p}
+	_, w := secrets.Lookup(snmpKey("wcommunity", path))
+	return SNMPSecretState{Community: c, WriteCommunity: w, Auth: au, Priv: p}
 }
 
 // SNMPSecretsIn saves or clears a session's SNMP secrets: nil keeps one, "" removes it.
 type SNMPSecretsIn struct {
 	Path      string  `json:"path"`
 	Community *string `json:"community"`
-	AuthPass  *string `json:"authPass"`
-	PrivPass  *string `json:"privPass"`
+	// WriteCommunity: the v1/v2c community used for Set ("" removes it: Set uses the read community).
+	WriteCommunity *string `json:"writeCommunity"`
+	AuthPass       *string `json:"authPass"`
+	PrivPass       *string `json:"privPass"`
 }
 
 // SNMPSetSecrets saves a session's SNMP community and v3 passwords in the credential store.
@@ -61,7 +66,7 @@ func (a *App) SNMPSetSecrets(in SNMPSecretsIn) error {
 	if in.Path == "" {
 		return errors.New("save the session first")
 	}
-	for kind, v := range map[string]*string{"community": in.Community, "auth": in.AuthPass, "priv": in.PrivPass} {
+	for kind, v := range map[string]*string{"community": in.Community, "wcommunity": in.WriteCommunity, "auth": in.AuthPass, "priv": in.PrivPass} {
 		if v == nil {
 			continue
 		}
@@ -69,7 +74,7 @@ func (a *App) SNMPSetSecrets(in SNMPSecretsIn) error {
 			_ = secrets.Delete(snmpKey(kind, in.Path))
 			continue
 		}
-		if kind != "community" && len(*v) < 8 {
+		if !strings.HasSuffix(kind, "community") && len(*v) < 8 {
 			return errors.New("an SNMPv3 password needs at least 8 characters")
 		}
 		if err := secrets.Set(snmpKey(kind, in.Path), *v); err != nil {
@@ -293,6 +298,11 @@ func (a *App) snmpConfig(r SNMPRequest) (snmp.Config, *session.Session, string, 
 		c, ok := secrets.Lookup(snmpKey("community", s.Path))
 		if !ok {
 			c = "public"
+		}
+		if r.Op == "set" { // a separate write community when the session has one
+			if w, ok := secrets.Lookup(snmpKey("wcommunity", s.Path)); ok && w != "" {
+				c = w
+			}
 		}
 		cfg.Community = c
 	}
@@ -550,6 +560,10 @@ type SNMPModule struct {
 	Name    string `json:"name"`
 	BuiltIn bool   `json:"builtIn"`
 	File    string `json:"file,omitempty"`
+	// Objects of the module in the tree.
+	Objects int `json:"objects"`
+	// Unplaced: objects whose parent is in a module that is not loaded.
+	Unplaced []string `json:"unplaced,omitempty"`
 }
 
 // SNMPMibModules lists the loaded modules: built in, then the user's.
@@ -562,8 +576,9 @@ func (a *App) SNMPMibModules() []SNMPModule {
 	snmpMibMu.Lock()
 	defer snmpMibMu.Unlock()
 	var out []SNMPModule
+	counts, un := mib.Counts(), mib.Unplaced()
 	for _, m := range mib.Modules() {
-		out = append(out, SNMPModule{Name: m, BuiltIn: std[m], File: snmpMibOf[m]})
+		out = append(out, SNMPModule{Name: m, BuiltIn: std[m], File: snmpMibOf[m], Objects: counts[m], Unplaced: un[m]})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].BuiltIn && !out[j].BuiltIn })
 	return out
@@ -644,7 +659,9 @@ func (a *App) SNMPRemoveMIB(module string) error {
 	if f == "" {
 		return fmt.Errorf("%s is built in or not loaded", module)
 	}
-	if err := os.Remove(filepath.Join(a.mibDir(), f)); err != nil && !os.IsNotExist(err) {
+	// kept in mibs/removed (put it back to load it again)
+	_ = os.MkdirAll(filepath.Join(a.mibDir(), "removed"), 0o700)
+	if err := os.Rename(filepath.Join(a.mibDir(), f), filepath.Join(a.mibDir(), "removed", f)); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	snmpMibMu.Lock()
@@ -654,6 +671,58 @@ func (a *App) SNMPRemoveMIB(module string) error {
 	a.snmpMIB()
 	return nil
 }
+
+// SNMPMibFolder is the folder the user's MIB files are kept in (made when missing).
+func (a *App) SNMPMibFolder() string {
+	_ = os.MkdirAll(a.mibDir(), 0o700)
+	return a.mibDir()
+}
+
+// SNMPTrapSendIn is a notification to send (a test for a trap receiver or a network management system).
+type SNMPTrapSendIn struct {
+	// Address: the receiver, host or host:port (162).
+	Address string `json:"address"`
+	// Version: 1, 2c (default) or 3.
+	Version string `json:"version,omitempty"`
+	// Community for v1/v2c (default public).
+	Community string `json:"community,omitempty"`
+	// User, Auth, AuthPass, Priv, PrivPass: v3.
+	User     string `json:"user,omitempty"`
+	Auth     string `json:"auth,omitempty"`
+	AuthPass string `json:"authPass,omitempty"`
+	Priv     string `json:"priv,omitempty"`
+	PrivPass string `json:"privPass,omitempty"`
+	// TrapOID: the notification (IF-MIB::linkDown, or an OID).
+	TrapOID string `json:"trapOid"`
+	// Values sent with it (types from the MIB when left out).
+	Values []SNMPValue `json:"values,omitempty"`
+}
+
+// SNMPSendTrap sends a notification.
+func (a *App) SNMPSendTrap(in SNMPTrapSendIn) error {
+	mib := a.snmpMIB()
+	oid, err := mib.Resolve(in.TrapOID)
+	if err != nil {
+		return err
+	}
+	var vbs []snmp.Varbind
+	for _, v := range in.Values {
+		vb, err := snmpValue(mib, v)
+		if err != nil {
+			return err
+		}
+		vbs = append(vbs, vb)
+	}
+	ver, _ := snmpVersion(in.Version)
+	c := in.Community
+	if c == "" {
+		c = "public"
+	}
+	cfg := snmp.Config{Address: in.Address, Version: ver, Community: c, User: in.User, Auth: snmp.Auth(in.Auth), AuthPass: in.AuthPass, Priv: snmp.Priv(in.Priv), PrivPass: in.PrivPass, Timeout: 3 * time.Second}
+	return snmp.SendTrap(cfg, oid, uint64(time.Since(appStart).Milliseconds()/10), vbs)
+}
+
+var appStart = time.Now()
 
 // ---- traps ----
 

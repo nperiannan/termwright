@@ -43,7 +43,7 @@ const MAX_ROWS = 20000;
     <div class="bar">
       <input class="q" [ngModel]="query()" (ngModelChange)="setQuery($event)" placeholder="Search: words, or /regex/" spellcheck="false" />
       <app-combo class="snd" [value]="host()" (valueChange)="setHost($event)" [options]="senderOpts()" placeholder="All senders (type to search)" emptyText="No sender yet" name="sender" />
-      <select [ngModel]="maxSev()" (ngModelChange)="setSev(+$event)">
+      <select class="fs" [ngModel]="maxSev()" (ngModelChange)="setSev(+$event)">
         <option [ngValue]="-1">All severities</option>
         @for (n of sevNames; track $index) { <option [ngValue]="$index">{{ n }}{{ $index < 7 ? ' or worse' : '' }}</option> }
       </select>
@@ -79,9 +79,9 @@ const MAX_ROWS = 20000;
             @for (r of editRules; track $index) {
               <tr><td><input type="checkbox" [ngModel]="!r.off" (ngModelChange)="r.off = !$event" /></td>
                 <td><input [(ngModel)]="r.name" /></td><td><input [(ngModel)]="r.match" placeholder="link down, /BGP.*Idle/" spellcheck="false" /></td>
-                <td><select [(ngModel)]="r.maxSeverity"><option [ngValue]="-1">any</option>@for (n of sevNames; track $index) { <option [ngValue]="$index">{{ n }}{{ $index < 7 ? '+' : '' }}</option> }</select></td>
+                <td><select class="fs" [(ngModel)]="r.maxSeverity"><option [ngValue]="-1">any</option>@for (n of sevNames; track $index) { <option [ngValue]="$index">{{ n }}{{ $index < 7 ? '+' : '' }}</option> }</select></td>
                 <td><input [(ngModel)]="r.host" placeholder="any" /></td>
-                <td><select [(ngModel)]="r.color">@for (c of colors; track c) { <option [value]="c">{{ c || 'none' }}</option> }</select></td>
+                <td><select class="fs" [(ngModel)]="r.color">@for (c of colors; track c) { <option [value]="c">{{ c || 'none' }}</option> }</select></td>
                 <td><input type="checkbox" [(ngModel)]="r.notify" /></td><td><input type="checkbox" [(ngModel)]="r.hide" /></td>
                 <td><a class="x" (click)="editRules.splice($index, 1)">✕</a></td></tr>
             }
@@ -95,10 +95,10 @@ const MAX_ROWS = 20000;
         <div class="pnl">
           <div class="grid">
             <label class="w2">Syslog server<input [(ngModel)]="out.target" placeholder="host or host:port (this computer: 127.0.0.1)" /></label>
-            <label>Transport<select [(ngModel)]="out.proto"><option value="udp">UDP</option><option value="tcp">TCP</option><option value="tls">TLS</option></select></label>
-            <label>Format<select [(ngModel)]="out.format"><option value="5424">RFC 5424</option><option value="3164">RFC 3164 (BSD)</option></select></label>
-            <label>Facility<select [(ngModel)]="out.facility">@for (f of facNames; track f) { <option [value]="f">{{ f }}</option> }</select></label>
-            <label>Severity<select [(ngModel)]="out.severity">@for (n of sevNames; track n) { <option [value]="n">{{ n }}</option> }</select></label>
+            <label>Transport<select class="fs" [(ngModel)]="out.proto"><option value="udp">UDP</option><option value="tcp">TCP</option><option value="tls">TLS</option></select></label>
+            <label>Format<select class="fs" [(ngModel)]="out.format"><option value="5424">RFC 5424</option><option value="3164">RFC 3164 (BSD)</option></select></label>
+            <label>Facility<select class="fs" [(ngModel)]="out.facility">@for (f of facNames; track f) { <option [value]="f">{{ f }}</option> }</select></label>
+            <label>Severity<select class="fs" [(ngModel)]="out.severity">@for (n of sevNames; track n) { <option [value]="n">{{ n }}</option> }</select></label>
             <label>Host name<input [(ngModel)]="out.host" placeholder="this computer" /></label>
             <label>Program<input [(ngModel)]="out.app" placeholder="termwright" /></label>
             <label class="w3">Message<input [(ngModel)]="out.text" (keydown.enter)="send()" /></label>

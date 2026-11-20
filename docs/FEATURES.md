@@ -353,6 +353,8 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **Import and export**: Postman v2.0 / v2.1 collections, OpenAPI 3 and Swagger 2 (YAML or JSON), cURL; export for Postman v2.1.
 - **API client for automation**: the in-app AI agent, MCP apps, the local REST API (`/api/v1/http…`) and the Python client; changes on production sessions always ask.
 - **SNMP Browser** (SNMP menu, or right-click a session → Open SNMP Browser): Get, Get Next, Get Bulk, Walk, Table and Set; SNMP v1, v2c, v3 (MD5, SHA-1, SHA-2; DES, AES-128/192/256); MIB tree with search and object details; 24 IETF/IANA MIBs built in, vendor MIBs from files; readable values (enum names, speeds, MAC addresses); Table view, History, Favourites, Export CSV.
+- **SNMP Browser extras**: several devices at once, Compare two walks, Poll with a live chart (counter rates), Send Trap (v1/v2c/v3), MIBs window (modules, problems, open folder, remove).
+- **SNMP-only sessions** and a separate write community; Open SNMP Browser from a terminal tab.
 - **SNMP credentials in the session**: session properties → SNMP (version, address, port, community or v3 user and protocols, context, Allow Set, Test); the community and v3 passwords are in the OS credential store.
 - **Trap receiver**: v1, v2c and v3 traps and informs on any UDP port, named from the MIBs, matched to sessions.
 - **SNMP for automation**: the in-app AI agent, MCP apps, the local REST API (`/api/v1/snmp…`, `/api/v1/tools`) and the Python client; a Set needs Allow Set, and production sessions always ask.
