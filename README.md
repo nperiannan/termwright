@@ -28,9 +28,9 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-<p align="center"><img src="docs/assets/termwright-demo.gif" alt="Termwright demo: the AI explains why ports are down, then a traffic run in the emulated lab with live loss and latency" width="900"></p>
+<p align="center"><img src="docs/assets/termwright-demo.gif" alt="Termwright demo: discovery, Wake-on-LAN, SSH and the AI assistant, one command to many tabs, a script, SFTP, the emulated lab and traffic generator, the SNMP Browser, the syslog server, the REST API client and teams" width="900"></p>
 
-<p align="center"><i>Asking the AI about a switch's output, then a traffic run in the emulated lab - recorded with simulated devices.</i> <a href="docs/assets/termwright-demo.mp4">Watch the 1-minute demo (MP4)</a></p>
+<p align="center"><i>Discover Devices, Wake-on-LAN, SSH and the AI assistant, one command to every tab, a script, SFTP, the emulated lab and traffic generator, the SNMP Browser, the syslog server, the REST API client and teams - recorded with simulated devices.</i> <a href="docs/assets/termwright-demo.mp4">Watch the 2-minute demo (MP4)</a></p>
 
 ![Termwright - start page with 3D cards and the Session Manager in the Glacier style](docs/screenshots/glacier-start-dark.png)
 
@@ -110,6 +110,18 @@ Termwright began as a terminal and session manager for network engineers. Today 
 - An Android companion app with an SSH and Telnet terminal, a device widget and Wake-on-LAN ([preview](mobile/README.md))
 
 And much more - see the [feature list](docs/FEATURES.md).
+
+## SNMP, syslog and REST API
+
+- **SNMP Browser**: v1, v2c and v3 against saved sessions, a MIB tree with the standard MIBs built in and vendor MIBs loaded from files, Walk, Table, Compare, Poll with a live chart, Set, Send Trap, and a trap receiver
+- **Syslog server**: UDP, TCP and TLS, senders matched to saved sessions, search, severity filters, colour / notify / hide rules, files per sender, and a test sender
+- **REST API client** in the spirit of Postman: API sessions with their login in the credential store, request tabs, collections, environments and globals (Postman import and export), per-request authorization, `pm.*` scripts and tests with `setNextRequest`, a collection runner, OpenAPI and cURL import, code export
+- All three are tools for the AI assistant, MCP apps, the local REST API and Python
+
+| | |
+|---|---|
+| ![SNMP Browser](docs/screenshots/snmp-browser.png) <br/>*SNMP Browser: the MIB tree and a walk of the interface table* | ![SNMP polling](docs/screenshots/snmp-poll.png) <br/>*Polling counters with a live chart* |
+| ![Syslog server](docs/screenshots/syslog.png) <br/>*Syslog server: live messages, severities, rules and senders* | ![REST API client](docs/screenshots/api-client.png) <br/>*REST API client: a collection, an environment and the variables panel* |
 
 ## Overview
 

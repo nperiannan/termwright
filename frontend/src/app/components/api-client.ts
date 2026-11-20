@@ -599,11 +599,11 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
     .envb { align-self: center; height: 28px; display: inline-flex; align-items: center; gap: 6px; max-width: 220px; white-space: nowrap; overflow: hidden; }
     .envb.on { border-color: color-mix(in srgb, var(--ok) 55%, transparent); color: var(--ok); } .cv { color: var(--muted); font-size: 10px; }
     .ib { align-self: center; height: 28px; padding: 0 9px; font: 600 12px var(--mono); margin-left: 6px; } .ib.on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
-    .crumb { display: flex; align-items: center; gap: 6px; } .crumb > app-session-select, .crumb > select, .crumb button { height: 28px; box-sizing: border-box; } .cc { color: var(--muted); white-space: nowrap; }
+    .crumb { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; row-gap: 6px; } .crumb > app-session-select, .crumb > select, .crumb button { height: 28px; box-sizing: border-box; } .cc { color: var(--muted); white-space: nowrap; }
     .rn0 { border-color: transparent; background: transparent; font-weight: 600; min-width: 120px; flex: 0 1 360px; } .rn0:hover, .rn0:focus { border-color: var(--border); background: var(--input-bg); }
     .split-btn { display: inline-flex; } .split-btn > button:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
     .split-btn > .dd { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 1px solid color-mix(in srgb, #000 25%, transparent); padding: 0 7px; min-width: 0; }
-    .bar .url { flex: 1; min-width: 200px; height: 30px; } .bar .send { height: 30px; } .bar .send button { height: 30px; }
+    .bar .url { flex: 1; min-width: 120px; height: 30px; } .bar .send { height: 30px; } .bar .send button { height: 30px; }
     .meth { width: 124px; flex: none; height: 30px; } .meth ::ng-deep input { font: 700 12px var(--mono); height: 30px; }
     .meth.m-GET ::ng-deep input, .meth.m-HEAD ::ng-deep input { color: var(--ok); } .meth.m-POST ::ng-deep input { color: #e5a33b; } .meth.m-PUT ::ng-deep input { color: #4f9cf7; }
     .meth.m-PATCH ::ng-deep input { color: #a78bfa; } .meth.m-DELETE ::ng-deep input { color: var(--danger); } .meth.m-OPTIONS ::ng-deep input { color: #ec4899; }
