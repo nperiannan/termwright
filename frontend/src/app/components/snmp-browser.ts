@@ -125,9 +125,15 @@ const FAV_KEY = 'tw.snmp.favourites';
                     }
                   </tbody></table>
                 } @else if (result(); as r) {
+                  @if (r.unknown) {
+                    <div class="unk">⚠ {{ r.unknown }} of these values are not described by the loaded MIBs, so they have no names or meanings.
+                      @if (r.suggest?.length) { They are most likely in <b translate="no">{{ r.suggest!.join(', ') }}</b>: load it from the vendor's MIB download. }
+                      @else { Load the device vendor's MIB files. }
+                      <button type="button" class="sm2" (click)="loadMib()">Load MIB Files…</button><button type="button" class="sm2" (click)="openMibs()">MIBs…</button></div>
+                  }
                   <table><thead><tr><th>Name</th><th>Index</th><th>Type</th><th>Value</th><th>OID</th></tr></thead><tbody>
                     @for (x of r.rows; track $index) {
-                      <tr (click)="oid = x.oid" translate="no"><td>{{ x.object || x.name }}</td><td>{{ x.instance }}</td><td>{{ x.type }}</td>
+                      <tr (click)="oid = x.oid" translate="no" [class.unkr]="x.unknown"><td [title]="x.unknown ? 'Not described by the loaded MIBs' + (x.suggest ? ' - most likely in ' + x.suggest : '') : (x.module ? x.module + '::' + x.object : '')">@if (x.unknown) { <span class="q">?</span> }{{ x.object || x.name }}</td><td>{{ x.instance }}</td><td>{{ x.type }}</td>
                         <td [class]="tone(x)">{{ x.display }}</td><td class="mono mut">{{ x.oid }}</td></tr>
                     }
                   </tbody></table>
@@ -250,7 +256,7 @@ const FAV_KEY = 'tw.snmp.favourites';
     :host { display: block; height: 100%; position: relative; }
     .sb { height: 100%; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; box-sizing: border-box; background: var(--bg); color: var(--text); font-size: 13px; }
     .head, .bar, .tbar, .foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    h2 { margin: 0 6px 0 0; font-size: 17px; font-weight: 600; }
+    h2 { margin: 0 6px 0 0; font-size: 17px; font-weight: 600; white-space: nowrap; } .setb { white-space: nowrap; }
     .sp { flex: 1; }
     .sess { width: 300px; max-width: 34vw; } .head { flex-wrap: nowrap; } .cred { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; } .tbtn { height: 26px; margin: 4px 0; }
     .setb { height: 30px; }
@@ -266,6 +272,8 @@ const FAV_KEY = 'tw.snmp.favourites';
     .ov { position: absolute; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 20; }
     .dlg { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 14px 16px; width: min(900px, 94%); max-height: 86%; display: flex; flex-direction: column; gap: 8px; }
     .dlg h3 { margin: 0; font-size: 15px; } .dh { display: flex; gap: 10px; align-items: baseline; } .x { cursor: pointer; color: var(--muted); }
+    .unk { margin: 8px 12px; padding: 8px 10px; border-radius: var(--r); background: color-mix(in srgb, var(--warn) 13%, transparent); font-size: 12.5px; line-height: 1.6; }
+    tr.unkr td:first-child { color: var(--muted); font-style: italic; } .q { display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: var(--warn); color: #fff; font: 700 10px/14px var(--ui-font); text-align: center; margin-right: 6px; font-style: normal; }
     .q2 { width: 260px; } .need { padding: 6px 10px; border-radius: var(--r); background: color-mix(in srgb, var(--warn) 12%, transparent); font-size: 12px; } .need b { margin-right: 8px; }
     .deps { white-space: normal !important; } .dep { display: inline-block; font-size: 11.5px; margin: 1px 6px 1px 0; color: var(--muted); } .dep.miss { color: var(--danger); font-weight: 600; }
     .act { white-space: nowrap; text-align: right; } .sm2 { height: 24px; padding: 0 8px; font-size: 12px; margin-left: 4px; }

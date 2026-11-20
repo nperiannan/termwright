@@ -386,3 +386,7 @@ select.method { color: var(--mc); font-weight: 700; border-color: color-mix(in s
 select.method option { color: var(--text); background: var(--input-bg); font-weight: 400; }
 /* segmented buttons: the focus ring only for the keyboard, so a clicked button does not look chosen */
 .seg button:focus:not(:focus-visible) { outline: none; box-shadow: none; }
+
+/* the "More…" protocol button of a segmented protocol choice (opens Termwright's own menu) */
+.seg .more-p { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+.seg .more-p .cv { font-size: 9px; color: var(--muted); }

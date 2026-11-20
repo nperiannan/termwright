@@ -262,6 +262,11 @@ export interface RemoteInfo { id: string; kind: 'rdp' | 'vnc'; title: string; ad
 export const EMULATIONS = ['Xterm', 'VT100', 'VT102', 'VT220', 'ANSI', 'Linux'] as const;
 export const BAUD_RATES = [300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
 
+/** How a protocol is named in the protocol choice. */
+export function protoLabel(p: string): string {
+  return ({ SSH2: 'SSH', WOL: 'Wake-on-LAN', API: 'REST API', 'Local Shell': 'Local Shell' } as Record<string, string>)[p] ?? p;
+}
+
 export function defaultPort(protocol: string): number {
   return protocol === 'Telnet' ? 23 : protocol === 'SSH2' ? 22 : protocol === 'RDP' ? 3389 : protocol === 'VNC' ? 5900 : 0;
 }
@@ -530,8 +535,8 @@ export interface LayoutResult { style: string; nodes: LayoutNode[] | null; }
 export interface SNMPTarget { address: string; version?: string; community?: string; user?: string; auth?: string; authPass?: string; priv?: string; privPass?: string; context?: string; }
 export interface SNMPValue { oid: string; type?: string; value: string; }
 export interface SNMPRequest { session?: string; target?: SNMPTarget; op: string; oids?: string[]; values?: SNMPValue[]; maxRep?: number; max?: number; timeout?: number; confirmed?: boolean; }
-export interface SNMPRow { oid: string; name: string; object?: string; module?: string; instance?: string; type: string; value: string; display: string; }
-export interface SNMPResult { rows: SNMPRow[]; address: string; version: string; engineId?: string; ms: number; requests: number; truncated?: boolean; }
+export interface SNMPRow { oid: string; name: string; object?: string; module?: string; instance?: string; type: string; value: string; display: string; unknown?: boolean; suggest?: string; }
+export interface SNMPResult { rows: SNMPRow[]; address: string; version: string; engineId?: string; ms: number; requests: number; truncated?: boolean; unknown?: number; suggest?: string[]; }
 export interface SNMPMibNode { oid: string; name: string; module: string; kind: string; syntax?: string; base?: string; enums?: Record<string, string>; hint?: string; access?: string; status?: string; units?: string; index?: string[]; augments?: string; objects?: string[]; description?: string; children: boolean; }
 export interface SNMPModule { name: string; builtIn: boolean; file?: string; objects?: number; unplaced?: string[]; imports?: string[]; missing?: string[]; dependents?: string[]; root?: string; }
 export interface SNMPSecretState { community: boolean; writeCommunity?: boolean; auth: boolean; priv: boolean; }

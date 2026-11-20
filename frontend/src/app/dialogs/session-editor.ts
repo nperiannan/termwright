@@ -6,7 +6,7 @@ import { askRef, isRef, refOf } from '../core/secret-ref';
 import { followJump } from '../core/jump-refs';
 import { Backend, errText } from '../core/backend';
 import { AuthMode, authModeOf, generateKeyFor, setAuthMode } from '../core/auth-mode';
-import { BAUD_RATES, CONSOLE_METHODS, EMULATIONS, FACT_EVERY, FactRule, LogonAction, PROTOCOLS, Session, SessionNode, SmartCardKey, defaultPort } from '../core/models';
+import { protoLabel, BAUD_RATES, CONSOLE_METHODS, EMULATIONS, FACT_EVERY, FactRule, LogonAction, PROTOCOLS, Session, SessionNode, SmartCardKey, defaultPort } from '../core/models';
 import { SCHEME_NAMES } from '../core/themes';
 import { Tabs } from '../core/tabs.service';
 import { envInfo, envList, envOf } from '../core/env';
@@ -146,8 +146,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                 
                   <div class="seg">
                     @for (p of mainProtos; track p) { <button type="button" [class.on]="s.protocol === p" (click)="s.protocol = p; protocolChanged()">{{ p === 'SSH2' ? 'SSH' : p }}</button> }
-                    <select name="otherp" [ngModel]="mainProtos.includes(s.protocol) ? '' : s.protocol" (ngModelChange)="$event && (s.protocol = $event) && protocolChanged()">
-                      <option value="">More…</option>@for (p of otherProtos; track p) { <option [value]="p">{{ p === 'WOL' ? 'Wake-on-LAN' : p === 'API' ? 'REST API' : p === 'SNMP' ? 'SNMP only' : p }}</option> }</select>
+                    <button type="button" class="more-p" [class.on]="!mainProtos.includes(s.protocol)" (click)="protoMenu($event)" aria-haspopup="menu" title="More protocols">{{ mainProtos.includes(s.protocol) ? 'More…' : protoLabel(s.protocol) }}<span class="cv">▾</span></button>
                   </div>
                 
                 </div>
@@ -1196,6 +1195,13 @@ export class SessionEditor implements OnInit {
   noTerm() { return this.remote() || this.s?.protocol === 'WOL' || this.s?.protocol === 'API' || this.s?.protocol === 'SNMP'; }
   readonly mainProtos = ['SSH2', 'Telnet', 'Serial', 'RDP', 'VNC'];
   readonly otherProtos = PROTOCOLS.filter(p => !['SSH2', 'Telnet', 'Serial', 'RDP', 'VNC'].includes(p));
+  readonly protoLabel = protoLabel;
+  /** The other protocols in Termwright's own menu (a native list closes by itself in some WebKit versions). */
+  protoMenu(ev: MouseEvent) {
+    const s = this.s;
+    if (!s) return;
+    this.ui.showMenu(ev, this.otherProtos.map(p => ({ label: (s.protocol === p ? '✓ ' : '') + protoLabel(p), icon: '', action: () => { s.protocol = p; this.protocolChanged(); this.cdr.markForCheck(); } })));
+  }
   devKind() { return this.s?.protocol === 'WOL' ? null : deviceKindOf(this.s?.deviceType); }
   protoKind(): SessionKind {
     const m: Record<string, SessionKind> = { Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc', WOL: 'wol', API: 'api', SNMP: 'snmp' };
@@ -1205,7 +1211,7 @@ export class SessionEditor implements OnInit {
   subtitle() {
     const s = this.s;
     if (!s) return '';
-    const where = s.protocol === 'API' ? (s.apiBaseUrl ?? '') : s.protocol === 'Serial' ? [s.comPort, s.baudRate].filter(Boolean).join(' ') : s.protocol === 'Local Shell' ? '' : (s.username ? s.username + '@' : '') + (s.hostname || '');
+    const where = s.protocol === 'API' ? (s.apiBaseUrl ?? '') : s.protocol === 'SNMP' ? (s.hostname || '') : s.protocol === 'Serial' ? [s.comPort, s.baudRate].filter(Boolean).join(' ') : s.protocol === 'Local Shell' ? '' : (s.username ? s.username + '@' : '') + (s.hostname || '');
     return [s.folder ? s.folder.split('/').join(' / ') : (this.oldPath ? 'Top level' : 'New session'), s.protocol, where].filter(Boolean).join(' · ');
   }
   // ---- SNMP page ----

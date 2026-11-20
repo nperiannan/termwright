@@ -7278,6 +7278,16 @@ components:
                 truncated:
                     description: 'Truncated: the walk stopped at max values.'
                     type: boolean
+                unknown:
+                    description: 'Unknown: how many values no loaded MIB describes.'
+                    type: integer
+                suggest:
+                    description: 'Suggest: MIB modules to load for them (most likely first).'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
             required:
                 - rows
                 - address
@@ -7310,6 +7320,12 @@ components:
                     type: string
                 display:
                     description: 'Display: the value as a person reads it (enum names, time, MAC addresses, units).'
+                    type: string
+                unknown:
+                    description: 'Unknown: no loaded MIB describes this object (Object is then the nearest known branch and the path below it).'
+                    type: boolean
+                suggest:
+                    description: 'Suggest: the MIB module that most likely describes it (load it to see names and meanings).'
                     type: string
             required:
                 - oid

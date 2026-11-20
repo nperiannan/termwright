@@ -192,6 +192,13 @@ func (a *App) snmpTool(ctx context.Context, args map[string]any, ask netAsker) (
 	if res.Truncated {
 		b.WriteString("… stopped at the limit (max)\n")
 	}
+	if res.Unknown > 0 {
+		fmt.Fprintf(&b, "%d values are not described by the loaded MIBs", res.Unknown)
+		if len(res.Suggest) > 0 {
+			b.WriteString(" (most likely in " + strings.Join(res.Suggest, ", ") + ": the user can load it in SNMP → Load MIB Files)")
+		}
+		b.WriteString(".\n")
+	}
 	if len(res.Rows) > 0 {
 		fmt.Fprintf(&b, "[%d values from %s, SNMPv%s, %d ms]", len(res.Rows), res.Address, res.Version, res.Ms)
 	}

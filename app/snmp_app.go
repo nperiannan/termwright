@@ -177,6 +177,10 @@ type SNMPRow struct {
 	Value string `json:"value"`
 	// Display: the value as a person reads it (enum names, time, MAC addresses, units).
 	Display string `json:"display"`
+	// Unknown: no loaded MIB describes this object (Object is then the nearest known branch and the path below it).
+	Unknown bool `json:"unknown,omitempty"`
+	// Suggest: the MIB module that most likely describes it (load it to see names and meanings).
+	Suggest string `json:"suggest,omitempty"`
 }
 
 // SNMPResult is what an operation returned.
@@ -195,6 +199,10 @@ type SNMPResult struct {
 	Requests int `json:"requests"`
 	// Truncated: the walk stopped at max values.
 	Truncated bool `json:"truncated,omitempty"`
+	// Unknown: how many values no loaded MIB describes.
+	Unknown int `json:"unknown,omitempty"`
+	// Suggest: MIB modules to load for them (most likely first).
+	Suggest []string `json:"suggest,omitempty"`
 }
 
 var errSNMPConfirm = errors.New("this is a production session: a Set asks the user first")
@@ -398,8 +406,17 @@ func (a *App) snmpRun(ctx context.Context, r SNMPRequest) (SNMPResult, error) {
 		return res, fmt.Errorf("unknown operation %q (get, getnext, bulk, walk, set)", r.Op)
 	}
 	res.Ms, res.Requests = time.Since(start).Milliseconds(), c.Requests
+	seen := map[string]bool{}
 	for _, v := range vbs {
-		res.Rows = append(res.Rows, snmpRow(mib, v))
+		row := snmpRow(mib, v)
+		if row.Unknown {
+			res.Unknown++
+			if row.Suggest != "" && !seen[row.Suggest] {
+				seen[row.Suggest] = true
+				res.Suggest = append(res.Suggest, row.Suggest)
+			}
+		}
+		res.Rows = append(res.Rows, row)
 	}
 	if res.Rows == nil {
 		res.Rows = []SNMPRow{}
@@ -409,13 +426,62 @@ func (a *App) snmpRun(ctx context.Context, r SNMPRequest) (SNMPResult, error) {
 
 func snmpRow(mib *snmp.MIB, v snmp.Varbind) SNMPRow {
 	row := SNMPRow{OID: v.OID, Name: mib.Name(v.OID), Type: string(v.Type), Value: v.Value, Display: mib.Describe(v)}
-	if n, inst := mib.Lookup(v.OID); n != nil {
+	n, inst := mib.Lookup(v.OID)
+	if n != nil {
 		row.Object, row.Module, row.Instance = n.Name, n.Module, inst
 	}
 	if v.Exception() {
 		row.Display = string(v.Type)
+		return row
+	}
+	// a value under a branch (not a scalar or a column): no loaded MIB describes it
+	if n == nil || (n.Kind != "scalar" && n.Kind != "column") {
+		row.Unknown = true
+		if parts := strings.Split(inst, "."); n != nil && len(parts) > 1 {
+			// the branch and the path below it, then the last number (most often the row index)
+			row.Object, row.Instance = n.Name+"."+strings.Join(parts[:len(parts)-1], "."), parts[len(parts)-1]
+		}
+		row.Suggest = snmpSuggest(mib, v.OID)
 	}
 	return row
+}
+
+// snmpKnownMIBs: where well-known MIB modules live, longest first wins (to suggest which file to load).
+var snmpKnownMIBs = map[string]string{
+	"1.3.6.1.2.1.10.7": "EtherLike-MIB", "1.3.6.1.2.1.10.166": "MPLS-TE-STD-MIB", "1.3.6.1.2.1.14": "OSPF-MIB", "1.3.6.1.2.1.15": "BGP4-MIB",
+	"1.3.6.1.2.1.16": "RMON-MIB", "1.3.6.1.2.1.26": "MAU-MIB", "1.3.6.1.2.1.33": "UPS-MIB", "1.3.6.1.2.1.43": "Printer-MIB", "1.3.6.1.2.1.68": "VRRP-MIB",
+	"1.3.6.1.2.1.80": "DISMAN-PING-MIB", "1.3.6.1.2.1.88": "DISMAN-EVENT-MIB", "1.3.6.1.2.1.92": "NOTIFICATION-LOG-MIB", "1.3.6.1.2.1.105": "POWER-ETHERNET-MIB",
+	"1.3.6.1.2.1.131": "TUNNEL-MIB", "1.3.6.1.2.1.10.131": "TUNNEL-MIB", "1.3.6.1.2.1.158": "SYSLOG-MIB", "1.3.6.1.2.1.17.6": "P-BRIDGE-MIB",
+	"1.0.8802.1.1.2": "LLDP-MIB", "1.0.8802.1.1.1": "IEEE8021-PAE-MIB", "1.2.840.10006.300.43": "IEEE8023-LAG-MIB", "1.2.840.10036": "IEEE802dot11-MIB",
+	"1.3.6.1.4.1.2021": "UCD-SNMP-MIB", "1.3.6.1.4.1.2021.13.15": "UCD-DISKIO-MIB", "1.3.6.1.4.1.2021.13.16": "LM-SENSORS-MIB", "1.3.6.1.4.1.2021.13.14": "UCD-DEMO-MIB",
+	"1.3.6.1.4.1.2021.10.1.6": "UCD-SNMP-MIB", "1.3.6.1.4.1.8072": "NET-SNMP-MIB", "1.3.6.1.4.1.8072.1": "NET-SNMP-AGENT-MIB", "1.3.6.1.4.1.8072.1.3": "NET-SNMP-EXTEND-MIB",
+	"1.3.6.1.4.1.8072.3": "NET-SNMP-MIB", "1.3.6.1.4.1.1916": "EXTREME-BASE-MIB (and the other Extreme Networks EXOS MIBs)",
+	"1.3.6.1.4.1.2272": "RAPID-CITY (and the other Extreme Networks VOSS MIBs)", "1.3.6.1.4.1.4329": "the Extreme Networks / Enterasys MIBs",
+	"1.3.6.1.4.1.9": "the Cisco MIBs (CISCO-SMI and the feature's MIB)", "1.3.6.1.4.1.2636": "the Juniper MIBs (JUNIPER-MIB)", "1.3.6.1.4.1.30065": "the Arista MIBs (ARISTA-SMI-MIB)",
+	"1.3.6.1.4.1.6876": "the VMware MIBs (VMWARE-ROOT-MIB)", "1.3.6.1.4.1.311": "the Microsoft MIBs", "1.3.6.1.4.1.11": "the HPE MIBs", "1.3.6.1.4.1.47196": "the Aruba (HPE) MIBs",
+	"1.3.6.1.4.1.14823": "the Aruba MIBs", "1.3.6.1.4.1.2011": "the Huawei MIBs (HUAWEI-MIB)", "1.3.6.1.4.1.25506": "the HPE Comware MIBs", "1.3.6.1.4.1.14988": "MIKROTIK-MIB",
+	"1.3.6.1.4.1.41112": "the Ubiquiti MIBs (UBNT-MIB)", "1.3.6.1.4.1.12356": "the Fortinet MIBs (FORTINET-CORE-MIB)", "1.3.6.1.4.1.25461": "the Palo Alto MIBs (PAN-COMMON-MIB)",
+	"1.3.6.1.4.1.674": "the Dell MIBs", "1.3.6.1.4.1.6574": "the Synology MIBs (SYNOLOGY-SYSTEM-MIB)", "1.3.6.1.4.1.24681": "the QNAP MIBs (NAS-MIB)",
+	"1.3.6.1.4.1.318": "the APC MIBs (PowerNet-MIB)", "1.3.6.1.4.1.534": "the Eaton MIBs (XUPS-MIB)", "1.3.6.1.4.1.2620": "the Check Point MIBs", "1.3.6.1.4.1.3375": "the F5 MIBs",
+	"1.3.6.1.4.1.8741": "the SonicWall MIBs", "1.3.6.1.4.1.1588": "the Brocade MIBs", "1.3.6.1.4.1.6027": "the Dell Networking (Force10) MIBs", "1.3.6.1.4.1.10002": "the Ubiquiti (Frogfoot) MIBs",
+}
+
+// snmpSuggest is the most likely MIB for an OID that no loaded MIB describes ("" when unknown or loaded).
+func snmpSuggest(mib *snmp.MIB, oid string) string {
+	best := ""
+	for pre := range snmpKnownMIBs {
+		if (oid == pre || strings.HasPrefix(oid, pre+".")) && len(pre) > len(best) {
+			best = pre
+		}
+	}
+	if best == "" {
+		return ""
+	}
+	name := snmpKnownMIBs[best]
+	if mib.Loaded(strings.Fields(name)[0]) {
+		return "" // loaded, yet the object is not in it (another module, or a newer version)
+	}
+	return name
 }
 
 // snmpValue turns a value to write into a varbind, its type from the MIB when it is not given.

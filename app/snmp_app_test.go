@@ -81,3 +81,14 @@ func TestSNMPSendTrapToReceiver(t *testing.T) {
 		t.Fatalf("%+v", tr)
 	}
 }
+
+// A value no loaded MIB describes is marked, named by its branch, and the MIB to load is suggested.
+func TestSNMPUnknownSuggest(t *testing.T) {
+	r := snmpRow(snmp.Standard(), snmp.Varbind{OID: "1.3.6.1.4.1.2021.13.15.1.1.3.8", Type: snmp.Counter32, Uint: 5, Value: "5"})
+	if !r.Unknown || r.Suggest != "UCD-DISKIO-MIB" || r.Object != "enterprises.2021.13.15.1.1.3" || r.Instance != "8" {
+		t.Fatalf("%+v", r)
+	}
+	if r := snmpRow(snmp.Standard(), snmp.Varbind{OID: "1.3.6.1.2.1.2.2.1.8.3", Type: snmp.Integer, Int: 1, Value: "1"}); r.Unknown || r.Object != "ifOperStatus" {
+		t.Fatalf("%+v", r)
+	}
+}

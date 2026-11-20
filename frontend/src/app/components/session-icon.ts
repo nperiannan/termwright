@@ -16,7 +16,7 @@ const KINDS: Record<Exclude<SessionKind, 'folder' | 'folder-open'>, { from: stri
   wol: { from: '#fbbf24', to: '#d97706', title: 'Wake-on-LAN' },
   vnc: { from: '#2dd4bf', to: '#0369a1', title: 'VNC remote screen' },
   api: { from: '#a78bfa', to: '#7c3aed', title: 'REST API (API client)' },
-  snmp: { from: '#22d3ee', to: '#0e7490', title: 'SNMP only (SNMP Browser)' },
+  snmp: { from: '#22d3ee', to: '#0e7490', title: 'SNMP (SNMP Browser)' },
 };
 
 /**
