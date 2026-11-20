@@ -47,6 +47,14 @@ lab.snmp.mib("IF-MIB::ifOperStatus")["description"]; lab.snmp.traps()["traps"]
 
 `get`, `bulk`, `walk`, `set` and `run(op, ...)` return the rows with `name`, `type`, `value` and `display`.
 
+## Device facts and type
+
+```python
+print(lab.devices.facts("Lab/edge-sw3", refresh=True))   # model, version, serial number, uptime
+print(lab.devices.identify("Lab/edge-sw3"))              # which device type's Detect pattern matches
+lab.devices.set_type("Lab/edge-sw3", "Huawei VRP")
+```
+
 ## API client
 
 `lab.http` sends REST requests with the saved API sessions (Termwright logs in; no secrets in your script) and runs collections:

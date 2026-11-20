@@ -101,6 +101,7 @@ class Lab:
         self.snmp = SNMP(self)
         self.http = HTTP(self)
         self.syslog = Syslog(self)
+        self.devices = Devices(self)
 
     # ---- plain requests ----
     def request(self, method: str, path: str, body: Any = None, timeout: Optional[float] = None, raw: bool = False, binary: bool = False,
@@ -746,6 +747,33 @@ class HTTP:
         body = {k: v for k, v in {"session": session, "collection": collection, "environment": environment, "env": env,
                                   "request": {"method": "GET", "url": ""}}.items() if v}
         return self.lab.request("POST", "/http/variables", body, root=True) or []
+
+
+class Devices:
+    """Device facts and device types of saved sessions (logs in in the background with the saved login)."""
+
+    def __init__(self, lab: "Lab"):
+        self.lab = lab
+
+    def _run(self, **args) -> str:
+        r = self.lab.request("POST", "/tools/device", {k: v for k, v in args.items() if v is not None}, root=True, timeout=max(self.lab.timeout, 150))
+        return r["result"] if isinstance(r, dict) and "result" in r else r
+
+    def facts(self, session: str, refresh: bool = False) -> str:
+        """The device facts (model, version, serial number, MAC address, uptime ...); refresh reads them now."""
+        return self._run(action="refresh_facts" if refresh else "facts", session=session)
+
+    def identify(self, session: str) -> str:
+        """Which device type's Detect pattern matches what the device shows (show version, display version ...)."""
+        return self._run(action="identify", session=session)
+
+    def set_type(self, session: str, device_type: str) -> str:
+        """Set a session's device type (asked in Termwright on a production session or when changes ask)."""
+        return self._run(action="set_type", session=session, type=device_type)
+
+    def types(self) -> str:
+        """The device types with their Detect patterns and commands."""
+        return self._run(action="types")
 
 
 class Syslog:

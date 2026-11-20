@@ -22,6 +22,12 @@ import (
 type netAsker func(title, msg string, danger bool) error
 
 var netTools = []mcpTool{
+	{"device", "A saved session's device facts and device type. facts: the model, version, serial number, MAC address, uptime and other facts read from it last time; refresh_facts logs in in the background (with the session's saved login) and reads them now with the device type's fact rules. identify logs in, runs the device types' detect commands (show version, display version …) and says which device type's Detect pattern matches; set_type sets the session's device type (asked first). types lists the device types with their Detect patterns. Nothing is typed in the user's tabs.",
+		mcpSchema(map[string]any{
+			"action":  map[string]any{"type": "string", "enum": []string{"facts", "refresh_facts", "identify", "set_type", "types"}, "description": "what to do"},
+			"session": map[string]any{"type": "string", "description": "the saved session's path, e.g. Datacenter/Core/core-sw1"},
+			"type":    map[string]any{"type": "string", "description": "set_type: the device type's name (\"\" clears it)"},
+		}, "action")},
 	{"snmp", "SNMP with a saved session's SNMP settings (session properties → SNMP; v1, v2c or v3) or an address and credentials: get, getnext, bulk and walk read; set writes (asked first on a production session, and only when the session allows writes). Values come back with the MIB's names and readable values (enum names, times, MAC addresses). mib_search and mib_info look objects up in the loaded MIBs (the standard IETF MIBs and the user's own); traps lists the notifications the trap receiver got; send_trap sends a test notification to a receiver.",
 		mcpSchema(map[string]any{
 			"action":    map[string]any{"type": "string", "enum": []string{"get", "getnext", "bulk", "walk", "set", "mib_search", "mib_info", "traps", "send_trap"}, "description": "what to do"},
@@ -89,6 +95,8 @@ func (a *App) netToolRun(ctx context.Context, name string, args map[string]any, 
 		return a.httpTool(ctx, args, ask)
 	case "syslog":
 		return a.syslogTool(args)
+	case "device":
+		return a.deviceTool(ctx, args, ask)
 	}
 	return "", fmt.Errorf("no tool %s", name)
 }
@@ -218,6 +226,8 @@ func (a *App) snmpTool(ctx context.Context, args map[string]any, ask netAsker) (
 // netWrites: the tool call changes something (asked per the rules above).
 func netWrites(name string, args map[string]any) bool {
 	switch name {
+	case "device":
+		return strings.EqualFold(argStr(args, "action"), "set_type")
 	case "snmp":
 		return strings.EqualFold(argStr(args, "action"), "set")
 	case "http":
@@ -287,6 +297,9 @@ func netAgentText(tools []string) string {
 	}
 	if b.Len() > 0 && slices.Contains(tools, "http") {
 		b.WriteString(`For example: http {"action":"send","session":"APIs/Lab switches REST","url":"/rest/restconf/data/openconfig-interfaces:interfaces"} or http {"action":"run","collection":"EXOS RESTCONF"}. A path goes after the session's base URL and the session logs in by itself; never ask the user for tokens or passwords. Changes (POST, PUT, PATCH, DELETE) on a production session are asked. When the user wants tests or scripts, write them into the request with save (its "tests" and "preScript" fields) and run it to check them. ` + pmReference + "\n")
+	}
+	if b.Len() > 0 && slices.Contains(tools, "device") {
+		b.WriteString(`For example: device {"action":"identify","session":"Lab/edge-sw3"} or device {"action":"refresh_facts","session":"Lab/edge-sw3"}. Use identify when a session has no device type or a wrong one, then set_type.` + "\n")
 	}
 	if b.Len() > 0 && slices.Contains(tools, "syslog") {
 		b.WriteString(`For example: syslog {"action":"messages","severity":"warning","minutes":30} or syslog {"action":"messages","host":"10.127.34.33","query":"link down"}.` + "\n")

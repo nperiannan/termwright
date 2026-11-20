@@ -4819,6 +4819,9 @@ const ru: Record<string, string> = {
   'Paste a banner or show version output to test the pattern': 'Вставьте баннер или вывод show version, чтобы проверить шаблон',
   'The pattern is not a valid regular expression': 'Шаблон не является допустимым регулярным выражением',
   'No match': 'Нет совпадения',
+  'Device facts and type': 'Факты и тип устройства',
+  'Set the device type?': 'Задать тип устройства?',
+  'Reads the facts of saved sessions (model, version, serial number, uptime), identifies a session\'s device type with the Detect patterns and sets it after asking - logging in in the background with the saved login': 'Читает факты сохранённых сессий (модель, версию, серийный номер, время работы), определяет тип устройства по шаблонам распознавания и задаёт его после вопроса - входит в фоне с сохранённым логином',
 };
 
 export default ru;

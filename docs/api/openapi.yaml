@@ -2043,6 +2043,56 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /tools/device:
+        post:
+            operationId: net_device
+            tags:
+                - Network tools
+            summary: The device tool
+            description: 'A saved session''s device facts and device type. facts: the model, version, serial number, MAC address, uptime and other facts read from it last time; refresh_facts logs in in the background (with the session''s saved login) and reads them now with the device type''s fact rules. identify logs in, runs the device types'' detect commands (show version, display version …) and says which device type''s Detect pattern matches; set_type sets the session''s device type (asked first). types lists the device types with their Detect patterns. Nothing is typed in the user''s tabs. Through the API it runs without asking.'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    description: what to do
+                                    enum:
+                                        - facts
+                                        - refresh_facts
+                                        - identify
+                                        - set_type
+                                        - types
+                                    type: string
+                                session:
+                                    description: the saved session's path, e.g. Datacenter/Core/core-sw1
+                                    type: string
+                                type:
+                                    description: 'set_type: the device type''s name ("" clears it)'
+                                    type: string
+                            required:
+                                - action
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /tools/snmp:
         post:
             operationId: net_snmp

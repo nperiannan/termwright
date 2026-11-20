@@ -54,6 +54,8 @@ class Fake(BaseHTTPRequestHandler):
                 return self.reply(200, {"on": False, "settings": {"udp": 514, "saveFiles": True}})
             if self.path == "/api/v1/syslog/start":
                 return self.reply(200, {"on": True})
+        if self.path == "/api/v1/tools/device":
+            return self.reply(200, {"result": "Lab/edge-sw3 looks like Huawei VRP"})
         if self.path.startswith("/api/v1/http"):
             if self.path == "/api/v1/http/send":
                 return self.reply(200, {"status": 200, "body": '{"ok": true}', "ms": 3})
@@ -271,6 +273,12 @@ class ClientTest(unittest.TestCase):
         calls = {p: b for _, p, b in Fake.state["calls"]}
         self.assertEqual(calls["/api/v1/http/environments"]["vars"][1], {"key": "Bearer", "value": "t", "secret": True})
         self.assertEqual(calls["/api/v1/http/collections/Lab%20checks/run"], {"environment": "dl2r1"})
+
+    def test_devices(self):
+        self.assertIn("Huawei VRP", self.lab.devices.identify("Lab/edge-sw3"))
+        self.lab.devices.set_type("Lab/edge-sw3", "Huawei VRP")
+        calls = {p: b for _, p, b in Fake.state["calls"]}
+        self.assertEqual(calls["/api/v1/tools/device"], {"action": "set_type", "session": "Lab/edge-sw3", "type": "Huawei VRP"})
 
     def test_syslog(self):
         self.assertEqual(self.lab.syslog.messages("link down", severity="err")[0]["id"], 7)
