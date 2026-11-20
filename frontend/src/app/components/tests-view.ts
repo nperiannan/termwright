@@ -93,7 +93,7 @@ type View = 'steps' | 'yaml' | 'go';
               <button type="button" (click)="backend.testsOpen(rep.dir)">Open Report</button><button type="button" (click)="backend.testsOpen(rep.dir + '/junit.xml')">JUnit XML</button></div>
             <div class="res">
               @for (r of rep.results; track $index) {
-                <button type="button" class="rr" (click)="r.file && select(r.file)"><span [class]="r.passed ? 'ok' : 'bad'">{{ r.passed ? '✓' : '✗' }}</span>{{ r.file || r.case }}<span class="mut">{{ r.passed ? '' : failText(r) }}</span><span class="sp"></span><span class="mut">{{ (r.ms / 1000).toFixed(1) }} s</span></button>
+                <button type="button" class="rr" (click)="r.file && select(r.file)"><span [class]="r.passed ? 'ok' : 'bad'">{{ r.passed ? '✓' : '✗' }}</span>{{ r.file || r.case }}{{ paramOf(r.case) }}<span class="mut">{{ r.passed ? '' : failText(r) }}</span><span class="sp"></span><span class="mut">{{ (r.ms / 1000).toFixed(1) }} s</span></button>
               }
             </div>
           </footer>
@@ -113,7 +113,7 @@ type View = 'steps' | 'yaml' | 'go';
     header { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); } .ttl { font-size: 15px; } .fl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     header select { height: 28px; max-width: 160px; }
     .seg { display: flex; gap: 2px; background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: 7px; padding: 2px; } .seg button { border: 0; background: none; padding: 3px 10px; border-radius: 5px; color: var(--text); cursor: pointer; } .seg button.on { background: color-mix(in srgb, var(--accent) 28%, transparent); }
-    .body { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+    .body p { margin: 0; } .body { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
     .st { border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; } .st.f { border-color: color-mix(in srgb, var(--danger, #ef6161) 60%, transparent); } .cmd { font-family: var(--mono, monospace); margin-left: 4px; } .st > div > b { margin-right: 8px; } .ms { float: right; color: var(--muted); font-size: 11px; }
     .chip { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 10px; margin: 4px 4px 0 0; background: color-mix(in srgb, var(--ok, #4ec07a) 15%, transparent); color: var(--ok, #4ec07a); }
     .chip.b { background: color-mix(in srgb, var(--danger, #ef6161) 15%, transparent); color: var(--danger, #ef6161); } .chip.v { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
@@ -260,6 +260,7 @@ export class TestsView implements OnInit, OnDestroy {
     try { const rel = await this.backend.testsNewTestbed(name, folder); this.ui.toast(tr('Wrote {0}', rel), 'success'); await this.load(); void this.backend.testsOpen(rel); }
     catch (e) { this.ui.toast(errText(e), 'error'); }
   }
+  paramOf(name: string) { const i = name.lastIndexOf(' ['); return i > 0 && name.endsWith(']') ? name.slice(i) : ''; }
   paramsText() { return (this.test()?.params ?? []).map(p => Object.entries(p).map(([k, v]) => `${k}=${v}`).join(', ')).join(' · '); }
   varsText() { return Object.entries(this.test()?.vars ?? {}).map(([k, v]) => `{{${k}}} = ${v}`).join(', '); }
 

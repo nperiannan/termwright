@@ -82,7 +82,7 @@ Settings, and turning one on does not turn on the other.
 | `GET /ai/skills` | The AI skills (SKILL.md procedures the AI assistant follows); `POST` adds or replaces one from its text | 200 |
 | `GET /ai/skills/{skill}` | One skill with its whole SKILL.md | 200 |
 | `GET /tools` | The network tools (`device`, `snmp`, `http`, `syslog`, `tests`) with their arguments (JSON Schema), the same as the MCP connector's | 200 `Tool[]` |
-| `POST /tools/{tool}` | Runs a network tool; the body holds its arguments (`device`: a saved session's facts and device type - facts, refresh_facts, identify, set_type, types; `tests`: Termwright tests - list, show, save (`file`, `yaml`), run (`files`, `testbed`, `vars`; pass/fail per step and the report's path), generate (the Go tests), step (one step without its checks, as JSON - used by the generated Go tests), results) | 200 `{"result": text}` |
+| `POST /tools/{tool}` | Runs a network tool; the body holds its arguments (`device`: a saved session's facts and device type - facts, refresh_facts, identify, set_type, types; `tests`: Termwright tests - list, show, save (`file`, `yaml`), run (`files`, `testbed`, `vars`; pass/fail per step and the report's path), generate (the Go tests), step (one `run`, `http` or `snmp` step without its checks, as JSON - used by the generated Go tests), new_testbed (`name`, `folder`: a role per saved session of a session folder), results) | 200 `{"result": text}` |
 
 `{port}` and `{stream}` take a name (`Test port 1`, `voice`) or an id. In a
 stream, `from` and `to` take names too. The OpenAPI document has every field,

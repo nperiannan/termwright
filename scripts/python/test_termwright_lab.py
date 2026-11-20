@@ -292,6 +292,11 @@ class ClientTest(unittest.TestCase):
         self.assertTrue(self.lab.tests.run("cases/smoke.yaml", vars={"vlan": "42"}).startswith("1 passed"))
         calls = {p: b for _, p, b in Fake.state["calls"]}
         self.assertEqual(calls["/api/v1/tools/tests"], {"action": "run", "files": ["cases/smoke.yaml"], "vars": {"vlan": "42"}})
+        self.lab.tests.run(testbed="lab-a.yaml")
+        self.lab.tests.new_testbed("lab-a", "Lab")
+        bodies = [b for _, p, b in Fake.state["calls"] if p == "/api/v1/tools/tests"]
+        self.assertEqual(bodies[-2], {"action": "run", "testbed": "lab-a.yaml"})
+        self.assertEqual(bodies[-1], {"action": "new_testbed", "name": "lab-a", "folder": "Lab"})
 
     def test_syslog(self):
         self.assertEqual(self.lab.syslog.messages("link down", severity="err")[0]["id"], 7)

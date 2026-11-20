@@ -811,9 +811,14 @@ class Tests:
         """Write a test from YAML (never with passwords: name saved sessions)."""
         return self._run(action="save", file=file, yaml=yaml_text)
 
-    def run(self, *files: str, vars: Optional[dict] = None, timeout: float = 1800) -> str:
-        """Run tests (none: all). Returns pass/fail per step and the report's path (JUnit XML and HTML in reports/)."""
-        return self._run(timeout=timeout, action="run", files=list(files) or None, vars=vars)
+    def run(self, *files: str, vars: Optional[dict] = None, testbed: Optional[str] = None, timeout: float = 1800) -> str:
+        """Run tests (none: all), optionally on a testbed (a file in testbeds/). Returns pass/fail per step
+        and the report's path (JUnit XML and HTML in reports/)."""
+        return self._run(timeout=timeout, action="run", files=list(files) or None, vars=vars, testbed=testbed)
+
+    def new_testbed(self, name: str, folder: str) -> str:
+        """Write testbeds/<name>.yaml with a role for each saved session of a session folder (core-sw1 -> {{core_sw1}})."""
+        return self._run(action="new_testbed", name=name, folder=folder)
 
     def generate(self, *files: str) -> str:
         """Write the Go tests again (none: all); run them with go test ./cases/... in the tests folder."""

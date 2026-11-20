@@ -1480,6 +1480,8 @@ Termwright can turn manual testing into repeatable tests, the way record-and-rep
   - *matches a pattern* - the text with its numbers turned into `\d+`;
   - *does not contain*;
   - **Save as Test Variable…** keeps the value for later steps as `{{name}}`.
+- Every get, walk or set you run in the **SNMP Browser** (on one device) becomes an `snmp` step; a get's values are added as checks (`ifOperStatus.5` = `up`).
+- **Sessions as roles** (on by default) saves each session as a role - `Lab/core-sw1` becomes `{{core_sw1}}` with `Lab/core-sw1` as the test's default - so a testbed can point the same test at other devices.
 - **+ Check** on a step adds status, JSON path (`data.items[0].name`, `[-1]`, `length`), *takes at most (ms)*, contains, matches or field checks by hand.
 - ↑ and ✕ reorder or remove steps; ⏸ pauses recording. **Save Test…** writes the test into the tests folder (`cases/…yaml`).
 
@@ -1493,7 +1495,7 @@ A step without checks passes when it runs without an error. Each recorded termin
 - The selected test as **Steps** (the last run's checks marked ✓ or ✗ with what came back), as **YAML** (edit and **Save** - the file is checked first) or as its generated **Go** test (read-only; *Open in VS Code*).
 - **▶ Run** runs the test, **▶▶** runs all of them; the testbed menu fills the `{{variables}}` from a file in `testbeds/`. A run that uses production sessions is asked first.
 - The last run lists each test with its first failure; **Open Report** opens the HTML report and **JUnit XML** the file CI systems read.
-- **Open…** makes another folder the tests folder; **Clone…** clones a Git repository of tests with this computer's `git` and its saved login (an address with a password in it is refused). When the folder is a Git repository its branch and number of changed files are shown. Files changed outside Termwright (an editor, `git pull`) show up within a few seconds.
+- **Open…** makes another folder the tests folder; **Clone…** clones a Git repository of tests with this computer's `git` and its saved login (an address with a password in it is refused). When the folder is a Git repository its branch, number of changed files and ↑ / ↓ (commits not pushed / not pulled) are shown, with **Pull** (fast-forward only - it never merges), **Commit…** (the tests, testbeds and library, with your own git name and e-mail; `reports/` stays out through the folder's `.gitignore`) and **Push** (the first push sets the branch's upstream on `origin`; never forced). **Make it a Git repository** starts one. Git uses this computer's saved login and never asks in a terminal. Files changed outside Termwright (an editor, `git pull`) show up within a few seconds.
 
 ### The tests folder
 
@@ -1533,9 +1535,11 @@ steps:
     continueOnFail: true
 ```
 
-- A step has `run` (`session`, `command`, optional `prompt` regular expression) or `http` (`session`, `environment`, `collection`, `method`, `url` - a path after the session's base URL or a full URL - `headers`, `body`).
-- `expect` checks: `contains`, `notContains`, `matches`, `status`, `maxMs`, and `field` (a regular expression whose first group is the value) or `json` (a path) with `equals`, `notEquals`, `greater`, `less` or `exists`.
-- `save` keeps a `field` or `json` value as a variable for later steps. `{{name}}` works in every text.
+- A step has `run` (`session`, `command`, optional `prompt` regular expression), `http` (`session`, `environment`, `collection`, `method`, `url` - a path after the session's base URL or a full URL - `headers`, `body`) or `snmp` (`session` - its SNMP settings and saved community or v3 passwords are used - `op`: `get`, `getnext`, `bulk`, `walk` or `set`, `oids`, or `values` for a set).
+- `expect` checks: `contains`, `notContains`, `matches`, `status`, `maxMs`, and `field` (a regular expression whose first group is the value), `json` (a path) or `oid` (an SNMP value) with `equals`, `notEquals`, `greater`, `less` or `exists`.
+- `oid` finds a value by name (`ifOperStatus.5`, `IF-MIB::ifOperStatus.5`, `ifOperStatus` for the first one a walk got) or numeric OID; `equals` matches its readable value (`up`) or its raw value (`1`); `greater` and `less` use the raw number. An SNMP step's output is one `name = value` line per value, so `contains` and `field` work on it too.
+- `save` keeps a `field`, `json` or `oid` value as a variable for later steps. `{{name}}` works in every text. To check that a value **changed**, save it in one step and use `notEquals: "{{name}}"` in a later one.
+- `params: [{vlan: "42"}, {vlan: "7"}]` runs the test once per entry, named *test [vlan=42]* in the results; the entry's values fill the variables (a testbed's and a run's own values still win).
 - After a failed step the rest are skipped, unless the step has `continueOnFail: true`. `timeout` is in seconds (default 60).
 - Put JSON paths with `[ ]` in quotes inside `{ … }`, as above.
 
@@ -1550,6 +1554,8 @@ site:
   api: APIs/Lab REST     # used as {{site.api}}
 ```
 
+**+** next to **Testbeds** in the Tests tab writes one for you: give a session folder (for example the emulated lab's folder, or a site) and a name, and it gets a role for each saved session in it (`core-sw1` → `core_sw1: Lab/core-sw1`). A test recorded with *Sessions as roles* then runs on those devices when you pick the testbed. An existing testbed is never replaced.
+
 ### Go tests
 
 Saving a test also writes it as a Go test next to it (`cases/vlan/vlan-42_test.go`): one subtest per step, checks as plain calls, for example ``a.Field(`Admin\s+State:\s*(\S+)`).Equals("Enabled")``. Termwright also writes `go.mod` (module `termwright-tests`) and `lib/twtest`, a small helper that uses only Go's standard library. Edit the YAML, not the Go file - it is written again on every save; files you add to `lib/` yourself are never replaced.
@@ -1563,11 +1569,13 @@ go test ./cases/... -args -tw.testbed=testbeds/lab.yaml -tw.var=vlan=7
 go test -json ./cases/... | go run ./lib/junit > junit.xml # JUnit XML for CI
 ```
 
+A test with `params` becomes one subtest per entry. `-tw.testbed` reads nested testbeds like Termwright (`{{site.api}}`) and finds a relative file from the tests folder.
+
 `TERMWRIGHT_API` and `TERMWRIGHT_KEY` point the tests at Termwright on another computer (otherwise they read `mcp.json` in the data folder).
 
 ### From the AI assistant, the API and Python
 
-The `tests` tool (AI assistant, Claude connector, `POST /api/v1/tools/tests`) lists, shows, saves, runs and generates tests - *"write a test that checks VLAN 42 is up on core-sw1 and run it"*. In Python: `lab.tests.run("cases/vlan/vlan42.yaml")` (see PYTHON.md).
+The `tests` tool (AI assistant, Claude connector, `POST /api/v1/tools/tests`) lists, shows, saves, runs (with a `testbed`) and generates tests and writes testbeds from a session folder (*new_testbed*); Git stays in your hands (the Tests tab) - *"write a test that checks VLAN 42 is up on core-sw1 and run it"*. In Python: `lab.tests.run("cases/vlan/vlan42.yaml")` (see PYTHON.md).
 
 ## 10. Automation: logon actions, triggers, scripts
 
