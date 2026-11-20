@@ -232,3 +232,34 @@ func (a *App) aiInstructionsText(sessionPath, deviceType string) string {
 	}
 	return b.String()
 }
+
+// AIImportInstructions reads an AGENTS.md (or CLAUDE.md, any .md) and returns its text for the
+// instructions; nothing is saved until the settings are.
+func (a *App) AIImportInstructions() (string, error) {
+	p, err := wruntime.OpenFileDialog(a.ctx, wruntime.OpenDialogOptions{Title: "Import Instructions (AGENTS.md)",
+		Filters: []wruntime.FileFilter{{DisplayName: "Instructions (AGENTS.md, CLAUDE.md, *.md)", Pattern: "*.md;*.txt"}}})
+	if err != nil || p == "" {
+		return "", err
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return "", err
+	}
+	if len(b) > skills.MaxSize {
+		return "", fmt.Errorf("the file is larger than %d KB", skills.MaxSize>>10)
+	}
+	t := strings.TrimPrefix(string(b), "\ufeff")
+	if _, n := aiRedact(t, false); n > 0 {
+		return "", errors.New("the file seems to hold a password, key or community - not imported")
+	}
+	return t, nil
+}
+
+// AIExportInstructions saves the instructions as an AGENTS.md (the file other AI tools read).
+func (a *App) AIExportInstructions(text string) (string, error) {
+	p, err := wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{Title: "Export Instructions", DefaultFilename: "AGENTS.md", CanCreateDirectories: true})
+	if err != nil || p == "" {
+		return "", err
+	}
+	return p, os.WriteFile(p, []byte(text), 0o600)
+}

@@ -628,7 +628,8 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
             }
             @case ('skills') {
               <div class="skp">
-                <div class="skh"><b>Instructions</b><span class="mut">followed in every AI chat - your team's rules, naming, change windows. Folders (Folder Defaults) and device types (Device Types) can add their own.</span></div>
+                <div class="skh"><b>Instructions</b><span class="mut">followed in every AI chat - your team's rules, naming, change windows. Folders (Folder Defaults) and device types (Device Types) can add their own.</span>
+                  <span class="sp"></span><button type="button" (click)="importInstructions()" title="Read an AGENTS.md or CLAUDE.md">Import AGENTS.md…</button><button type="button" (click)="exportInstructions()" [disabled]="!(s.ai?.instructions ?? '').trim()" title="Save them as an AGENTS.md, the file other AI tools read">Export…</button></div>
                 <textarea name="aiins" class="mono" rows="4" [ngModel]="s.ai?.instructions ?? ''" (ngModelChange)="setAI({ instructions: $event })"
                   placeholder="e.g. VLAN names are <site>-<purpose>. Save the configuration after every change. Never change ports 1:49-1:52 (uplinks)."></textarea>
                 <div class="skh"><b>Skills</b><span class="mut">{{ skills().length }} skill{{ skills().length === 1 ? '' : 's' }} · procedures the AI loads when a request matches; it sees only their names and descriptions until then. SKILL.md files - the open format other AI tools use too.</span></div>
@@ -768,7 +769,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
   }`,
   styles: [`
     .skp { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
-    .skh { display: flex; gap: 10px; align-items: baseline; margin-top: 6px; } .skh .mut { font-size: 12px; }
+    .skh { display: flex; gap: 10px; align-items: baseline; margin-top: 6px; } .skh .sp { flex: 1; } .skh button { flex: none; } .skh .mut { font-size: 12px; }
     .skp textarea[name=aiins] { width: 100%; box-sizing: border-box; font-size: 12px; }
     .skbar { display: flex; gap: 8px; align-items: center; } .skbar .sp, .skeh .sp { flex: 1; }
     .skai { display: flex; gap: 8px; } .skai input { flex: 1; }
@@ -1200,6 +1201,16 @@ export class OptionsDialog implements OnInit {
     catch (e) { this.skillErr.set(errText(e)); }
     this.cdr.markForCheck();
   }
+  async importInstructions() {
+    try {
+      const t = await this.backend.aiImportInstructions(); if (!t) return;
+      const cur = (this.s?.ai?.instructions ?? '').trim();
+      const replace = !cur || await this.ui.confirm('Import Instructions', 'Replace the instructions with the file\'s? Cancel adds the file\'s after them.', 'Replace');
+      this.setAI({ instructions: replace ? t.trim() : cur + '\n\n' + t.trim() });
+      this.ui.toast('Imported - press Save to keep them', 'info');
+    } catch (e) { this.ui.error(e); }
+  }
+  async exportInstructions() { try { const p = await this.backend.aiExportInstructions(this.s?.ai?.instructions ?? ''); if (p) this.ui.toast('Saved ' + p, 'success'); } catch (e) { this.ui.error(e); } }
   async newSkill(text?: string) {
     if (!(await this.keepEdits())) return;
     this.skillEdit.set({ name: '', description: '', path: '', modified: '', on: true });
