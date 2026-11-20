@@ -1464,6 +1464,111 @@ Termwright receives syslog from your devices while it runs, so you do not need a
 
 **AI assistant, MCP and scripts.** Turn on the **Syslog** tool in the agent's tool list and ask, for example, *"what errors did the switches log in the last 30 minutes?"*. MCP apps get the same `syslog` tool, the local API has `/api/v1/syslog…` (see the [API guide](API.md)), and in Python `Lab().syslog.wait_for("link down", timeout=60)` waits for a message in a test.
 
+## 9f. Tests: record, run and generate code
+
+Termwright can turn manual testing into repeatable tests, the way record-and-replay test tools do: you work as usual, mark what must be true, and Termwright saves a test you can run again on any testbed - from Termwright, from the AI assistant, from CI, or as plain Go code.
+
+### Recording a test
+
+**Tests → Record a Test** opens the **Steps** panel on the right. While it records:
+
+- Every command you type in a terminal tab (or send from its Send bar) becomes a step: *session › command*. Commands that may hold a password, secret, community or key are not recorded.
+- Every request you send in the **API Client** becomes a step with its session, environment, collection, method, URL, headers and body; its status code is added as the first check.
+- Select output in a terminal, right-click → **Expect this**:
+  - *contains "…"* - the output must contain the text;
+  - *field = "…"* - Termwright builds a regular expression from the label in front of the value (`Admin State:   Enabled` → `Admin\s+State:\s*(\S+)` = `Enabled`), so the check still works when spacing or other lines change;
+  - *matches a pattern* - the text with its numbers turned into `\d+`;
+  - *does not contain*;
+  - **Save as Test Variable…** keeps the value for later steps as `{{name}}`.
+- **+ Check** on a step adds status, JSON path (`data.items[0].name`, `[-1]`, `length`), *takes at most (ms)*, contains, matches or field checks by hand.
+- ↑ and ✕ reorder or remove steps; ⏸ pauses recording. **Save Test…** writes the test into the tests folder (`cases/…yaml`).
+
+A step without checks passes when it runs without an error. Each recorded terminal step runs again in a **new background login**, so a command that only works in a mode (configure mode, a directory) needs the command that enters the mode recorded too.
+
+### The Tests tab
+
+**Tests → Tests** opens the tests folder:
+
+- **Cases** by folder, with a dot for the last result (green passed, red failed, amber unreadable file); **Testbeds**; **Reports** (past runs - click one to open its HTML report).
+- The selected test as **Steps** (the last run's checks marked ✓ or ✗ with what came back), as **YAML** (edit and **Save** - the file is checked first) or as its generated **Go** test (read-only; *Open in VS Code*).
+- **▶ Run** runs the test, **▶▶** runs all of them; the testbed menu fills the `{{variables}}` from a file in `testbeds/`. A run that uses production sessions is asked first.
+- The last run lists each test with its first failure; **Open Report** opens the HTML report and **JUnit XML** the file CI systems read.
+- **Open…** makes another folder the tests folder; **Clone…** clones a Git repository of tests with this computer's `git` and its saved login (an address with a password in it is refused). When the folder is a Git repository its branch and number of changed files are shown. Files changed outside Termwright (an editor, `git pull`) show up within a few seconds.
+
+### The tests folder
+
+By default `tests` in Termwright's data folder; it can be any folder, for example a Git repository shared by a team:
+
+| Folder | Holds |
+|---|---|
+| `cases/` | The tests (`.yaml`) and their generated Go tests (`_test.go`), in sub-folders as you like |
+| `testbeds/` | Which devices and values a run uses (`.yaml`) |
+| `lib/` | The helper library of the Go tests (`lib/twtest`) and the JUnit converter (`lib/junit`) |
+| `reports/` | One folder per run: `report.html`, `junit.xml`, `result.json` |
+
+Tests never hold passwords: steps name saved sessions, whose logins stay in the computer's credential store. A test with a password, key or community in it is refused.
+
+### The test format
+
+```yaml
+name: VLAN 42 is up
+description: the VLAN exists, is enabled and the REST API shows it
+tags: [smoke, vlan]
+vars: {vlan: "42"}
+steps:
+  - run: {session: "{{sw1}}", command: "show vlan {{vlan}}"}
+    expect:
+      - contains: "created by user"
+      - field: 'Admin\s+State:\s*(\S+)'
+        equals: Enabled
+    save:
+      - {var: ip, field: 'Primary IP:\s*(\S+)'}
+  - http: {session: APIs/Lab REST, method: GET, url: "/rest/vlans/{{vlan}}"}
+    expect:
+      - status: 200
+      - {json: "data.ip", equals: "{{ip}}"}
+      - {json: "data.ports.length", greater: 0}
+      - {maxMs: 2000}
+    timeout: 30
+    continueOnFail: true
+```
+
+- A step has `run` (`session`, `command`, optional `prompt` regular expression) or `http` (`session`, `environment`, `collection`, `method`, `url` - a path after the session's base URL or a full URL - `headers`, `body`).
+- `expect` checks: `contains`, `notContains`, `matches`, `status`, `maxMs`, and `field` (a regular expression whose first group is the value) or `json` (a path) with `equals`, `notEquals`, `greater`, `less` or `exists`.
+- `save` keeps a `field` or `json` value as a variable for later steps. `{{name}}` works in every text.
+- After a failed step the rest are skipped, unless the step has `continueOnFail: true`. `timeout` is in seconds (default 60).
+- Put JSON paths with `[ ]` in quotes inside `{ … }`, as above.
+
+### Testbeds
+
+A testbed is a YAML file in `testbeds/` whose values fill the variables, so the same test runs against the lab or another site:
+
+```yaml
+sw1: Lab/core-sw1
+vlan: "42"
+site:
+  api: APIs/Lab REST     # used as {{site.api}}
+```
+
+### Go tests
+
+Saving a test also writes it as a Go test next to it (`cases/vlan/vlan-42_test.go`): one subtest per step, checks as plain calls, for example ``a.Field(`Admin\s+State:\s*(\S+)`).Equals("Enabled")``. Termwright also writes `go.mod` (module `termwright-tests`) and `lib/twtest`, a small helper that uses only Go's standard library. Edit the YAML, not the Go file - it is written again on every save; files you add to `lib/` yourself are never replaced.
+
+In the tests folder, with Termwright running (its local API on - the Go tests send each step to it, and Termwright logs in with the saved logins):
+
+```sh
+go test ./cases/...                                        # all tests
+go test ./cases/vlan/ -run TestVlan42Up -v                 # one test
+go test ./cases/... -args -tw.testbed=testbeds/lab.yaml -tw.var=vlan=7
+go test -json ./cases/... | go run ./lib/junit > junit.xml # JUnit XML for CI
+```
+
+`TERMWRIGHT_API` and `TERMWRIGHT_KEY` point the tests at Termwright on another computer (otherwise they read `mcp.json` in the data folder).
+
+### From the AI assistant, the API and Python
+
+The `tests` tool (AI assistant, Claude connector, `POST /api/v1/tools/tests`) lists, shows, saves, runs and generates tests - *"write a test that checks VLAN 42 is up on core-sw1 and run it"*. In Python: `lab.tests.run("cases/vlan/vlan42.yaml")` (see PYTHON.md).
+
 ## 10. Automation: logon actions, triggers, scripts
 
 **Logon Actions** (Session Options → Logon Actions & Triggers):

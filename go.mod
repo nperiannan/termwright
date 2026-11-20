@@ -7,6 +7,7 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/danieljoos/wincred v1.2.3
 	github.com/dop251/goja v0.0.0-20260603125802-cfe4039cb6d7
+	github.com/godbus/dbus/v5 v5.2.2
 	github.com/gorilla/websocket v1.5.3
 	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/miekg/pkcs11 v1.1.2
@@ -16,7 +17,6 @@ require (
 	go.bug.st/serial v1.6.4
 	golang.org/x/crypto v0.43.0
 	golang.org/x/net v0.45.0
-	github.com/godbus/dbus/v5 v5.2.2
 	golang.org/x/sys v0.37.0
 	gopkg.in/yaml.v3 v3.0.1
 )

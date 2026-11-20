@@ -4,7 +4,7 @@
 
 <p align="center">
   <b>AI-powered network access, automation, monitoring, emulation and reservation platform.</b><br/>
-  SSH · Telnet · Serial · SFTP · RDP · VNC · WoL · SNMP · Syslog · REST API · Discover · Collaborate - on Windows, macOS and Linux.
+  SSH · Telnet · Serial · SFTP · RDP · VNC · WoL · SNMP · Syslog · REST API · Tests · Discover · Collaborate - on Windows, macOS and Linux.
 </p>
 
 <p align="center">
@@ -111,6 +111,15 @@ Termwright began as a terminal and session manager for network engineers. Today 
 
 And much more - see the [feature list](docs/FEATURES.md).
 
+## Tests: record, run, generate code
+
+- **Record a test** while you work: commands in terminal tabs and REST requests become steps; right-click output → *Expect this* to add a check
+- **Tests tab**: run one or all tests on a testbed, see which check failed and what came back, open the HTML report or JUnit XML
+- **Plain files**: tests are YAML in a folder that can be a Git repository, and each is also written as a **Go test** (`go test ./cases/...`) - no passwords in either, Termwright logs in with the saved logins
+- Usable from the AI assistant, MCP apps, the local REST API and Python
+
+![Tests tab](docs/screenshots/tests.png)
+
 ## SNMP, syslog and REST API
 
 - **SNMP Browser**: v1, v2c and v3 against saved sessions, a MIB tree with the standard MIBs built in and vendor MIBs loaded from files, Walk, Table, Compare, Poll with a live chart, Set, Send Trap, and a trap receiver
@@ -155,6 +164,7 @@ Every change is in the [changelog](CHANGELOG.md).
 | Device facts | Model, version, serial number, MAC address, uptime and custom values, read in a background login. Built-in rules for VOSS, EXOS, Cisco IOS and NX-OS, Huawei VRP, Eltex MES, Ruckus ICX and Linux. |
 | Session management | Wake-on-LAN (also through a jump host); folders with defaults; favourites and recents; environments, with confirmation before multi-tab sends to production; reachability checks; bulk edit; workspaces; Quick Open; drag and drop. |
 | Syslog | A syslog server (UDP, TCP, TLS; RFC 3164 and 5424) with live view, senders matched to saved sessions, search, severity filters, colour / notify / hide rules and daily files, plus a test message sender; usable from the AI assistant, MCP apps, the local API and Python. |
+| Tests | Record tests while you work (terminal commands and REST requests, *Expect this* checks on selected output), run them on testbeds from the Tests tab with HTML and JUnit reports, edit them as YAML, and run them as generated Go tests (`go test`) in CI; usable from the AI assistant, MCP apps, the local API and Python. |
 | API client | A free REST client in the spirit of Postman: API sessions with API key, bearer, login-request, basic and OAuth 2.0 authentication (secrets in the credential store), `{{variables}}` with Postman-style environments and globals (import Postman environments), request tabs, per-request and per-collection authorization, request settings, collections as plain JSON files, `pm.*` tests and pre-request scripts with `setNextRequest` and `sendRequest`, a collection runner with data files, a console, import of Postman collections, OpenAPI / Swagger (YAML or JSON) and cURL, code export; usable from the AI assistant, MCP apps, the local API and Python. |
 | SNMP | SNMP Browser for v1, v2c and v3 (Get, Walk, Table, Set) with a MIB tree, the standard MIBs built in and vendor MIBs loaded from files, a trap receiver, credentials kept in the computer's credential store; usable from the AI assistant, MCP apps, the local API and Python. |
 | Discovery | Scans a network or range (up to /22): open ports, SSH and Telnet banners, web servers and certificates, SIP, SNMP v2c, DNS, MAC vendor. Each result shows its evidence, a guessed kind, a device type and *Connect ▾*; selected devices are added as sessions. Discovery never logs in. |

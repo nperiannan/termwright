@@ -92,6 +92,24 @@ errors = lab.syslog.messages(severity="err", minutes=30)
 lab.syslog.send("10.0.0.5", "test from CI", severity="err", facility="local7")
 ```
 
+## Tests
+
+`lab.tests` runs Termwright tests (YAML files in the tests folder, see USER_GUIDE "Tests"):
+
+```python
+print(lab.tests.list())
+lab.tests.save("cases/smoke/version.yaml", """
+name: version
+steps:
+  - run: {session: Lab/core-sw1, command: show version}
+    expect: [{contains: "32.6"}]
+""")
+print(lab.tests.run("cases/smoke/version.yaml", vars={"vlan": "42"}))  # pass/fail per step, report path
+print(lab.tests.run())          # all tests
+print(lab.tests.results())      # the last run
+lab.tests.generate()            # write the Go tests again
+```
+
 ## Traffic
 
 Test ports and streams are as in the API; the keyword arguments are the API's fields in snake_case

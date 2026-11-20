@@ -85,6 +85,15 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **Local API, command line and Python**: a REST API on this computer (OpenAPI), `termwright lab …` and a Python client drive the same lab tools - no approval asked, for your own automation.
 - **Simulated lab**: switches simulated on this computer (an SSH server each, no VM) from a device pack (.vm) loaded with consent: models with their port layout, command line with abbreviations, `?` help and Tab, VLANs, ports, IP interfaces, save / reset, ping and LLDP over drawn cables; New Lab wizard with leaf-spine, chain or ring cabling; Lab window with list, topology and cables; sessions in a Simulated Lab folder with live state.
 
+## Tests (record and replay)
+
+- **Test recorder**: Tests → Record a Test; commands typed in terminal tabs and requests sent in the API Client become steps; right-click selected output → *Expect this* (contains, field = value with the regular expression made from its label, matches, does not contain) or *Save as Test Variable*; **+ Check** for status, JSON path, time.
+- **Tests tab**: tests by folder with their last result, testbeds, reports; a test as steps, YAML (edit and save) or generated Go; run one or all with a testbed; results with the first failure; HTML report and JUnit XML per run.
+- **Test format**: YAML - `run` (session, command) and `http` (session, method, url, headers, body) steps; checks `contains`, `notContains`, `matches`, `status`, `maxMs`, `field` / `json` with `equals`, `notEquals`, `greater`, `less`, `exists`; `save` for `{{variables}}`; `continueOnFail`, `timeout`.
+- **Go tests**: each test is also written as a Go test with a small standard-library helper; `go test ./cases/...` runs them through Termwright (saved logins, no passwords in code); `go run ./lib/junit` makes JUnit XML for CI.
+- **Tests folder**: any folder, a Git repository too (Clone…; branch and changes shown); testbeds fill the variables; production sessions are asked first; tests with passwords are refused.
+- **Tests for AI and automation**: the `tests` tool for the AI assistant and MCP apps, `POST /api/v1/tools/tests`, and `lab.tests` in Python.
+
 ## AI assistant and connector
 
 - **AI assistant** (optional, off by default): a chat panel docked right or left or floating, with chat history, pasted pictures and *Add context* (selection, clipboard, whole terminal, other tabs, files) and a token warning; **Agent mode** runs commands in your tabs to debug or fix - read-only commands by themselves, changes after you allow them, production always asks; *Explain with AI* for output and errors and *Ask AI for a Command* for the tab's device type, with Claude, an OpenAI-compatible service, a local Ollama or **Claude Code** (your own Claude login, no API key); secrets removed before sending, commands pasted without Enter, *Save* to the Command Library.
