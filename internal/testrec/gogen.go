@@ -81,12 +81,39 @@ func GenerateGo(c Case, caseFile string) ([]byte, error) {
 				f = append(f, "Timeout: "+strconv.Itoa(st.Timeout))
 			}
 			fmt.Fprintf(&b, "\t\ta := s.HTTP(twtest.Request{%s})\n", strings.Join(f, ", "))
+		case st.SNMP != nil:
+			sn := st.SNMP
+			op := strings.ToLower(sn.Op)
+			if op == "" {
+				op = "get"
+			}
+			f := []string{"Session: " + q(sn.Session), "Op: " + q(op)}
+			if len(sn.OIDs) > 0 {
+				var o []string
+				for _, x := range sn.OIDs {
+					o = append(o, q(x))
+				}
+				f = append(f, "OIDs: []string{"+strings.Join(o, ", ")+"}")
+			}
+			if len(sn.Values) > 0 {
+				var o []string
+				for _, x := range sn.Values {
+					o = append(o, fmt.Sprintf("{OID: %s, Type: %s, Value: %s}", q(x.OID), q(x.Type), q(x.Value)))
+				}
+				f = append(f, "Values: []twtest.SetValue{"+strings.Join(o, ", ")+"}")
+			}
+			if st.Timeout > 0 {
+				f = append(f, "Timeout: "+strconv.Itoa(st.Timeout))
+			}
+			fmt.Fprintf(&b, "\t\ta := s.SNMP(twtest.SNMP{%s})\n", strings.Join(f, ", "))
 		}
 		for _, e := range st.Expect {
 			fmt.Fprintf(&b, "\t\t%s\n", goExpect(e))
 		}
 		for _, s := range st.Save {
-			if s.Field != "" {
+			if s.OID != "" {
+				fmt.Fprintf(&b, "\t\ta.OID(%s).Save(%s)\n", q(s.OID), q(s.Var))
+			} else if s.Field != "" {
 				fmt.Fprintf(&b, "\t\ta.Field(%s).Save(%s)\n", goStr(s.Field), q(s.Var))
 			} else if s.JSON != "" {
 				fmt.Fprintf(&b, "\t\ta.JSON(%s).Save(%s)\n", q(s.JSON), q(s.Var))
@@ -116,11 +143,13 @@ func goExpect(e Expect) string {
 		return "a.Matches(" + goStr(e.Matches) + ")"
 	case e.Status != 0:
 		return fmt.Sprintf("a.StatusIs(%d)", e.Status)
-	case e.MaxMs != 0 && e.Field == "" && e.JSON == "":
+	case e.MaxMs != 0 && e.Field == "" && e.JSON == "" && e.OID == "":
 		return fmt.Sprintf("a.MaxMs(%d)", e.MaxMs)
-	case e.Field != "" || e.JSON != "":
+	case e.Field != "" || e.JSON != "" || e.OID != "":
 		v := "a.JSON(" + q(e.JSON) + ")"
-		if e.Field != "" {
+		if e.OID != "" {
+			v = "a.OID(" + q(e.OID) + ")"
+		} else if e.Field != "" {
 			v = "a.Field(" + goStr(e.Field) + ")"
 		}
 		var c []string

@@ -8,6 +8,7 @@ import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { SessionSelect } from './session-select';
 import { Combo } from './combo';
+import { Recorder } from '../core/recorder.service';
 
 interface TreeItem { node: SNMPMibNode; depth: number; open: boolean; }
 interface HistItem { at: number; op: string; oid: string; session: string; n: number; ms: number; err?: string; rows?: SNMPRow[]; }
@@ -338,6 +339,7 @@ export class SnmpBrowser implements OnInit, OnDestroy {
   readonly tab = input.required<TabView>();
   readonly visible = input(true);
   private readonly backend = inject(Backend);
+  private readonly rec = inject(Recorder);
   private readonly tabs = inject(Tabs);
   readonly ui = inject(Ui);
   private readonly host = inject(ElementRef<HTMLElement>);
@@ -468,6 +470,7 @@ export class SnmpBrowser implements OnInit, OnDestroy {
       }
       this.result.set(r);
       this.lastOp.set(op);
+      if (this.rec.recording()) this.rec.snmp({ session: this.path(), op, ...(op === 'set' ? { values: [{ oid, type: this.setType || undefined, value: this.setValue }] } : { oids: [oid] }) }, r.rows);
       if (this.view() !== 'table' || op !== 'table') this.view.set(op === 'table' ? 'table' : 'results');
       this.addHist({ at: Date.now(), op, oid, session: this.path(), n: r.rows.length, ms: r.ms, rows: r.rows.slice(0, 5000) });
     } catch (e) {

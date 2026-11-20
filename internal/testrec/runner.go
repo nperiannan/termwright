@@ -18,6 +18,8 @@ type Driver interface {
 	Command(ctx context.Context, session, cmd, prompt string) (string, error)
 	// HTTP sends a request.
 	HTTP(ctx context.Context, r HTTPStep) (HTTPAnswer, error)
+	// SNMP runs an SNMP operation.
+	SNMP(ctx context.Context, r SNMPStep) ([]SNMPValue, error)
 }
 
 // HTTPAnswer is what an HTTP step got.
@@ -66,6 +68,8 @@ type StepResult struct {
 	Skipped bool `json:"skipped,omitempty"`
 	// Error: why it could not run.
 	Error string `json:"error,omitempty"`
+	// Rows: the values an SNMP step got.
+	Rows []SNMPValue `json:"rows,omitempty"`
 	// Checks: one per expect.
 	Checks []CheckResult `json:"checks,omitempty"`
 }
@@ -116,6 +120,9 @@ func stepKind(s Step) string {
 	if s.HTTP != nil {
 		return "http"
 	}
+	if s.SNMP != nil {
+		return "snmp"
+	}
 	return "run"
 }
 
@@ -125,6 +132,8 @@ func stepName(s Step, i int) string {
 		return s.Name
 	case s.Run != nil:
 		return s.Run.Command
+	case s.SNMP != nil:
+		return snmpText(*s.SNMP)
 	case s.HTTP != nil:
 		m := strings.ToUpper(strings.TrimSpace(s.HTTP.Method))
 		if m == "" {
@@ -146,9 +155,10 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 	start := time.Now()
 	var out string
 	var err error
+	var rows []SNMPValue
 	switch {
-	case st.Run != nil && st.HTTP != nil:
-		err = errors.New("a step has run or http, not both")
+	case actions(st) > 1:
+		err = errors.New("a step has one of run, http and snmp")
 	case st.Run != nil:
 		sr.Target, sr.Sent = Fill(st.Run.Session, v), Fill(st.Run.Command, v)
 		out, err = d.Command(sctx, sr.Target, sr.Sent, st.Run.Prompt)
@@ -161,8 +171,13 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 		var a HTTPAnswer
 		a, err = d.HTTP(sctx, h)
 		sr.Status, out = a.Status, a.Body
+	case st.SNMP != nil:
+		sn := fillSNMP(*st.SNMP, v)
+		sr.Target, sr.Sent = sn.Session, snmpText(sn)
+		rows, err = d.SNMP(sctx, sn)
+		sr.Rows, out = rows, SNMPOutput(rows)
 	default:
-		err = errors.New("the step has nothing to do (run or http)")
+		err = errors.New("the step has nothing to do (run, http or snmp)")
 	}
 	sr.Ms = time.Since(start).Milliseconds()
 	if len(out) > maxOut {
@@ -179,12 +194,18 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 	}
 	sr.Passed = true
 	for _, e := range st.Expect {
-		c := check(e, out, sr.Status, sr.Ms, v)
+		c := check(e, out, sr.Status, sr.Ms, v, rows)
 		sr.Checks = append(sr.Checks, c)
 		sr.Passed = sr.Passed && c.Passed
 	}
 	for _, s := range st.Save {
-		if val, ok := extract(s.Field, s.JSON, out); ok && s.Var != "" {
+		val, ok := extract(s.Field, s.JSON, out)
+		if s.OID != "" {
+			var r SNMPValue
+			r, ok = FindOID(rows, Fill(s.OID, v))
+			val = r.Display
+		}
+		if ok && s.Var != "" {
 			v[s.Var] = val
 		}
 	}
@@ -219,7 +240,7 @@ func fillHTTP(h HTTPStep, v map[string]string) HTTPStep {
 	return h
 }
 
-func check(e Expect, out string, status int, ms int64, v map[string]string) CheckResult {
+func check(e Expect, out string, status int, ms int64, v map[string]string, rows []SNMPValue) CheckResult {
 	switch {
 	case e.Contains != "":
 		t := Fill(e.Contains, v)
@@ -235,6 +256,16 @@ func check(e Expect, out string, status int, ms int64, v map[string]string) Chec
 		return CheckResult{What: "matches " + re.String(), Passed: re.MatchString(out), Got: re.FindString(out)}
 	case e.Status != 0:
 		return CheckResult{What: fmt.Sprintf("status = %d", e.Status), Passed: status == e.Status, Got: strconv.Itoa(status)}
+	case e.OID != "":
+		r, ok := FindOID(rows, Fill(e.OID, v))
+		c := compare("oid "+e.OID, r.Display, ok, e, v)
+		if !c.Passed && ok && (e.Equals != nil || e.NotEquals != nil || e.Greater != nil || e.Less != nil) {
+			if c2 := compare("oid "+e.OID, r.Value, ok, e, v); c2.Passed {
+				c2.Got = r.Display
+				return c2
+			}
+		}
+		return c
 	case e.MaxMs != 0 && e.Field == "" && e.JSON == "":
 		return CheckResult{What: fmt.Sprintf("took ≤ %d ms", e.MaxMs), Passed: ms <= e.MaxMs, Got: fmt.Sprintf("%d ms", ms)}
 	case e.Field != "" || e.JSON != "":
@@ -389,11 +420,88 @@ type StepAnswer struct {
 	Ms int64 `json:"ms"`
 	// Error: why it could not run.
 	Error string `json:"error,omitempty"`
+	// Rows: the values an SNMP step got.
+	Rows []SNMPValue `json:"rows,omitempty"`
 }
 
 // RunOne runs one step's action (variables already filled in) without its checks - for the
 // generated tests, which send their steps to Termwright one by one.
 func RunOne(ctx context.Context, st Step, d Driver) StepAnswer {
-	sr := runStep(ctx, Step{Run: st.Run, HTTP: st.HTTP, Timeout: st.Timeout}, 0, d, map[string]string{})
-	return StepAnswer{Output: sr.Output, Status: sr.Status, Ms: sr.Ms, Error: sr.Error}
+	sr := runStep(ctx, Step{Run: st.Run, HTTP: st.HTTP, SNMP: st.SNMP, Timeout: st.Timeout}, 0, d, map[string]string{})
+	return StepAnswer{Output: sr.Output, Status: sr.Status, Ms: sr.Ms, Error: sr.Error, Rows: sr.Rows}
+}
+
+func actions(s Step) int {
+	n := 0
+	for _, b := range []bool{s.Run != nil, s.HTTP != nil, s.SNMP != nil} {
+		if b {
+			n++
+		}
+	}
+	return n
+}
+
+func snmpText(s SNMPStep) string {
+	op := strings.ToLower(s.Op)
+	if op == "" {
+		op = "get"
+	}
+	if op == "set" {
+		var p []string
+		for _, x := range s.Values {
+			p = append(p, x.OID+" = "+x.Value)
+		}
+		return "set " + strings.Join(p, ", ")
+	}
+	return op + " " + strings.Join(s.OIDs, " ")
+}
+
+func fillSNMP(s SNMPStep, v map[string]string) SNMPStep {
+	s.Session = Fill(s.Session, v)
+	s.Op = strings.ToLower(strings.TrimSpace(s.Op))
+	if s.Op == "" {
+		s.Op = "get"
+	}
+	oids := make([]string, len(s.OIDs))
+	for i, o := range s.OIDs {
+		oids[i] = Fill(o, v)
+	}
+	s.OIDs = oids
+	vals := make([]SNMPSetValue, len(s.Values))
+	for i, x := range s.Values {
+		vals[i] = SNMPSetValue{OID: Fill(x.OID, v), Type: x.Type, Value: Fill(x.Value, v)}
+	}
+	s.Values = vals
+	return s
+}
+
+// SNMPOutput is an SNMP step's values as text, one "name = value" line each, for contains, matches
+// and field checks.
+func SNMPOutput(rows []SNMPValue) string {
+	var b strings.Builder
+	for _, r := range rows {
+		b.WriteString(r.Name + " = " + r.Display + "\n")
+	}
+	return b.String()
+}
+
+// FindOID finds a value by name (ifOperStatus.5, IF-MIB::ifOperStatus.5, ifOperStatus = the first
+// instance) or numeric OID.
+func FindOID(rows []SNMPValue, oid string) (SNMPValue, bool) {
+	oid = strings.TrimPrefix(strings.TrimSpace(oid), ".")
+	for _, r := range rows {
+		if r.OID == oid || r.Name == oid {
+			return r, true
+		}
+	}
+	for _, r := range rows {
+		n := r.Name
+		if _, after, ok := strings.Cut(n, "::"); ok && !strings.Contains(oid, "::") {
+			n = after
+		}
+		if n == oid || strings.HasPrefix(n, oid+".") || strings.HasPrefix(r.OID, oid+".") {
+			return r, true
+		}
+	}
+	return SNMPValue{}, false
 }

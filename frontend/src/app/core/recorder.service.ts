@@ -48,6 +48,14 @@ export class Recorder {
     this.push({ step: { http: h, expect }, output: body, status, ms });
   }
 
+  /** An SNMP get, walk or set in the SNMP Browser; a get's values become checks (the readable ones). */
+  snmp(s: NonNullable<TestStep['snmp']>, rows: { name: string; display: string }[]) {
+    if (!this.recording() || !s.session) return;
+    const op = s.op === 'table' ? 'walk' : s.op;
+    const expect: TestExpect[] = op === 'get' ? rows.slice(0, 5).map(r => ({ oid: r.name.replace(/^[\w-]+::/, ''), equals: r.display })) : [];
+    this.push({ step: { snmp: { ...s, op }, expect }, output: rows.map(r => r.name + ' = ' + r.display).join('\n') });
+  }
+
   private push(s: RecStep) { this.steps.update(l => [...l, s]); }
 
   /** The output of a tab's last step: the lines after its command up to the prompt line. */

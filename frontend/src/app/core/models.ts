@@ -581,11 +581,12 @@ export interface SyslogQuery { after?: number; text?: string; host?: string; max
 export interface SyslogSendIn { target: string; proto?: string; format?: string; facility?: string; severity?: string; host?: string; app?: string; text: string; count?: number; insecure?: boolean; }
 
 /** Tests (internal/testrec): a YAML test case, its list entry and a run's report. */
-export interface TestExpect { contains?: string; notContains?: string; matches?: string; field?: string; json?: string; status?: number; maxMs?: number; equals?: string; notEquals?: string; greater?: number; less?: number; exists?: boolean; }
+export interface TestExpect { oid?: string; contains?: string; notContains?: string; matches?: string; field?: string; json?: string; status?: number; maxMs?: number; equals?: string; notEquals?: string; greater?: number; less?: number; exists?: boolean; }
 export interface TestStep {
   name?: string; run?: { session: string; command: string; prompt?: string };
   http?: { session?: string; environment?: string; collection?: string; method?: string; url: string; headers?: Record<string, string>; body?: string };
-  expect?: TestExpect[]; save?: { var: string; field?: string; json?: string }[]; timeout?: number; continueOnFail?: boolean;
+  snmp?: { session: string; op?: string; oids?: string[]; values?: { oid: string; type?: string; value: string }[] };
+  expect?: TestExpect[]; save?: { var: string; field?: string; json?: string; oid?: string }[]; timeout?: number; continueOnFail?: boolean;
 }
 export interface TestCase { name?: string; description?: string; tags?: string[]; vars?: Record<string, string>; steps: TestStep[]; }
 export interface TestCaseInfo { file: string; name: string; description?: string; tags?: string[]; steps: number; error?: string; }

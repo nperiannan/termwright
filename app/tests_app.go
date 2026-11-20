@@ -189,6 +189,8 @@ func (a *App) testsProduction(f testrec.Folder, files []string, vars map[string]
 				p = testrec.Fill(st.Run.Session, v)
 			} else if st.HTTP != nil {
 				p = testrec.Fill(st.HTTP.Session, v)
+			} else if st.SNMP != nil {
+				p = testrec.Fill(st.SNMP.Session, v)
 			}
 			if p == "" || slices.Contains(out, p) {
 				continue
@@ -242,6 +244,22 @@ func (d testDriver) HTTP(ctx context.Context, h testrec.HTTPStep) (testrec.HTTPA
 		return testrec.HTTPAnswer{}, errors.New(res.Error)
 	}
 	return testrec.HTTPAnswer{Status: res.Status, Body: res.Body}, nil
+}
+
+func (d testDriver) SNMP(ctx context.Context, sn testrec.SNMPStep) ([]testrec.SNMPValue, error) {
+	r := SNMPRequest{Session: sn.Session, Op: sn.Op, OIDs: sn.OIDs, Confirmed: true} // production was asked before the run
+	for _, v := range sn.Values {
+		r.Values = append(r.Values, SNMPValue{OID: v.OID, Type: v.Type, Value: v.Value})
+	}
+	res, err := d.a.snmpRun(ctx, r)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]testrec.SNMPValue, 0, len(res.Rows))
+	for _, x := range res.Rows {
+		out = append(out, testrec.SNMPValue{OID: x.OID, Name: x.Name, Value: x.Value, Display: x.Display})
+	}
+	return out, nil
 }
 
 // testsTool is the "tests" network tool (AI assistant, MCP, POST /tools/tests).
@@ -334,14 +352,21 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 		// one step for the generated Go tests: they check the answer themselves
 		var st testrec.Step
 		raw, _ := json.Marshal(args["step"])
-		if err := json.Unmarshal(raw, &st); err != nil || (st.Run == nil) == (st.HTTP == nil) {
-			return "", errors.New("step needs run {session, command} or http {url}")
-		}
+		n := 0
 		target := ""
-		if st.Run != nil {
-			target = st.Run.Session
-		} else {
-			target = st.HTTP.Session
+		if json.Unmarshal(raw, &st) == nil {
+			if st.Run != nil {
+				n, target = n+1, st.Run.Session
+			}
+			if st.HTTP != nil {
+				n, target = n+1, st.HTTP.Session
+			}
+			if st.SNMP != nil {
+				n, target = n+1, st.SNMP.Session
+			}
+		}
+		if n != 1 {
+			return "", errors.New("step needs one of run {session, command}, http {url} and snmp {session, op, oids}")
 		}
 		if s, err := a.store.Get(target); err == nil && strings.EqualFold(s.Environment, "production") {
 			if err := ask("Test step on a production session", target+": "+testStepText(st), true); err != nil {
@@ -365,6 +390,9 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 func testStepText(st testrec.Step) string {
 	if st.Run != nil {
 		return st.Run.Command
+	}
+	if st.SNMP != nil {
+		return "SNMP " + st.SNMP.Op + " " + strings.Join(st.SNMP.OIDs, " ")
 	}
 	return strings.TrimSpace(st.HTTP.Method + " " + st.HTTP.URL)
 }

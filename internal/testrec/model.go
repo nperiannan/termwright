@@ -18,7 +18,7 @@ type Case struct {
 	Steps []Step `yaml:"steps" json:"steps"`
 }
 
-// Step is one action and its checks. Exactly one of Run and HTTP is set.
+// Step is one action and its checks. Exactly one of Run, HTTP and SNMP is set.
 type Step struct {
 	// Name shown in the report (default: the command or the request).
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
@@ -26,6 +26,8 @@ type Step struct {
 	Run *RunStep `yaml:"run,omitempty" json:"run,omitempty"`
 	// HTTP: a request, through an API session or to a full URL.
 	HTTP *HTTPStep `yaml:"http,omitempty" json:"http,omitempty"`
+	// SNMP: an SNMP get, walk or set with a saved session's SNMP settings.
+	SNMP *SNMPStep `yaml:"snmp,omitempty" json:"snmp,omitempty"`
 	// Expect: the checks; all must pass. With none, the step passes when it ran without an error.
 	Expect []Expect `yaml:"expect,omitempty" json:"expect,omitempty"`
 	// Save: values taken from the answer for later steps ({{name}}).
@@ -64,6 +66,41 @@ type HTTPStep struct {
 	Body string `yaml:"body,omitempty" json:"body,omitempty"`
 }
 
+// SNMPStep is an SNMP operation on a saved session (its SNMP settings and saved community or v3
+// passwords are used).
+type SNMPStep struct {
+	// Session: the saved session's path.
+	Session string `yaml:"session" json:"session"`
+	// Op: get (default), getnext, bulk, walk or set.
+	Op string `yaml:"op,omitempty" json:"op,omitempty"`
+	// OIDs: names or numeric OIDs (sysDescr.0, IF-MIB::ifOperStatus).
+	OIDs []string `yaml:"oids,omitempty" json:"oids,omitempty"`
+	// Values to write (op set).
+	Values []SNMPSetValue `yaml:"values,omitempty" json:"values,omitempty"`
+}
+
+// SNMPSetValue is a value an SNMP set writes.
+type SNMPSetValue struct {
+	// OID: name or numeric OID with its instance (ifAdminStatus.5).
+	OID string `yaml:"oid" json:"oid"`
+	// Type: Integer, OctetString, IpAddress … ("" = from the MIB).
+	Type string `yaml:"type,omitempty" json:"type,omitempty"`
+	// Value as text (an enumerated Integer takes its name too: down).
+	Value string `yaml:"value" json:"value"`
+}
+
+// SNMPValue is one value an SNMP step got.
+type SNMPValue struct {
+	// OID: the numeric OID.
+	OID string `json:"oid"`
+	// Name: MODULE::object.instance (or the OID).
+	Name string `json:"name"`
+	// Value: the raw value (numbers as digits).
+	Value string `json:"value"`
+	// Display: the value as read (enum names, time, units).
+	Display string `json:"display"`
+}
+
 // Expect is one check. Set one subject (output, status, json, field, ms); the rest of the fields say
 // what it must be.
 type Expect struct {
@@ -75,6 +112,9 @@ type Expect struct {
 	Matches string `yaml:"matches,omitempty" json:"matches,omitempty"`
 	// Field: a regular expression with one group, e.g. "Uptime:\s+(\S+)"; its group is compared.
 	Field string `yaml:"field,omitempty" json:"field,omitempty"`
+	// OID: an SNMP value by name or OID (ifOperStatus.5, sysName.0; "ifOperStatus" = the first one a
+	// walk got); equals matches its readable value (up) or its raw value (1); greater / less use the raw one.
+	OID string `yaml:"oid,omitempty" json:"oid,omitempty"`
 	// JSON: a path into the JSON body, e.g. data.items[0].name; its value is compared.
 	JSON string `yaml:"json,omitempty" json:"json,omitempty"`
 	// Status: the HTTP status code.
@@ -101,4 +141,6 @@ type Save struct {
 	Field string `yaml:"field,omitempty" json:"field,omitempty"`
 	// JSON: a path into the JSON body.
 	JSON string `yaml:"json,omitempty" json:"json,omitempty"`
+	// OID: an SNMP value (its readable value is saved).
+	OID string `yaml:"oid,omitempty" json:"oid,omitempty"`
 }

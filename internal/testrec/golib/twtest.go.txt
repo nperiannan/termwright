@@ -117,8 +117,22 @@ type Request struct {
 	Timeout                                             int // seconds
 }
 
+// SNMP is an SNMP step (op get, getnext, bulk, walk or set).
+type SNMP struct {
+	Session, Op string
+	OIDs        []string
+	Values      []SetValue
+	Timeout     int // seconds
+}
+
+// SetValue is a value an SNMP set writes.
+type SetValue struct{ OID, Type, Value string }
+
+type snmpRow struct{ OID, Name, Value, Display string }
+
 // Answer is what a step got.
 type Answer struct {
+	Rows   []snmpRow `json:"rows"`
 	s      *Step
 	Output string `json:"output"`
 	Status int    `json:"status"`
@@ -141,6 +155,43 @@ func (s *Step) HTTP(r Request) *Answer {
 	}
 	return s.send(map[string]any{"http": map[string]any{"session": s.c.Fill(r.Session), "environment": s.c.Fill(r.Environment), "collection": s.c.Fill(r.Collection),
 		"method": r.Method, "url": s.c.Fill(r.URL), "headers": h, "body": s.c.Fill(r.Body)}, "timeout": r.Timeout})
+}
+
+// SNMP runs an SNMP operation with a saved session's SNMP settings.
+func (s *Step) SNMP(r SNMP) *Answer {
+	s.Helper()
+	oids := make([]string, len(r.OIDs))
+	for i, o := range r.OIDs {
+		oids[i] = s.c.Fill(o)
+	}
+	vals := []map[string]string{}
+	for _, v := range r.Values {
+		vals = append(vals, map[string]string{"oid": s.c.Fill(v.OID), "type": v.Type, "value": s.c.Fill(v.Value)})
+	}
+	return s.send(map[string]any{"snmp": map[string]any{"session": s.c.Fill(r.Session), "op": r.Op, "oids": oids, "values": vals}, "timeout": r.Timeout})
+}
+
+// OID: an SNMP value by name (ifOperStatus.5, IF-MIB::ifOperStatus.5, ifOperStatus = the first) or
+// numeric OID. Equals matches its readable value (up) or its raw value (1).
+func (a *Answer) OID(oid string) *Value {
+	o := strings.TrimPrefix(strings.TrimSpace(a.s.c.Fill(oid)), ".")
+	v := &Value{s: a.s, what: "oid " + o}
+	pick := func(r snmpRow) *Value { v.Text, v.raw, v.Found = r.Display, r.Value, true; return v }
+	for _, r := range a.Rows {
+		if r.OID == o || r.Name == o {
+			return pick(r)
+		}
+	}
+	for _, r := range a.Rows {
+		n := r.Name
+		if _, after, ok := strings.Cut(n, "::"); ok && !strings.Contains(o, "::") {
+			n = after
+		}
+		if n == o || strings.HasPrefix(n, o+".") || strings.HasPrefix(r.OID, o+".") {
+			return pick(r)
+		}
+	}
+	return v
 }
 
 func (s *Step) send(step map[string]any) *Answer {
@@ -300,6 +351,15 @@ type Value struct {
 	what  string
 	Text  string
 	Found bool
+	raw   string // an SNMP value's raw value
+}
+
+func (v *Value) num() (float64, error) {
+	t := v.Text
+	if v.raw != "" {
+		t = v.raw
+	}
+	return strconv.ParseFloat(strings.TrimSpace(t), 64)
 }
 
 // Save keeps the value as {{name}} for later steps.
@@ -322,7 +382,7 @@ func (v *Value) Exists(want bool) *Value {
 // Equals: the value is exactly want.
 func (v *Value) Equals(want string) *Value {
 	v.s.Helper()
-	if w := v.s.c.Fill(want); !v.Found || v.Text != w {
+	if w := v.s.c.Fill(want); !v.Found || (v.Text != w && (v.raw == "" || v.raw != w)) {
 		v.s.Errorf("%s: expected %q, got %q", v.what, w, v.Text)
 	}
 	return v
@@ -331,7 +391,7 @@ func (v *Value) Equals(want string) *Value {
 // NotEquals: the value is not want.
 func (v *Value) NotEquals(want string) *Value {
 	v.s.Helper()
-	if w := v.s.c.Fill(want); v.Text == w {
+	if w := v.s.c.Fill(want); v.Text == w || (v.raw != "" && v.raw == w) {
 		v.s.Errorf("%s: expected not %q", v.what, w)
 	}
 	return v
@@ -340,7 +400,7 @@ func (v *Value) NotEquals(want string) *Value {
 // Greater: the value is a number above n.
 func (v *Value) Greater(n float64) *Value {
 	v.s.Helper()
-	if x, err := strconv.ParseFloat(strings.TrimSpace(v.Text), 64); err != nil || !v.Found || x <= n {
+	if x, err := v.num(); err != nil || !v.Found || x <= n {
 		v.s.Errorf("%s: expected > %g, got %q", v.what, n, v.Text)
 	}
 	return v
@@ -349,7 +409,7 @@ func (v *Value) Greater(n float64) *Value {
 // Less: the value is a number below n.
 func (v *Value) Less(n float64) *Value {
 	v.s.Helper()
-	if x, err := strconv.ParseFloat(strings.TrimSpace(v.Text), 64); err != nil || !v.Found || x >= n {
+	if x, err := v.num(); err != nil || !v.Found || x >= n {
 		v.s.Errorf("%s: expected < %g, got %q", v.what, n, v.Text)
 	}
 	return v

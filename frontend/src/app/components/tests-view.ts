@@ -5,7 +5,7 @@ import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { Recorder } from '../core/recorder.service';
 import { TestCase, TestCaseInfo, TestResult, TestRunReport, TestsGitInfo, TestsTree } from '../core/models';
-import { expectLabel } from './recorder-panel';
+import { expectLabel, stepText } from './recorder-panel';
 
 type View = 'steps' | 'yaml' | 'go';
 
@@ -53,7 +53,7 @@ type View = 'steps' | 'yaml' | 'go';
                 @if (test()?.description) { <p class="mut">{{ test()?.description }}</p> }
                 @for (s of test()?.steps ?? []; track $index; let i = $index) {
                   <div class="st" [class.f]="stepRes(i)?.passed === false && !stepRes(i)?.skipped">
-                    <div><b>{{ i + 1 }}</b> <span class="mut">{{ s.run?.session ?? s.http?.session ?? '' }} ›</span> <span class="cmd">{{ s.run?.command ?? ((s.http?.method || 'GET') + ' ' + s.http?.url) }}</span>
+                    <div><b>{{ i + 1 }}</b> <span class="mut">{{ s.run?.session ?? s.http?.session ?? s.snmp?.session ?? '' }} ›</span> <span class="cmd">{{ text(s) }}</span>
                       @if (stepRes(i); as r) { <span class="ms">{{ r.skipped ? 'skipped' : r.ms + ' ms' }}</span> }</div>
                     @for (e of s.expect ?? []; track $index; let j = $index) {
                       <span class="chip" [class.b]="stepRes(i)?.checks?.[j]?.passed === false">{{ stepRes(i)?.checks?.[j]?.passed === false ? '✗' : '✓' }} {{ label(e) }}@if (stepRes(i)?.checks?.[j]?.passed === false) { · got {{ stepRes(i)?.checks?.[j]?.got }} }</span>
@@ -229,6 +229,7 @@ export class TestsView implements OnInit, OnDestroy {
   dot(c: TestCaseInfo) { if (c.error) return 'dot e'; const r = this.last()[c.file]; return r ? (r.passed ? 'dot p' : 'dot f') : 'dot'; }
   stepRes(i: number) { return this.last()[this.sel()]?.steps?.[i]; }
   label = expectLabel;
+  text = stepText;
   when(dir: string) { return dir.replace(/^reports\//, '').replace(/^(\d{4}-\d\d-\d\d)_(\d\d)(\d\d)(\d\d).*/, '$1 $2:$3'); }
   failText(r: TestResult) {
     if (r.error) return r.error;

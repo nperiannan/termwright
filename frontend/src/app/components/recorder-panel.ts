@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Recorder } from '../core/recorder.service';
 import { TestExpect, TestStep } from '../core/models';
 
-type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'status' | 'maxMs';
+type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid' | 'status' | 'maxMs';
 
 /** The Steps panel of the test recorder: the steps recorded so far with their checks. */
 @Component({
@@ -31,7 +31,7 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'stat
             <span class="chip">✓ {{ label(e) }}<button type="button" (click)="rec.removeCheck(i, j)" title="Remove the check">×</button></span>
           }
           @for (v of s.step.save ?? []; track $index; let j = $index) {
-            <span class="chip var">{{ '{{' + v.var + '}}' }} ← {{ v.field || v.json }}<button type="button" (click)="rec.removeSave(i, j)" title="Remove">×</button></span>
+            <span class="chip var">{{ '{{' + v.var + '}}' }} ← {{ v.field || v.json || v.oid }}<button type="button" (click)="rec.removeSave(i, j)" title="Remove">×</button></span>
           }
           @if (!(s.step.expect?.length)) { <div class="mut">no checks - passes when it runs without an error</div> }
           @if (adding() === i) {
@@ -39,8 +39,8 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'stat
               <select [(ngModel)]="kind">
                 @for (k of kinds(s.step); track k.v) { <option [value]="k.v">{{ k.l }}</option> }
               </select>
-              @if (kind === 'field' || kind === 'json') { <input [(ngModel)]="subject" [placeholder]="kind === 'json' ? 'data.items[0].name' : 'Uptime:\\s+(\\S+)'" /> }
-              <input [(ngModel)]="value" [placeholder]="kind === 'status' ? '200' : kind === 'maxMs' ? '500' : kind === 'field' || kind === 'json' ? 'equals (empty: is there)' : 'text'" (keydown.enter)="addCheck(i)" />
+              @if (kind === 'field' || kind === 'json' || kind === 'oid') { <input [(ngModel)]="subject" [placeholder]="kind === 'json' ? 'data.items[0].name' : kind === 'oid' ? 'ifOperStatus.5' : 'Uptime:\\s+(\\S+)'" /> }
+              <input [(ngModel)]="value" [placeholder]="kind === 'status' ? '200' : kind === 'maxMs' ? '500' : kind === 'field' || kind === 'json' || kind === 'oid' ? 'equals (empty: is there)' : 'text'" (keydown.enter)="addCheck(i)" />
               <div class="row"><button type="button" (click)="adding.set(-1)">Cancel</button><button type="button" class="pri" (click)="addCheck(i)">Add</button></div>
             </div>
           } @else {
@@ -77,20 +77,21 @@ export class RecorderPanel {
   subject = '';
   value = '';
 
-  target(s: TestStep) { return s.run?.session ?? s.http?.session ?? ''; }
-  sent(s: TestStep) { return s.run?.command ?? `${s.http?.method || 'GET'} ${s.http?.url ?? ''}`; }
+  target(s: TestStep) { return s.run?.session ?? s.http?.session ?? s.snmp?.session ?? ''; }
+  sent(s: TestStep) { return stepText(s); }
   kinds(s: TestStep): { v: AddKind; l: string }[] {
     const k: { v: AddKind; l: string }[] = [{ v: 'contains', l: 'Contains' }, { v: 'notContains', l: 'Does not contain' }, { v: 'matches', l: 'Matches (regular expression)' }, { v: 'field', l: 'Field (regular expression with a group)' }];
+    if (s.snmp) return [{ v: 'oid', l: 'SNMP value (name or OID)' }, ...k];
     return s.http ? [{ v: 'status', l: 'Status' }, { v: 'json', l: 'JSON path' }, ...k, { v: 'maxMs', l: 'Takes at most (ms)' }] : k;
   }
-  openAdd(i: number, s: TestStep) { this.kind = s.http ? 'json' : 'contains'; this.subject = ''; this.value = ''; this.adding.set(i); }
+  openAdd(i: number, s: TestStep) { this.kind = s.http ? 'json' : s.snmp ? 'oid' : 'contains'; this.subject = ''; this.value = ''; this.adding.set(i); }
   addCheck(i: number) {
     const v = this.value.trim(), sub = this.subject.trim();
     let e: TestExpect | null = null;
     switch (this.kind) {
       case 'status': e = +v ? { status: +v } : null; break;
       case 'maxMs': e = +v ? { maxMs: +v } : null; break;
-      case 'json': case 'field': e = sub ? { [this.kind]: sub, ...(v ? { equals: v } : {}) } : null; break;
+      case 'json': case 'field': case 'oid': e = sub ? { [this.kind]: sub, ...(v ? { equals: v } : {}) } : null; break;
       default: e = v ? { [this.kind]: v } : null;
     }
     if (!e) return;
@@ -108,7 +109,14 @@ export function expectLabel(e: TestExpect): string {
   if (e.matches) return `matches ${e.matches}`;
   if (e.status) return `status ${e.status}`;
   if (e.json) return `${e.json} ${cmp || 'is there'}`;
+  if (e.oid) return `${e.oid} ${cmp || 'is there'}`;
   if (e.field) return `${e.field} ${cmp || 'found'}`;
   if (e.maxMs) return `≤ ${e.maxMs} ms`;
   return '?';
+}
+/** What a step sends, for lists: the command, "GET /path" or "walk IF-MIB::ifTable". */
+export function stepText(s: TestStep): string {
+  if (s.run) return s.run.command;
+  if (s.snmp) return s.snmp.op === 'set' ? 'set ' + (s.snmp.values ?? []).map(v => `${v.oid} = ${v.value}`).join(', ') : `${s.snmp.op || 'get'} ${(s.snmp.oids ?? []).join(' ')}`;
+  return `${s.http?.method || 'GET'} ${s.http?.url ?? ''}`;
 }

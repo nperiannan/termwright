@@ -70,7 +70,12 @@ func TestGeneratedGoRuns(t *testing.T) {
 		{Run: &RunStep{Session: "s", Command: "show version"}},
 	}}
 	f.Save("other/bad", bad)
-	for _, file := range []string{"cases/vlan/vlan42.yaml", "cases/other/bad.yaml"} {
+	sn, err := Parse([]byte("steps:\n  - snmp: {session: Lab/sw1, op: walk, oids: [IF-MIB::ifTable]}\n    expect: [{oid: ifOperStatus.5, equals: up}, {oid: ifInOctets, greater: 1000}]\n    save: [{var: n, oid: sysName.0}]\n  - snmp: {session: Lab/sw1, op: set, values: [{oid: sysContact.0, value: \"{{n}}\"}]}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Save("snmp/ifs", sn)
+	for _, file := range []string{"cases/vlan/vlan42.yaml", "cases/other/bad.yaml", "cases/snmp/ifs.yaml"} {
 		if _, err := f.WriteGo(file); err != nil {
 			t.Fatal(err)
 		}
@@ -82,7 +87,7 @@ func TestGeneratedGoRuns(t *testing.T) {
 		out, err := cmd.CombinedOutput()
 		return string(out), err
 	}
-	if out, err := run("test", "-count=1", "./cases/vlan/"); err != nil {
+	if out, err := run("test", "-count=1", "./cases/vlan/", "./cases/snmp/"); err != nil {
 		t.Fatalf("vlan: %v\n%s", err, out)
 	}
 	out, err := run("test", "-count=1", "-v", "./cases/other/", "-args", "-tw.var=x=1")

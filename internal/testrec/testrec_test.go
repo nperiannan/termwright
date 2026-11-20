@@ -22,6 +22,15 @@ func (f *fake) Command(_ context.Context, session, cmd, _ string) (string, error
 	return "", errors.New("no answer")
 }
 
+func (f *fake) SNMP(_ context.Context, r SNMPStep) ([]SNMPValue, error) {
+	f.sent = append(f.sent, r.Session+": snmp "+r.Op)
+	return []SNMPValue{
+		{OID: "1.3.6.1.2.1.1.5.0", Name: "SNMPv2-MIB::sysName.0", Value: "core-sw1", Display: "core-sw1"},
+		{OID: "1.3.6.1.2.1.2.2.1.8.5", Name: "IF-MIB::ifOperStatus.5", Value: "1", Display: "up"},
+		{OID: "1.3.6.1.2.1.2.2.1.10.5", Name: "IF-MIB::ifInOctets.5", Value: "123456", Display: "123456"},
+	}, nil
+}
+
 func (f *fake) HTTP(_ context.Context, r HTTPStep) (HTTPAnswer, error) {
 	f.sent = append(f.sent, r.Method+" "+r.URL)
 	return HTTPAnswer{Status: 200, Body: `{"data":{"items":[{"name":"v42","tag":42},{"name":"v7","tag":7}]},"ok":true}`}, nil
@@ -132,6 +141,36 @@ func TestFolderRunWritesReports(t *testing.T) {
 		if n == "junit.xml" && (!strings.Contains(string(b), `tests="2"`) || !strings.Contains(string(b), `errors="1"`)) {
 			t.Fatalf("junit: %s", b)
 		}
+	}
+}
+
+func TestSNMPStep(t *testing.T) {
+	c, err := Parse([]byte(`
+steps:
+  - snmp: {session: Lab/sw1, op: walk, oids: [IF-MIB::ifTable]}
+    expect:
+      - {oid: ifOperStatus.5, equals: up}
+      - {oid: IF-MIB::ifOperStatus.5, equals: "1"}
+      - {oid: ifInOctets, greater: 1000}
+      - {oid: 1.3.6.1.2.1.1.5.0, equals: core-sw1}
+      - contains: "ifOperStatus.5 = up"
+      - {oid: ifSpeed.5, exists: false}
+    save: [{var: name, oid: sysName.0}]
+  - snmp: {session: Lab/sw1, op: set, values: [{oid: sysContact.0, value: "{{name}}"}]}
+    expect: [{oid: ifOperStatus.5, notEquals: down}]
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := Run(context.Background(), c, &fake{}, nil)
+	if !r.Passed {
+		t.Fatalf("%+v", r.Steps)
+	}
+	if r.Steps[1].Sent != "set sysContact.0 = core-sw1" {
+		t.Fatal(r.Steps[1].Sent)
+	}
+	if _, err := Parse([]byte("steps: [{snmp: {session: a, op: set}}]")); err == nil {
+		t.Fatal("set without values")
 	}
 }
 

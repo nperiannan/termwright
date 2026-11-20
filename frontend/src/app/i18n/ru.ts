@@ -2888,6 +2888,7 @@ const ru: Record<string, string> = {
   'Wireless AP': 'Точка доступа',
   'Cloud': 'Облако',
   'Import…': 'Импорт…',
+  'SNMP value (name or OID)': 'Значение SNMP (имя или OID)',
   'Open…': 'Открыть…',
   'Clone…': 'Клонировать…',
   'Run all tests': 'Запустить все тесты',

@@ -168,10 +168,16 @@ func Parse(b []byte) (Case, error) {
 	}
 	for i, s := range c.Steps {
 		switch {
-		case s.Run == nil && s.HTTP == nil:
-			return c, fmt.Errorf("step %d has neither run nor http", i+1)
-		case s.Run != nil && s.HTTP != nil:
-			return c, fmt.Errorf("step %d has both run and http", i+1)
+		case actions(s) == 0:
+			return c, fmt.Errorf("step %d has none of run, http and snmp", i+1)
+		case actions(s) > 1:
+			return c, fmt.Errorf("step %d has more than one of run, http and snmp", i+1)
+		case s.SNMP != nil && s.SNMP.Session == "":
+			return c, fmt.Errorf("step %d: snmp needs a session", i+1)
+		case s.SNMP != nil && strings.EqualFold(s.SNMP.Op, "set") && len(s.SNMP.Values) == 0:
+			return c, fmt.Errorf("step %d: an snmp set needs values", i+1)
+		case s.SNMP != nil && !strings.EqualFold(s.SNMP.Op, "set") && len(s.SNMP.OIDs) == 0:
+			return c, fmt.Errorf("step %d: snmp needs oids", i+1)
 		case s.Run != nil && (s.Run.Session == "" || s.Run.Command == ""):
 			return c, fmt.Errorf("step %d: run needs a session and a command", i+1)
 		case s.HTTP != nil && s.HTTP.URL == "":
