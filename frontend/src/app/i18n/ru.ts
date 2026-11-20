@@ -4716,6 +4716,15 @@ const ru: Record<string, string> = {
   'Header name': 'Имя заголовка',
   '{0} of {1} devices answered': 'Ответили {0} из {1} устройств',
   'Sent {0} to {1}': '{0} отправлен на {1}',
+  'Show in Tree': 'Показать в дереве',
+  'To load next:': 'Загрузить ещё:',
+  'Collapse': 'Свернуть',
+  'Expand': 'Развернуть',
+  '(needed by your MIBs; until then some of their objects are not in the tree)': '(нужны вашим MIB; до тех пор часть их объектов не попадёт в дерево)',
+  'Not loaded: load it': 'Не загружен: загрузите его',
+  'Loaded': 'Загружен',
+  'The objects you run are kept here': 'Здесь хранятся объекты, которые вы запускали',
+  'These MIBs import it and lose the objects that hang under it: {0}': 'Эти MIB импортируют его и потеряют объекты под ним: {0}',
 };
 
 export default ru;

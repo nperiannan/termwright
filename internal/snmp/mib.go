@@ -51,12 +51,13 @@ type MIB struct {
 	byName  map[string][]*Node // "ifDescr" and "IF-MIB::ifDescr"
 	tcs     map[string]*textConv
 	modules map[string]bool
+	imports map[string][]string // module → the modules it imports from
 	pending []*Node
 }
 
 // NewMIB is an empty MIB with the tree's roots.
 func NewMIB() *MIB {
-	m := &MIB{byOID: map[string]*Node{}, byName: map[string][]*Node{}, tcs: map[string]*textConv{}, modules: map[string]bool{}}
+	m := &MIB{byOID: map[string]*Node{}, byName: map[string][]*Node{}, tcs: map[string]*textConv{}, modules: map[string]bool{}, imports: map[string][]string{}}
 	for _, r := range []struct{ oid, name string }{{"0", "ccitt"}, {"1", "iso"}, {"2", "joint-iso-ccitt"}, {"1.3", "org"}, {"1.3.6", "dod"}, {"1.3.6.1", "internet"},
 		{"1.3.6.1.1", "directory"}, {"1.3.6.1.2", "mgmt"}, {"1.3.6.1.2.1", "mib-2"}, {"1.3.6.1.3", "experimental"}, {"1.3.6.1.4", "private"},
 		{"1.3.6.1.4.1", "enterprises"}, {"1.3.6.1.5", "security"}, {"1.3.6.1.6", "snmpV2"}, {"1.3.6.1.6.1", "snmpDomains"}, {"1.3.6.1.6.2", "snmpProxys"},
@@ -90,12 +91,64 @@ func Standard() *MIB {
 // for (usually an object of a module that is not loaded: load the vendor's other MIB files too).
 func (m *MIB) Unplaced() map[string][]string {
 	out := map[string][]string{}
+	seen := map[string]bool{}
 	for _, n := range m.pending {
-		if len(n.parentRef) > 0 && n.parentRef[0] != "#trap" {
+		if len(n.parentRef) > 0 && n.parentRef[0] != "#trap" && !seen[n.Module+"::"+n.Name] {
+			seen[n.Module+"::"+n.Name] = true
 			out[n.Module] = append(out[n.Module], n.Name+" (needs "+n.parentRef[0]+")")
 		}
 	}
 	return out
+}
+
+// Imports are the modules a module imports from.
+func (m *MIB) Imports(mod string) []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return append([]string(nil), m.imports[mod]...)
+}
+
+// Loaded says whether a module is loaded.
+func (m *MIB) Loaded(mod string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.modules[mod]
+}
+
+// Dependents are the loaded modules that import mod.
+func (m *MIB) Dependents(mod string) []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var out []string
+	for k, l := range m.imports {
+		for _, x := range l {
+			if x == mod {
+				out = append(out, k)
+				break
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Root is a module's top object in the tree (its MODULE-IDENTITY, else its shortest OID).
+func (m *MIB) Root(mod string) string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	best := ""
+	for oid, n := range m.byOID {
+		if n.Module != mod {
+			continue
+		}
+		if n.Kind == "module" {
+			return oid
+		}
+		if best == "" || strings.Count(oid, ".") < strings.Count(best, ".") || (strings.Count(oid, ".") == strings.Count(best, ".") && CompareOID(oid, best) < 0) {
+			best = oid
+		}
+	}
+	return best
 }
 
 // Counts is how many objects each module has in the tree.
@@ -111,7 +164,10 @@ func (m *MIB) Counts() map[string]int {
 func (m *MIB) Clone() *MIB {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	c := &MIB{byOID: map[string]*Node{}, byName: map[string][]*Node{}, tcs: map[string]*textConv{}, modules: map[string]bool{}}
+	c := &MIB{byOID: map[string]*Node{}, byName: map[string][]*Node{}, tcs: map[string]*textConv{}, modules: map[string]bool{}, imports: map[string][]string{}}
+	for k, v := range m.imports {
+		c.imports[k] = v
+	}
 	for k, v := range m.byOID {
 		c.byOID[k] = v
 	}
@@ -262,10 +318,15 @@ func (m *MIB) Load(src string) ([]string, error) {
 func (m *MIB) parseModule(mod string, t []tok) {
 	i := 0
 	if i < len(t) && t[i].s == "IMPORTS" {
+		var from []string
 		for i < len(t) && t[i].s != ";" {
+			if t[i].s == "FROM" && i+1 < len(t) {
+				from = append(from, t[i+1].s)
+			}
 			i++
 		}
 		i++
+		m.imports[mod] = from
 	}
 	for i < len(t) {
 		// MACRO definitions (in SNMPv2-SMI): skip to their END

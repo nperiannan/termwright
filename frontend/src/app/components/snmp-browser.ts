@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, computed, effect, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SlicePipe } from '@angular/common';
 import { Backend, errText } from '../core/backend';
@@ -7,6 +7,7 @@ import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { SessionSelect } from './session-select';
+import { Combo } from './combo';
 
 interface TreeItem { node: SNMPMibNode; depth: number; open: boolean; }
 interface HistItem { at: number; op: string; oid: string; session: string; n: number; ms: number; err?: string; rows?: SNMPRow[]; }
@@ -22,7 +23,7 @@ const FAV_KEY = 'tw.snmp.favourites';
 /** SNMP Browser: get / walk / table / set against a saved session (credentials from the Session Manager), the MIB tree, traps. */
 @Component({
   selector: 'app-snmp-browser',
-  imports: [FormsModule, SlicePipe, SessionSelect],
+  imports: [FormsModule, SlicePipe, SessionSelect, Combo],
   template: `
     <div class="sb">
       <div class="head">
@@ -46,7 +47,7 @@ const FAV_KEY = 'tw.snmp.favourites';
         <label class="op">Operation
           <select class="fs" [(ngModel)]="op">@for (o of ops; track o.v) { <option [value]="o.v">{{ o.l }}</option> }</select>
         </label>
-        <input class="oid" [(ngModel)]="oid" (keydown.enter)="run()" placeholder="OID or name: sysDescr.0, IF-MIB::ifTable, 1.3.6.1.2.1.2.2" spellcheck="false" translate="no" />
+        <app-combo class="oid" [value]="oid" (valueChange)="oid = $event" (keydown.enter)="run()" [options]="recentOpts()" placeholder="OID or name: sysDescr.0, IF-MIB::ifTable, 1.3.6.1.2.1.2.2" emptyText="The objects you run are kept here" name="oid" label="OID or name" />
         @if (op === 'set') {
           <select class="fs ty" [(ngModel)]="setType" title="Type (empty = from the MIB)">@for (t of setTypes; track t) { <option [value]="t">{{ t || 'Type from MIB' }}</option> }</select>
           <input class="val" [(ngModel)]="setValue" (keydown.enter)="run()" placeholder="Value (enum names work: up, down)" spellcheck="false" />
@@ -69,8 +70,9 @@ const FAV_KEY = 'tw.snmp.favourites';
                 } @empty { <div class="mut pad">Nothing found</div> }
               } @else {
                 @for (it of items(); track it.node.oid) {
-                  <div class="tn" [class.on]="sel()?.oid === it.node.oid" [style.padding-left.px]="8 + it.depth * 14" (click)="pick(it.node)" (dblclick)="runOn(it.node)" translate="no">
-                    <span class="tw" (click)="toggle(it, $event)">{{ it.node.children ? (it.open ? '▾' : '▸') : '' }}</span>
+                  <div class="tn" [class.on]="sel()?.oid === it.node.oid" [style.padding-left.px]="6 + it.depth * 16" (click)="pick(it.node)" (dblclick)="it.node.children ? toggle(it) : runOn(it.node)" translate="no">
+                    <span class="tw" [class.open]="it.open" (click)="toggle(it, $event)" [title]="it.node.children ? (it.open ? 'Collapse' : 'Expand') : ''">@if (it.node.children) { <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M4.2 2.5L7.8 6l-3.6 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg> }</span>
+                    <span class="ki" [class]="'ki k-' + it.node.kind" [title]="kindText(it.node)">{{ kindMark(it.node) }}</span>
                     <span class="nm" [class.tb]="it.node.kind === 'table'">{{ it.node.name }}</span>
                     <span class="o">{{ tail(it) }}{{ it.node.kind === 'table' ? ' · table' : it.node.base ? ' · ' + it.node.base : '' }}</span>
                   </div>
@@ -224,17 +226,22 @@ const FAV_KEY = 'tw.snmp.favourites';
       </div>
       @if (mibOpen()) {
         <div class="ov" (click)="mibOpen.set(false)"><div class="dlg" (click)="$event.stopPropagation()">
-          <div class="dh"><h3>MIBs</h3><span class="mut">{{ mibs().length }} modules · {{ userMibs() }} of yours</span><span class="sp"></span><a class="x" (click)="mibOpen.set(false)">✕</a></div>
-          <div class="mut">The standard IETF and IANA MIBs are built in. Your MIB files are kept in <span class="mono" translate="no">{{ mibFolder() }}</span>.</div>
+          <div class="dh"><h3>MIBs</h3><span class="mut">{{ mibs().length }} modules · {{ userMibs() }} of yours{{ missingAll().length ? ' · ' + missingAll().length + ' needed but not loaded' : '' }}</span></div>
+          <div class="mut">The standard IETF and IANA MIBs are built in. Your MIB files are kept in <span class="mono" translate="no">{{ mibFolder() }}</span>. A MIB often needs others (its IMPORTS): load them too, from the same vendor download.</div>
+          @if (missingAll().length) { <div class="need">To load next: @for (n of missingAll(); track n) { <b translate="no">{{ n }}</b> } <span class="mut">(needed by your MIBs; until then some of their objects are not in the tree)</span></div> }
           <div class="tbar"><input class="q2" [(ngModel)]="mibQ" placeholder="Filter modules or files" spellcheck="false" /><span class="sp"></span>
             <button type="button" (click)="showMibFolder()" title="Open the folder in the file manager">Open Folder</button><button type="button" class="pri" (click)="loadMib()">Load MIB Files…</button></div>
-          <div class="mtab"><table><thead><tr><th>Module</th><th>From</th><th>Objects</th><th>Problems</th><th></th></tr></thead><tbody>
+          <div class="mtab"><table><thead><tr><th>Module</th><th>From</th><th>Objects</th><th>Needs</th><th>Used by</th><th></th></tr></thead><tbody>
             @for (m of mibShown(); track m.name) {
-              <tr translate="no"><td>{{ m.name }}</td><td class="mut">{{ m.builtIn ? 'built in' : m.file }}</td><td>{{ m.objects }}</td>
-                <td>@if (m.unplaced?.length) { <span class="warn" [title]="m.unplaced!.join('\n')">{{ m.unplaced!.length }} objects need a MIB that is not loaded</span> }</td>
-                <td>@if (!m.builtIn) { <a class="x" (click)="removeMib(m)" title="Stop loading it (the file is moved to the removed folder)">Remove</a> }</td></tr>
+              <tr translate="no"><td><b>{{ m.name }}</b>@if (m.unplaced?.length) { <div class="warn" [title]="m.unplaced!.join('\n')">{{ m.unplaced!.length }} objects wait for a MIB that is not loaded</div> }</td>
+                <td class="mut">{{ m.builtIn ? 'built in' : m.file }}</td><td>{{ m.objects }}</td>
+                <td class="deps">@for (i of needs(m); track i) { <span class="dep" [class.miss]="m.missing?.includes(i)" [title]="m.missing?.includes(i) ? 'Not loaded: load it' : 'Loaded'">{{ m.missing?.includes(i) ? '✕' : '✓' }} {{ i }}</span> }</td>
+                <td class="deps">@for (d of m.dependents ?? []; track d) { <span class="dep">{{ d }}</span> }</td>
+                <td class="act">@if (m.root) { <button type="button" class="sm2" (click)="showInTree(m)" title="Open the tree at this module">Show in Tree</button> }
+                  @if (!m.builtIn) { <button type="button" class="sm2" (click)="removeMib(m)" title="Stop loading it (the file is moved to the removed folder)">Remove</button> }</td></tr>
             }
           </tbody></table></div>
+          <div class="dfoot"><span class="sp"></span><button type="button" (click)="mibOpen.set(false)">Close</button></div>
         </div></div>
       }
     </div>
@@ -259,7 +266,10 @@ const FAV_KEY = 'tw.snmp.favourites';
     .ov { position: absolute; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 20; }
     .dlg { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 14px 16px; width: min(900px, 94%); max-height: 86%; display: flex; flex-direction: column; gap: 8px; }
     .dlg h3 { margin: 0; font-size: 15px; } .dh { display: flex; gap: 10px; align-items: baseline; } .x { cursor: pointer; color: var(--muted); }
-    .q2 { width: 260px; } .mtab { overflow: auto; min-height: 0; flex: 1; border: 1px solid var(--line); border-radius: var(--r); } .warn { color: var(--warn); font-size: 12px; cursor: help; }
+    .q2 { width: 260px; } .need { padding: 6px 10px; border-radius: var(--r); background: color-mix(in srgb, var(--warn) 12%, transparent); font-size: 12px; } .need b { margin-right: 8px; }
+    .deps { white-space: normal !important; } .dep { display: inline-block; font-size: 11.5px; margin: 1px 6px 1px 0; color: var(--muted); } .dep.miss { color: var(--danger); font-weight: 600; }
+    .act { white-space: nowrap; text-align: right; } .sm2 { height: 24px; padding: 0 8px; font-size: 12px; margin-left: 4px; }
+    .dfoot { display: flex; gap: 8px; padding-top: 4px; } .mtab { overflow: auto; min-height: 0; flex: 1; border: 1px solid var(--line); border-radius: var(--r); } .warn { color: var(--warn); font-size: 12px; cursor: help; }
     .cred { border: 1px solid var(--border); border-radius: 12px; padding: 2px 10px; color: var(--muted); font-size: 12px; }
     .cred.v3 { border-color: color-mix(in srgb, var(--ok) 55%, transparent); color: var(--ok); }
     .lnk { color: var(--accent); cursor: pointer; font-size: 12px; }
@@ -282,7 +292,13 @@ const FAV_KEY = 'tw.snmp.favourites';
     .tl { overflow: auto; flex: 1; padding-bottom: 6px; }
     .tn { display: flex; align-items: baseline; gap: 6px; padding: 3px 10px; cursor: pointer; white-space: nowrap; }
     .tn:hover { background: var(--hover); } .tn.on { background: var(--selected); }
-    .tn .tw { width: 10px; color: var(--muted); display: inline-block; }
+    .tn .tw { width: 18px; height: 18px; flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); border-radius: 4px; transition: transform .12s; }
+    .tn .tw:hover { background: var(--hover); color: var(--text); } .tn .tw.open { transform: rotate(90deg); }
+    .tn { align-items: center !important; }
+    .ki { flex: none; width: 16px; height: 16px; border-radius: 4px; font: 600 9.5px/16px var(--mono); text-align: center; color: #fff; background: var(--faint); }
+    .k-module { background: #7c3aed; } .k-node, .k-group { background: #64748b; } .k-table { background: #2563eb; } .k-row { background: #0891b2; } .k-column { background: #0d9488; }
+    .k-scalar { background: #16a34a; } .k-notification { background: #d97706; } .k-compliance { background: #94a3b8; }
+    .oid ::ng-deep input { font-family: var(--mono); height: 30px; box-sizing: border-box; }
     .tn .o { color: var(--faint); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
     .tn .tb { color: var(--accent); }
     .det dl { display: grid; grid-template-columns: 90px 1fr; gap: 5px 10px; margin: 0; padding: 10px 12px; max-height: 260px; overflow: auto; }
@@ -316,6 +332,7 @@ export class SnmpBrowser implements OnInit, OnDestroy {
   private readonly backend = inject(Backend);
   private readonly tabs = inject(Tabs);
   readonly ui = inject(Ui);
+  private readonly host = inject(ElementRef<HTMLElement>);
 
   readonly ops = OPS; readonly setTypes = SET_TYPES;
   op = 'walk'; oid = ''; setType = ''; setValue = ''; maxRep = 25; timeout = 3; trapPort = 162;
@@ -427,6 +444,7 @@ export class SnmpBrowser implements OnInit, OnDestroy {
       ...(op === 'set' ? { values: [{ oid, type: this.setType, value: this.setValue }] } : { oids: [oid] }),
     };
     const t0 = Date.now();
+    this.remember(oid);
     if (this.extra().length && op !== 'set') { await this.runMany(req, op, oid); return; }
     this.multi.set([]);
     try {
@@ -576,10 +594,44 @@ export class SnmpBrowser implements OnInit, OnDestroy {
   }
   userMibs() { return this.mibs().filter(m => !m.builtIn).length; }
   mibShown() { const q = this.mibQ.trim().toLowerCase(); return this.mibs().filter(m => !q || m.name.toLowerCase().includes(q) || (m.file ?? '').toLowerCase().includes(q)); }
+  needs(m: SNMPModule) { return (m.imports ?? []).filter(i => !['SNMPv2-SMI', 'SNMPv2-TC', 'SNMPv2-CONF', 'RFC1155-SMI', 'RFC-1212', 'RFC-1215'].includes(i)); }
+  missingAll() { return [...new Set(this.mibs().flatMap(m => m.missing ?? []))].sort(); }
   async removeMib(m: SNMPModule) {
-    if (!(await this.ui.confirm(tr('Remove {0}', m.name), tr('Stop loading {0}? Its file {1} is moved to the removed folder next to the MIB files, so it can be put back.', m.name, m.file ?? ''), tr('Remove'), true))) return;
+    const deps = m.dependents ?? [];
+    const msg = tr('Stop loading {0}? Its file {1} is moved to the removed folder next to the MIB files, so it can be put back.', m.name, m.file ?? '') +
+      (deps.length ? '\n\n' + tr('These MIBs import it and lose the objects that hang under it: {0}', deps.join(', ')) : '');
+    if (!(await this.ui.confirm(tr('Remove {0}', m.name), msg, tr('Remove'), true))) return;
     try { await this.backend.snmpRemoveMib(m.name); await this.afterMibs(); } catch (e) { this.ui.toast(errText(e), 'error'); }
   }
+  /** Opens the tree along a module's top object and selects it. */
+  async showInTree(m: SNMPModule) {
+    if (!m.root) return;
+    this.mibOpen.set(false);
+    this.query.set('');
+    await this.reveal(m.root);
+  }
+  async reveal(oid: string) {
+    const parts = oid.split('.');
+    for (let n = 1; n <= parts.length; n++) {
+      const pre = parts.slice(0, n).join('.');
+      const it = this.items().find(i => i.node.oid === pre);
+      if (!it) continue;
+      if (pre === oid) { this.pick(it.node); break; }
+      if (!it.open && it.node.children) await this.toggle(it);
+    }
+    setTimeout(() => this.host.nativeElement.querySelector('.tn.on')?.scrollIntoView({ block: 'center' }));
+  }
+  kindMark(n: SNMPMibNode) { return ({ module: 'M', table: 'T', row: 'R', column: 'C', scalar: 'S', notification: 'N', group: 'G', compliance: '✓' } as Record<string, string>)[n.kind] ?? '•'; }
+
+  // ---- the OID box keeps the last objects run ----
+  readonly recent = signal<string[]>(loadRecent());
+  recentOpts() { return this.recent().map(v => ({ value: v })); }
+  private remember(o: string) {
+    const l = [o, ...this.recent().filter(x => x !== o)].slice(0, 15);
+    this.recent.set(l);
+    try { localStorage.setItem('tw.snmp.recent', JSON.stringify(l)); } catch { /* not kept */ }
+  }
+
   showMibFolder() { void this.backend.showInFolder(this.mibFolder()).catch(e => this.ui.toast(errText(e), 'error')); }
   private async afterMibs() {
     this.mibs.set(await this.backend.snmpMibModules().catch(() => []));
@@ -643,6 +695,11 @@ function flat(n: SessionNode | null, out: SessionNode[] = []): SessionNode[] {
   if (!n.isFolder && n.path) out.push(n);
   for (const c of n.children ?? []) flat(c, out);
   return out;
+}
+
+function loadRecent(): string[] {
+  try { const v = JSON.parse(localStorage.getItem('tw.snmp.recent') || 'null'); if (Array.isArray(v)) return v.slice(0, 15); } catch { /* none */ }
+  return [];
 }
 
 function loadFavs(): string[] {

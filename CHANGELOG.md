@@ -4,6 +4,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **MIBs window shows dependencies**: for each module what it imports (✓ loaded, ✕ not loaded) and which loaded MIBs use it; a line at the top lists the MIBs to load next; **Show in Tree** opens the tree at a module; removing a MIB that others import names them first. The window has a Close button like the other windows.
+- **MIB tree**: clear expand / collapse arrows with a hover area, and a small coloured mark per kind (M module, T table, R row, C column, S scalar, N notification); double-click opens a branch or runs an object. The OID box keeps the last 15 objects run in its list.
+
 - **SNMP Browser grows**: run the same request on **several devices** at once (+ Device; results with a Device column); **Compare** two walks (before and after a change, or two devices) with only the differences; **Poll** a value or a whole column every few seconds and see it as a **chart** (counters as a rate per second) with last, min, max and average; **Send Trap** (v1, v2c and v3 with Termwright's engine ID) to test a receiver; a **MIBs** window lists every module (built in or yours, objects, objects that need a MIB that is not loaded), opens the MIB folder, loads more and removes one (its file is moved to the removed folder, not deleted).
 - **SNMP-only sessions** (protocol *SNMP only*) for devices you reach only by SNMP: they open in the SNMP Browser. A session can keep a separate **write community** for Set (reads use the read community). **Open SNMP Browser** is on a terminal tab's right-click menu too.
 - **Right-click menus of the API client, SNMP Browser, Syslog and other tool tabs** show only what fits them (session options, rename, close) instead of the terminal's entries; more menu entries got icons (remote desktop, send group, files panel, recording, timestamps, SNMP, syslog…).

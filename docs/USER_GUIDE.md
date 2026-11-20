@@ -1378,7 +1378,7 @@ The community and passwords are kept in the computer's credential store (Keychai
 
 **Poll.** Choose a value (`sysUpTime.0`, `ifHCInOctets.3`) or a column (`IF-MIB::ifHCInOctets` for every port; up to 8 lines), set the interval and press **Start Polling**: a chart draws it, counters as a rate per second, with last, min, max and average.
 
-**MIBs.** **MIBs…** lists every module: built in or loaded by you (with its file), how many objects it has, and objects that need a MIB that is not loaded (load the vendor's other files). **Open Folder** shows the folder your MIB files are kept in; **Remove** stops loading one (its file is moved to the *removed* folder there, so it can be put back).
+**MIBs.** **MIBs…** lists every module: built in or loaded by you (with its file), how many objects it has, what it **needs** (the modules it imports: ✓ loaded, ✕ not loaded) and which loaded MIBs **use** it. The line at the top names the MIBs to load next; until they are loaded, objects that hang under them are not in the tree. **Show in Tree** opens the tree at the module. Removing a MIB that others import names them first. **Open Folder** shows the folder your MIB files are kept in; **Remove** stops loading one (its file is moved to the *removed* folder there, so it can be put back).
 
 **SNMP-only devices.** A device you reach only by SNMP can be a session of its own: New Session → Protocol → More… → **SNMP only**, its address, and the SNMP page. Double-click opens it in the SNMP Browser. On v1 / v2c a **Write community** can be kept for Set (reads use the read community). Any terminal tab's right-click menu has **Open SNMP Browser** for its device.
 

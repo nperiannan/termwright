@@ -533,7 +533,7 @@ export interface SNMPRequest { session?: string; target?: SNMPTarget; op: string
 export interface SNMPRow { oid: string; name: string; object?: string; module?: string; instance?: string; type: string; value: string; display: string; }
 export interface SNMPResult { rows: SNMPRow[]; address: string; version: string; engineId?: string; ms: number; requests: number; truncated?: boolean; }
 export interface SNMPMibNode { oid: string; name: string; module: string; kind: string; syntax?: string; base?: string; enums?: Record<string, string>; hint?: string; access?: string; status?: string; units?: string; index?: string[]; augments?: string; objects?: string[]; description?: string; children: boolean; }
-export interface SNMPModule { name: string; builtIn: boolean; file?: string; objects?: number; unplaced?: string[]; }
+export interface SNMPModule { name: string; builtIn: boolean; file?: string; objects?: number; unplaced?: string[]; imports?: string[]; missing?: string[]; dependents?: string[]; root?: string; }
 export interface SNMPSecretState { community: boolean; writeCommunity?: boolean; auth: boolean; priv: boolean; }
 export interface SNMPTrapState { on: boolean; port: number; error?: string; count: number; }
 export interface SNMPTrapView { at: string; from: string; version: string; community?: string; user?: string; kind: string; trapOid: string; uptime: number; note?: string; name: string; rows: SNMPRow[]; session?: string; }

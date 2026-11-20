@@ -88,3 +88,27 @@ END`)
 		t.Fatal("the shared MIB must not change")
 	}
 }
+
+// Imports, dependents and a missing module are known; the root of a module is found.
+func TestMIBImportsAndRoot(t *testing.T) {
+	m := Standard().Clone()
+	if _, err := m.Load(`LM-SENSORS-MIB DEFINITIONS ::= BEGIN
+IMPORTS OBJECT-TYPE, MODULE-IDENTITY FROM SNMPv2-SMI ucdExperimental FROM UCD-SNMP-MIB;
+lmSensorsMIB MODULE-IDENTITY LAST-UPDATED "200011050000Z" ORGANIZATION "x" CONTACT-INFO "x" DESCRIPTION "x" ::= { lmSensors 1 }
+lmSensors OBJECT IDENTIFIER ::= { ucdExperimental 16 }
+END`); err != nil {
+		t.Fatal(err)
+	}
+	if im := m.Imports("LM-SENSORS-MIB"); len(im) != 2 || im[1] != "UCD-SNMP-MIB" || m.Loaded("UCD-SNMP-MIB") {
+		t.Fatal(im)
+	}
+	if u := m.Unplaced()["LM-SENSORS-MIB"]; len(u) == 0 {
+		t.Fatal("unplaced expected")
+	}
+	if d := m.Dependents("IF-MIB"); len(d) == 0 {
+		t.Fatal("IF-MIB has dependents")
+	}
+	if r := m.Root("IF-MIB"); r != "1.3.6.1.2.1.31" {
+		t.Fatal(r)
+	}
+}

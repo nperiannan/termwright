@@ -564,6 +564,14 @@ type SNMPModule struct {
 	Objects int `json:"objects"`
 	// Unplaced: objects whose parent is in a module that is not loaded.
 	Unplaced []string `json:"unplaced,omitempty"`
+	// Imports: the modules it imports from.
+	Imports []string `json:"imports,omitempty"`
+	// Missing: the imported modules that are not loaded (load them too).
+	Missing []string `json:"missing,omitempty"`
+	// Dependents: the loaded modules that import this one (they lose objects if it is removed).
+	Dependents []string `json:"dependents,omitempty"`
+	// Root: its top object in the tree ("" when none is placed).
+	Root string `json:"root,omitempty"`
 }
 
 // SNMPMibModules lists the loaded modules: built in, then the user's.
@@ -578,7 +586,13 @@ func (a *App) SNMPMibModules() []SNMPModule {
 	var out []SNMPModule
 	counts, un := mib.Counts(), mib.Unplaced()
 	for _, m := range mib.Modules() {
-		out = append(out, SNMPModule{Name: m, BuiltIn: std[m], File: snmpMibOf[m], Objects: counts[m], Unplaced: un[m]})
+		md := SNMPModule{Name: m, BuiltIn: std[m], File: snmpMibOf[m], Objects: counts[m], Unplaced: un[m], Imports: mib.Imports(m), Dependents: mib.Dependents(m), Root: mib.Root(m)}
+		for _, im := range md.Imports {
+			if !mib.Loaded(im) && !snmpAlwaysThere[im] {
+				md.Missing = append(md.Missing, im)
+			}
+		}
+		out = append(out, md)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].BuiltIn && !out[j].BuiltIn })
 	return out
@@ -671,6 +685,9 @@ func (a *App) SNMPRemoveMIB(module string) error {
 	a.snmpMIB()
 	return nil
 }
+
+// snmpAlwaysThere are modules whose definitions the reader knows without their file (the SMI base, macros).
+var snmpAlwaysThere = map[string]bool{"SNMPv2-SMI": true, "SNMPv2-TC": true, "SNMPv2-CONF": true, "RFC1155-SMI": true, "RFC-1212": true, "RFC-1215": true, "RFC1213-MIB": true}
 
 // SNMPMibFolder is the folder the user's MIB files are kept in (made when missing).
 func (a *App) SNMPMibFolder() string {
