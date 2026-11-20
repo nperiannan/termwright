@@ -325,18 +325,18 @@ func (a *App) httpSend(ctx context.Context, r HTTPSendRequest) (apiclient.Respon
 
 // HTTPHistoryItem is a request sent (no answer bodies, secrets masked).
 type HTTPHistoryItem struct {
-	At         time.Time         `json:"at"`                   // when it was sent
-	Session    string            `json:"session,omitempty"`    // the API session
-	Env        string            `json:"env,omitempty"`        // "" or production
-	Collection string            `json:"collection,omitempty"` // the collection it came from
+	At         time.Time `json:"at"`                   // when it was sent
+	Session    string    `json:"session,omitempty"`    // the API session
+	Env        string    `json:"env,omitempty"`        // "" or production
+	Collection string    `json:"collection,omitempty"` // the collection it came from
 	// Environment chosen when it was sent.
-	Environment string `json:"environment,omitempty"`
-	Request    apiclient.Request `json:"request"`              // the request (the body cut at 16 KB)
-	URL        string            `json:"url"`                  // the URL sent (secrets masked)
-	Status     int               `json:"status"`               // the answer's status (0: not sent)
-	Ms         int64             `json:"ms"`                   // how long it took
-	Size       int               `json:"size"`                 // the answer's size in bytes
-	Error      string            `json:"error,omitempty"`
+	Environment string            `json:"environment,omitempty"`
+	Request     apiclient.Request `json:"request"` // the request (the body cut at 16 KB)
+	URL         string            `json:"url"`     // the URL sent (secrets masked)
+	Status      int               `json:"status"`  // the answer's status (0: not sent)
+	Ms          int64             `json:"ms"`      // how long it took
+	Size        int               `json:"size"`    // the answer's size in bytes
+	Error       string            `json:"error,omitempty"`
 }
 
 func (a *App) httpHistFile() string { return filepath.Join(a.cfg.DataDir(), "api", "history.json") }

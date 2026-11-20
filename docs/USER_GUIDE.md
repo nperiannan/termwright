@@ -444,7 +444,7 @@ Devices cabled to a console server (terminal server) get a session of protocol *
 
 ### Device facts
 
-Termwright reads a device's **model, OS version, serial number, MAC address and uptime** (and any value you add) after connecting, in a **background login** - nothing is typed in your tab. Version and uptime are read at every connect, the others once. They show when you hover over a tab, in the status bar (*VOSS 8.10.0.0 · up 41 days*), on the start page cards, in the Session Manager hover card, in the session side panel and in the HTML scrollback report. A MAC address found is saved with the session, so *Find by MAC Address* works. VOSS, EXOS, Cisco IOS and Linux come with the rules; right-click a session → **Refresh Device Facts** reads them now.
+Termwright reads a device's **model, OS version, serial number, MAC address and uptime** (and any value you add) after connecting, in a **background login** - nothing is typed in your tab. Version and uptime are read at every connect, the others once. They show when you hover over a tab, in the status bar (*VOSS 8.10.0.0 · up 41 days*), on the start page cards, in the Session Manager hover card, in the session side panel and in the HTML scrollback report. A MAC address found is saved with the session, so *Find by MAC Address* works. VOSS, EXOS, Cisco IOS (also IOS XE), Cisco NX-OS, Huawei VRP, Eltex MES, Ruckus ICX and Linux come with the rules (a device type you add gets its own: a command and a regular expression whose first group is the value); right-click a session → **Refresh Device Facts** reads them now.
 
 **Session Options → Device Facts** lists every fact - its value for this session, the command it comes from and whether it is read at every connect or once - with:
 

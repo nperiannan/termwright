@@ -87,10 +87,44 @@ func BuiltinFacts(name string) []FactRule {
 	case "CISCO IOS":
 		return []FactRule{
 			fact("Hostname", "show version", `^(\S+) uptime is`, false),
-			fact("Model", "show version", `^[Cc]isco (\S+) \(`, false),
+			fact("Model", "show version", `^[Cc]isco (\S+) \(|^Model [Nn]umber\s*:\s*(\S+)`, false),
 			fact("Version", "show version", `Cisco IOS.*Version ([^,\s]+)`, true),
-			fact("Serial", "show version", `Processor board ID (\S+)`, false),
+			fact("Serial", "show version", `System [Ss]erial [Nn]umber\s*:\s*(\S+)|Processor board ID (\S+)`, false),
 			fact("MAC", "show version", `Base [Ee]thernet MAC [Aa]ddress\s*:\s*`+mac, false),
+			fact("Uptime", "show version", `uptime is (.+?)\s*$`, true),
+		}
+	case "CISCO NX-OS":
+		return []FactRule{
+			fact("Hostname", "show version", `Device name:\s*(\S+)`, false),
+			fact("Model", "show version", `cisco Nexus\S*\s+(\S+)\s+[Cc]hassis`, false),
+			fact("Version", "show version", `(?:NXOS|system):\s+version\s+(\S+)`, true),
+			fact("Serial", "show version", `Processor [Bb]oard ID (\S+)`, false),
+			fact("Uptime", "show version", `Kernel uptime is (.+?)\s*$`, true),
+		}
+	case "HUAWEI VRP":
+		return []FactRule{
+			fact("Hostname", "display current-configuration | include sysname", `^\s*sysname (\S+)`, false),
+			fact("Model", "display version", `^(?:HUAWEI|Huawei) (\S+).*\buptime is`, false),
+			fact("Version", "display version", `VRP \(R\) software,\s*Version (\S+(?: \([^)]+\))?)`, true),
+			fact("Serial", "display esn", `ESN of [^:]*:\s*(\S+)`, false),
+			fact("MAC", "display bridge mac-address", `(?i)bridge MAC address\s*:\s*`+mac, false),
+			fact("Uptime", "display version", `uptime is (.+?)\s*$`, true),
+		}
+	case "ELTEX MES":
+		return []FactRule{
+			fact("Hostname", "show system", `System Name:\s*(\S+)`, false),
+			fact("Model", "show system", `System Description:\s*(\S+)`, false),
+			fact("Version", "show version", `(?:^\s*Version:\s*|SW version\s+)(\S+)`, true),
+			fact("Serial", "show system id", `(?i)^\s*(?:1\s+|serial number\s*:\s*)([A-Z0-9]{6,})\s*$`, false),
+			fact("MAC", "show system", `System MAC Address:\s*`+mac, false),
+			fact("Uptime", "show system", `System Up Time(?: \([^)]*\))?:\s*(.+?)\s*$`, true),
+		}
+	case "RUCKUS ICX":
+		return []FactRule{
+			fact("Hostname", "show running-config | include hostname", `^hostname (\S+)`, false),
+			fact("Model", "show version", `HW:\s*(?:Stackable\s+)?(\S+)`, false),
+			fact("Version", "show version", `SW: Version (\S+)`, true),
+			fact("Serial", "show version", `Serial\s*#:\s*(\S+)`, false),
 			fact("Uptime", "show version", `uptime is (.+?)\s*$`, true),
 		}
 	case "LINUX":
@@ -221,6 +255,20 @@ func BuiltinDeviceTypes() []DeviceType {
 		{Name: "Cisco IOS", Protocol: ProtoSSH2, Prompt: `[>#] ?$`, BackupCommands: "show running-config",
 			LoginSteps: []LogonAction{step("Username:", `\s`, false), step("Password:", `\w`, true)},
 			AfterLogin: []LogonAction{step(">", "enable", false), step("#", "terminal length 0", false)}, Tunnel: "off"},
+		{Name: "Cisco NX-OS", Protocol: ProtoSSH2, Prompt: `# ?$`, BackupCommands: "show running-config",
+			LoginSteps: []LogonAction{step("login:", `\s`, false), step("Password:", `\w`, true)},
+			AfterLogin: []LogonAction{step("#", "terminal length 0", false)}, Tunnel: "off"},
+		// Huawei VRP: <name> in user view, [name] in system view; "display" instead of "show"
+		{Name: "Huawei VRP", Protocol: ProtoSSH2, Prompt: `[>\]] ?$`, BackupCommands: "display current-configuration",
+			LoginSteps: []LogonAction{step("Username:", `\s`, false), step("Password:", `\w`, true)},
+			AfterLogin: []LogonAction{step(">", "screen-length 0 temporary", false)}, Tunnel: "off"},
+		{Name: "Eltex MES", Protocol: ProtoSSH2, Prompt: `[>#] ?$`, BackupCommands: "show running-config",
+			LoginSteps: []LogonAction{step("User Name:", `\s`, false), step("Password:", `\w`, true)},
+			AfterLogin: []LogonAction{step(">", "enable", false), step("#", "terminal datadump", false)}, Tunnel: "off"},
+		// Ruckus (formerly Brocade) ICX, FastIron
+		{Name: "Ruckus ICX", Protocol: ProtoSSH2, Prompt: `[>#] ?$`, BackupCommands: "show running-config",
+			LoginSteps: []LogonAction{step("Name:", `\s`, false), step("Password:", `\w`, true)},
+			AfterLogin: []LogonAction{step(">", "enable", false), step("#", "skip-page-display", false)}, Tunnel: "off"},
 		{Name: "Linux", Protocol: ProtoSSH2, Prompt: `[$#] ?$`,
 			LoginSteps: []LogonAction{step("login:", `\s`, false), step("Password:", `\w`, true)}},
 	}

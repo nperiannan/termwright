@@ -204,8 +204,14 @@ func ApplyFactRules(rules []session.FactRule, cmds, outs []string) map[string]st
 		}
 		if m := re.FindStringSubmatch(strings.ReplaceAll(outs[i], "\r", "")); m != nil {
 			v := m[0]
-			if len(m) > 1 {
-				v = m[1]
+			if len(m) > 1 { // the first group that matched (a rule may have alternatives, each with its group)
+				v = ""
+				for _, g := range m[1:] {
+					if g != "" {
+						v = g
+						break
+					}
+				}
 			}
 			if v = strings.TrimSpace(v); v != "" {
 				if len(v) > 160 {

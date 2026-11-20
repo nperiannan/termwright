@@ -138,6 +138,7 @@ type Settings struct {
 	ExosPortColors       bool                         `json:"exosPortColors"`       // set once when the Network set got the EXOS port-state keywords (0.33.0)
 	FactRulesAdded       bool                         `json:"factRulesAdded"`       // set once when the built-in device types got their fact rules (0.21.0)
 	HostnameFactAdded    bool                         `json:"hostnameFactAdded"`    // set once when the built-in device types got the Hostname fact (0.34.0)
+	MoreTypesAdded       bool                         `json:"moreTypesAdded"`       // set once when the device types of 0.42.0 were added (NX-OS, Huawei VRP, Eltex MES, Ruckus ICX)
 	KeywordsOn           bool                         `json:"keywordsOn"`
 	Language             string                       `json:"language"`                  // interface language: "" = English, "ru" = Russian (partial)
 	IconStyle            string                       `json:"iconStyle"`                 // device and session icons: "" = coloured tiles, "glyph" = the symbol only
@@ -534,6 +535,25 @@ func Load(dataDir string) (*Manager, error) {
 			}
 		}
 		m.cur.HostnameFactAdded, changed = true, true
+	}
+	// More built-in device types (0.42.0): Cisco NX-OS, Huawei VRP, Eltex MES and Ruckus ICX are added
+	// once to existing settings that have no device type of that name.
+	if !m.cur.MoreTypesAdded {
+		have := map[string]bool{}
+		for _, d := range m.cur.DeviceTypes {
+			have[strings.ToLower(d.Name)] = true
+		}
+		for _, b := range session.BuiltinDeviceTypes() {
+			switch strings.ToLower(b.Name) {
+			case "cisco nx-os", "huawei vrp", "eltex mes", "ruckus icx": // not the older ones a user may have removed
+			default:
+				continue
+			}
+			if !have[strings.ToLower(b.Name)] {
+				m.cur.DeviceTypes = append(m.cur.DeviceTypes, b)
+			}
+		}
+		m.cur.MoreTypesAdded, changed = true, true
 	}
 	// Keyword highlighting is on by default (0.21.0): once, the Network set
 	// becomes the default when none was chosen, and its built-in words also

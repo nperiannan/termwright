@@ -509,7 +509,7 @@ export interface LabHubCfg { rev: number; ports?: Record<string, LabHubPort> | n
 export interface LabHubDetail { id: string; running: boolean; in: number[]; macs: { mac: string; vlan: number; port: number; age: number }[]; cfg?: LabHubCfg | null; sshOk: boolean; error?: string; }
 
 /** Device types whose SSH server does not pass connections on (TCP forwarding) unless their setting says it does. */
-const NO_TUNNEL = ['exos', 'voss', 'cisco ios'];
+const NO_TUNNEL = ['exos', 'voss', 'cisco ios', 'cisco nx-os', 'huawei vrp', 'eltex mes', 'ruckus icx'];
 /** Whether a session of this device type can open a web page through its SSH server (Open Web Page Through This Session). */
 export function dtTunnels(types: DeviceType[] | null | undefined, name: string | undefined): boolean {
   if (!name) return true;

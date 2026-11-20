@@ -671,7 +671,7 @@ export class DiscoverDialog implements OnDestroy {
     if (direct) return direct.name;
     const aliases: [RegExp, string[]][] = [
       [/voss|vsp|fabric ?engine/, ['voss', 'fabric']], [/exos|extremexos|switch ?engine|summit/, ['exos', 'switch engine']],
-      [/nx-os/, ['nx-os', 'nxos', 'cisco']], [/cisco/, ['ios', 'cisco']], [/junos|juniper/, ['junos', 'juniper']],
+      [/nx-os/, ['nx-os', 'nxos', 'cisco']], [/huawei|\bvrp\b/, ['huawei', 'vrp']], [/eltex|\bmes ?\d{4}/, ['eltex', 'mes']], [/ruckus|brocade|fastiron|\bicx ?\d{4}/, ['icx', 'ruckus', 'brocade']], [/cisco/, ['ios', 'cisco']], [/junos|juniper/, ['junos', 'juniper']],
       [/arista|\beos\b/, ['eos', 'arista']], [/linux|ubuntu|debian|centos|red ?hat|rocky|alma|amazon|openssh/, ['linux', 'server']],
       [/windows/, ['windows']],
     ];
@@ -839,6 +839,7 @@ export class DiscoverDialog implements OnDestroy {
 const PLATFORM_WORDS: Record<string, string[]> = {
   EXOS: ['exos', 'switch engine'], VOSS: ['voss', 'fabric'], BOSS: ['boss'], 'NX-OS': ['nx-os', 'nxos'], 'IOS XR': ['ios xr', 'ios-xr', 'xr'],
   'IOS XE': ['ios xe', 'ios-xe', 'ios'], IOS: ['ios', 'cisco'], Junos: ['junos', 'juniper'], EOS: ['eos', 'arista'], FortiOS: ['forti'],
+  VRP: ['huawei', 'vrp'], MES: ['eltex', 'mes'], ICX: ['icx', 'ruckus', 'brocade', 'fastiron'],
   'PAN-OS': ['pan-os', 'palo'], RouterOS: ['routeros', 'mikrotik'], Comware: ['comware', 'h3c'], ArubaOS: ['aruba', 'aos'],
 };
 

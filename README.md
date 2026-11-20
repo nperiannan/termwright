@@ -100,7 +100,7 @@ Termwright began as a terminal and session manager for network engineers. Today 
 - Jump hosts (chainable), proxies and port forwarding; device web interfaces opened through the SSH connection
 - RDP and VNC, also through a jump host - and RDP or VNC set up on a Linux machine over SSH
 - Device discovery with device type and network OS detection; device facts (model, version, serial number, MAC address, uptime); *Name After Devices*
-- Automatic login per device type (EXOS, VOSS, Cisco IOS, Linux or your own) and shared accounts
+- Automatic login per device type (EXOS, VOSS, Cisco IOS and NX-OS, Huawei VRP, Eltex MES, Ruckus ICX, Linux or your own) and shared accounts
 - Which devices answer, for every session or one folder; devices that moved to a new address found by their MAC
 - Environments (production, staging, lab or your own) with colours and safeguards
 - Built-in TFTP, FTP and HTTP servers for images, licences and configurations; Network Check (reachability, traceroute, iPerf3)
@@ -151,7 +151,7 @@ Every change is in the [changelog](CHANGELOG.md).
 | SSH authentication | Password and keyboard-interactive. Public keys: OpenSSH, encrypted, and PuTTY `.ppk`. SSH certificates, FIDO2 security keys, PIV / PKCS#11 smart cards, Kerberos (GSSAPI), the SSH agent. `known_hosts` verification with prompts for new and changed keys. |
 | Key management | Generate Ed25519, RSA 4096 or ECDSA keys. Install them on Linux, macOS, BSD and Windows OpenSSH servers, test the key-only login, then switch the session to it. |
 | Device types | Per-platform login profiles: login steps for Telnet and serial, after-login steps for every protocol (for example `enable`, paging off), and credentials inherited or overridden per session. |
-| Device facts | Model, version, serial number, MAC address, uptime and custom values, read in a background login. Built-in rules for VOSS, EXOS, Cisco IOS and Linux. |
+| Device facts | Model, version, serial number, MAC address, uptime and custom values, read in a background login. Built-in rules for VOSS, EXOS, Cisco IOS and NX-OS, Huawei VRP, Eltex MES, Ruckus ICX and Linux. |
 | Session management | Wake-on-LAN (also through a jump host); folders with defaults; favourites and recents; environments, with confirmation before multi-tab sends to production; reachability checks; bulk edit; workspaces; Quick Open; drag and drop. |
 | Syslog | A syslog server (UDP, TCP, TLS; RFC 3164 and 5424) with live view, senders matched to saved sessions, search, severity filters, colour / notify / hide rules and daily files, plus a test message sender; usable from the AI assistant, MCP apps, the local API and Python. |
 | API client | A free REST client in the spirit of Postman: API sessions with API key, bearer, login-request, basic and OAuth 2.0 authentication (secrets in the credential store), `{{variables}}` with Postman-style environments and globals (import Postman environments), request tabs, per-request and per-collection authorization, request settings, collections as plain JSON files, `pm.*` tests and pre-request scripts with `setNextRequest` and `sendRequest`, a collection runner with data files, a console, import of Postman collections, OpenAPI / Swagger (YAML or JSON) and cURL, code export; usable from the AI assistant, MCP apps, the local API and Python. |
