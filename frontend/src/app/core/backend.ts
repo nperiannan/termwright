@@ -298,6 +298,10 @@ export class Backend {
   testsOpenFolder() { return this.call<string>('TestsOpenFolder'); }
   testsClone(repo: string) { return this.call<string>('TestsClone', repo); }
   testsNewTestbed(name: string, folder: string) { return this.call<string>('TestsNewTestbed', name, folder); }
+  testsGitInit() { return this.call<string>('TestsGitInit'); }
+  testsGitPull() { return this.call<string>('TestsGitPull'); }
+  testsGitCommit(message: string) { return this.call<string>('TestsGitCommit', message); }
+  testsGitPush() { return this.call<string>('TestsGitPush'); }
   testsGit() { return this.call<TestsGitInfo>('TestsGit'); }
   testsOpen(rel: string) { return this.call<void>('TestsOpen', rel); }
   testsOpenInEditor(rel: string) { return this.call<void>('TestsOpenInEditor', rel); }

@@ -594,5 +594,5 @@ export interface TestCheckResult { what: string; passed: boolean; got?: string; 
 export interface TestStepResult { name: string; kind: string; target?: string; sent?: string; status?: number; output?: string; ms: number; passed: boolean; skipped?: boolean; error?: string; checks?: TestCheckResult[]; }
 export interface TestResult { case: string; file?: string; start: string; ms: number; passed: boolean; error?: string; steps: TestStepResult[]; }
 export interface TestsTree { root: string; cases: TestCaseInfo[]; testbeds: string[]; reports: { dir: string; passed: number; failed: number; ms: number }[]; }
-export interface TestsGitInfo { repo: boolean; branch?: string; changed: number; hasGo: boolean; }
+export interface TestsGitInfo { repo: boolean; branch?: string; changed: number; upstream?: boolean; ahead?: number; behind?: number; hasGo: boolean; hasGit: boolean; }
 export interface TestRunReport { dir: string; passed: number; failed: number; ms: number; results: TestResult[]; }

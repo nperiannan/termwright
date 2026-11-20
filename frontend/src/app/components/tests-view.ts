@@ -18,8 +18,18 @@ type View = 'steps' | 'yaml' | 'go';
       <aside class="side">
         <div class="row"><button type="button" (click)="openFolder()" title="Use another folder as the tests folder">Open…</button><button type="button" (click)="clone()" title="Clone a Git repository of tests">Clone…</button>
           <span class="sp"></span><button type="button" (click)="run([])" [disabled]="busy() || !tree()?.cases?.length" title="Run all tests">▶▶</button></div>
-        <div class="git" [title]="tree()?.root ?? ''">@if (git()?.repo) { <span>⎇ {{ git()?.branch }}</span><span>{{ git()?.changed }} changed</span> } @else { <span>{{ folderName() }}</span> }
+        <div class="git" [title]="tree()?.root ?? ''">@if (git()?.repo) { <span>⎇ {{ git()?.branch }}</span><span>{{ git()?.changed }} changed</span>
+            @if (git()?.ahead) { <span title="Commits not pushed yet">↑{{ git()?.ahead }}</span> } @if (git()?.behind) { <span title="Commits on the remote not pulled yet">↓{{ git()?.behind }}</span> } } @else { <span>{{ folderName() }}</span> }
           <span class="sp"></span><button type="button" class="lnk" (click)="backend.testsOpenInEditor('')" title="Open the folder in VS Code (or the file manager)">⧉</button></div>
+        @if (git()?.repo) {
+          <div class="row gb">
+            <button type="button" (click)="gitDo('pull')" [disabled]="busy() || !git()?.upstream" title="Get the remote's commits (fast-forward only)">Pull</button>
+            <button type="button" (click)="gitDo('commit')" [disabled]="busy() || !git()?.changed" title="Commit the tests, testbeds and library (not the reports)">Commit…</button>
+            <button type="button" (click)="gitDo('push')" [disabled]="busy() || (!!git()?.upstream && !git()?.ahead)" title="Send your commits to the remote">Push</button>
+          </div>
+        } @else if (git()?.hasGit) {
+          <button type="button" class="lnk sm" (click)="gitDo('init')" title="Keep the tests' history with Git (reports are left out)">Make it a Git repository</button>
+        }
         <div class="tree">
           <div class="h">CASES</div>
           @for (g of groups(); track g.dir) {
@@ -95,7 +105,7 @@ type View = 'steps' | 'yaml' | 'go';
     .side { width: 250px; flex: none; display: flex; flex-direction: column; gap: 8px; padding: 10px; border-right: 1px solid var(--border); background: var(--panel); min-height: 0; }
     .row { display: flex; align-items: center; gap: 6px; } .sp { flex: 1; } .mut { color: var(--muted); font-size: 12px; } .ok { color: var(--ok, #4ec07a); } .bad { color: var(--danger, #ef6161); }
     .git { display: flex; gap: 8px; font-size: 12px; color: var(--muted); align-items: center; } .lnk { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0 4px; }
-    .tree { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 1px; } .hb { display: flex; justify-content: space-between; align-items: center; } .h { font-size: 11px; letter-spacing: .06em; color: var(--muted); margin: 8px 0 3px; } .grp { font-size: 12px; color: var(--muted); padding: 2px 4px; }
+    .gb button { flex: 1; padding: 3px 6px; } .sm { font-size: 12px; text-align: left; } .tree { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 1px; } .hb { display: flex; justify-content: space-between; align-items: center; } .h { font-size: 11px; letter-spacing: .06em; color: var(--muted); margin: 8px 0 3px; } .grp { font-size: 12px; color: var(--muted); padding: 2px 4px; }
     .it { display: flex; gap: 6px; align-items: center; text-align: left; border: 0; background: none; color: var(--text); padding: 4px 8px; border-radius: 6px; cursor: pointer; font: inherit; }
     .it:hover { background: var(--hover, rgba(255,255,255,.05)); } .it.sel { background: color-mix(in srgb, var(--accent) 20%, transparent); } .it .n { margin-left: auto; color: var(--muted); font-size: 11px; }
     .dot { font-size: 9px; color: var(--muted); } .dot.p { color: var(--ok, #4ec07a); } .dot.f { color: var(--danger, #ef6161); } .dot.e { color: var(--warn, #e0a030); }
@@ -227,6 +237,21 @@ export class TestsView implements OnInit, OnDestroy {
     this.busy.set(false);
   }
   recordMore() { this.rec.start(); }
+  async gitDo(what: 'pull' | 'commit' | 'push' | 'init') {
+    let msg = '';
+    if (what === 'commit') {
+      msg = await this.ui.input(tr('Commit Tests'), tr('What changed?'), '') ?? '';
+      if (!msg.trim()) return;
+    }
+    this.busy.set(true);
+    try {
+      const out = what === 'pull' ? await this.backend.testsGitPull() : what === 'push' ? await this.backend.testsGitPush()
+        : what === 'init' ? await this.backend.testsGitInit() : await this.backend.testsGitCommit(msg);
+      this.ui.toast((out || tr('Done')).split('\n').slice(-3).join('\n'), 'success');
+      await this.load();
+    } catch (e) { this.ui.toast(errText(e), 'error'); }
+    this.busy.set(false);
+  }
   async newTestbed() {
     const folder = await this.ui.input(tr('New Testbed'), tr('Session folder whose sessions become roles (e.g. Lab)'), '');
     if (!folder) return;

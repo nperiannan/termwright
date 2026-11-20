@@ -34,6 +34,11 @@ func (f Folder) Init() error {
 			return err
 		}
 	}
+	if gi := filepath.Join(f.Root, ".gitignore"); !exists(gi) {
+		if err := os.WriteFile(gi, []byte("# run reports are kept out of Git\nreports/\n"), 0o644); err != nil {
+			return err
+		}
+	}
 	readme := filepath.Join(f.Root, "README.md")
 	if _, err := os.Stat(readme); errors.Is(err, fs.ErrNotExist) {
 		return os.WriteFile(readme, []byte(readmeText), 0o644)
@@ -470,3 +475,5 @@ func (f Folder) WriteTestbed(name string, sessions []string, comment string) (st
 	}
 	return rel, os.WriteFile(p, []byte(b.String()), 0o644)
 }
+
+func exists(p string) bool { _, err := os.Stat(p); return err == nil }

@@ -130,6 +130,14 @@ type TestsGitInfo struct {
 	Branch string `json:"branch,omitempty"`
 	// Changed: files changed or new.
 	Changed int `json:"changed"`
+	// Upstream: the branch tracks a remote branch.
+	Upstream bool `json:"upstream,omitempty"`
+	// Ahead: commits not pushed yet.
+	Ahead int `json:"ahead,omitempty"`
+	// Behind: commits on the remote not pulled yet.
+	Behind int `json:"behind,omitempty"`
+	// HasGit: the git command is installed.
+	HasGit bool `json:"hasGit"`
 	// HasGo: the go command is installed (to run the Go tests).
 	HasGo bool `json:"hasGo"`
 }
@@ -147,22 +155,129 @@ func (a *App) TestsGit() TestsGitInfo {
 	if err != nil {
 		return i
 	}
+	i.HasGit = true
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, git, "-C", f.Root, "status", "--porcelain", "-b").Output()
+	out, err := exec.CommandContext(ctx, git, "-C", f.Root, "rev-parse", "--show-toplevel").Output()
+	if err != nil || !samePath(strings.TrimSpace(string(out)), f.Root) && !strings.HasPrefix(f.Root, strings.TrimSpace(string(out))) {
+		return i
+	}
+	out, err = exec.CommandContext(ctx, git, "-C", f.Root, "status", "--porcelain", "-b").Output()
 	if err != nil {
 		return i
 	}
+	parseGitStatus(string(out), &i)
+	return i
+}
+
+func samePath(a, b string) bool {
+	ea, _ := filepath.EvalSymlinks(a)
+	eb, _ := filepath.EvalSymlinks(b)
+	return filepath.Clean(ea) == filepath.Clean(eb)
+}
+
+// parseGitStatus reads `git status --porcelain -b`: "## main...origin/main [ahead 1, behind 2]" and
+// one line per changed file.
+func parseGitStatus(out string, i *TestsGitInfo) {
 	i.Repo = true
-	for _, l := range strings.Split(strings.TrimRight(string(out), "\n"), "\n") {
-		if b, ok := strings.CutPrefix(l, "## "); ok {
-			b, _, _ = strings.Cut(b, "...")
-			i.Branch = strings.TrimPrefix(b, "No commits yet on ")
-		} else if l != "" {
-			i.Changed++
+	for _, l := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		b, ok := strings.CutPrefix(l, "## ")
+		if !ok {
+			if l != "" {
+				i.Changed++
+			}
+			continue
+		}
+		b = strings.TrimPrefix(b, "No commits yet on ")
+		if br, rest, ok := strings.Cut(b, "..."); ok {
+			i.Branch, i.Upstream = br, true
+			if _, ab, ok := strings.Cut(rest, " ["); ok {
+				for _, p := range strings.Split(strings.TrimSuffix(ab, "]"), ", ") {
+					var n int
+					if _, err := fmt.Sscanf(p, "ahead %d", &n); err == nil {
+						i.Ahead = n
+					} else if _, err := fmt.Sscanf(p, "behind %d", &n); err == nil {
+						i.Behind = n
+					}
+				}
+			}
+		} else {
+			i.Branch = b
 		}
 	}
-	return i
+}
+
+// testsGitRun runs git in the tests folder (no prompts: git uses its saved login) and returns its output.
+func (a *App) testsGitRun(timeout time.Duration, args ...string) (string, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return "", err
+	}
+	git, err := exec.LookPath("git")
+	if err != nil {
+		return "", errors.New("git is not installed on this computer")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, git, append([]string{"-C", f.Root}, args...)...)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	out, err := cmd.CombinedOutput()
+	o := strings.TrimSpace(string(out))
+	if ctx.Err() != nil {
+		return o, fmt.Errorf("git %s: no answer in %s", args[0], timeout)
+	}
+	if err != nil {
+		if o == "" {
+			o = err.Error()
+		}
+		return o, fmt.Errorf("git %s: %s", args[0], o)
+	}
+	return o, nil
+}
+
+// TestsGitInit makes the tests folder a Git repository (reports/ is left out by .gitignore).
+func (a *App) TestsGitInit() (string, error) {
+	return a.testsGitRun(30*time.Second, "init")
+}
+
+// TestsGitPull brings the remote's commits (fast-forward only: it never merges or overwrites).
+func (a *App) TestsGitPull() (string, error) {
+	return a.testsGitRun(5*time.Minute, "pull", "--ff-only")
+}
+
+// TestsGitCommit commits the tests, testbeds and library (not the reports) with the person's own
+// git name and e-mail.
+func (a *App) TestsGitCommit(message string) (string, error) {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return "", errors.New("give a commit message")
+	}
+	f, err := a.testsFolder()
+	if err != nil {
+		return "", err
+	}
+	var paths []string
+	for _, p := range []string{"cases", "testbeds", "lib", "go.mod", ".gitignore", "README.md"} {
+		if _, err := os.Stat(filepath.Join(f.Root, p)); err == nil {
+			paths = append(paths, p)
+		}
+	}
+	if out, err := a.testsGitRun(time.Minute, append([]string{"add", "-A", "--"}, paths...)...); err != nil {
+		return out, err
+	}
+	return a.testsGitRun(time.Minute, "commit", "-m", message)
+}
+
+// TestsGitPush pushes the branch (setting its upstream on origin the first time); never forced.
+func (a *App) TestsGitPush() (string, error) {
+	i := a.TestsGit()
+	if !i.Repo {
+		return "", errors.New("the tests folder is not a Git repository")
+	}
+	if i.Upstream {
+		return a.testsGitRun(5*time.Minute, "push")
+	}
+	return a.testsGitRun(5*time.Minute, "push", "-u", "origin", "HEAD")
 }
 
 // TestsOpen opens a file or folder of the tests folder with the system ("" = the folder; a report
