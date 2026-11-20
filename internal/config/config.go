@@ -181,6 +181,7 @@ type Settings struct {
 	CollectDir           string                       `json:"collectDir"`              // "" = Documents/Termwright Collected
 	ChecklistDir         string                       `json:"checklistDir"`            // "" = Documents/Termwright Checklists
 	RecordHistory        *bool                        `json:"recordHistory,omitempty"` // nil = on
+	KeepAwake            *bool                        `json:"keepAwake,omitempty"`     // nil = on: the computer does not sleep on its own while Termwright is open
 	RecordSessions       bool                         `json:"recordSessions"`          // record every connection (.cast)
 	RecordDir            string                       `json:"recordDir"`               // "" = Documents/Termwright Recordings
 	RecordKeepDays       int                          `json:"recordKeepDays"`          // 0 = keep

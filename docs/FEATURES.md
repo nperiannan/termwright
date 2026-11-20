@@ -11,6 +11,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Updates**: Help → Check for Updates shows the installed version, the latest stable release with its changes and newer nightly builds; downloads and opens the installer.
 - **Update channels**: be told about stable releases, stable and nightly, or nothing; optional check at start-up.
 - **Release notes**: every release and nightly build lists its changes (CHANGELOG) and commits.
+- **Keeps the computer awake**: while Termwright is open the computer does not go to sleep on its own (macOS, Windows, Linux; the display can still turn off) - a Global Option, on by default.
 - **Free and open source**: Apache-2.0.
 
 ## Main window

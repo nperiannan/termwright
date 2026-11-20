@@ -23,6 +23,7 @@ import (
 
 	"github.com/termwright/termwright/internal/config"
 	"github.com/termwright/termwright/internal/discover"
+	"github.com/termwright/termwright/internal/keepawake"
 	"github.com/termwright/termwright/internal/macwin"
 	"github.com/termwright/termwright/internal/secretref"
 	"github.com/termwright/termwright/internal/secrets"
@@ -77,6 +78,33 @@ func (a *App) startup(ctx context.Context) {
 	go a.startTeamSync()
 	go a.syncLoop(ctx)
 	go a.labAutoStart(ctx)
+	a.applyKeepAwake()
+}
+
+// applyKeepAwake keeps the computer from sleeping on its own while Termwright is open (Global Options).
+func (a *App) applyKeepAwake() {
+	if a.cfg == nil {
+		return
+	}
+	v := a.cfg.Get().KeepAwake
+	keepAwakeErr = keepawake.Set(v == nil || *v)
+}
+
+var keepAwakeErr error
+
+// KeepAwakeStatus says whether the computer is kept awake, and why not when it should be.
+func (a *App) KeepAwakeStatus() KeepAwakeInfo {
+	i := KeepAwakeInfo{Active: keepawake.Active()}
+	if keepAwakeErr != nil {
+		i.Error = keepAwakeErr.Error()
+	}
+	return i
+}
+
+// KeepAwakeInfo is the state of keeping the computer awake.
+type KeepAwakeInfo struct {
+	Active bool   `json:"active"`          // the computer does not go to sleep on its own
+	Error  string `json:"error,omitempty"` // why it could not be kept awake on this system
 }
 
 func (a *App) init() error {
@@ -177,6 +205,7 @@ func (a *App) init() error {
 
 func (a *App) shutdown(context.Context) {
 	closeWebPages()
+	keepawake.Set(false)
 	a.SyslogStop()
 	fsMgr.StopAll()
 	a.IperfServerStop()
@@ -317,6 +346,7 @@ func (a *App) SaveSettings(s config.Settings) error {
 		syncMu.Unlock()
 	}
 	a.mcpApply()
+	a.applyKeepAwake()
 	if bad := a.applyAlerts(); len(bad) > 0 {
 		return errors.New("alert pattern: " + strings.Join(bad, "; "))
 	}

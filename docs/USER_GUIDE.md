@@ -1688,6 +1688,10 @@ Notes:
 
 Global Options is called **Settings** (⚙ in the title bar). The General page starts with **Appearance** - theme previews, Icons (Tiles / Glyphs), **Folder colours** (*Soft* - the default, *Vivid* or *Steel blue*: the folders by level and the PROD / LAB tags), Start page buttons, interface font and text size - then **Behaviour** (each switch with a short explanation: confirm before closing, confirm multi-line paste, remember typed commands, **save Quick Connect sessions**, reopen the tabs that were open, show the Session Manager, Button Bar and Command Window) and **Folders and files**. Changes apply when you press *Save*.
 
+### Keep the computer awake
+
+**Keep the computer awake while Termwright is open** (General → Behaviour, on by default) stops macOS, Windows and Linux from going to sleep on their own while Termwright runs, so sessions, transfers, captures, the syslog server and the emulated lab are not cut off. Only idle sleep is stopped: the display can still turn off, you can still choose Sleep yourself, and a closed laptop lid still sleeps. It ends when Termwright quits (also after a crash). macOS uses `caffeinate`, Windows the system's execution state, Linux the desktop's inhibit (GNOME, KDE, Xfce) and systemd-logind - when a Linux system has neither, the option says so.
+
 ### Interface language
 
 **Start page footer**: the slogan, the version you run (green *up to date* or the newer release after the update check - click it for Software Update), the number of downloads from GitHub (not fetched when update checks are off), the licence and a link to the project.

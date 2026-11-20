@@ -157,7 +157,7 @@ export interface Settings {
   pasteLineDelayMs: number; buttons: Button[]; recentSessions: string[];
   favorites?: string[] | null; lastConnected?: Record<string, string> | null; showReachability?: boolean; reachFolder?: string;
   backupDir?: string; backupJobs?: BackupJob[] | null;
-  checklists?: Checklist[] | null; checklistDir?: string; recordHistory?: boolean | null;
+  checklists?: Checklist[] | null; checklistDir?: string; recordHistory?: boolean | null; keepAwake?: boolean | null;
   recordSessions?: boolean; recordDir?: string; recordKeepDays?: number;
   smartCardLibraries?: string[] | null; smartCardPinEachTime?: boolean;
   collections?: Collection[] | null; collectDir?: string;

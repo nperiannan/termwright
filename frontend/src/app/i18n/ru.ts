@@ -2888,6 +2888,7 @@ const ru: Record<string, string> = {
   'Wireless AP': 'Точка доступа',
   'Cloud': 'Облако',
   'Import…': 'Импорт…',
+  'Keep the computer awake while Termwright is open': 'Не давать компьютеру засыпать, пока открыт Termwright',
   'Import AGENTS.md…': 'Импорт AGENTS.md…',
   'Import Instructions': 'Импорт инструкций',
   'Imported - press Save to keep them': 'Импортировано - нажмите «Сохранить», чтобы сохранить',

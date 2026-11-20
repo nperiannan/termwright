@@ -287,6 +287,7 @@ export class Backend {
   httpRun(r: HRunRequest) { return this.call<HRunResult>('HTTPRun', r); }
   httpHistory() { return this.call<HHistoryItem[]>('HTTPHistory'); }
   httpClearHistory() { return this.call<void>('HTTPClearHistory'); }
+  keepAwakeStatus() { return this.call<{ active: boolean; error?: string }>('KeepAwakeStatus'); }
   aiImportInstructions() { return this.call<string>('AIImportInstructions'); }
   aiExportInstructions(text: string) { return this.call<string>('AIExportInstructions', text); }
   aiSkills() { return this.call<AISkill[]>('AISkills'); }

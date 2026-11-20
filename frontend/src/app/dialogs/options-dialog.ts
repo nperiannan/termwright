@@ -153,6 +153,8 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 <div class="checks">
                   <label><input type="checkbox" name="cc" [(ngModel)]="s.confirmClose" />  <span class="tx">Confirm before closing connected tabs<small>and before quitting</small></span> </label>
                   <label><input type="checkbox" name="cpaste" [(ngModel)]="s.confirmPaste" />  <span class="tx">Confirm pasting more than one line<small>shows the lines first - production tabs always ask</small></span> </label>
+                  <label><input type="checkbox" name="kawake" [ngModel]="s.keepAwake !== false" (ngModelChange)="s.keepAwake = $event" />
+                     <span class="tx">Keep the computer awake while Termwright is open<small>it does not go to sleep on its own, so sessions, transfers and the lab keep running; the display can still turn off{{ keepAwakeErr ? ' - not possible here: ' + keepAwakeErr : '' }}</small></span> </label>
                   <label><input type="checkbox" name="rhist" [ngModel]="s.recordHistory !== false" (ngModelChange)="s.recordHistory = $event" />
                      <span class="tx">Remember typed commands<small>for Command History and suggestions - never commands with passwords, secrets or keys</small></span> </label>
                   <label><input type="checkbox" name="qcs" [ngModel]="!!s.quickConnectSave" (ngModelChange)="s.quickConnectSave = $event" />  <span class="tx">Save Quick Connect sessions<small>every connection made with Quick Connect is kept in the Session Manager (in the selected folder)</small></span> </label>
@@ -1083,8 +1085,10 @@ export class OptionsDialog implements OnInit {
     this.kwIndex.set(0);
   }
 
+  keepAwakeErr = '';
   ngOnInit() {
     void this.backend.syncState().then(x => this.syncSt.set(x)).catch(() => {});
+    void this.backend.keepAwakeStatus().then(x => this.keepAwakeErr = x.error ?? '').catch(() => {});
     if (this.page() === 'ai') this.loadAI();
     if (this.page() === 'skills') void this.loadSkills();
     this.ui.optionsPage.set('');
