@@ -65,6 +65,9 @@ type Step struct {
 	If string `yaml:"if,omitempty" json:"if,omitempty"`
 	// Retry: run the step again until its checks pass (or the time is up).
 	Retry *Retry `yaml:"retry,omitempty" json:"retry,omitempty"`
+	// Upgrade: install a software image on a session with its device type's upgrade commands and
+	// wait until the device answers again (the output is the version it runs then).
+	Upgrade *UpgradeStep `yaml:"upgrade,omitempty" json:"upgrade,omitempty"`
 	// Traffic: run a saved lab traffic test; its results are JSON (rows[0].loss, rows[0].mbps …) for
 	// json checks.
 	Traffic *TrafficStep `yaml:"traffic,omitempty" json:"traffic,omitempty"`
@@ -223,4 +226,10 @@ type Watch struct {
 // TrafficStep runs a saved traffic test of the emulated lab.
 type TrafficStep struct {
 	Test string `yaml:"test" json:"test"`
+}
+
+// UpgradeStep installs an image.
+type UpgradeStep struct {
+	Session string `yaml:"session" json:"session"`
+	Image   string `yaml:"image" json:"image"`
 }

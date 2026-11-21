@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/termwright/termwright/internal/syslog"
@@ -141,4 +142,74 @@ func (d *testDriver) Traffic(ctx context.Context, test string) (string, error) {
 			return string(j), nil
 		}
 	}
+}
+
+// Versions reads the software version of each device (its device facts: refreshed in a background
+// login where that needs no password, else the ones saved), at most 60 s for all.
+func (d *testDriver) Versions(ctx context.Context, sessions []string) map[string]string {
+	out := map[string]string{}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, p := range sessions {
+		if s, err := d.a.store.Get(p); err != nil || s.DeviceType == "" {
+			continue
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			done := make(chan map[string]string, 1)
+			go func() { m, _ := d.a.RefreshFacts(p, false); done <- m }()
+			var m map[string]string
+			select {
+			case m = <-done:
+			case <-time.After(60 * time.Second):
+				m = d.a.SessionFacts(p)
+			case <-ctx.Done():
+				return
+			}
+			if v := strings.TrimSpace(m["Version"]); v != "" {
+				mu.Lock()
+				out[p] = v
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+	return out
+}
+
+// Upgrade installs an image with the session's device type's upgrade commands ({image}), waits until
+// the device logs in again and returns the version it runs then.
+func (d *testDriver) Upgrade(ctx context.Context, path, image string) (string, error) {
+	s, err := d.a.store.Get(path)
+	if err != nil {
+		return "", fmt.Errorf("no saved session %q", path)
+	}
+	if d.a.isProtected(s) {
+		return "", errors.New("not on a production session")
+	}
+	dt, _ := d.a.deviceTypeNamed(s.DeviceType)
+	var cmds []string
+	for _, l := range strings.Split(dt.Upgrade, "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			cmds = append(cmds, strings.ReplaceAll(l, "{image}", image))
+		}
+	}
+	if len(cmds) == 0 {
+		return "", fmt.Errorf("the device type %q has no upgrade commands (Global Options → Device Types)", orDash(s.DeviceType))
+	}
+	d.EndCase()
+	outs, err := d.a.terms.CaptureYes(ctx, s, cmds, "")
+	out := strings.Join(outs, "\n")
+	if err != nil && !strings.Contains(err.Error(), "closed") {
+		return out, err
+	}
+	if err := d.waitUp(ctx, path, 25*time.Minute); err != nil {
+		return out, err
+	}
+	m, _ := d.a.RefreshFacts(path, false)
+	if v := m["Version"]; v != "" {
+		return out + "\nnow running " + v, nil
+	}
+	return out, nil
 }

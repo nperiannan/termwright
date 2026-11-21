@@ -203,6 +203,10 @@ class Step:
     def __init__(self, run, skip=False):
         self.r, self.skip, self.errors, self._retry = run, skip, [], None
 
+    def upgrade(self, session, image, timeout=0):
+        """Installs a software image with the device type's upgrade commands and waits for the device."""
+        return self._send({"upgrade": {"session": self.r.fill(session), "image": self.r.fill(image)}, "timeout": timeout})
+
     def traffic(self, test, timeout=0):
         """Runs a saved lab traffic test; its results are JSON (a.json("rows[0].loss"))."""
         return self._send({"traffic": {"test": self.r.fill(test)}, "timeout": timeout})

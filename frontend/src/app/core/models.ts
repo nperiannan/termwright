@@ -35,7 +35,7 @@ export interface Session {
 /** A login profile for a kind of device (EXOS, VOSS, Cisco IOS …). */
 export interface DeviceType {
   name: string; icon?: string; protocol: string; port: number; username: string; credential: string; initialCr: boolean;
-  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string; undoRules?: string; testSave?: string; testRestore?: string; errorPatterns?: string; factoryReset?: string; aiInstructions?: string; detect?: string; detectCommand?: string; tunnel?: string; webCheck?: string; webHttp?: string; webHttps?: string; webOn?: string; webSave?: string; aiReadOnly?: string;
+  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string; undoRules?: string; testSave?: string; testRestore?: string; errorPatterns?: string; factoryReset?: string; upgrade?: string; aiInstructions?: string; detect?: string; detectCommand?: string; tunnel?: string; webCheck?: string; webHttp?: string; webHttps?: string; webOn?: string; webSave?: string; aiReadOnly?: string;
   facts?: FactRule[] | null;
 }
 /** A value read from command output after connecting: the first group of regex. every = at each connect. */
@@ -595,7 +595,7 @@ export interface TestStep {
   http?: { session?: string; environment?: string; collection?: string; method?: string; url: string; headers?: Record<string, string>; body?: string };
   snmp?: { session: string; op?: string; oids?: string[]; values?: { oid: string; type?: string; value: string }[] };
   expect?: TestExpect[]; save?: { var: string; field?: string; json?: string; oid?: string; where?: Record<string, string>; column?: string }[]; timeout?: number; continueOnFail?: boolean; ignoreErrors?: boolean;
-  traffic?: { test: string }; wait?: number; if?: string; retry?: { timeout?: number; interval?: number }; loop?: { var: string; values?: string[]; range?: string; from?: string; steps: TestStep[] };
+  traffic?: { test: string }; upgrade?: { session: string; image: string }; wait?: number; if?: string; retry?: { timeout?: number; interval?: number }; loop?: { var: string; values?: string[]; range?: string; from?: string; steps: TestStep[] };
 }
 export interface TestCase { name?: string; description?: string; tags?: string[]; dependsOn?: string[]; watch?: { syslog?: string[]; traps?: string[]; devices?: string[] }; configDiff?: boolean; configIgnore?: string[]; vars?: Record<string, string>; params?: Record<string, string>[]; restore?: ('config' | 'lab')[]; setup?: TestStep[]; steps: TestStep[]; cleanup?: TestStep[]; }
 export interface TestCaseInfo { file: string; name: string; description?: string; tags?: string[]; steps: number; error?: string; }
@@ -608,4 +608,5 @@ export interface TestScheduleView extends TestSchedule { state: { last: string; 
 export interface TestsGitInfo { repo: boolean; branch?: string; changed: number; upstream?: boolean; ahead?: number; behind?: number; hasGo: boolean; hasGit: boolean; }
 export type CleanupMode = '' | 'off' | 'auto';
 export type OnCleanupFail = '' | 'stop' | 'restore' | 'factory';
-export interface TestRunReport { testbed?: string; cleanup?: CleanupMode; dir: string; passed: number; failed: number; skipped?: number; onCleanupFail?: OnCleanupFail; recovery?: TestStepResult[]; ms: number; results: TestResult[]; }
+export interface TestHistory { file: string; runs: { at: string; dir: string; file: string; case: string; passed: boolean; skipped?: boolean; ms: number; testbed?: string; versions?: Record<string, string>; problem?: string }[]; passed: number; failed: number; skipped: number; flips: number; avgMs: number; byVersion: { version: string; passed: number; failed: number }[]; }
+export interface TestRunReport { versions?: Record<string, string>; testbed?: string; cleanup?: CleanupMode; dir: string; passed: number; failed: number; skipped?: number; onCleanupFail?: OnCleanupFail; recovery?: TestStepResult[]; ms: number; results: TestResult[]; }

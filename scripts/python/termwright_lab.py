@@ -823,6 +823,10 @@ class Tests:
         return self._run(timeout=timeout, action="run", files=list(files) or None, vars=vars, testbed=testbed,
                          on_cleanup_fail=on_cleanup_fail or None, cleanup=cleanup or None, tags=tags or None, testbeds=testbeds or None)
 
+    def history(self, file: str = "", limit: int = 30) -> str:
+        """Past results of a test (or of every test): pass rate, flips (flaky) and results per software version."""
+        return self._run(action="history", file=file or None, limit=limit)
+
     def new_testbed(self, name: str, folder: str) -> str:
         """Write testbeds/<name>.yaml with a role for each saved session of a session folder (core-sw1 -> {{core_sw1}})."""
         return self._run(action="new_testbed", name=name, folder=folder)

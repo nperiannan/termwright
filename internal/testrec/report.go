@@ -137,6 +137,16 @@ pre{white-space:pre-wrap;background:#0b0f14;padding:8px;border-radius:6px;max-he
 		fmt.Fprintf(&b, `<div><b class="warn">%d</b>skipped</div>`, rep.Skipped)
 	}
 	fmt.Fprintf(&b, `<div><b>%s s</b>total</div></div>`, secs(rep.Ms))
+	if rep.Testbed != "" {
+		fmt.Fprintf(&b, `<p class="mut">Testbed: %s.</p>`, e(rep.Testbed))
+	}
+	if len(rep.Versions) > 0 {
+		var vs []string
+		for _, k := range sortedKeys(rep.Versions) {
+			vs = append(vs, k+" "+rep.Versions[k])
+		}
+		fmt.Fprintf(&b, `<p class="mut">Software: %s.</p>`, e(strings.Join(vs, ", ")))
+	}
 	if rep.OnCleanupFail != "" {
 		fmt.Fprintf(&b, `<p class="mut">On a failed cleanup: %s.</p>`, e(map[string]string{"stop": "stop the run (the remaining tests are skipped)", "restore": "restore the configuration saved before the run, then go on", "factory": "reset the devices to factory default, then go on"}[rep.OnCleanupFail]))
 	}

@@ -212,6 +212,7 @@ export function expectLabel(e: TestExpect): string {
 export function stepText(s: TestStep): string {
   if (s.loop) return `for each {{${s.loop.var}}} in ${s.loop.values?.join(', ') ?? s.loop.range ?? s.loop.from ?? ''}: ${s.loop.steps.map(stepText).join('; ')}`;
   if (s.traffic) return `traffic test ${s.traffic.test}`;
+  if (s.upgrade) return `upgrade ${s.upgrade.session} to ${s.upgrade.image}`;
   if (!s.run && !s.http && !s.snmp) return s.wait ? `wait ${s.wait} s` : '';
   if (s.run) return s.run.command;
   if (s.snmp) return s.snmp.op === 'set' ? 'set ' + (s.snmp.values ?? []).map(v => `${v.oid} = ${v.value}`).join(', ') : `${s.snmp.op || 'get'} ${(s.snmp.oids ?? []).join(' ')}`;

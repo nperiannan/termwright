@@ -463,6 +463,28 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 			return "", err
 		}
 		return testsReportText(f, rep), nil
+	case "history":
+		var b strings.Builder
+		for _, h := range func() []testrec.TestHistory { f, _ := a.testsFolder(); return f.History(argStr(args, "file"), argInt(args, "limit", 30, 500)) }() {
+			fmt.Fprintf(&b, "%s: %d passed, %d failed, %d skipped, %d flips, avg %d ms\n", h.File, h.Passed, h.Failed, h.Skipped, h.Flips, h.AvgMs)
+			for _, v := range h.ByVersion {
+				fmt.Fprintf(&b, "  %s: %d passed, %d failed\n", v.Version, v.Passed, v.Failed)
+			}
+			for i, r := range h.Runs {
+				if i == 5 {
+					break
+				}
+				st := map[bool]string{true: "passed", false: "FAILED"}[r.Passed]
+				if r.Skipped {
+					st = "skipped"
+				}
+				fmt.Fprintf(&b, "  %s %s %s\n", r.At.Local().Format("2006-01-02 15:04"), st, r.Problem)
+			}
+		}
+		if b.Len() == 0 {
+			return "No history yet: run tests first.", nil
+		}
+		return b.String(), nil
 	case "generate":
 		files := argStrs(args, "files")
 		if x := argStr(args, "file"); x != "" {

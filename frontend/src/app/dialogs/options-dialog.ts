@@ -452,6 +452,9 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <label>Error patterns</label>
                   <textarea name="dter" class="mono" rows="2" [(ngModel)]="d.errorPatterns" [placeholder]="errorsDefault(d.name) || 'Error messages of the device, one regular expression per line, e.g. ^ *% *Invalid'"></textarea>
                   <label></label><div class="hint">A test step fails when the device answers a command with a line that matches (unless the step has <b>Ignore device errors</b>). Empty: the built-in patterns{{ errorsDefault(d.name) ? '' : ' (none for this type)' }}.</div>
+                  <label>Upgrade</label>
+                  <textarea name="dtup" class="mono" rows="2" [(ngModel)]="d.upgrade" placeholder="Commands that install a software image for a test's upgrade step; {{ '{image}' }} is the image, e.g. download image {{ '{image}' }} / reboot"></textarea>
+                  <label></label><div class="hint">Termwright answers the confirmations and waits up to 25 minutes until the device logs in again. Never run on production sessions.</div>
                   <label>Factory reset</label>
                   <textarea name="dtfr" class="mono" rows="2" [(ngModel)]="d.factoryReset" [placeholder]="factoryDefault(d.name) || 'Commands that reset to factory default and reboot, e.g. write erase / reload'"></textarea>
                   <label></label><div class="hint">For test runs with <b>On a failed cleanup: Factory default</b>; Termwright answers the confirmations and waits up to 15 minutes for the device. Never run on production sessions.</div>

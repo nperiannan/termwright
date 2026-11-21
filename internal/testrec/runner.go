@@ -42,6 +42,8 @@ type Result struct {
 	Ms int64 `json:"ms"`
 	// Passed: every step (setup and cleanup too) passed.
 	Passed bool `json:"passed"`
+	// Versions: the software each device of the case ran (session → version).
+	Versions map[string]string `json:"versions,omitempty"`
 	// CleanupFailed: a cleanup step (or the restore) failed - the device may not be clean; the case
 	// failed because of its cleanup.
 	CleanupFailed bool `json:"cleanupFailed,omitempty"`
@@ -435,6 +437,9 @@ func stepKind(s Step) string {
 	if s.Traffic != nil {
 		return "traffic"
 	}
+	if s.Upgrade != nil {
+		return "upgrade"
+	}
 	return "run"
 }
 
@@ -446,6 +451,8 @@ func stepName(s Step, i int) string {
 		return "loop " + s.Loop.Var
 	case s.Traffic != nil:
 		return "traffic test " + s.Traffic.Test
+	case s.Upgrade != nil:
+		return "upgrade to " + s.Upgrade.Image
 	case actions(s) == 0 && s.Wait > 0:
 		return fmt.Sprintf("wait %g s", s.Wait)
 	case s.Run != nil:
@@ -467,7 +474,7 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 	to := time.Duration(st.Timeout) * time.Second
 	if to <= 0 {
 		to = 60 * time.Second
-		if st.Traffic != nil {
+		if st.Traffic != nil || st.Upgrade != nil {
 			to = 30 * time.Minute
 		}
 	}
@@ -509,6 +516,13 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 		sr.Target, sr.Sent = sn.Session, snmpText(sn)
 		rows, err = d.SNMP(sctx, sn)
 		sr.Rows, out = rows, SNMPOutput(rows)
+	case st.Upgrade != nil:
+		sr.Target, sr.Sent = Fill(st.Upgrade.Session, v), "upgrade to "+Fill(st.Upgrade.Image, v)
+		if u, ok := d.(Upgrader); ok {
+			out, err = u.Upgrade(sctx, sr.Target, Fill(st.Upgrade.Image, v))
+		} else {
+			err = errors.New("this runner cannot upgrade devices")
+		}
 	case st.Traffic != nil:
 		sr.Target, sr.Sent = "lab", "traffic test "+Fill(st.Traffic.Test, v)
 		if tr, ok := d.(TrafficRunner); ok {
@@ -783,7 +797,7 @@ type StepAnswer struct {
 // RunOne runs one step's action (variables already filled in) without its checks - for the
 // generated tests, which send their steps to Termwright one by one.
 func RunOne(ctx context.Context, st Step, d Driver) StepAnswer {
-	one := Step{Run: st.Run, HTTP: st.HTTP, SNMP: st.SNMP, Traffic: st.Traffic, Timeout: st.Timeout}
+	one := Step{Run: st.Run, HTTP: st.HTTP, SNMP: st.SNMP, Traffic: st.Traffic, Upgrade: st.Upgrade, Timeout: st.Timeout}
 	var sr StepResult
 	if st.Retry != nil { // the generated tests' retry: Termwright repeats the step until its checks pass
 		one.Expect, one.Retry = st.Expect, st.Retry
@@ -799,7 +813,7 @@ func RunOne(ctx context.Context, st Step, d Driver) StepAnswer {
 
 func actions(s Step) int {
 	n := 0
-	for _, b := range []bool{s.Run != nil, s.HTTP != nil, s.SNMP != nil, s.Traffic != nil} {
+	for _, b := range []bool{s.Run != nil, s.HTTP != nil, s.SNMP != nil, s.Traffic != nil, s.Upgrade != nil} {
 		if b {
 			n++
 		}
@@ -947,4 +961,14 @@ func ConfigDiff(old, now string, ignore []*regexp.Regexp) string {
 		}
 	}
 	return strings.Join(out, "\n")
+}
+
+// Upgrader installs software images (upgrade steps); it returns the version the device runs then.
+type Upgrader interface {
+	Upgrade(ctx context.Context, session, image string) (string, error)
+}
+
+// Versioner tells which software the devices run (recorded with each result and in the history).
+type Versioner interface {
+	Versions(ctx context.Context, sessions []string) map[string]string
 }

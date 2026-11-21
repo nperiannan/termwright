@@ -383,3 +383,12 @@ func (a *App) TestSaveSuite(rel string, s testrec.Suite) (string, error) {
 	}
 	return f.SaveSuite(rel, s)
 }
+
+// TestHistory: the last runs of a test (file "": every test) with pass rate, flips and versions.
+func (a *App) TestHistory(file string, limit int) ([]testrec.TestHistory, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return nil, err
+	}
+	return f.History(file, limit), nil
+}

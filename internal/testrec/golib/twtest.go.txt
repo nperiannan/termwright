@@ -325,6 +325,12 @@ func (s *Step) RunParsed(session, command, prompt, parse string, timeout int) *A
 	return s.send(map[string]any{"run": map[string]any{"session": s.c.Fill(session), "command": s.c.Fill(command), "prompt": prompt, "parse": parse}, "timeout": timeout})
 }
 
+// Upgrade installs a software image with the device type's upgrade commands and waits for the device.
+func (s *Step) Upgrade(session, image string, timeout int) *Answer {
+	s.Helper()
+	return s.send(map[string]any{"upgrade": map[string]any{"session": s.c.Fill(session), "image": s.c.Fill(image)}, "timeout": timeout})
+}
+
 // Traffic runs a saved lab traffic test; its results are JSON (a.JSON("rows[0].loss")).
 func (s *Step) Traffic(test string, timeout int) *Answer {
 	s.Helper()

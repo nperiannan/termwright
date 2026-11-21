@@ -5,11 +5,11 @@ import { Backend, errText } from '../core/backend';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { Recorder, escapeRe, fieldPattern } from '../core/recorder.service';
-import { CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestStepResult, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
+import { CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestHistory, TestStepResult, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
 import { expectLabel, parseTableCheck, stepText } from './recorder-panel';
 import { AIChat } from '../core/ai-chat.service';
 
-type View = 'steps' | 'yaml' | 'go' | 'py' | 'tcl';
+type View = 'steps' | 'yaml' | 'go' | 'py' | 'tcl' | 'history';
 type Phase = 'setup' | 'steps' | 'cleanup';
 type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
 
@@ -107,7 +107,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
         @switch (section()) {
           @case ('runs') {
             @if (runRep(); as rep) {
-              <div class="head"><div class="crumb">{{ rep.dir }} · {{ rep.testbed ? 'testbed ' + base(rep.testbed) : "the tests' own sessions" }} · {{ rep.cleanup === 'off' ? 'no cleanup' : rep.cleanup === 'auto' ? 'cleanup or undo' : 'cleanup steps' }} · {{ dur(rep.ms) }}</div>
+              <div class="head"><div class="crumb">{{ rep.dir }} · {{ rep.testbed ? 'testbed ' + base(rep.testbed) : "the tests' own sessions" }} · {{ rep.cleanup === 'off' ? 'no cleanup' : rep.cleanup === 'auto' ? 'cleanup or undo' : 'cleanup steps' }} · {{ dur(rep.ms) }}@if (verText(rep.versions)) { · {{ verText(rep.versions) }} }</div>
                 <div class="title"><h1>Run · {{ when(rep.dir) }}</h1>
                   <span class="pill" [class]="rep.failed ? 'pill f' : rep.skipped ? 'pill s' : 'pill p'">{{ rep.failed ? rep.failed + ' failed' : rep.skipped ? rep.skipped + ' skipped' : 'all passed' }}</span>
                   <span class="sp"></span>
@@ -171,8 +171,9 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                 </div>
                 <div class="tabs">
                   <button type="button" [class.on]="view() === 'steps'" (click)="setView('steps')">Steps</button>
-                  <button type="button" [class.on]="view() !== 'steps'" (click)="setView(view() === 'steps' ? 'yaml' : view())">Code</button>
-                  @if (view() !== 'steps') { <span class="seg">@for (v of views.slice(1); track v.k) { <button type="button" [class.on]="view() === v.k" (click)="setView(v.k)">{{ v.l }}</button> }</span> }
+                  <button type="button" [class.on]="view() === 'history'" (click)="setView('history')">History</button>
+                  <button type="button" [class.on]="view() !== 'steps' && view() !== 'history'" (click)="setView(view() === 'steps' || view() === 'history' ? 'yaml' : view())">Code</button>
+                  @if (view() !== 'steps' && view() !== 'history') { <span class="seg">@for (v of views.slice(1); track v.k) { <button type="button" [class.on]="view() === v.k" (click)="setView(v.k)">{{ v.l }}</button> }</span> }
                 </div>
               </div>
               <div class="body">
@@ -198,12 +199,13 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                       </div></div>
                     @for (ph of phases; track ph.k) {
                       <div class="sec">
-                        <div class="sh">{{ ph.l }}<span class="sp"></span><button type="button" class="lnk" (click)="addStep(ph.k)">+ Step</button><button type="button" class="lnk" (click)="addWait(ph.k)">+ Wait</button><button type="button" class="lnk" (click)="addTraffic(ph.k)" title="Run a saved traffic test of the emulated lab">+ Traffic</button><button type="button" class="lnk" (click)="addLoop(ph.k)" title="Run steps once per value">+ Loop</button></div>
+                        <div class="sh">{{ ph.l }}<span class="sp"></span><button type="button" class="lnk" (click)="addStep(ph.k)">+ Step</button><button type="button" class="lnk" (click)="addWait(ph.k)">+ Wait</button><button type="button" class="lnk" (click)="addUpgrade(ph.k)" title="Install a software image (the device type's upgrade commands) and wait for the device">+ Upgrade</button><button type="button" class="lnk" (click)="addTraffic(ph.k)" title="Run a saved traffic test of the emulated lab">+ Traffic</button><button type="button" class="lnk" (click)="addLoop(ph.k)" title="Run steps once per value">+ Loop</button></div>
                         @for (s of listOf(d, ph.k); track $index; let i = $index; let lastI = $last) {
                           <div class="ed">
                             <div class="row"><b class="num">{{ i + 1 }}</b>
                               @if (s.run) { <input class="ses" [(ngModel)]="s.run.session" placeholder="session" aria-label="Session" /><input class="cmdi" [(ngModel)]="s.run.command" placeholder="command" aria-label="Command" /> }
                               @else if (s.http) { <select [(ngModel)]="s.http.method" aria-label="Method">@for (m of methods; track m) { <option [value]="m">{{ m }}</option> }</select><input class="cmdi" [(ngModel)]="s.http.url" placeholder="URL" aria-label="URL" /> }
+                              @else if (s.upgrade) { <span class="mut">upgrade</span><input class="ses" [(ngModel)]="s.upgrade.session" placeholder="session" aria-label="Session" /><input class="cmdi" [(ngModel)]="s.upgrade.image" placeholder="image file or URL" aria-label="Image" /> }
                               @else if (s.traffic) { <span class="mut">traffic test</span><input class="cmdi" [(ngModel)]="s.traffic.test" placeholder="saved lab traffic test" aria-label="Traffic test" /> }
                               @else { <span class="cmd fl">{{ text(s) }}</span><span class="sp"></span>@if (s.loop) { <span class="mut">edit loops in the YAML</span> } }
                               <button type="button" class="lnk" (click)="moveStep(ph.k, i, -1)" [disabled]="i === 0" title="Move up">↑</button><button type="button" class="lnk" (click)="moveStep(ph.k, i, 1)" [disabled]="lastI" title="Move down">↓</button><button type="button" class="lnk" (click)="removeStep(ph.k, i)" title="Remove the step">✕</button>
@@ -268,6 +270,25 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                       }
                     }
                   }
+                } @else if (view() === 'history') {
+                  @if (hist(); as h) {
+                    <div class="kpis">
+                      <div class="kpi"><b [class]="h.failed ? 'kbad' : 'kok'">{{ rate(h) }}%</b><span>passed ({{ h.passed }} of {{ h.passed + h.failed }})</span></div>
+                      <div class="kpi"><b [class.kwarn]="h.flips >= 2">{{ h.flips }}</b><span>{{ h.flips >= 2 && h.passed && h.failed ? 'flips - flaky' : 'flips between passed and failed' }}</span></div>
+                      <div class="kpi"><b>{{ dur(h.avgMs) }}</b><span>average time</span></div>
+                      <div class="kpi"><b>{{ h.runs.length }}</b><span>runs kept</span></div></div>
+                    <div class="dots" title="Oldest left, newest right">@for (r of h.runs.slice().reverse(); track $index) { <i [class]="r.skipped ? 'dw' : r.passed ? 'dp' : 'df'" [title]="r.at.slice(0, 16).replace('T', ' ') + ' ' + (r.skipped ? 'skipped' : r.passed ? 'passed' : 'failed: ' + (r.problem ?? ''))"></i> }</div>
+                    @if (h.byVersion.length > 1 || (h.byVersion.length === 1 && h.byVersion[0].version !== 'unknown')) {
+                      <div class="sec"><div class="sh">By software version</div>
+                        @for (v of h.byVersion; track v.version) { <div class="vrow"><span>{{ v.version }}</span><span class="ok">{{ v.passed }} passed</span><span [class.bad]="v.failed">{{ v.failed }} failed</span><span class="bar2"><i class="okb" [style.flex]="v.passed"></i><i class="badb" [style.flex]="v.failed"></i></span></div> }</div>
+                    }
+                    <div class="sec"><div class="rhd"><span></span><span>When</span><span>Problem</span><span class="r">Time</span></div>
+                      @for (r of h.runs; track $index) {
+                        <div class="rrow" (click)="openRunReport(r.dir)" (keydown.enter)="openRunReport(r.dir)" tabindex="0" role="button"><span [class]="r.skipped ? 'warn' : r.passed ? 'ok' : 'bad'">{{ r.skipped ? '○' : r.passed ? '✓' : '✗' }}</span>
+                          <span>{{ r.at.slice(0, 16).replace('T', ' ') }}@if (r.testbed) { <span class="mut"> · {{ base(r.testbed) }}</span> }@if (verText(r.versions)) { <span class="mut"> · {{ verText(r.versions) }}</span> }</span>
+                          <span class="mut">{{ r.problem }}</span><span class="r mut">{{ dur(r.ms) }}</span></div>
+                      }</div>
+                  } @else { <p class="mut">No runs of this test yet.</p> }
                 } @else if (view() === 'yaml') {
                   <textarea class="code" [(ngModel)]="yaml" spellcheck="false" aria-label="Test YAML"></textarea>
                   <div class="row"><span class="mut">Saving checks the test and writes its Go, Python and TCL code again.</span><span class="sp"></span><button type="button" (click)="setView('yaml')">Revert</button><button type="button" class="pri" (click)="saveYaml()">Save</button></div>
@@ -368,6 +389,8 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .ed { padding: 9px 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px; } .num { width: 18px; color: var(--muted); font-weight: 500; }
     .ses { width: 160px; height: 27px; } .cmdi { flex: 1; min-width: 0; height: 27px; font-family: var(--mono, monospace); } .num2 { width: 60px; height: 24px; } .pin { width: 100px; height: 24px; }
     .opts .wide { flex: 1; } .opts .wide .cmdi { height: 26px; }
+    .dots { display: flex; gap: 3px; flex-wrap: wrap; } .dots i { width: 10px; height: 18px; border-radius: 3px; } .dp { background: var(--ok, #3fbf75); } .df { background: var(--danger, #ef6161); } .dw { background: var(--warn, #e0a030); }
+    .vrow { display: grid; grid-template-columns: minmax(160px, 1fr) 90px 90px 1.2fr; gap: 10px; padding: 7px 12px; border-top: 1px solid var(--border); font-size: 12.5px; align-items: center; } .bar2 { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--text) 8%, transparent); }
     .logic { display: inline-block; margin-left: 8px; font: 11px var(--ui-font, inherit); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); padding: 0 6px; border-radius: 8px; }
     .opts { flex-wrap: wrap; font-size: 12px; color: var(--muted); gap: 16px; padding-left: 24px; } .opts label { display: flex; align-items: center; gap: 4px; } .ed .chips { padding-left: 24px; }
     .addck { display: inline-flex; gap: 4px; } .addck select, .addck input { height: 24px; font-size: 12px; } .addck input { width: 220px; }
@@ -496,8 +519,12 @@ export class TestsView implements OnInit, OnDestroy {
     await this.setView(keepView ? this.view() : 'steps');
   }
 
+  readonly hist = signal<TestHistory | null>(null);
+  rate(h: TestHistory) { const n = h.passed + h.failed; return n ? Math.round(h.passed * 100 / n) : 0; }
+  verText(v?: Record<string, string>) { const l = [...new Set(Object.values(v ?? {}))]; return l.join(', '); }
   async setView(v: View) {
     this.view.set(v);
+    if (v === 'history') { const l = await this.backend.testHistory(this.sel(), 50).catch(() => []); this.hist.set(l?.[0] ?? null); return; }
     const f = this.sel();
     if (v === 'yaml') this.yaml = await this.backend.testFile(f).catch(e => '# ' + errText(e));
     if (v === 'go' || v === 'py' || v === 'tcl') this.goSrc.set(await this.backend.testFile(v === 'go' ? this.goFile() : v === 'py' ? this.pyFile() : this.tclFile()).catch(() => tr('No generated code yet: save the test (YAML → Save) to write it.')));
@@ -840,6 +867,11 @@ export class TestsView implements OnInit, OnDestroy {
     const ses = [...all].reverse().find(s => s.run)?.run?.session ?? '';
     this.listOf(d, p).push({ run: { session: ses, command: '' } });
     this.touch();
+  }
+  addUpgrade(p: Phase) {
+    const d = this.draft(); if (!d) return;
+    const all = [...(d.setup ?? []), ...d.steps, ...(d.cleanup ?? [])], ses = [...all].reverse().find(s => s.run)?.run?.session ?? '';
+    this.listOf(d, p).push({ upgrade: { session: ses, image: '' } }); this.touch();
   }
   addTraffic(p: Phase) { const d = this.draft(); if (!d) return; this.listOf(d, p).push({ traffic: { test: '' }, expect: [{ json: 'rows[0].loss', less: 0.01 }] }); this.touch(); }
   setWatch(d: TestCase, k: 'syslog' | 'traps', v: string) {

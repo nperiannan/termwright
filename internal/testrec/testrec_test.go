@@ -555,7 +555,7 @@ type watchFake struct {
 	hits []string
 }
 
-func (w *watchFake) WatchMark(*Watch) (any, error) { return 1, nil }
+func (w *watchFake) WatchMark(*Watch) (any, error)                    { return 1, nil }
 func (w *watchFake) WatchHits(any, Watch, []string) ([]string, error) { return w.hits, nil }
 func (w *watchFake) ConfigSnapshot(context.Context, string) (string, error) {
 	c := w.cfg[0]
@@ -575,5 +575,20 @@ func TestWatchConfigDiff(t *testing.T) {
 	r := Run(context.Background(), c, w, nil)
 	if r.Passed || !r.CleanupFailed || !strings.Contains(r.Steps[len(r.Steps)-1].Output, "+ vlan 42") || !strings.Contains(r.Steps[1].Error, "LINK down") {
 		t.Fatal(r.Steps)
+	}
+}
+
+func TestRunHistory(t *testing.T) {
+	f := Folder{Root: t.TempDir()}
+	f.Init()
+	c, _ := Parse([]byte("steps: [{run: {session: s, command: show version}, expect: [{contains: ExtremeXOS}]}]"))
+	rel, _ := f.Save("h", c)
+	f.RunFiles(context.Background(), []string{rel}, &fake{}, nil, nil)
+	c.Steps[0].Expect[0].Contains = "NOPE"
+	f.Save("h", c)
+	f.RunFiles(context.Background(), []string{rel}, &fake{}, nil, nil)
+	h := f.History(rel, 10)
+	if len(h) != 1 || h[0].Passed != 1 || h[0].Failed != 1 || h[0].Flips != 1 || h[0].Runs[0].Passed || !strings.Contains(h[0].Runs[0].Problem, "NOPE") {
+		t.Fatal(h)
 	}
 }

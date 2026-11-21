@@ -2153,6 +2153,7 @@ paths:
                                         - save_state
                                         - restore_state
                                         - results
+                                        - history
                                     type: string
                                 at:
                                     description: 'schedule: time of day HH:MM (daily, weekdays, weekly)'

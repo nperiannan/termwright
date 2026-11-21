@@ -583,3 +583,8 @@ proc tw::retry_until {timeout interval expect} {
 proc tw::traffic {test {timeout 0}} {
     tw::_send "\{\"traffic\":\{\"test\":[tw::jstr [tw::fill $test]]\},\"timeout\":$timeout\}"
 }
+
+# tw::upgrade session image ?timeout?: installs a software image and waits for the device.
+proc tw::upgrade {session image {timeout 0}} {
+    tw::_send "\{\"upgrade\":\{\"session\":[tw::jstr [tw::fill $session]],\"image\":[tw::jstr [tw::fill $image]]\},\"timeout\":$timeout\}"
+}

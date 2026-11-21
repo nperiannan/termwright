@@ -234,6 +234,8 @@ func checkSteps(all []Step, in string) error {
 			return fmt.Errorf("%sstep %d: an snmp set needs values", in, i+1)
 		case s.SNMP != nil && !strings.EqualFold(s.SNMP.Op, "set") && len(s.SNMP.OIDs) == 0:
 			return fmt.Errorf("%sstep %d: snmp needs oids", in, i+1)
+		case s.Upgrade != nil && (s.Upgrade.Session == "" || s.Upgrade.Image == ""):
+			return fmt.Errorf("%sstep %d: upgrade needs a session and an image", in, i+1)
 		case s.Traffic != nil && s.Traffic.Test == "":
 			return fmt.Errorf("%sstep %d: traffic needs a test (a saved lab traffic test)", in, i+1)
 		case s.Run != nil && (s.Run.Session == "" || s.Run.Command == ""):
@@ -273,6 +275,8 @@ func (f Folder) Save(rel string, c Case) (string, error) {
 
 // RunReport is a run of one or more cases with its reports.
 type RunReport struct {
+	// Versions: the software each device ran at the start of the run (session → version).
+	Versions map[string]string `json:"versions,omitempty"`
 	// Testbed the run used ("" = the tests' own sessions) and its cleanup mode.
 	Testbed string `json:"testbed,omitempty"`
 	Cleanup string `json:"cleanup,omitempty"`
@@ -359,6 +363,9 @@ func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars
 			}
 		}
 	}
+	if vr, ok := d.(Versioner); ok && len(all) > 0 {
+		rep.Versions = vr.Versions(ctx, all)
+	}
 	if mode != "stop" && !canRecover {
 		return rep, errors.New("this runner cannot restore or reset devices after a failed cleanup")
 	}
@@ -397,6 +404,23 @@ func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars
 		}
 		for _, r := range rs {
 			r.File = file
+			if len(rep.Versions) > 0 && loaded {
+				v := map[string]string{}
+				for k, x := range c.Vars {
+					v[k] = x
+				}
+				for k, x := range vars {
+					v[k] = x
+				}
+				for _, s := range Sessions(c, v) {
+					if x := rep.Versions[s]; x != "" {
+						if r.Versions == nil {
+							r.Versions = map[string]string{}
+						}
+						r.Versions[s] = x
+					}
+				}
+			}
 			switch {
 			case r.Skipped && status[file] == "":
 				status[file] = "skipped"
@@ -471,6 +495,7 @@ func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars
 			return rep, err
 		}
 	}
+	f.appendHistory(rep)
 	return rep, nil
 }
 

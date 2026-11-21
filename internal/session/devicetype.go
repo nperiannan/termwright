@@ -48,6 +48,9 @@ type DeviceType struct {
 	// FactoryReset: commands that reset the device to factory default (a run's "on a failed cleanup:
 	// factory default"), one per line; the device may restart. Empty = the built-in ones, if any.
 	FactoryReset string `json:"factoryReset,omitempty"`
+	// Upgrade: commands that install a software image for a test's upgrade step, one per line;
+	// {image} is the image (a file name or URL). The device may restart; Termwright waits for it.
+	Upgrade string `json:"upgrade,omitempty"`
 	// The device's web server, for Open Web Interface (each empty = the built-in one for the type's name):
 	// WebCheck prints its state, WebHTTP and WebHTTPS match that output while each is on, WebOn turns both
 	// on and WebSave keeps it after a restart (commands one per line; {name} is the session's name).
