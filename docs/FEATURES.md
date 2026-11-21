@@ -11,7 +11,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Updates**: Help → Check for Updates shows the installed version, the latest stable release with its changes and newer nightly builds; downloads and opens the installer.
 - **Update channels**: be told about stable releases, stable and nightly, or nothing; optional check at start-up.
 - **Release notes**: every release and nightly build lists its changes (CHANGELOG) and commits.
-- **Keeps the computer awake**: while Termwright is open the computer does not go to sleep on its own (macOS, Windows, Linux; the display can still turn off) - a Global Option, on by default.
+- **Keeps the computer awake**: while Termwright is open the computer does not go to sleep on its own (macOS, Windows, Linux; the display can still turn off) - a Global Option, on by default; also from the AI assistant, MCP, the local API and Python (`keep_awake`).
 - **Free and open source**: Apache-2.0.
 
 ## Main window
@@ -113,6 +113,9 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **Workspace**: Tests, Runs, Schedules, Testbeds and Library; tests as tables with expected vs got; a Run panel for every run setting.
 - **Edit and select**: edit steps and checks in the Tests tab, rename, duplicate and delete tests (to `.removed/`), run only the ticked tests or a folder; the `lib/` helpers are listed apart from the tests.
 - **Tests for AI and automation**: the `tests` tool for the AI assistant and MCP apps, `POST /api/v1/tools/tests`, and `lab.tests` in Python.
+- **Import from Postman and OpenAPI**: one test per request or operation, folders and tags as suites, status checks from the scripts, examples or 2xx answers; Excel and CSV manual test cases too.
+- **Team roles and approvals**: `roles.yaml` (editors, runners, approvers) and approved runs on production sessions (or always), requested and decided in the Tests tab, valid 24 hours, in the audit log.
+- **JSON Schema checks**: `schema` on API steps (inline or a file); SNMP gets and walks recorded with checks that hold (set values, configured names; no counters).
 
 ## AI assistant and connector
 
@@ -384,10 +387,13 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **Like Postman**: request tabs; Docs, Params with path variables and bulk edit, Authorization (inherit, none, bearer, basic, API key) per request and per collection, Headers with hidden auto headers and presets, Body (form-data with files, URL-encoded, raw JSON / Text / JavaScript / HTML / XML, binary, GraphQL), Scripts before and after, request Settings (HTTP version, certificates, redirects, URL encoding, cookies, timeout); environments and globals with secret values in the credential store; coloured `{{variables}}` and a variables panel; console; cookie manager; Send and Download; paste cURL into the URL.
 - **Import and export**: Postman v2.0 / v2.1 collections and environments, OpenAPI 3 and Swagger 2 (YAML or JSON), cURL; export for Postman v2.1.
 - **API client for automation**: the in-app AI agent, MCP apps, the local REST API (`/api/v1/http…`) and the Python client; changes on production sessions always ask.
+- **API mocks, monitors and schemas**: saved examples per request, a mock server per collection (path variables, `x-mock-example`), monitors that run a collection every few minutes and notify on failure and recovery, and JSON Schema checks of answers (`pm.response.to.have.jsonSchema`).
 - **SNMP Browser** (SNMP menu, or right-click a session → Open SNMP Browser): Get, Get Next, Get Bulk, Walk, Table and Set; SNMP v1, v2c, v3 (MD5, SHA-1, SHA-2; DES, AES-128/192/256); MIB tree with search and object details; 24 IETF/IANA MIBs built in, vendor MIBs from files; readable values (enum names, speeds, MAC addresses); Table view, History, Favourites, Export CSV.
 - **SNMP Browser extras**: several devices at once, Compare two walks, Poll with a live chart (counter rates), Send Trap (v1/v2c/v3), MIBs window (modules, problems, open folder, remove).
+- **SNMP dashboards and alarms**: saved pages of values from several devices with sparklines, rates per second and alarms (above, below, not a value) as notifications, also in the background.
+- **SNMP files and simulator**: export to Excel, save and open walk files (`snmpwalk -On` format), and a v1/v2c agent that answers from a walk like the device.
 - **SNMP sessions** and a separate write community; Open SNMP Browser from a terminal tab.
 - **SNMP credentials in the session**: session properties → SNMP (version, address, port, community or v3 user and protocols, context, Allow Set, Test); the community and v3 passwords are in the OS credential store.
 - **Trap receiver**: v1, v2c and v3 traps and informs on any UDP port, named from the MIBs, matched to sessions.
 - **SNMP for automation**: the in-app AI agent, MCP apps, the local REST API (`/api/v1/snmp…`, `/api/v1/tools`) and the Python client; a Set needs Allow Set, and production sessions always ask.
-- **Network Map**: live topology from your sessions (LLDP, CDP, EDP, STP, LAG; EXOS, VOSS, Cisco, Arista, Junos; CLI or SNMP), auto-arranged, zoom, export to JPEG, PDF or HTML. The labs have the same Arrange styles.
+- **Network Map**: live topology from your sessions (LLDP, CDP, EDP, STP, LAG; EXOS, VOSS, Cisco, Arista, Junos, Huawei VRP, Ruckus ICX, Eltex MES and any device type with TextFSM templates in its Network map; CLI or SNMP), auto-arranged, zoom, export to JPEG, PDF or HTML. The labs have the same Arrange styles.

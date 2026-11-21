@@ -122,6 +122,8 @@ func goExpect(e Expect) string {
 		return "a.Matches(" + goStr(e.Matches) + ")"
 	case e.Status != 0:
 		return fmt.Sprintf("a.StatusIs(%d)", e.Status)
+	case e.Schema != "":
+		return "// the JSON Schema check runs in Termwright only"
 	case e.MaxMs != 0 && e.Field == "" && e.JSON == "" && e.OID == "":
 		return fmt.Sprintf("a.MaxMs(%d)", e.MaxMs)
 	case e.Field != "" || e.JSON != "" || e.OID != "":

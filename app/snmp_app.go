@@ -181,6 +181,8 @@ type SNMPRow struct {
 	Unknown bool `json:"unknown,omitempty"`
 	// Suggest: the MIB module that most likely describes it (load it to see names and meanings).
 	Suggest string `json:"suggest,omitempty"`
+	// Raw: the bytes in hex, for an OctetString that is not text (to save the walk exactly).
+	Raw string `json:"raw,omitempty"`
 }
 
 // SNMPResult is what an operation returned.
@@ -426,6 +428,9 @@ func (a *App) snmpRun(ctx context.Context, r SNMPRequest) (SNMPResult, error) {
 
 func snmpRow(mib *snmp.MIB, v snmp.Varbind) SNMPRow {
 	row := SNMPRow{OID: v.OID, Name: mib.Name(v.OID), Type: string(v.Type), Value: v.Value, Display: mib.Describe(v)}
+	if (v.Type == snmp.OctetString || v.Type == snmp.Opaque) && snmp.Text(v.Bytes) != string(v.Bytes) {
+		row.Raw = hex.EncodeToString(v.Bytes)
+	}
 	n, inst := mib.Lookup(v.OID)
 	if n != nil {
 		row.Object, row.Module, row.Instance = n.Name, n.Module, inst

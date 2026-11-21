@@ -80,6 +80,8 @@ func (a *App) startup(ctx context.Context) {
 	go a.syncLoop(ctx)
 	go a.labAutoStart(ctx)
 	go a.testsScheduler(ctx)
+	go a.apiMonitorLoop(ctx)
+	go a.snmpDashLoop(ctx)
 	a.applyKeepAwake()
 }
 

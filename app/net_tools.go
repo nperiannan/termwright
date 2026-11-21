@@ -59,7 +59,7 @@ var netTools = []mcpTool{
 		}, "action")},
 	{"snmp", "SNMP with a saved session's SNMP settings (session properties → SNMP; v1, v2c or v3) or an address and credentials: get, getnext, bulk and walk read; set writes (asked first on a production session, and only when the session allows writes). Values come back with the MIB's names and readable values (enum names, times, MAC addresses). mib_search and mib_info look objects up in the loaded MIBs (the standard IETF MIBs and the user's own); traps lists the notifications the trap receiver got; send_trap sends a test notification to a receiver.",
 		mcpSchema(map[string]any{
-			"action":    map[string]any{"type": "string", "enum": []string{"get", "getnext", "bulk", "walk", "set", "mib_search", "mib_info", "traps", "send_trap"}, "description": "what to do"},
+			"action":    map[string]any{"type": "string", "enum": []string{"get", "getnext", "bulk", "walk", "set", "mib_search", "mib_info", "traps", "send_trap", "dashboards", "poll_dashboard", "simulate", "stop_simulator", "simulator", "load_walk"}, "description": "what to do"},
 			"session":   map[string]any{"type": "string", "description": "a saved session's path (list_sessions); its SNMP settings and saved community / v3 passwords are used"},
 			"address":   map[string]any{"type": "string", "description": "instead of session: host or host:port"},
 			"version":   map[string]any{"type": "string", "enum": []string{"1", "2c", "3"}, "description": "with address (default 2c)"},
@@ -69,10 +69,13 @@ var netTools = []mcpTool{
 			"max":       map[string]any{"type": "integer", "description": "walk: at most this many values (default 2000 here)"},
 			"query":     map[string]any{"type": "string", "description": "mib_search: a name, module or OID; mib_info: one object"},
 			"trap":      map[string]any{"type": "string", "description": "send_trap: the notification (IF-MIB::linkDown or an OID), sent to address (port 162) with values"},
+			"dashboard": map[string]any{"type": "string", "description": "poll_dashboard: the saved dashboard's name or id"},
+			"file":      map[string]any{"type": "string", "description": "simulate / load_walk: a walk file (snmpwalk -On format)"},
+			"port":      map[string]any{"type": "integer", "description": "simulate: UDP port (default 1161)"},
 		}, "action")},
 	{"http", "The REST API client with saved API sessions (Protocol API: base URL, authentication - API key, bearer token, login, basic, OAuth 2.0 - and {{variables}}; secrets stay in the credential store) and collections. send sends one request (a path goes after the session's base URL; the login token is fetched and renewed by itself) or a saved one (collection + request); POST, PUT, PATCH and DELETE on a production session are asked first. run runs a collection's requests with their tests; collections / collection list them; save adds or replaces a request in a collection (made when missing), with its pre-request script (preScript) and tests in Postman's pm.* style (pm.test, pm.expect, pm.response.json(), pm.variables.set); import reads a cURL command, a Postman collection or an OpenAPI document into a collection; history lists the last requests; environments lists the environments (Postman's) and globals; variables lists the variables a request can use and where each comes from (secret values hidden).",
 		mcpSchema(map[string]any{
-			"action":      map[string]any{"type": "string", "enum": []string{"send", "run", "collections", "collection", "save", "import", "history", "environments", "variables"}, "description": "what to do"},
+			"action":      map[string]any{"type": "string", "enum": []string{"send", "run", "collections", "collection", "save", "import", "history", "environments", "variables", "mock", "stop_mock", "mocks", "monitors", "run_monitor"}, "description": "what to do"},
 			"environment": map[string]any{"type": "string", "description": "send / run / variables: an environment's id or name (environments lists them); its variables win over the session's"},
 			"session":     map[string]any{"type": "string", "description": "an API session's path (list_sessions shows protocol API)"},
 			"env":         map[string]any{"type": "string", "enum": []string{"", "production"}, "description": "production uses the variables' production values"},
@@ -105,6 +108,10 @@ var netTools = []mcpTool{
 			"facility": map[string]any{"type": "string", "description": "send: local7, user, … (default user)"},
 			"text":     map[string]any{"type": "string", "description": "send: the message"},
 		}, "action")},
+	{"keep_awake", "Whether Termwright keeps the computer from going to sleep on its own while it is open (for long test runs, captures and labs). status says whether it is kept awake; on / off changes the setting (saved).",
+		mcpSchema(map[string]any{
+			"action": map[string]any{"type": "string", "enum": []string{"status", "on", "off"}, "description": "what to do"},
+		}, "action")},
 }
 
 // isNetTool: the name is one of the network tools.
@@ -128,13 +135,96 @@ func (a *App) netToolRun(ctx context.Context, name string, args map[string]any, 
 		return a.deviceTool(ctx, args, ask)
 	case "tests":
 		return a.testsTool(ctx, args, ask)
+	case "keep_awake":
+		return a.keepAwakeTool(args)
 	}
 	return "", fmt.Errorf("no tool %s", name)
+}
+
+// keepAwakeTool reads or changes Keep the computer awake.
+func (a *App) keepAwakeTool(args map[string]any) (string, error) {
+	switch strings.ToLower(argStr(args, "action")) {
+	case "on", "off":
+		on := strings.EqualFold(argStr(args, "action"), "on")
+		cfg := a.cfg.Get()
+		cfg.KeepAwake = &on
+		if err := a.cfg.Save(cfg); err != nil {
+			return "", err
+		}
+		a.applyKeepAwake()
+	}
+	st := a.KeepAwakeStatus()
+	if st.Error != "" {
+		return "Not kept awake: " + st.Error, nil
+	}
+	if st.Active {
+		return "The computer is kept awake while Termwright is open.", nil
+	}
+	return "The computer may go to sleep on its own.", nil
 }
 
 func (a *App) snmpTool(ctx context.Context, args map[string]any, ask netAsker) (string, error) {
 	act := strings.ToLower(argStr(args, "action"))
 	switch act {
+	case "dashboards":
+		var b strings.Builder
+		for _, d := range a.SNMPDashboards() {
+			fmt.Fprintf(&b, "%s  %s  %d values every %d s  alarms=%v\n", d.ID, d.Name, len(d.Items), d.Every, d.Alarms)
+		}
+		if b.Len() == 0 {
+			return "No dashboards (SNMP Browser → Dashboards).", nil
+		}
+		return b.String(), nil
+	case "poll_dashboard":
+		id := argStr(args, "dashboard")
+		for _, d := range a.SNMPDashboards() {
+			if strings.EqualFold(d.Name, id) || d.ID == id {
+				p := a.pollDash(ctx, d)
+				var b strings.Builder
+				for i, v := range p.Values {
+					it := d.Items[i]
+					fmt.Fprintf(&b, "%s on %s = %s", orDefault(it.Label, it.OID), it.Session, v.Display)
+					if v.Alarm != "" {
+						b.WriteString("  ALARM: " + v.Alarm)
+					}
+					if v.Error != "" {
+						b.WriteString("  error: " + v.Error)
+					}
+					b.WriteString("\n")
+				}
+				return b.String(), nil
+			}
+		}
+		return "", errors.New("no dashboard " + id)
+	case "simulate":
+		st, err := a.SNMPSimStart(SNMPSimIn{File: argStr(args, "file"), Port: argInt(args, "port", 0, 65535), Community: argStr(args, "community")})
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("Simulating %d values from %s on udp %s (community %s)", st.Values, st.Source, st.Address, st.Community), nil
+	case "stop_simulator":
+		a.SNMPSimStop()
+		return "Stopped.", nil
+	case "simulator":
+		st := a.SNMPSim()
+		if !st.Running {
+			return "The simulator is not running.", nil
+		}
+		return fmt.Sprintf("Simulating %d values from %s on udp %s", st.Values, st.Source, st.Address), nil
+	case "load_walk":
+		w, err := a.readWalk(argStr(args, "file"))
+		if err != nil {
+			return "", err
+		}
+		var b strings.Builder
+		for i, r := range w.Rows {
+			if i >= 500 {
+				fmt.Fprintf(&b, "… %d more\n", len(w.Rows)-i)
+				break
+			}
+			fmt.Fprintf(&b, "%s = %s\n", r.Name, r.Display)
+		}
+		return b.String(), nil
 	case "mib_search":
 		var b strings.Builder
 		for i, n := range a.SNMPMibSearch(argStr(args, "query")) {

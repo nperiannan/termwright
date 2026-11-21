@@ -2364,12 +2364,24 @@ paths:
                                         - mib_info
                                         - traps
                                         - send_trap
+                                        - dashboards
+                                        - poll_dashboard
+                                        - simulate
+                                        - stop_simulator
+                                        - simulator
+                                        - load_walk
                                     type: string
                                 address:
                                     description: 'instead of session: host or host:port'
                                     type: string
                                 community:
                                     description: with address, v1/v2c (default public)
+                                    type: string
+                                dashboard:
+                                    description: 'poll_dashboard: the saved dashboard''s name or id'
+                                    type: string
+                                file:
+                                    description: 'simulate / load_walk: a walk file (snmpwalk -On format)'
                                     type: string
                                 max:
                                     description: 'walk: at most this many values (default 2000 here)'
@@ -2379,6 +2391,9 @@ paths:
                                     items:
                                         type: string
                                     type: array
+                                port:
+                                    description: 'simulate: UDP port (default 1161)'
+                                    type: integer
                                 query:
                                     description: 'mib_search: a name, module or OID; mib_info: one object'
                                     type: string
@@ -2454,6 +2469,11 @@ paths:
                                         - history
                                         - environments
                                         - variables
+                                        - mock
+                                        - stop_mock
+                                        - mocks
+                                        - monitors
+                                        - run_monitor
                                     type: string
                                 body:
                                     description: 'send: a JSON value (sent as JSON) or text'
@@ -2590,6 +2610,48 @@ paths:
                                 udp:
                                     description: 'start: UDP port (default the saved one, 514)'
                                     type: integer
+                            required:
+                                - action
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /tools/keep_awake:
+        post:
+            operationId: net_keep_awake
+            tags:
+                - Network tools
+            summary: The keep_awake tool
+            description: Whether Termwright keeps the computer from going to sleep on its own while it is open (for long test runs, captures and labs). status says whether it is kept awake; on / off changes the setting (saved). Through the API it runs without asking.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    description: what to do
+                                    enum:
+                                        - status
+                                        - "on"
+                                        - "off"
+                                    type: string
                             required:
                                 - action
             responses:
@@ -6093,6 +6155,24 @@ components:
                 - name
                 - level
                 - text
+        Example:
+            type: object
+            properties:
+                name:
+                    type: string
+                status:
+                    type: integer
+                headers:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPKeyValue'
+                body:
+                    type: string
+            required:
+                - name
+                - status
         FieldChange:
             type: object
             description: 'A field of a stream''s frames that changes from frame to frame: its value plus 0, step, 2·step… (count values, then again), or one of them at random.'
@@ -6472,6 +6552,16 @@ components:
                     type: string
                 description:
                     description: 'Description: what it does.'
+                    type: string
+                examples:
+                    description: 'Examples: saved answers, shown as documentation and served by the collection''s mock server.'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/Example'
+                schema:
+                    description: 'Schema: a JSON Schema the answer''s body must fit (checked after each send and in runs).'
                     type: string
             required:
                 - method
@@ -7945,6 +8035,9 @@ components:
                     type: boolean
                 suggest:
                     description: 'Suggest: the MIB module that most likely describes it (load it to see names and meanings).'
+                    type: string
+                raw:
+                    description: 'Raw: the bytes in hex, for an OctetString that is not text (to save the walk exactly).'
                     type: string
             required:
                 - oid

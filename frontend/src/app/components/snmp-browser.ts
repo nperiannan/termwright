@@ -2,7 +2,7 @@ import { Component, ElementRef, OnDestroy, OnInit, computed, effect, inject, inp
 import { FormsModule } from '@angular/forms';
 import { SlicePipe } from '@angular/common';
 import { Backend, errText } from '../core/backend';
-import { Session, SessionNode, SNMPMibNode, SNMPModule, SNMPResult, SNMPRow, SNMPTrapsView } from '../core/models';
+import { SNMPDashboard, SNMPDashItem, SNMPDashPoll, SNMPSimState, Session, SessionNode, SNMPMibNode, SNMPModule, SNMPResult, SNMPRow, SNMPTrapsView } from '../core/models';
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
@@ -110,7 +110,10 @@ const FAV_KEY = 'tw.snmp.favourites';
             <a [class.on]="view() === 'poll'" (click)="view.set('poll')">Poll{{ polling() ? ' ●' : '' }}</a>
             <a [class.on]="view() === 'traps'" (click)="view.set('traps')">Traps <i>{{ traps().traps.length }}</i></a>
             <a [class.on]="view() === 'history'" (click)="view.set('history')">History</a>
-            <span class="sp"></span><button type="button" class="tbtn" (click)="exportCsv()" [disabled]="!result()?.rows?.length">Export CSV</button>
+            <a [class.on]="view() === 'dash'" (click)="openDash()">Dashboards{{ dashAlarms() ? ' ⚠' : '' }}</a>
+            <span class="sp"></span>
+            @if (sim().running) { <span class="simon" [title]="'Answers ' + sim().values + ' values from ' + sim().source + ' (community ' + sim().community + ')'">● Simulator {{ sim().address }}</span><button type="button" class="tbtn" (click)="simStop()">Stop</button> }
+            <button type="button" class="tbtn" (click)="fileMenu($event)">File ▾</button>
           </div>
           <div class="body">
             @if (error()) { <div class="err">{{ error() }}</div> }
@@ -160,6 +163,37 @@ const FAV_KEY = 'tw.snmp.favourites';
                     @for (d of diff().rows; track d.k) { <tr translate="no" [class]="'d-' + d.kind"><td>{{ d.k }}</td><td>{{ d.a ?? '' }}</td><td>{{ d.b ?? '' }}</td><td class="mut">{{ d.kind === 'same' ? '' : d.kind === 'changed' ? 'changed' : d.kind === 'a' ? 'only in A' : 'only in B' }}</td></tr> }
                   </tbody></table>
                 }
+              }
+              @case ('dash') {
+                <div class="dbar">
+                  @for (d of dashes(); track d.id) { <a class="dchip" [class.on]="dash()?.id === d.id" (click)="pickDash(d)">{{ d.name }}@if (d.alarms) { <i title="Alarms also while closed">🔔</i> }</a> }
+                  <button type="button" class="tbtn" (click)="newDash()">+ New Dashboard</button>
+                  @if (dash(); as d) {
+                    <span class="sp"></span>
+                    <label class="sm">Every <input type="number" min="5" [ngModel]="d.every" (ngModelChange)="patchDash({ every: +$event })" /> s</label>
+                    <label class="sm" title="Poll in the background and notify while this view is closed too"><input type="checkbox" [ngModel]="!!d.alarms" (ngModelChange)="patchDash({ alarms: $event })" /> Alarms in the background</label>
+                    <button type="button" class="tbtn" (click)="addDashItem()" [disabled]="!path() || !oid.trim()" title="Adds the OID in the box above, on the chosen session">+ Add {{ oid.trim() || 'value' }}</button>
+                    <button type="button" class="tbtn" (click)="dashMenu($event)">⋯</button>
+                  }
+                </div>
+                @if (dash(); as d) {
+                  @if (!d.items.length) { <div class="empty">Type an OID above (ifHCInOctets.3, sysUpTime.0, ifOperStatus.5), choose the device, then <b>+ Add</b>. Several devices can share a dashboard; each value can raise an alarm.</div> }
+                  <div class="dgrid">
+                    @for (it of d.items; track $index; let i = $index) {
+                      @let v = dashVals()[i];
+                      <div class="dcard" [class.alarm]="!!v?.alarm" [class.err]="!!v?.error">
+                        <div class="dh"><b translate="no">{{ it.label || it.oid }}</b><span class="sp"></span><a class="more" (click)="itemMenu($event, i)">⋯</a></div>
+                        <div class="ds mut" translate="no">{{ it.session.split('/').pop() }} · {{ it.oid }}{{ it.rate ? ' · per second' : '' }}</div>
+                        <div class="dv">{{ v?.error ? '—' : (v?.display ?? '…') }}</div>
+                        <svg class="spark" viewBox="0 0 100 28" preserveAspectRatio="none"><polyline [attr.points]="sparkPts(i)" /></svg>
+                        <div class="dfo">
+                          @if (v?.alarm) { <span class="bad">⚠ {{ v!.alarm }}</span> } @else if (v?.error) { <span class="bad">{{ v!.error }}</span> }
+                          @else { <span class="mut">{{ limits(it) }}</span> }
+                        </div>
+                      </div>
+                    }
+                  </div>
+                } @else { <div class="empty">Dashboards keep values from several devices on one page, polled together, with alarms when a value crosses a limit (CPU above 80, a port not up, traffic above a rate). Make one with <b>+ New Dashboard</b>.</div> }
               }
               @case ('poll') {
                 <div class="tbar">
@@ -315,6 +349,15 @@ const FAV_KEY = 'tw.snmp.favourites';
     .star { margin-left: 6px !important; cursor: pointer; color: var(--warn); }
     .favs { max-height: 160px; } .favs .tn { padding: 3px 12px; }
     .right { min-width: 0; }
+    .simon { color: var(--ok); font-size: 12px; margin-right: 4px; }
+    .dbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 10px 10px; } .dbar .sm input[type=number] { width: 56px; }
+    .dchip { padding: 4px 10px; border: 1px solid var(--border); border-radius: 14px; cursor: pointer; font-size: 12px; } .dchip.on { border-color: var(--accent); background: var(--accent-soft); } .dchip i { font-style: normal; margin-left: 4px; }
+    .dgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; padding: 0 10px 10px; }
+    .dcard { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); min-width: 0; }
+    .dcard.alarm { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 7%, var(--panel)); } .dcard .dh { display: flex; align-items: center; gap: 6px; min-width: 0; } .dcard .dh b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dcard .ds { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .dcard .dv { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; } .dcard.alarm .dv { color: var(--danger); }
+    .dcard .spark { width: 100%; height: 28px; } .dcard .spark polyline { fill: none; stroke: var(--accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; } .dcard.alarm .spark polyline { stroke: var(--danger); }
+    .dcard .dfo { font-size: 11.5px; min-height: 16px; } .dcard .more { cursor: pointer; color: var(--muted); }
     .tabs { display: flex; gap: 4px; align-items: center; border-bottom: 1px solid var(--border); padding: 0 10px; }
     .tabs a { padding: 9px 12px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; }
     .tabs a.on { color: var(--text); border-bottom-color: var(--accent); }
@@ -362,7 +405,7 @@ export class SnmpBrowser implements OnInit, OnDestroy {
   readonly lastOp = signal('');
   readonly error = signal('');
   readonly busy = signal(false);
-  readonly view = signal<'results' | 'table' | 'compare' | 'poll' | 'traps' | 'history'>('results');
+  readonly view = signal<'results' | 'table' | 'compare' | 'poll' | 'traps' | 'history' | 'dash'>('results');
   readonly extra = signal<string[]>([]);
   readonly multi = signal<{ session: string; rows: SNMPRow[]; err?: string }[]>([]);
   readonly traps = signal<SNMPTrapsView>({ state: { on: false, port: 0, count: 0 }, traps: [] });
@@ -377,6 +420,7 @@ export class SnmpBrowser implements OnInit, OnDestroy {
   }
 
   async ngOnInit() {
+    void this.backend.snmpSim().then(s => s && this.sim.set(s)).catch(() => {});
     if (!this.ui.tree()) this.ui.tree.set(await this.backend.getSessionTree().catch(() => null));
     if (this.tab().snmpSession) await this.choose(this.tab().snmpSession!);
     const roots = await Promise.all(ROOTS.map(o => this.backend.snmpMibInfo(o).catch(() => null)));
@@ -386,7 +430,7 @@ export class SnmpBrowser implements OnInit, OnDestroy {
     this.traps.set(await this.backend.snmpTraps().catch(() => this.traps()));
     this.off = this.backend.on('snmp:trap', () => void this.backend.snmpTraps().then(v => this.traps.set(v)).catch(() => {}));
   }
-  ngOnDestroy() { this.off?.(); clearTimeout(this.searchT); clearInterval(this.pollTimer); }
+  ngOnDestroy() { this.off?.(); clearTimeout(this.searchT); clearInterval(this.pollTimer); clearInterval(this.dashTimer); }
 
   async choose(p: string) {
     this.path.set(p);
@@ -680,6 +724,120 @@ export class SnmpBrowser implements OnInit, OnDestroy {
     const k = n.module + '::' + n.name;
     this.favs.update(l => l.includes(k) ? l.filter(x => x !== k) : [...l, k]);
     try { localStorage.setItem(FAV_KEY, JSON.stringify(this.favs())); } catch { /* not kept */ }
+  }
+
+  // ---- files: Excel, CSV, walk files, simulator ----
+  readonly sim = signal<SNMPSimState>({ running: false });
+  fileMenu(ev: MouseEvent) {
+    const r = this.result(), has = !!r?.rows?.length;
+    this.ui.showMenu(ev, [
+      { label: 'Export to Excel…', icon: 'export', disabled: !has, action: () => void this.exportXlsx() },
+      { label: 'Export CSV', disabled: !has, action: () => this.exportCsv() },
+      { separator: true },
+      { label: 'Save Walk File…', icon: 'save', disabled: !has, action: () => void this.backend.snmpSaveWalk(this.path().split('/').pop() || 'walk', r!.rows).then(p => p && this.ui.toast(tr('Saved {0}', p), 'success')).catch(e => this.ui.toast(errText(e), 'error')) },
+      { label: 'Open Walk File…', icon: 'open', action: () => void this.openWalk() },
+      { separator: true },
+      { label: this.sim().running ? 'Stop the Simulator' : 'Simulate This Device…', disabled: !this.sim().running && !has, action: () => void (this.sim().running ? this.simStop() : this.simStart()) },
+    ]);
+  }
+  async exportXlsx() {
+    const r = this.result(); if (!r) return;
+    const p = this.view() === 'table' ? this.pivot() : null;
+    const name = 'snmp-' + (this.path().split('/').pop() || 'result');
+    try {
+      const f = p ? await this.backend.snmpExportXLSX(name, ['Index', ...p.cols], p.rows.map(x => [x.idx, ...p.cols.map(c => x.v[c] ?? '')]))
+        : await this.backend.snmpExportXLSX(name, ['Name', 'Index', 'Type', 'Value', 'Raw value', 'OID'], r.rows.map(x => [x.object || x.name, x.instance ?? '', x.type, x.display, x.value, x.oid]));
+      if (f) this.ui.toast(tr('Saved {0}', f), 'success');
+    } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  async openWalk() {
+    try {
+      const w = await this.backend.snmpOpenWalk(); if (!w) return;
+      this.result.set({ rows: w.rows, address: w.file, version: 'file', ms: 0, requests: 0 }); this.view.set('results');
+      this.ui.toast(tr('{0} values from {1}', w.rows.length, w.file.split(/[\\/]/).pop() ?? ''), 'success');
+    } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  async simStart() {
+    const port = await this.ui.input(tr('Simulate This Device'), tr('Answer SNMP v1/v2c with these {0} values, like the device they came from, on UDP port (127.0.0.1; community public):', this.result()?.rows.length ?? 0), '1161');
+    if (!port) return;
+    try { this.sim.set(await this.backend.snmpSimStart({ rows: this.result()!.rows, port: parseInt(port, 10) || 1161 })); this.ui.toast(tr('Simulator on {0}', this.sim().address ?? ''), 'success'); } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  async simStop() { await this.backend.snmpSimStop().catch(() => {}); this.sim.set({ running: false }); }
+
+  // ---- dashboards ----
+  readonly dashes = signal<SNMPDashboard[]>([]);
+  readonly dash = signal<SNMPDashboard | null>(null);
+  readonly dashVals = signal<SNMPDashPoll['values']>([]);
+  readonly dashHist = signal<number[][]>([]);
+  readonly dashAlarms = computed(() => this.dashVals().some(v => !!v?.alarm));
+  private dashTimer: ReturnType<typeof setInterval> | undefined;
+  async openDash() {
+    this.view.set('dash');
+    this.dashes.set((await this.backend.snmpDashboards().catch(() => [])) ?? []);
+    const cur = this.dash();
+    this.pickDash(this.dashes().find(d => d.id === cur?.id) ?? this.dashes()[0] ?? null);
+  }
+  pickDash(d: SNMPDashboard | null) {
+    this.dash.set(d); this.dashVals.set([]); this.dashHist.set([]);
+    clearInterval(this.dashTimer);
+    if (!d) return;
+    void this.pollDash();
+    this.dashTimer = setInterval(() => { if (this.view() === 'dash') void this.pollDash(); }, Math.max(5, d.every) * 1000);
+  }
+  async pollDash() {
+    const d = this.dash(); if (!d?.items.length) return;
+    try {
+      const p = await this.backend.snmpPollDashboard(d.id);
+      this.dashVals.set(p.values);
+      this.dashHist.update(h => p.values.map((v, i) => [...(h[i] ?? []), v.value ?? NaN].slice(-60)));
+    } catch (e) { this.error.set(errText(e)); }
+  }
+  sparkPts(i: number) {
+    const h = (this.dashHist()[i] ?? []).filter(x => !isNaN(x)); if (h.length < 2) return '';
+    const lo = Math.min(...h), hi = Math.max(...h), span = hi - lo || 1;
+    return h.map((v, k) => `${(k / (h.length - 1)) * 100},${26 - ((v - lo) / span) * 24}`).join(' ');
+  }
+  limits(it: SNMPDashItem) {
+    const l = [it.above != null ? 'alarm above ' + it.above : '', it.below != null ? 'alarm below ' + it.below : '', it.equals ? 'alarm when not ' + it.equals : ''].filter(Boolean);
+    return l.length ? l.join(' · ') : 'no alarm';
+  }
+  private async saveDash(d: SNMPDashboard) {
+    try { const s = await this.backend.snmpSaveDashboard(d); this.dashes.update(l => l.some(x => x.id === s.id) ? l.map(x => x.id === s.id ? s : x) : [...l, s]); this.dash.set(s); return s; }
+    catch (e) { this.ui.toast(errText(e), 'error'); return null; }
+  }
+  async newDash() {
+    const name = await this.ui.input(tr('New Dashboard'), tr('Name'), ''); if (!name) return;
+    const s = await this.saveDash({ id: '', name, every: 10, items: [] }); if (s) this.pickDash(s);
+  }
+  patchDash(p: Partial<SNMPDashboard>) { const d = this.dash(); if (d) void this.saveDash({ ...d, ...p }).then(s => s && p.every && this.pickDash(s)); }
+  async addDashItem() {
+    const d = this.dash(); if (!d) return;
+    const oid = this.oid.trim(), rate = /octets|pkts|packets|errors|discards/i.test(oid);
+    const s = await this.saveDash({ ...d, items: [...d.items, { session: this.path(), oid, rate, label: oid.replace(/^[\w-]+::/, '') }] });
+    if (s) this.pickDash(s);
+  }
+  itemMenu(ev: MouseEvent, i: number) {
+    const d = this.dash(); if (!d) return;
+    const it = d.items[i];
+    const set = async (p: Partial<SNMPDashItem>) => { const s = await this.saveDash({ ...d, items: d.items.map((x, j) => j === i ? { ...x, ...p } : x) }); if (s) this.pickDash(s); };
+    const num = async (title: string, cur?: number | null) => { const v = await this.ui.input(tr(title), tr('A number; empty: no alarm'), cur != null ? String(cur) : ''); return v === null || v === undefined ? undefined : v.trim() === '' ? null : Number(v); };
+    this.ui.showMenu(ev, [
+      { label: 'Rename…', action: async () => { const v = await this.ui.input(tr('Label'), tr('What the value is'), it.label || it.oid); if (v) await set({ label: v }); } },
+      { label: it.rate ? 'Show the Value' : 'Show per Second (Counter)', action: () => void set({ rate: !it.rate }) },
+      { separator: true },
+      { label: 'Alarm Above…', action: async () => { const v = await num('Alarm Above', it.above); if (v !== undefined) await set({ above: v }); } },
+      { label: 'Alarm Below…', action: async () => { const v = await num('Alarm Below', it.below); if (v !== undefined) await set({ below: v }); } },
+      { label: 'Alarm When Not…', action: async () => { const v = await this.ui.input(tr('Alarm When Not'), tr('The value it should have, e.g. up; empty: no alarm'), it.equals ?? ''); if (v !== null && v !== undefined) await set({ equals: v.trim() }); } },
+      { separator: true },
+      { label: 'Remove', action: async () => { const s = await this.saveDash({ ...d, items: d.items.filter((_, j) => j !== i) }); if (s) this.pickDash(s); } },
+    ]);
+  }
+  dashMenu(ev: MouseEvent) {
+    const d = this.dash(); if (!d) return;
+    this.ui.showMenu(ev, [
+      { label: 'Rename Dashboard…', action: async () => { const v = await this.ui.input(tr('Rename Dashboard'), tr('Name'), d.name); if (v) await this.saveDash({ ...d, name: v }); } },
+      { label: 'Delete Dashboard', action: async () => { if (!(await this.ui.confirm(tr('Delete Dashboard?'), d.name, tr('Delete'), true))) return; await this.backend.snmpDeleteDashboard(d.id).catch(() => {}); await this.openDash(); } },
+    ]);
   }
 
   exportCsv() {

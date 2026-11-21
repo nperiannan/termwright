@@ -77,6 +77,11 @@ lab.http.import_(open("openapi.yaml").read(), session="APIs/Lab switches REST")
 lab.http.save_environment("dl2r1", {"ep1-environment": "10.127.34.200", "Bearer": token}, secret=["Bearer"])
 lab.http.run("RADIUS-BluePrint", environment="dl2r1")             # postman.setNextRequest loops work
 print(lab.http.variables(collection="RADIUS-BluePrint", environment="dl2r1"))
+print(lab.http.mock("RADIUS-BluePrint"))            # serve its saved examples on 127.0.0.1
+print(lab.http.monitors())                          # monitors and their last results; run_monitor(id)
+print(lab.snmp.poll_dashboard("Core uplinks"))      # values and ALARM lines of a saved dashboard
+print(lab.snmp.simulate("core-sw1.snmpwalk", port=1161))  # answer SNMP from a walk file
+print(lab.keep_awake())                             # keep_awake(True) / keep_awake(False) changes it
 ```
 
 ## Syslog
@@ -111,6 +116,8 @@ print(lab.tests.run(testbeds=["testbeds/lab-a.yaml", "testbeds/lab-b.yaml"]))  #
 print(lab.tests.history("cases/smoke/version.yaml"))   # pass rate, flips, per software version
 print(lab.tests.send_qtest())                          # the last run to qTest
 print(lab.tests.defect("cases/smoke/version.yaml"))    # a Jira defect for a failed test
+lab.tests.request_approval(["cases/prod/check.yaml"], "testbeds/prod.yaml", "change window 42")  # roles.yaml approval: production
+print(lab.tests.approvals())                            # requests and decisions; lab.tests.approve(id) / reject(id, note)
 print(lab.tests.run(on_cleanup_fail="restore"))  # after a failed cleanup put back the saved configuration (or "factory"; default "stop")
 print(lab.tests.run(testbed="lab-a.yaml"))   # the same tests on other devices
 lab.tests.new_testbed("lab-a", "Lab")        # a role per saved session of the Lab folder

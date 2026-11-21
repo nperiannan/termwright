@@ -62,7 +62,8 @@ function __mkres(r) {
       status: function(c) { if (typeof c === 'number' ? r.status !== c : r.statusText.indexOf(c) < 0) throw new Error('expected status ' + c + ', got ' + r.status); },
       header: function(n, v) { var h = o.headers.get(n); if (h === undefined || (arguments.length > 1 && h !== v)) throw new Error('expected header ' + n); },
       body: function(s) { if (s !== undefined && r.body.indexOf(s) < 0) throw new Error('expected the body to contain ' + s); },
-      jsonBody: function(k) { var j = JSON.parse(r.body); if (k !== undefined && !(k in j)) throw new Error('expected property ' + k); } },
+      jsonBody: function(k) { var j = JSON.parse(r.body); if (k !== undefined && !(k in j)) throw new Error('expected property ' + k); },
+      jsonSchema: function(s) { var e = __schema(typeof s === 'string' ? s : JSON.stringify(s), r.body); if (e) throw new Error('schema: ' + e); } },
     be: {} };
   Object.defineProperty(o.to.be, 'ok', { get: function() { if (r.status < 200 || r.status > 299) throw new Error('expected a 2xx status, got ' + r.status); } });
   Object.defineProperty(o.to.be, 'success', { get: function() { if (r.status < 200 || r.status > 299) throw new Error('expected a 2xx status, got ' + r.status); } });
@@ -161,6 +162,7 @@ func script(ctx context.Context, src string, req Request, res *Response, vars ma
 	var iv any
 	_ = json.Unmarshal(ib, &iv)
 	_ = vm.Set("__info", iv)
+	_ = vm.Set("__schema", func(schema, doc string) string { return ValidateSchema(schema, doc) })
 	_ = vm.Set("__send", func(call goja.FunctionCall) goja.Value {
 		r := scriptRequest(call.Argument(0).Export(), jv)
 		if t == nil {
@@ -360,6 +362,13 @@ func runInfo(ctx context.Context, r Request, t *Target, info scriptInfo) Respons
 		if err != nil {
 			res.Tests = append(res.Tests, TestResult{Name: "test script", Error: err.Error()})
 		}
+	}
+	if strings.TrimSpace(r.Schema) != "" {
+		tr := TestResult{Name: "body fits the schema", Pass: true}
+		if bad := ValidateSchema(r.Schema, res.Body); bad != "" {
+			tr.Pass, tr.Error = false, bad
+		}
+		res.Tests = append(res.Tests, tr)
 	}
 	res.Logs = logs
 	return res

@@ -104,6 +104,12 @@ class Lab:
         self.devices = Devices(self)
         self.tests = Tests(self)
 
+    def keep_awake(self, on: Optional[bool] = None) -> str:
+        """Whether Termwright keeps the computer awake while it is open; on=True/False changes it."""
+        act = "status" if on is None else ("on" if on else "off")
+        r = self.request("POST", "/tools/keep_awake", {"action": act}, root=True)
+        return r.get("result", "") if isinstance(r, dict) else str(r)
+
     # ---- plain requests ----
     def request(self, method: str, path: str, body: Any = None, timeout: Optional[float] = None, raw: bool = False, binary: bool = False,
                 root: bool = False, **params):
@@ -675,6 +681,29 @@ class SNMP:
         """The trap receiver's state and the traps it has received, newest first."""
         return self.lab.request("GET", "/snmp/traps", root=True)
 
+    def _tool(self, tool: str, **args) -> str:
+        r = self.lab.request("POST", "/tools/" + tool, {k: v for k, v in args.items() if v is not None}, root=True, timeout=max(self.lab.timeout, 60))
+        return r.get("result", "") if isinstance(r, dict) else str(r)
+
+    def dashboards(self) -> str:
+        """The saved poll dashboards (SNMP Browser → Dashboards)."""
+        return self._tool("snmp", action="dashboards")
+
+    def poll_dashboard(self, dashboard: str) -> str:
+        """Polls a saved dashboard once: each value, and ALARM when it crosses its threshold."""
+        return self._tool("snmp", action="poll_dashboard", dashboard=dashboard)
+
+    def simulate(self, file: str, port: int = 1161, community: str = "public") -> str:
+        """Answers SNMP v1/v2c on 127.0.0.1:port from a walk file (snmpwalk -On format), like the device it came from."""
+        return self._tool("snmp", action="simulate", file=file, port=port, community=community)
+
+    def stop_simulator(self) -> str:
+        return self._tool("snmp", action="stop_simulator")
+
+    def load_walk(self, file: str) -> str:
+        """The values of a walk file, named with the loaded MIBs."""
+        return self._tool("snmp", action="load_walk", file=file)
+
     @staticmethod
     def table(result: dict) -> dict:
         """{oid name: display} of a result."""
@@ -686,6 +715,27 @@ class HTTP:
 
     def __init__(self, lab: Lab):
         self.lab = lab
+
+    def _tool(self, **args) -> str:
+        r = self.lab.request("POST", "/tools/http", {k: v for k, v in args.items() if v is not None}, root=True, timeout=max(self.lab.timeout, 60))
+        return r.get("result", "") if isinstance(r, dict) else str(r)
+
+    def mock(self, collection: str, port: int = 0) -> str:
+        """Serves the collection's saved examples on 127.0.0.1 (port 0: a free one); returns its address."""
+        return self._tool(action="mock", collection=collection, port=port or None)
+
+    def stop_mock(self, collection: str) -> str:
+        return self._tool(action="stop_mock", collection=collection)
+
+    def mocks(self) -> str:
+        return self._tool(action="mocks")
+
+    def monitors(self) -> str:
+        """The API monitors (a collection run every few minutes) and their last results."""
+        return self._tool(action="monitors")
+
+    def run_monitor(self, id: str) -> str:
+        return self._tool(action="run_monitor", id=id)
 
     def send(self, url: str, method: str = "GET", session: Optional[str] = None, env: str = "", headers: Optional[dict] = None,
              params: Optional[dict] = None, json_body: Any = None, text: Optional[str] = None, tests: str = "",

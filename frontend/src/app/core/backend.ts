@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import type { TestApproval, TopoPlan, TopoRequest, TopoResult, LayoutRequest, LayoutResult, TestCase, TestCaseInfo, TestRunReport, TestsTree, TestsGitInfo, TestSchedule, TestScheduleView, IntegrationsConfig, TestTable, TestHistory } from './models';
+import type { SNMPRow, HMockInfo, APIMonitor, APIMonitorState, SNMPDashboard, SNMPDashPoll, SNMPSimState, TestApproval, TopoPlan, TopoRequest, TopoResult, LayoutRequest, LayoutResult, TestCase, TestCaseInfo, TestRunReport, TestsTree, TestsGitInfo, TestSchedule, TestScheduleView, IntegrationsConfig, TestTable, TestHistory } from './models';
 import { EmuEngines, EmuHostNIC, EmuTrex,
   EmuServer, EmuServerView,
   AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange, SNMPRequest, SNMPResult, SNMPMibNode, SNMPModule, SNMPSecretState, SNMPTrapState, SNMPTrapsView, HSendRequest, HResponse, HCollection, HCollectionInfo, HRunRequest, HRunResult, HHistoryItem, HRequest, AISkill, HEnv, HVar, HHostCookies, SyslogSettings, SyslogState, SyslogMsg, SyslogRule, SyslogQuery, SyslogSendIn } from './models';
@@ -311,6 +311,23 @@ export class Backend {
   testsOpenInEditor(rel: string) { return this.call<void>('TestsOpenInEditor', rel); }
   runTests(r: { files?: string[]; vars?: Record<string, string>; testbed?: string; confirmed?: boolean; onCleanupFail?: string; cleanup?: string; tags?: string[]; forceLock?: boolean }) { return this.call<TestRunReport>('RunTests', r); }
   runTestsParallel(r: { files?: string[]; testbeds: string[]; confirmed?: boolean; onCleanupFail?: string; cleanup?: string; forceLock?: boolean }) { return this.call<TestRunReport[]>('RunTestsParallel', r); }
+  httpMockStart(collection: string, port = 0) { return this.call<HMockInfo>('HTTPMockStart', collection, port); }
+  httpMockStop(collection: string) { return this.call<void>('HTTPMockStop', collection); }
+  httpMocks() { return this.call<HMockInfo[]>('HTTPMocks'); }
+  apiMonitors() { return this.call<APIMonitorState[]>('APIMonitors'); }
+  apiSaveMonitor(m: Partial<APIMonitor>) { return this.call<APIMonitor>('APISaveMonitor', m); }
+  apiDeleteMonitor(id: string) { return this.call<void>('APIDeleteMonitor', id); }
+  apiRunMonitor(id: string) { return this.call<void>('APIRunMonitor', id); }
+  snmpExportXLSX(title: string, headers: string[], rows: string[][]) { return this.call<string>('SNMPExportXLSX', title, headers, rows); }
+  snmpSaveWalk(name: string, rows: SNMPRow[]) { return this.call<string>('SNMPSaveWalk', name, rows); }
+  snmpOpenWalk() { return this.call<{ file: string; rows: SNMPRow[] } | null>('SNMPOpenWalk'); }
+  snmpSimStart(i: { file?: string; rows?: SNMPRow[]; port?: number; community?: string; all?: boolean; writable?: boolean }) { return this.call<SNMPSimState>('SNMPSimStart', i); }
+  snmpSimStop() { return this.call<void>('SNMPSimStop'); }
+  snmpSim() { return this.call<SNMPSimState>('SNMPSim'); }
+  snmpDashboards() { return this.call<SNMPDashboard[]>('SNMPDashboards'); }
+  snmpSaveDashboard(d: SNMPDashboard) { return this.call<SNMPDashboard>('SNMPSaveDashboard', d); }
+  snmpDeleteDashboard(id: string) { return this.call<void>('SNMPDeleteDashboard', id); }
+  snmpPollDashboard(id: string) { return this.call<SNMPDashPoll>('SNMPPollDashboard', id); }
   testApprovals() { return this.call<TestApproval[]>('TestApprovals'); }
   testRequestApproval(files: string[], testbed: string, reason: string) { return this.call<TestApproval>('TestRequestApproval', files, testbed, reason); }
   testDecide(id: string, approve: boolean, note: string) { return this.call<TestApproval>('TestDecide', id, approve, note); }

@@ -171,6 +171,9 @@ type Expect struct {
 	JSON string `yaml:"json,omitempty" json:"json,omitempty"`
 	// Status: the HTTP status code.
 	Status int `yaml:"status,omitempty" json:"status,omitempty"`
+	// Schema: the JSON body fits this JSON Schema - the schema itself ({...}) or a file in the tests folder
+	// (schemas/vlan.json).
+	Schema string `yaml:"schema,omitempty" json:"schema,omitempty"`
 	// MaxMs: the step took at most this many milliseconds.
 	MaxMs int64 `yaml:"maxMs,omitempty" json:"maxMs,omitempty"`
 	// Equals: the field / JSON value is exactly this (also "true", "null", numbers).

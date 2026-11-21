@@ -5,13 +5,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/termwright/termwright/internal/textfsm"
+	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
+
+	"github.com/termwright/termwright/internal/apiclient"
+	"github.com/termwright/termwright/internal/textfsm"
 )
+
+// schemaRoot is the tests folder schema files are read from (set by a folder's run).
+var schemaRoot atomic.Value
+
+func init() { schemaRoot.Store(".") }
 
 // Driver runs the steps: the app runs commands on saved sessions and sends HTTP requests; tests
 // use a fake one.
@@ -663,6 +673,18 @@ func check(e Expect, out string, status int, ms int64, v map[string]string, rows
 		return CheckResult{What: "matches " + re.String(), Passed: re.MatchString(out), Got: re.FindString(out)}
 	case e.Status != 0:
 		return CheckResult{What: fmt.Sprintf("status = %d", e.Status), Passed: status == e.Status, Got: strconv.Itoa(status)}
+	case e.Schema != "":
+		sch, name := e.Schema, "the schema"
+		if !strings.HasPrefix(strings.TrimSpace(sch), "{") {
+			name = sch
+			b, err := os.ReadFile(filepath.Join(schemaRoot.Load().(string), filepath.Clean("/" + sch)))
+			if err != nil {
+				return CheckResult{What: "fits " + name, Got: err.Error()}
+			}
+			sch = string(b)
+		}
+		bad := apiclient.ValidateSchema(sch, out)
+		return CheckResult{What: "fits " + name, Passed: bad == "", Got: bad}
 	case e.OID != "":
 		r, ok := FindOID(rows, Fill(e.OID, v))
 		c := compare("oid "+e.OID, r.Display, ok, e, v)

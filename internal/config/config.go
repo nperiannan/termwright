@@ -129,6 +129,8 @@ type Settings struct {
 	DownloadDir          string                       `json:"downloadDir"`
 	TestsDir             string                       `json:"testsDir,omitempty"`      // the tests folder (cases, lib, testbeds, reports); "" = tests in the data folder
 	TestSchedules        []testrec.Schedule           `json:"testSchedules,omitempty"` // tests that run by themselves while Termwright is open
+	APIMonitors          []APIMonitor                 `json:"apiMonitors,omitempty"`   // API collections run every few minutes while Termwright is open
+	SNMPDashboards       []SNMPDashboard              `json:"snmpDashboards,omitempty"` // saved SNMP poll dashboards
 	Integrations         integrations.Config          `json:"integrations"`            // qTest, Jira and Git host (tokens in the credential store)
 	FontFamily           string                       `json:"fontFamily"`
 	FontSize             int                          `json:"fontSize"`
@@ -900,4 +902,40 @@ func (m *Manager) MovePaths(oldPath, newPath string, folder bool) {
 	if changed {
 		_ = m.Save(s)
 	}
+}
+
+// APIMonitor runs an API collection every few minutes and tells when it fails.
+type APIMonitor struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Collection  string `json:"collection"`
+	Session     string `json:"session,omitempty"`
+	Environment string `json:"environment,omitempty"`
+	// Every: minutes between runs (at least 1).
+	Every   int  `json:"every"`
+	Enabled bool `json:"enabled"`
+}
+
+// SNMPDashboard is a saved set of SNMP values polled together, with alarm thresholds.
+type SNMPDashboard struct {
+	ID    string          `json:"id"`
+	Name  string          `json:"name"`
+	Every int             `json:"every"` // seconds between polls (at least 5)
+	Items []SNMPDashItem  `json:"items"`
+	// Alarms: poll in the background and notify while the dashboard is closed too.
+	Alarms bool `json:"alarms,omitempty"`
+}
+
+// SNMPDashItem is one polled value of a dashboard.
+type SNMPDashItem struct {
+	Session string `json:"session"`
+	OID     string `json:"oid"`
+	Label   string `json:"label,omitempty"`
+	// Rate: show the change per second (counters such as ifInOctets).
+	Rate bool `json:"rate,omitempty"`
+	// Above / Below: alarm when the value (or rate) goes over / under; nil = no alarm.
+	Above *float64 `json:"above,omitempty"`
+	Below *float64 `json:"below,omitempty"`
+	// Equals: alarm when the readable value is not this (e.g. up).
+	Equals string `json:"equals,omitempty"`
 }

@@ -558,7 +558,7 @@ export interface HKV { key: string; value: string; off?: boolean; desc?: string;
 export interface HBody { mode?: string; raw?: string; form?: HKV[]; graphqlVars?: string; file?: string; }
 export interface HReqAuth { token?: string; user?: string; password?: string; key?: string; value?: string; in?: string; }
 export interface HSettings { httpVersion?: string; verify?: string; noRedirects?: boolean; followMethod?: boolean; followAuth?: boolean; removeReferer?: boolean; noEncode?: boolean; noCookies?: boolean; maxRedirects?: number; timeoutMs?: number; }
-export interface HRequest { id?: string; name?: string; folder?: string; method: string; url: string; params?: HKV[]; pathVars?: HKV[]; headers?: HKV[]; body?: HBody; auth?: string; authData?: HReqAuth;
+export interface HRequest { examples?: HExample[]; schema?: string; id?: string; name?: string; folder?: string; method: string; url: string; params?: HKV[]; pathVars?: HKV[]; headers?: HKV[]; body?: HBody; auth?: string; authData?: HReqAuth;
   settings?: HSettings; preScript?: string; tests?: string; description?: string; }
 export interface HCollection { id: string; name: string; session?: string; vars?: HKV[]; requests: HRequest[]; description?: string; auth?: string; authData?: HReqAuth; preScript?: string; tests?: string; }
 export interface HEnvVar { key: string; value: string; secret?: boolean; off?: boolean; desc?: string; hasValue?: boolean; }
@@ -616,3 +616,14 @@ export interface TopoPlan { paging?: string; identity?: string; identityTemplate
 
 /** A request to run tests that need an approval (roles.yaml). */
 export interface TestApproval { id: string; files: string[]; testbed?: string; reason?: string; requestedBy: string; at: string; approvedBy?: string; approvedAt?: string; rejected?: boolean; note?: string; expired?: boolean; }
+
+/** A saved answer of an API request (documentation, and what its collection's mock server answers). */
+export interface HExample { name: string; status: number; headers?: HKV[]; body?: string; }
+export interface HMockInfo { collection: string; name: string; port: number; since: string; hits: number; missed: number; routes: number; }
+export interface APIMonitor { id: string; name: string; collection: string; session?: string; environment?: string; every: number; enabled: boolean; }
+export interface APIMonitorState extends APIMonitor { lastRun?: string; passed: number; failed: number; ms: number; error?: string; history?: boolean[]; running?: boolean; }
+export interface SNMPDashItem { session: string; oid: string; label?: string; rate?: boolean; above?: number | null; below?: number | null; equals?: string; }
+export interface SNMPDashboard { id: string; name: string; every: number; items: SNMPDashItem[]; alarms?: boolean; }
+export interface SNMPDashValue { display: string; value?: number; alarm?: string; error?: string; }
+export interface SNMPDashPoll { at: string; values: SNMPDashValue[]; }
+export interface SNMPSimState { running: boolean; address?: string; community?: string; values?: number; source?: string; since?: string; }

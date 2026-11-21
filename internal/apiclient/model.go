@@ -107,6 +107,18 @@ type Request struct {
 	Tests string `json:"tests,omitempty"`
 	// Description: what it does.
 	Description string `json:"description,omitempty"`
+	// Examples: saved answers, shown as documentation and served by the collection's mock server.
+	Examples []Example `json:"examples,omitempty"`
+	// Schema: a JSON Schema the answer's body must fit (checked after each send and in runs).
+	Schema string `json:"schema,omitempty"`
+}
+
+// Example is a saved answer of a request.
+type Example struct {
+	Name    string `json:"name"`
+	Status  int    `json:"status"`
+	Headers []KV   `json:"headers,omitempty"`
+	Body    string `json:"body,omitempty"`
 }
 
 // Collection is a set of requests, kept as one JSON file.

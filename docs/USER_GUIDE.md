@@ -1353,6 +1353,8 @@ The Emulated and Simulated Labs have the same styles under **More → Arrange** 
 
 **While it reads.** Up to 16 devices are read at the same time; each shows how many of its 5 steps (connect, identify, neighbours, ports/STP/LAG, build map) are done.
 
+**Other vendors.** Huawei VRP, Ruckus ICX and Eltex MES are read with TextFSM templates that come with Termwright. For any other device type, **Options → Device Types → Network map** says how to read it: a command that turns paging off, and show or display commands for the neighbours (required), the device's identity and its ports, each with a TextFSM template. Neighbour templates give `LOCAL_PORT`, `NEIGHBOR`, `NEIGHBOR_PORT`, `CHASSIS_ID` and `MGMT_IP` (the ntc-templates names `LOCAL_INTERFACE`, `NEIGHBOR_NAME`, `NEIGHBOR_INTERFACE` and `MGMT_ADDRESS` work too, so a community template can be pasted in); identity templates `HOSTNAME`, `CHASSIS_ID` and `MODEL`; port templates `PORT`, `ADMIN`, `OPER` and `SPEED`. **Start From Built-in** fills in a shipped plan to change, and **Test a template on pasted output** shows the rows a template finds. Only show/display commands and the known paging commands ever run. Devices without a plan are still read by SNMP (LLDP-MIB).
+
 ## 9c. SNMP Browser
 
 **Open it.** **SNMP → SNMP Browser**, or right-click a session → **Open SNMP Browser**. Choose the session at the top: the address and credentials come from the session's SNMP settings, shown next to it (for example *v3 authPriv · user netops · SHA-256 / AES-128*).
@@ -1402,6 +1404,10 @@ In **Settings → Instructions & Skills**: **+ New Skill** starts from a templat
 
 MCP apps get the `termwright_skills` tool (list the skills and instructions, get a skill's steps), the local API has `/api/v1/ai/skills`, and Python has `lab.skills()`, `lab.skill(name)` and `lab.save_skill(text)`.
 
+**Dashboards and alarms.** The **Dashboards** tab keeps values from several devices on one page, polled together every few seconds: type an OID above (ifHCInOctets.3, sysUpTime.0, ifOperStatus.5), choose the device and press **+ Add**. Each value is a card with its value, a sparkline and its limits; counters (octets, packets, errors) show the rate per second. A card's ⋯ sets an alarm - **above**, **below**, or **when not** a value such as `up` - shown in red on the card and as a notification when it starts and when it clears. **Alarms in the background** keeps polling and notifying while the tab is closed (while Termwright runs). Dashboards are saved.
+
+**Files and the simulator.** **File ▾** exports what the browser shows to **Excel** (the Table view as rows and columns, otherwise every value with its type, raw value and OID) or CSV, **saves a walk file** in the `snmpwalk -On` format and **opens one** - saved by Termwright or by net-snmp's `snmpwalk -On` - to browse it offline with the MIBs' names. **Simulate This Device** answers SNMP v1/v2c with the values shown (community `public`) on a UDP port of 127.0.0.1, like the device they came from: walk a switch once and run tools, tests and demos against the copy. One simulator runs at a time; the toolbar shows it and stops it.
+
 ## 9d. API client
 
 A REST client in the spirit of Postman, free and open source, with the logins kept in the Session Manager.
@@ -1449,6 +1455,12 @@ The password, key, token, client secret and the values of secret variables are k
 - one or more **cURL** commands (as copied from a browser's developer tools).
 
 **AI assistant, MCP and scripts.** Turn on the **API client** tool in the agent's tool list and ask, for example, *"list the interfaces of the lab switches through RESTCONF"*: the agent sends with the session's login (it never asks you for tokens). Changes follow the agent's permission and always ask on production sessions. MCP apps get the same `http` tool, the local API has `POST /api/v1/http/send` and the `/http/collections…` routes (see the [API guide](API.md)), and Python has `Lab().http` ([Python guide](PYTHON.md)).
+
+**Examples, mocks and schemas.** Response ⋯ → **Save as Example** keeps an answer with its request (listed under **Docs**; save the request to keep it). Collection ⋯ → **Start a Mock Server** answers with the saved examples on 127.0.0.1 (a free port; the address is copied): a request is matched by method and path, `:id`, `{id}` and `{{var}}` parts match any value, the first example answers and the `x-mock-example` header picks one by name; anything else gets 404. Under **Docs**, a **Response schema** (JSON Schema: type, required, properties, items, enum, minimum/maximum, lengths, pattern, formats, allOf/anyOf/oneOf, local `$ref`) is checked after every send and in runs, as the test *body fits the schema*; scripts can call `pm.response.to.have.jsonSchema(schema)` too.
+
+**Monitors.** Collection ⋯ → **Monitor** runs the collection every few minutes while Termwright is open, with the chosen session, and notifies when it starts failing and when it passes again; changing requests are refused on production sessions. **Mocks & Monitors** in the sidebar shows the running mock servers and each monitor's last runs (green and red bars); ⋯ runs one now, pauses it, changes how often or deletes it.
+
+**Flows.** Requests that depend on each other (log in, create, read back, delete), with conditions and loops, are tests: import the collection into **Tests** (Import Test Cases takes Postman and OpenAPI files) or record the requests, then use saved variables, *if*, *retry* and loops in the steps.
 
 ## 9e. Syslog server
 
@@ -1618,8 +1630,13 @@ The TCL scripts print TAP (`ok 1 - show version`, `not ok 2 - …` with the reas
 | `watch: {syslog: [LINK-3-UPDOWN], traps: [linkDown]}` | fail when these arrive from the test's devices while it runs |
 | `configDiff: true` (+ `configIgnore: [...]`) | compare each device's configuration before the test and after its cleanup |
 | `qtest: {testCase: TC-12}` | the qTest test case its results go to |
+| `http: {…}` + `schema: schemas/vlan.json` | the JSON body fits a JSON Schema (a file in the tests folder, or the schema itself) |
 
 **Suites** (`suites/<name>.yaml`: `name`, `tests` - files, folders or suites - and `tags`) are named sets; *Save as suite…* keeps a selection. A run **locks** its testbed (`locks/` in the tests folder, stale after 12 hours; *Release* frees it) and can run on several testbeds at once. Every run records the software version of each device (its device facts) and adds its results to `reports/history.jsonl`. While recording, show commands get checks for what was configured before them (*Options* in the recorder turns it off).
+
+**Import.** **Import Test Cases** (⋯ menu) takes Excel or CSV manual test cases, a **Postman collection** (one test per request; folders become suites; the status check comes from the test script or the saved example) or an **OpenAPI 3 / Swagger 2** description (one test per operation; tags become suites; the first 2xx answer is the status check). Name the API session the requests go to.
+
+**Team roles and approvals.** `roles.yaml` in the tests folder (Library → **Team roles**) lists who may edit (`editors`), run (`runners`) and approve (`approvers`) tests - user names as in *Run by*; an empty list lets everyone. `approval: production` makes runs that touch production sessions wait for an approved request (`always`: every run). A blocked run offers **Ask for an Approval**; an approver (someone else than the requester) approves or rejects it under **Runs → Approvals**, and the approval allows that run - the same tests on the same testbed - for 24 hours. Requests and decisions are files in `approvals/`, shared through Git with the tests, and the audit log records them. It keeps an honest team in step; it is not a security boundary.
 
 **Integrations** (Global Options): qTest (address, user, project id, test cycle id, token; *Send every run*), Jira / Atlassian (address, e-mail - empty for a Data Center personal access token -, project, issue type, token; *Defect for failures* for scheduled runs) and the Git host (host, user, token - used for Clone, Pull and Push of the tests folder). Tokens stay in the OS keychain. **Send to qTest** in a run and **+ defect** on a failed test do it by hand.
 
@@ -1877,7 +1894,7 @@ Global Options is called **Settings** (⚙ in the title bar). The General page s
 
 ### Keep the computer awake
 
-**Keep the computer awake while Termwright is open** (General → Behaviour, on by default) stops macOS, Windows and Linux from going to sleep on their own while Termwright runs, so sessions, transfers, captures, the syslog server and the emulated lab are not cut off. Only idle sleep is stopped: the display can still turn off, you can still choose Sleep yourself, and a closed laptop lid still sleeps. It ends when Termwright quits (also after a crash). macOS uses `caffeinate`, Windows the system's execution state, Linux the desktop's inhibit (GNOME, KDE, Xfce) and systemd-logind - when a Linux system has neither, the option says so.
+**Keep the computer awake while Termwright is open** (General → Behaviour, on by default) stops macOS, Windows and Linux from going to sleep on their own while Termwright runs, so sessions, transfers, captures, the syslog server and the emulated lab are not cut off. Only idle sleep is stopped: the display can still turn off, you can still choose Sleep yourself, and a closed laptop lid still sleeps. It ends when Termwright quits (also after a crash). macOS uses `caffeinate`, Windows the system's execution state, Linux the desktop's inhibit (GNOME, KDE, Xfce) and systemd-logind - when a Linux system has neither, the option says so. The AI assistant, MCP apps, the local API (`POST /api/v1/tools/keep_awake` with `action` status, on or off) and Python (`lab.keep_awake()`, `lab.keep_awake(True)`) read and change it too.
 
 ### Interface language
 

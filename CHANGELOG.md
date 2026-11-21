@@ -4,6 +4,14 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **SNMP dashboards and alarms**: SNMP Browser → **Dashboards** keeps values from several devices on one page, polled together, each as a card with its value, a sparkline and its limits; counters can show the rate per second. A value can raise an alarm (above, below, or not a given value such as `up`), shown on the card and as a notification when it starts and clears; **Alarms in the background** keeps polling while the view is closed.
+
+- **SNMP files and a simulator**: **File ▾** exports a walk or the table view to Excel, saves a walk file in the `snmpwalk -On` format, opens one (from Termwright or net-snmp) to browse it offline, and **Simulate This Device** answers SNMP v1/v2c with those values on a UDP port, like the device they came from - for demos, tests and tools without the device.
+
+- **API mocks, monitors, examples and schemas**: a response can be **saved as an example** of its request (shown under Docs); **Start a Mock Server** on a collection answers with those examples on 127.0.0.1 (path variables match any value; the `x-mock-example` header picks an example by name). **Monitor** runs a collection every few minutes while Termwright is open and notifies when it starts failing and when it passes again (changing requests are refused on production sessions); the sidebar shows the last runs. A request can have a **response schema** (JSON Schema) that every send and run checks, test scripts can use `pm.response.to.have.jsonSchema(schema)`, and Termwright tests get a `schema` check (inline or a file in the tests folder).
+
+- **Keep awake from tools**: the `keep_awake` tool (AI, MCP, `POST /tools/keep_awake`, Python `lab.keep_awake()`) reads or changes whether the computer is kept awake. The `snmp` tool gains dashboards, poll_dashboard, simulate, stop_simulator, simulator and load_walk; the `http` tool gains mock, stop_mock, mocks, monitors and run_monitor (also in Python).
+
 - **Network map for any vendor**: a device type can say how the map reads it - a paging command, and show/display commands for neighbours, identity and ports, each with a TextFSM template (Options → Device Types → Network map, with **Start From Built-in** and **Test a template on pasted output**). Neighbour templates give `LOCAL_PORT`, `NEIGHBOR`, `NEIGHBOR_PORT`, `CHASSIS_ID` and `MGMT_IP` (ntc-templates names work too). Huawei VRP, Ruckus ICX and Eltex MES are read this way out of the box. Only show/display commands and the known paging commands ever run.
 
 - **Import from Postman and OpenAPI**: **Import Test Cases** also takes a Postman collection (v2.0/2.1) or an OpenAPI 3 / Swagger 2 description: one test per request, folders and tags become suites, the status check comes from the test script, the saved example or the first 2xx answer, and the requests go to the API session you name.

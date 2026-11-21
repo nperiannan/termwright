@@ -337,6 +337,7 @@ func (f Folder) RunFiles(ctx context.Context, files []string, d Driver, vars map
 
 // RunFilesWith is RunFiles with options (what to do when a cleanup fails).
 func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars map[string]string, opt RunOptions, progress func(Result)) (RunReport, error) {
+	schemaRoot.Store(f.Root)
 	files, err := f.ExpandFiles(files, opt.Tags)
 	if err != nil {
 		return RunReport{}, err

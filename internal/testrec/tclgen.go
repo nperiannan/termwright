@@ -137,6 +137,8 @@ func tclExpect(e Expect) []string {
 		return []string{"tw::matches " + tclStr(e.Matches)}
 	case e.Status != 0:
 		return []string{fmt.Sprintf("tw::status %d", e.Status)}
+	case e.Schema != "":
+		return []string{"# the JSON Schema check runs in Termwright only"}
 	case e.MaxMs != 0 && e.Field == "" && e.JSON == "" && e.OID == "":
 		return []string{fmt.Sprintf("tw::max_ms %d", e.MaxMs)}
 	case e.Field != "" || e.JSON != "" || e.OID != "":

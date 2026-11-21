@@ -133,6 +133,8 @@ func pyExpect(e Expect) string {
 		return "a.matches(" + pyStr(e.Matches) + ")"
 	case e.Status != 0:
 		return fmt.Sprintf("a.status_is(%d)", e.Status)
+	case e.Schema != "":
+		return "pass  # the JSON Schema check runs in Termwright only"
 	case e.MaxMs != 0 && e.Field == "" && e.JSON == "" && e.OID == "":
 		return fmt.Sprintf("a.max_ms(%d)", e.MaxMs)
 	case e.Field != "" || e.JSON != "" || e.OID != "":

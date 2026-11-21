@@ -123,6 +123,7 @@ And much more - see the [feature list](docs/FEATURES.md).
 - **History and reporting**: pass rate, flaky tests and results per software version; send results to **qTest** and open **Jira** defects with the steps and output attached
 - **Plain files**: tests are YAML in a folder that can be a Git repository (Pull, Commit, Push in the Tests tab), and each is also written as **Go**, **Python** and **TCL** test code (`go test ./cases/...`, `python lib/python/run_tests.py`, `tclsh lib/tcl/run_tests.tcl`) - no passwords in any of them, Termwright logs in with the saved logins
 - **Scheduled runs** with a notification when one fails, and the AI assistant to **write a test** from a description or **explain why one failed**
+- **Import and teams**: Excel/CSV manual test cases, Postman collections and OpenAPI descriptions become tests; `roles.yaml` says who edits, runs and approves, and runs on production can wait for an approval
 - **CI without the window**: `termwright tests run --junit junit.xml`, or `termwright tests serve` for the generated code; secrets from the credential store or `TERMWRIGHT_SECRET_…` variables
 - Usable from the AI assistant, MCP apps, the local REST API and Python
 
@@ -132,9 +133,9 @@ Step by step with pictures: [Testing with Termwright](docs/TESTS_GUIDE.md).
 
 ## SNMP, syslog and REST API
 
-- **SNMP Browser**: v1, v2c and v3 against saved sessions, a MIB tree with the standard MIBs built in and vendor MIBs loaded from files, Walk, Table, Compare, Poll with a live chart, Set, Send Trap, and a trap receiver
+- **SNMP Browser**: v1, v2c and v3 against saved sessions, a MIB tree with the standard MIBs built in and vendor MIBs loaded from files, Walk, Table, Compare, Poll with a live chart, saved dashboards with alarms, Excel export, walk files and a simulator that answers like the device, Set, Send Trap, and a trap receiver
 - **Syslog server**: UDP, TCP and TLS, senders matched to saved sessions, search, severity filters, colour / notify / hide rules, files per sender, and a test sender
-- **REST API client** in the spirit of Postman: API sessions with their login in the credential store, request tabs, collections, environments and globals (Postman import and export), per-request authorization, `pm.*` scripts and tests with `setNextRequest`, a collection runner, OpenAPI and cURL import, code export
+- **REST API client** in the spirit of Postman: API sessions with their login in the credential store, request tabs, collections, environments and globals (Postman import and export), per-request authorization, `pm.*` scripts and tests with `setNextRequest`, a collection runner, saved examples with a mock server, monitors, JSON Schema checks, OpenAPI and cURL import, code export
 - All three are tools for the AI assistant, MCP apps, the local REST API and Python
 
 | | |

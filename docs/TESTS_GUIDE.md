@@ -18,7 +18,7 @@ Commands that may hold a password, secret, community or key are not recorded. Dr
 
 ![Recording: three commands, the recorder on the right](screenshots/tests-guide/20-recording.png)
 
-**Already have manual test cases?** ⋯ → **Import Manual Test Cases** reads a sheet (Excel or CSV) with the columns *Suite*, *Test*, *Step*, *Device*, *Expected* (and optionally *Type*: command, api, manual): each row becomes a step, rows of the same test become one test, a row without a device becomes a manual step, and quoted text in *Expected* (`"v200"`) becomes a check. Then run them, and add checks where the import could not.
+**Already have test cases?** ⋯ → **Import Test Cases** reads a **Postman collection** or an **OpenAPI / Swagger** description (one test per request, folders and tags as suites, the status check from the test script, the saved example or the first 2xx answer - name the API session they go to), or a sheet (Excel or CSV) with the columns *Suite*, *Test*, *Step*, *Device*, *Expected* (and optionally *Type*: command, api, manual): each row becomes a step, rows of the same test become one test, a row without a device becomes a manual step, and quoted text in *Expected* (`"v200"`) becomes a check. Then run them, and add checks where the import could not.
 
 ## 2. Checks - mostly written for you
 
@@ -130,7 +130,22 @@ Global Options → **Integrations** holds the addresses, users and tokens of **q
 - **+ defect** (or *Create Jira Defect*) opens a Jira issue with the problem, the steps with expected vs got, the versions, the failed output and the report; its key links to it. *Defect for failures* opens one for each failed test of a scheduled run.
 - With a Git token, Clone, Pull and Push of the tests folder use it.
 
-## 13. Code, CI and the AI assistant
+## 13. Team roles and approvals
+
+`roles.yaml` in the tests folder (Library → **Team roles**) says who may edit, run and approve tests (user names as in *Run by*; an empty list lets everyone):
+
+```yaml
+editors: [anna, ravi]
+runners: []               # everyone
+approvers: [meera]
+approval: production      # runs on production sessions need an approved request (always: every run)
+```
+
+A run that needs an approval offers **Ask for an Approval** (with a reason). The approver sees it under **Runs → Approvals** and approves or rejects it - not their own; the approval allows that run (the same tests on the same testbed) for 24 hours. Requests live in `approvals/` and go through Git with the tests; the audit log records requests, decisions and approved runs. It keeps an honest team in step - it is not a security boundary.
+
+API steps can also check the answer against a **JSON Schema**: `schema: schemas/vlan.json` (a file in the tests folder) or the schema itself.
+
+## 14. Code, CI and the AI assistant
 
 The generated tests run outside the window while Termwright is open - they send each step to Termwright, which logs in with the saved logins:
 

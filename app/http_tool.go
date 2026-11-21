@@ -16,6 +16,48 @@ import (
 func (a *App) httpTool(ctx context.Context, args map[string]any, ask netAsker) (string, error) {
 	act := strings.ToLower(argStr(args, "action"))
 	switch act {
+	case "mock":
+		m, err := a.HTTPMockStart(argStr(args, "collection"), argInt(args, "port", 0, 65535))
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("Mock of %s on http://127.0.0.1:%d (%d requests with examples; header x-mock-example picks an example by name)", m.Name, m.Port, m.Routes), nil
+	case "stop_mock":
+		a.HTTPMockStop(argStr(args, "collection"))
+		return "Stopped.", nil
+	case "mocks":
+		var b strings.Builder
+		for _, m := range a.HTTPMocks() {
+			fmt.Fprintf(&b, "%s  http://127.0.0.1:%d  %d answered, %d not matched\n", m.Name, m.Port, m.Hits, m.Missed)
+		}
+		if b.Len() == 0 {
+			return "No mock servers running.", nil
+		}
+		return b.String(), nil
+	case "monitors":
+		var b strings.Builder
+		for _, m := range a.APIMonitors() {
+			st := "never run"
+			if !m.LastRun.IsZero() {
+				st = fmt.Sprintf("last %s: %d passed, %d failed %s", m.LastRun.Format("15:04"), m.Passed, m.Failed, m.Error)
+			}
+			fmt.Fprintf(&b, "%s  %s  every %d min  enabled=%v  %s\n", m.ID, m.Name, m.Every, m.Enabled, st)
+		}
+		if b.Len() == 0 {
+			return "No monitors (API Client → Monitors).", nil
+		}
+		return b.String(), nil
+	case "run_monitor":
+		id := argStr(args, "id")
+		for _, m := range a.APIMonitors() {
+			if m.Name == id {
+				id = m.ID
+			}
+		}
+		if err := a.APIRunMonitor(id); err != nil {
+			return "", err
+		}
+		return "Running " + id + " in the background; see monitors for the result.", nil
 	case "collections":
 		var b strings.Builder
 		for _, c := range a.HTTPCollections() {
