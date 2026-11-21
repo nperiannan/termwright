@@ -6,6 +6,7 @@ import { tr } from '../core/i18n';
 import { Recorder } from '../core/recorder.service';
 import { TestCase, TestCaseInfo, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestsGitInfo, TestsTree } from '../core/models';
 import { expectLabel, stepText } from './recorder-panel';
+import { AIChat } from '../core/ai-chat.service';
 
 type View = 'steps' | 'yaml' | 'go' | 'py' | 'tcl';
 
@@ -30,6 +31,7 @@ type View = 'steps' | 'yaml' | 'go' | 'py' | 'tcl';
         } @else if (git()?.hasGit) {
           <button type="button" class="lnk sm" (click)="gitDo('init')" title="Keep the tests' history with Git (reports are left out)">Make it a Git repository</button>
         }
+        <button type="button" class="aiw" (click)="writeWithAI()" title="Describe a test; the AI assistant writes it as YAML, saves it and can run it">✦ Write a Test with AI</button>
         <div class="tree">
           <div class="h">CASES</div>
           @for (g of groups(); track g.dir) {
@@ -98,7 +100,9 @@ type View = 'steps' | 'yaml' | 'go' | 'py' | 'tcl';
                     @if (stepRes(i)?.error) { <div class="bad">{{ stepRes(i)?.error }}</div> }
                   </div>
                 }
-                <div class="row"><button type="button" (click)="recordMore()">● Record a New Test</button><span class="mut">To change steps, edit the YAML.</span></div>
+                <div class="row"><button type="button" (click)="recordMore()">● Record a New Test</button>
+                  @if (last()[file]?.passed === false) { <button type="button" (click)="explain(last()[file])" title="Ask the AI assistant why this test failed">✦ Explain the Failure</button> }
+                  <span class="mut">To change steps, edit the YAML.</span></div>
               }
               @case ('yaml') {
                 <textarea class="code" [(ngModel)]="yaml" spellcheck="false" aria-label="Test YAML"></textarea>
@@ -125,7 +129,7 @@ type View = 'steps' | 'yaml' | 'go' | 'py' | 'tcl';
               <button type="button" (click)="backend.testsOpen(rep.dir)">Open Report</button><button type="button" (click)="backend.testsOpen(rep.dir + '/junit.xml')">JUnit XML</button></div>
             <div class="res">
               @for (r of rep.results; track $index) {
-                <button type="button" class="rr" (click)="r.file && select(r.file)"><span [class]="r.passed ? 'ok' : 'bad'">{{ r.passed ? '✓' : '✗' }}</span>{{ r.file || r.case }}{{ paramOf(r.case) }}<span class="mut">{{ r.passed ? '' : failText(r) }}</span><span class="sp"></span><span class="mut">{{ (r.ms / 1000).toFixed(1) }} s</span></button>
+                <button type="button" class="rr" (click)="r.file && select(r.file)"><span [class]="r.passed ? 'ok' : 'bad'">{{ r.passed ? '✓' : '✗' }}</span>{{ r.file || r.case }}{{ paramOf(r.case) }}<span class="mut">{{ r.passed ? '' : failText(r) }}</span><span class="sp"></span>@if (!r.passed) { <span class="lnk ex" role="button" tabindex="0" (click)="$event.stopPropagation(); explain(r)" (keydown.enter)="$event.stopPropagation(); explain(r)" title="Ask the AI assistant why it failed">✦ Explain</span> }<span class="mut">{{ (r.ms / 1000).toFixed(1) }} s</span></button>
               }
             </div>
           </footer>
@@ -150,7 +154,7 @@ type View = 'steps' | 'yaml' | 'go' | 'py' | 'tcl';
     .chip { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 10px; margin: 4px 4px 0 0; background: color-mix(in srgb, var(--ok, #4ec07a) 15%, transparent); color: var(--ok, #4ec07a); }
     .chip.b { background: color-mix(in srgb, var(--danger, #ef6161) 15%, transparent); color: var(--danger, #ef6161); } .chip.v { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
     .code { flex: 1; min-height: 240px; font: 12.5px/1.5 var(--mono, monospace); resize: none; white-space: pre; overflow: auto; margin: 0; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--term-bg, rgba(0,0,0,.25)); color: var(--text); }
-    .sf label { display: flex; align-items: center; gap: 10px; } .sf label > span { width: 90px; color: var(--muted); font-size: 12px; } .sf input:not([type=checkbox]), .sf select { height: 28px; min-width: 220px; } .sf .ck { padding-left: 100px; font-size: 13px; } .pri { background: var(--accent); color: #fff; border-color: transparent; } .empty { margin: auto; }
+    .sf label { display: flex; align-items: center; gap: 10px; } .sf label > span { width: 90px; color: var(--muted); font-size: 12px; } .sf input:not([type=checkbox]), .sf select { height: 28px; min-width: 220px; } .sf .ck { padding-left: 100px; font-size: 13px; } .aiw { text-align: left; } .ex { font-size: 12px; margin-right: 8px; cursor: pointer; } .pri { background: var(--accent); color: #fff; border-color: transparent; } .empty { margin: auto; }
     footer { border-top: 1px solid var(--border); padding: 8px 12px; max-height: 32%; display: flex; flex-direction: column; gap: 4px; min-height: 0; } .res { overflow: auto; }
     .rr { display: flex; gap: 8px; width: 100%; border: 0; background: none; color: var(--text); padding: 3px 4px; text-align: left; cursor: pointer; font: inherit; } .rr:hover { background: var(--hover, rgba(255,255,255,.05)); }
   `],
@@ -160,6 +164,7 @@ export class TestsView implements OnInit, OnDestroy {
   readonly backend = inject(Backend);
   private readonly ui = inject(Ui);
   private readonly rec = inject(Recorder);
+  private readonly ai = inject(AIChat);
   readonly tree = signal<TestsTree | null>(null);
   readonly git = signal<TestsGitInfo | null>(null);
   readonly sel = signal('');
@@ -180,7 +185,7 @@ export class TestsView implements OnInit, OnDestroy {
   private timer?: ReturnType<typeof setInterval>;
   private offs: (() => void)[] = [];
   /** The last result of each test file, for the tree's dots. */
-  private readonly last = signal<Record<string, TestResult>>({});
+  readonly last = signal<Record<string, TestResult>>({});
 
   readonly groups = computed(() => {
     const m = new Map<string, TestCaseInfo[]>();
@@ -284,6 +289,29 @@ export class TestsView implements OnInit, OnDestroy {
     this.busy.set(false);
   }
   recordMore() { this.rec.start(); }
+  /** Sends a failed run with its test to the AI assistant and asks why it failed. */
+  async explain(r: TestResult) {
+    const yaml = r.file ? await this.backend.testFile(r.file).catch(() => '') : '';
+    const cut = (s: string, n: number) => s.length > n ? s.slice(0, n) + '\n… (cut)' : s;
+    const steps = r.steps.map((s, i) => {
+      const head = `${i + 1}. ${s.skipped ? 'SKIPPED' : s.passed ? 'passed' : 'FAILED'} - ${s.name} (${s.kind} ${s.target ?? ''}: ${s.sent ?? ''}, ${s.ms} ms${s.status ? ', status ' + s.status : ''})`;
+      if (s.passed || s.skipped) return head;
+      const checks = (s.checks ?? []).map(c => `   ${c.passed ? 'ok' : 'FAILED'}: ${c.what}, got "${c.got ?? ''}"`).join('\n');
+      return [head, s.error ? '   error: ' + s.error : '', checks, s.output ? '   output:\n' + cut(s.output, 6000) : ''].filter(Boolean).join('\n');
+    }).join('\n');
+    this.ai.currentId.set('');
+    this.ai.start({});
+    this.ai.addFile('Test ' + (r.file || r.case), `Test file ${r.file ?? ''}:\n${cut(yaml, 8000)}\n\nRun of "${r.case}" (${r.passed ? 'passed' : 'failed'}${r.error ? ': ' + r.error : ''}):\n${steps}`);
+    void this.ai.send(tr('Why did this Termwright test fail? Say whether the device, the network or the test itself is wrong, and how to fix it. If the test should change, show the corrected YAML.'));
+  }
+  /** Asks the AI assistant to write a test from a description. */
+  async writeWithAI() {
+    const what = await this.ui.input(tr('Write a Test with AI'), tr('What should the test check? (e.g. VLAN 42 is up on core-sw1 and the REST API lists it)'), '');
+    if (!what?.trim()) return;
+    this.ai.currentId.set('');
+    this.ai.start({});
+    void this.ai.send(tr('Write a Termwright test that checks: {0}. Find the saved sessions it needs first, then save it with the tests tool (action save, a file under cases/), using roles ({{role}} variables with the sessions as defaults) and checks on what must be true. Then show the YAML and offer to run it.', what.trim()));
+  }
   editSchedule(s: TestScheduleView | null) {
     this.sched.set(s ? structuredClone({ ...s, state: undefined, next: undefined, when: undefined }) as TestSchedule : { id: '', name: '', repeat: 'daily', at: '06:00', day: 1, hours: 4, testbed: this.testbed });
     this.schedWhat = s?.files?.length ? 'keep' : 'all';
