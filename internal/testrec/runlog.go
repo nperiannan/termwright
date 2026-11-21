@@ -51,12 +51,19 @@ func StepLog(rep RunReport, r Result) string {
 		if s.Output != "" {
 			fmt.Fprintf(&b, "--- output ---\n%s\n--------------\n", strings.TrimRight(s.Output, "\n"))
 		}
-		for _, c := range s.Checks {
-			m := "ok  "
-			if !c.Passed {
-				m = "FAIL"
+		if len(s.Checks) > 0 {
+			w := len("Expected")
+			for _, c := range s.Checks {
+				w = max(w, min(len([]rune(c.What)), 60))
 			}
-			fmt.Fprintf(&b, "Check %s %s - got %q\n", m, c.What, c.Got)
+			fmt.Fprintf(&b, "Checks:\n  %-8s  %-*s  %s\n", "Result", w, "Expected", "Found")
+			for _, c := range s.Checks {
+				m := "✓ pass"
+				if !c.Passed {
+					m = "✗ FAIL"
+				}
+				fmt.Fprintf(&b, "  %-8s  %-*s  %s\n", m, w, c.What, CheckFound(c))
+			}
 		}
 		if s.Error != "" {
 			fmt.Fprintf(&b, "Error:    %s\n", s.Error)
@@ -76,4 +83,15 @@ func (f Folder) writeLogs(rep *RunReport, abs string) {
 			rep.Results[i].Log = rep.Dir + "/logs/" + name
 		}
 	}
+}
+
+// CheckFound is what a check found, in words: the value, or found / not found for text checks.
+func CheckFound(c CheckResult) string {
+	if c.Got != "" {
+		return c.Got
+	}
+	if c.Passed {
+		return "found"
+	}
+	return "not in the output"
 }

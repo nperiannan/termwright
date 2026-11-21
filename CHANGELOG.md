@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Run log you can read**: the live log shows each step as a heading, the device's answer, a table of the checks (Expected, Found) with ✓ and ✗, and the result in green or red with its time; a step without checks says it passes when the device answers without an error. The saved run log has the checks as a table too (Result, Expected, Found), and the log viewer colours passed and failed lines.
+
+- **Calmer buttons in Tests**: **Record a Test** is a small button with a red dot (dark in the dark theme, light in the light theme), and running is a small green **▶ Run Test** button - in the test page, the selection bar, the Run panel and for failed tests.
+
 - **Live log you can size and expand**: drag the bar under the live log to make it taller or shorter (remembered), or **Expand** it over the whole test page and **Minimise** it back; the Running bar with Stop stays visible. The Run panel's buttons stay readable in the light theme and when the pointer is over them.
 
 - **No cleanup for what a test already removed**: when a recorded step undoes an earlier change itself (`delete vlan v2000` in the steps), its suggested cleanup and the cleanup of what depended on it (`configure vlan v2000 delete ports 1:2`, `unconfigure vlan v2000 ipaddress`) are taken out, so the cleanup no longer fails on a VLAN that is gone.

@@ -621,7 +621,7 @@ func TestRunLog(t *testing.T) {
 	rel, _ := f.Save("l", Case{Name: "log me", Steps: []Step{{Run: &RunStep{Session: "s", Command: "show version"}, Expect: []Expect{{Contains: "ExtremeXOS"}}}}})
 	rep, _ := f.RunFiles(context.Background(), []string{rel}, &fake{}, nil, nil)
 	b, err := os.ReadFile(filepath.Join(f.Root, rep.Results[0].Log))
-	if err != nil || !strings.Contains(string(b), "Sent:     show version") || !strings.Contains(string(b), "ExtremeXOS version 32.6.1.4") || !strings.Contains(string(b), "Check ok") {
+	if err != nil || !strings.Contains(string(b), "Sent:     show version") || !strings.Contains(string(b), "ExtremeXOS version 32.6.1.4") || !strings.Contains(string(b), "✓ pass") {
 		t.Fatal(string(b), err)
 	}
 }

@@ -16,6 +16,8 @@ type Phase = 'setup' | 'steps' | 'cleanup';
 type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
 
 /** The Tests tab: the tests folder's tree, the selected test (steps, YAML, generated Go) and the last run. */
+type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestStepResult };
+
 @Component({
   selector: 'app-tests-view',
   imports: [FormsModule, NgTemplateOutlet, Icon],
@@ -33,7 +35,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
         @switch (section()) {
           @case ('tests') {
             <div class="stop">
-              <div class="row"><button type="button" class="pri grow" (click)="recordMore()">● Record a Test</button><button type="button" (click)="moreMenu($event)" title="Open, clone, write with AI, folder">⋯</button></div>
+              <div class="row"><button type="button" class="recb" (click)="recordMore()" title="Record what you do in terminal tabs, the API Client and the SNMP Browser as a test"><i class="rdot"></i>Record a Test</button><span class="sp"></span><button type="button" (click)="moreMenu($event)" title="Open, clone, write with AI, folder">⋯</button></div>
               <input class="search" type="search" placeholder="Search tests" [ngModel]="q()" (ngModelChange)="q.set($event)" aria-label="Search tests" />
               <div class="tags">@for (t of tagList(); track t.k) { <button type="button" class="tag" [class.on]="tag() === t.k" (click)="tag.set(t.k)">{{ t.l }} <i>{{ t.n }}</i></button> }</div>
             </div>
@@ -65,7 +67,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                     <ol><li><b>Record</b> - work on the device as you always do; commands, API requests and SNMP queries become steps, and the checks for what you configured are added for you.</li>
                       <li><b>Run</b> - on the same devices or a testbed, with or without cleanup.</li>
                       <li><b>Report</b> - results with expected vs got, history, qTest and Jira.</li></ol>
-                    <button type="button" class="pri" (click)="recordMore()">● Record a Test</button>
+                    <button type="button" class="recb" (click)="recordMore()"><i class="rdot"></i>Record a Test</button>
                     <button type="button" (click)="importManual()">Import Test Cases…</button>
                     <button type="button" (click)="writeWithAI()">✦ Write a Test with AI</button>
                     <span class="mut">Import reads your test case sheet (Excel or CSV): Suite, Test, Step, Device, Expected.</span>
@@ -74,8 +76,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
               }
             </div>
             @if (picked().length) {
-              <div class="selbar col"><div class="row"><b>{{ picked().length }} selected</b><span class="sp"></span><button type="button" class="lnk" (click)="picked.set([])">Clear</button><button type="button" class="lnk" (click)="saveSuite()" title="Keep the selected tests as a plan (suites/…) to run them together again">Save as plan…</button></div>
-                <button type="button" class="pri full" (click)="openRun(picked(), picked().length + ' tests')"><app-icon name="play" [size]="13" /> Run {{ picked().length }} {{ picked().length === 1 ? 'test' : 'tests' }}…</button></div>
+              <div class="selbar"><b>{{ picked().length }} selected</b><span class="sp"></span><button type="button" class="lnk" (click)="picked.set([])">Clear</button><button type="button" class="lnk" (click)="saveSuite()" title="Keep the selected tests as a plan (suites/…) to run them together again">Save as plan…</button><button type="button" class="go" (click)="openRun(picked(), (picked().length === 1 ? '1 test' : picked().length + ' tests'))"><app-icon name="play" [size]="12" /> Run {{ picked().length === 1 ? 'Test' : picked().length + ' Tests' }}</button></div>
             } @else if (filtering()) {
               <div class="selbar"><span class="mut">{{ filtered().length }} of {{ tree()?.cases?.length ?? 0 }} shown</span><span class="sp"></span><button type="button" (click)="openRun(shownFiles(), filtered().length + ' shown tests')" [disabled]="!filtered().length"><app-icon name="play" [size]="13" /> Run shown…</button></div>
             } @else {
@@ -150,7 +151,26 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
               <button type="button" class="lnk" (click)="copyLive()">Copy</button>
               <button type="button" class="lnk" (click)="conMax.set(!conMax())" [title]="conMax() ? 'Back to the log above the test' : 'Show the log over the whole page'"><app-icon [name]="conMax() ? 'minimize' : 'maximize'" [size]="12" /> {{ conMax() ? 'Minimise' : 'Expand' }}</button>
               @if (!busy()) { <button type="button" class="lnk" (click)="showLive.set(false); conMax.set(false)">Close</button> }</div>
-            <pre #con [style.height.px]="conMax() ? null : conH()">{{ liveLog().join('\n') }}</pre>
+            <div class="con" #con [style.height.px]="conMax() ? null : conH()">
+              @for (it of liveLog(); track $index) {
+                @switch (it.k) {
+                  @case ('head') { <div class="lhd"><span class="lar">▶&nbsp;</span><span class="lcase">{{ it.c }}</span> · <b>{{ it.t }}</b></div> }
+                  @case ('out') { <pre class="lout">{{ it.t }}</pre> }
+                  @case ('res') {
+                    @if (it.s!.checks?.length) {
+                      <table class="lchk"><thead><tr><th></th><th>Expected</th><th>Found</th></tr></thead><tbody>
+                        @for (c of it.s!.checks!; track $index) { <tr [class.bad]="!c.passed"><td class="lm">{{ c.passed ? '✓' : '✗' }}</td><td>{{ c.what }}</td><td>{{ found(c) }}</td></tr> }
+                      </tbody></table>
+                    }
+                    <div class="lres" [class.ok]="it.s!.passed && !it.s!.skipped" [class.bad]="!it.s!.passed && !it.s!.skipped" [class.skip]="it.s!.skipped">
+                      {{ it.s!.skipped ? '– skipped' : it.s!.passed ? '✓ passed' : '✗ failed' }}<span class="lms">{{ dur(it.s!.ms) }}</span>
+                      @if (it.s!.error) { <span class="lerr">{{ it.s!.error }}</span> }
+                      @else if (!it.s!.skipped && !it.s!.checks?.length) { <span class="lnote">no checks - passes when the device does not answer with an error</span> }
+                    </div>
+                  }
+                }
+              }
+            </div>
             @if (!conMax()) { <div class="cgrip" (mousedown)="dragCon($event)" (dblclick)="conH.set(240); keepCon()" title="Drag to change the height (double-click: default)" role="separator" aria-orientation="horizontal"></div> }
           </div>
         }
@@ -163,7 +183,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                   <span class="sp"></span>
                   <button type="button" (click)="backend.testsOpen(rep.dir)">HTML report</button><button type="button" (click)="backend.testsOpen(rep.dir + '/junit.xml')">JUnit</button>
                   <button type="button" (click)="sendQTest(rep)" [disabled]="sending()" title="Send each test's result to its qTest test case (Global Options → Integrations)">{{ sending() ? 'Sending…' : 'Send to qTest' }}</button>
-                  @if (failedFiles(rep).length) { <button type="button" class="pri" (click)="openRun(failedFiles(rep), 'the failed tests')">▶ Run failed again</button> }
+                  @if (failedFiles(rep).length) { <button type="button" class="go" (click)="openRun(failedFiles(rep), 'the failed tests')"><app-icon name="play" [size]="12" /> Run Failed Again</button> }
                 </div></div>
               <div class="body">
                 <div class="kpis">
@@ -220,7 +240,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                   @if (last()[sel()]?.log; as lg) { <button type="button" (click)="openLog(lg, t.name || sel())" title="The last run's log: every step, what was sent and what came back">Run Log</button> }
                   @if (!draft()) { <button type="button" (click)="edit()">✎ Edit</button> }
                   <button type="button" (click)="testMenu($event)" title="Rename, duplicate, delete, open">⋯</button>
-                  <button type="button" class="pri" (click)="openRun([sel()], t.name || sel())" [disabled]="busy()">{{ busy() ? 'Running…' : '▶ Run…' }}</button>
+                  <button type="button" class="go" (click)="openRun([sel()], t.name || sel())" [disabled]="busy()"><app-icon name="play" [size]="12" /> {{ busy() ? 'Running…' : 'Run Test' }}</button>
                 </div>
                 <div class="tabs">
                   <button type="button" [class.on]="view() === 'steps'" (click)="setView('steps')">Steps</button>
@@ -393,7 +413,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
         <div class="mdlg logdlg" role="dialog" aria-label="Run log">
           <div class="row"><h2 class="fl">Run log · {{ lv.title }}</h2><span class="sp"></span><button type="button" (click)="copyText(lv.text)">Copy</button><button type="button" (click)="backend.testsOpenInEditor(lv.file)">Open in Editor</button><button type="button" (click)="logView.set(null)">Close</button></div>
           <span class="mut">{{ lv.file }}</span>
-          <pre class="logpre">{{ lv.text }}</pre>
+          <pre class="logpre">@for (ln of lv.text.split('\n'); track $index) {<span [class]="logCls(ln)">{{ ln + '\n' }}</span>}</pre>
         </div>
       }
       @if (manual(); as m) {
@@ -430,7 +450,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
             <label class="fld"><span>If a cleanup fails</span><select [(ngModel)]="onCleanupFail" (ngModelChange)="keepOcf()"><option value="stop">Stop the run - skip the rest</option><option value="restore">Restore the configuration saved before the run</option><option value="factory">Factory default, then go on</option></select></label>
           }
           <span class="sp"></span>
-          <div class="row"><button type="button" class="grow" (click)="runFiles.set(null)">Cancel</button><button type="button" class="pri grow2" (click)="startRun()" [disabled]="multi() && multiPick.length < 1">▶ Run {{ rf.length ? rf.length + (rf.length === 1 ? ' test' : ' tests') : 'all' }}{{ multi() ? ' on ' + multiPick.length + ' testbeds' : '' }}</button></div>
+          <div class="row"><button type="button" class="grow" (click)="runFiles.set(null)">Cancel</button><button type="button" class="go grow2" (click)="startRun()" [disabled]="multi() && multiPick.length < 1"><app-icon name="play" [size]="12" /> Run {{ rf.length ? rf.length + (rf.length === 1 ? ' test' : ' tests') : 'all' }}{{ multi() ? ' on ' + multiPick.length + ' testbeds' : '' }}</button></div>
         </aside>
       }
     </div>
@@ -442,7 +462,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     button { font: inherit; } .sp { flex: 1; } .grow { flex: 1; } .grow2 { flex: 2; } .mut { color: var(--muted); font-size: 12px; } .ok { color: var(--ok, #3fbf75); } .bad { color: var(--danger, #ef6161); } .warn { color: var(--warn, #e0a030); }
     .row { display: flex; align-items: center; gap: 6px; } .r { text-align: right; } .fl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pri { background: var(--accent) !important; color: #fff !important; border-color: transparent !important; } .pri:hover:not(:disabled) { filter: brightness(1.1); } .pri:disabled { opacity: .55; }
-    .drawer .row button:not(.pri) { background: var(--surface, var(--panel)) !important; color: var(--text) !important; border: 1px solid var(--border) !important; } .drawer .row button:not(.pri):hover { background: var(--hover) !important; } .ghost { background: none; border-color: transparent; color: var(--muted); }
+    .drawer .row button:not(.pri):not(.go) { background: var(--surface, var(--panel)) !important; color: var(--text) !important; border: 1px solid var(--border) !important; } .drawer .row button:not(.pri):not(.go):hover { background: var(--hover) !important; } .ghost { background: none; border-color: transparent; color: var(--muted); }
     .lnk { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0 4px; }
     .rail { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 8px 6px; background: var(--chrome); border-right: 1px solid var(--border); }
     .rail button { display: flex !important; flex-direction: column; align-items: center; justify-content: center; gap: 4px; height: auto !important; min-height: 52px; line-height: 1.15; padding: 6px 2px !important; font-size: 10.5px !important; border: 0; border-radius: 9px; background: none; color: var(--muted); font-size: 10.5px; cursor: pointer; }
@@ -465,7 +485,13 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .sm { font-size: 12px; align-self: flex-start; } .drawer small { font-size: 11.5px; }
     .sui { color: var(--accent); font-size: 10px; width: 14px; text-align: center; }
     .empty-s { color: var(--muted); font-size: 12px; padding: 18px 8px; text-align: center; line-height: 1.6; }
-    .selbar { display: flex; align-items: center; gap: 8px; margin: 8px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: color-mix(in srgb, var(--text) 4%, transparent); }
+    .recb { display: inline-flex; align-items: center; gap: 8px; height: 28px !important; padding: 0 12px !important; border-radius: 6px !important; background: #16171a !important; color: #f2f3f5 !important; border: 1px solid #000 !important; font-size: 12.5px; font-weight: 500; box-shadow: none !important; }
+    .recb:hover { background: #24262b !important; } .rdot { width: 9px; height: 9px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 0 3px rgba(239, 68, 68, .22); flex: none; }
+    :host-context(.light) .recb { background: #ffffff !important; color: #1f2329 !important; border-color: #cfd2d8 !important; box-shadow: 0 1px 2px rgba(0,0,0,.06) !important; }
+    :host-context(.light) .recb:hover { background: #f3f4f6 !important; border-color: #b9bdc5 !important; }
+    .go { display: inline-flex; align-items: center; gap: 6px; justify-content: center; height: 28px !important; padding: 0 12px !important; border-radius: 6px !important; background: #1f9d55 !important; color: #fff !important; border: 1px solid #188a4a !important; font-size: 12.5px; font-weight: 600; box-shadow: none !important; }
+    .go:hover:not(:disabled) { background: #188a4a !important; } .go:disabled { opacity: .55; }
+    .selbar > * { white-space: nowrap; } .selbar { display: flex; align-items: center; gap: 8px; margin: 8px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: color-mix(in srgb, var(--text) 4%, transparent); }
     .selbar.col { flex-direction: column; align-items: stretch; } .selbar .full { justify-content: center; width: 100%; } .selbar b { font-weight: 600; font-size: 12.5px; }
     .main { position: relative; background: var(--bg); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
     .head { padding: 12px 20px 0; border-bottom: 1px solid var(--border); } .crumb { color: var(--muted); font-size: 12px; }
@@ -507,7 +533,17 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .cgrip::after { content: ''; width: 44px; height: 4px; border-radius: 3px; background: color-mix(in srgb, var(--text) 30%, transparent); }
     .cgrip:hover::after, .cgrip:active::after { background: var(--accent); width: 100%; height: 3px; border-radius: 0; }
     .console .ch { display: flex; align-items: center; gap: 10px; padding: 5px 20px; font-size: 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
-    .console pre { margin: 0; min-height: 60px; overflow: auto; padding: 8px 20px; font: 12px/1.45 var(--mono, monospace); color: #cfd3da; white-space: pre-wrap; }
+    .console .con { min-height: 60px; overflow: auto; padding: 6px 20px 10px; font: 12px/1.45 var(--mono, monospace); color: #cfd3da; }
+    .console.max .con { flex: 1; height: auto; }
+    .lhd { margin: 12px 0 2px; color: #e8eaee; } .lhd .lar { color: #7aa7ff; } .lhd .lcase { color: #9aa1ab; } .lhd b { font-weight: 600; }
+    .lout { margin: 0; white-space: pre-wrap; color: #b8bec8; font: inherit; }
+    .lchk { border-collapse: collapse; margin: 6px 0 4px 14px; font: 11.5px/1.4 var(--mono, monospace); min-width: 50%; }
+    .lchk th { text-align: left; color: #8b919b; font-weight: 500; padding: 3px 10px; border-bottom: 1px solid #2c2f36; } .lchk td { padding: 3px 10px; border-bottom: 1px solid #22252b; color: #d6dae1; vertical-align: top; }
+    .lchk td.lm { color: #4ade80; width: 14px; } .lchk tr.bad td { color: #fca5a5; } .lchk tr.bad td.lm { color: #f87171; } .lchk tr:not(.bad) td:nth-child(3) { color: #86efac; }
+    .lres { margin: 4px 0 0 14px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-weight: 600; } .lres.ok { color: #4ade80; } .lres.bad { color: #f87171; } .lres.skip { color: #9aa1ab; }
+    .lres .lms { font-weight: 400; color: inherit; opacity: .85; } .lres .lerr { font-weight: 400; color: #fca5a5; } .lres .lnote { font-weight: 400; color: #8b919b; }
+    .console pre.unused { margin: 0; min-height: 60px; overflow: auto; padding: 8px 20px; font: 12px/1.45 var(--mono, monospace); color: #cfd3da; white-space: pre-wrap; }
+    .lg-ok { color: #4ade80; } .lg-bad { color: #f87171; } .lg-hd { color: #e8eaee; font-weight: 600; }
     .logdlg { width: min(1000px, 94vw); height: min(80vh, 900px); } .logpre { flex: 1; margin: 0; overflow: auto; padding: 10px 12px; border-radius: 8px; background: #111317; color: #cfd3da; font: 12px/1.5 var(--mono, monospace); white-space: pre-wrap; }
     .live { display: flex; align-items: center; gap: 10px; padding: 7px 20px; background: color-mix(in srgb, var(--accent) 12%, var(--panel)); border-bottom: 1px solid var(--border); font-size: 12.5px; }
     .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); border-top-color: var(--accent); animation: sp 0.9s linear infinite; } @keyframes sp { to { transform: rotate(360deg); } }
@@ -645,10 +681,9 @@ export class TestsView implements OnInit, OnDestroy {
     this.offs.push(this.backend.on('tests:progress', (r: TestResult) => { if (r.file) this.last.update(m => ({ ...m, [r.file!]: r })); }));
     this.offs.push(this.backend.on('tests:step', (e: { case: string; step: TestStepResult }) => {
       this.liveStep.set(e); this.liveCount.update(n => n + 1);
-      const s = e.step, bad = s.checks?.find(c => !c.passed);
-      this.liveLine(s.skipped ? '   – skipped' + (s.error ? ': ' + s.error : '') : s.passed ? `   ✓ passed (${this.dur(s.ms)})` : `   ✗ FAILED: ${s.error || (bad ? bad.what + ', got "' + (bad.got ?? '') + '"' : '')}`);
+      this.pushLive({ k: 'res', s: e.step });
     }));
-    this.offs.push(this.backend.on('tests:step-start', (e: { case: string; step: string }) => this.liveLine(`\n▶ ${e.case} · ${e.step}`)));
+    this.offs.push(this.backend.on('tests:step-start', (e: { case: string; step: string }) => this.pushLive({ k: 'head', c: e.case, t: e.step })));
     this.offs.push(this.backend.on('tests:out', (e: { session: string; text: string }) => this.addLive(e.text)));
     this.offs.push(this.backend.on('tests:manual', (m: { id: string; name: string; instruction: string; expected: string }) => { this.manualNote = ''; this.manual.set(m); }));
     this.offs.push(this.backend.on('tests:manual-done', (id: string) => { if (this.manual()?.id === id) this.manual.set(null); }));
@@ -1151,16 +1186,35 @@ export class TestsView implements OnInit, OnDestroy {
   readonly liveCount = signal(0);
   async stopRun() { await this.backend.testStop().catch(() => {}); this.ui.toast(tr('Stopping after the step that runs now…'), 'info'); }
   readonly showLive = signal(true);
-  readonly liveLog = signal<string[]>([]);
+  readonly liveLog = signal<LiveItem[]>([]);
   private livePart = '';
-  private addLive(text: string) {
-    const parts = (this.livePart + text.replace(/\r/g, '')).split('\n');
-    this.livePart = parts.pop() ?? '';
-    this.liveLog.update(l => { const n = [...l, ...parts]; return n.length > 4000 ? n.slice(-4000) : n; });
-    queueMicrotask(() => { const el = document.querySelector('app-tests-view .console pre'); if (el) el.scrollTop = el.scrollHeight; });
+  private pushLive(it: LiveItem) {
+    this.liveLog.update(l => { const n = [...l, it]; return n.length > 3000 ? n.slice(-3000) : n; });
+    this.scrollLive();
   }
-  private liveLine(line: string) { if (this.livePart) { this.addLive('\n'); } this.addLive(line + '\n'); }
-  copyLive() { this.copyText(this.liveLog().join('\n')); }
+  private scrollLive() { queueMicrotask(() => { const el = document.querySelector('app-tests-view .console .con'); if (el) el.scrollTop = el.scrollHeight; }); }
+  private addLive(text: string) {
+    const t = text.replace(/\r/g, '');
+    if (!t) return;
+    this.liveLog.update(l => {
+      const last = l[l.length - 1];
+      if (last?.k === 'out') return [...l.slice(0, -1), { k: 'out', t: ((last.t ?? '') + t).slice(-200000) }];
+      return [...l, { k: 'out', t: t.replace(/^\n+/, '') }];
+    });
+    this.scrollLive();
+  }
+  logCls(ln: string) {
+    if (/^\s*✓|\[PASSED|^Result:\s+PASSED/.test(ln)) return 'lg-ok';
+    if (/^\s*✗|\[FAILED|^Result:\s+FAILED|^Error:/.test(ln)) return 'lg-bad';
+    if (/^===|^Checks:|^\s+Result\s+Expected/.test(ln)) return 'lg-hd';
+    return '';
+  }
+  found(c: { passed: boolean; got?: string }) { return c.got ? c.got : c.passed ? 'found' : 'not in the output'; }
+  private liveText() {
+    return this.liveLog().map(it => it.k === 'head' ? `\n▶ ${it.c} · ${it.t}` : it.k === 'out' ? (it.t ?? '').replace(/\n$/, '')
+      : [...(it.s!.checks ?? []).map(c => `   ${c.passed ? '✓' : '✗'} ${c.what}  →  ${this.found(c)}`), `   ${it.s!.skipped ? '– skipped' : it.s!.passed ? '✓ passed' : '✗ failed'} (${this.dur(it.s!.ms)})${it.s!.error ? ' ' + it.s!.error : ''}`].join('\n')).join('\n');
+  }
+  copyLive() { this.copyText(this.liveText()); }
   copyText(t: string) { void navigator.clipboard?.writeText(t).then(() => this.ui.toast(tr('Copied'), 'success')).catch(() => {}); }
   readonly logView = signal<{ title: string; file: string; text: string } | null>(null);
   async openLog(file: string, title: string) {
