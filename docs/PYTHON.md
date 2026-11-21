@@ -108,6 +108,8 @@ print(lab.tests.run("cases/smoke/version.yaml", vars={"vlan": "42"}))  # pass/fa
 print(lab.tests.run())          # all tests
 print(lab.tests.run(testbed="lab-a.yaml"))   # the same tests on other devices
 lab.tests.new_testbed("lab-a", "Lab")        # a role per saved session of the Lab folder
+lab.tests.schedule("nightly", repeat="daily", at="02:15", testbed="lab-a.yaml")   # runs while Termwright is open
+print(lab.tests.schedules())
 print(lab.tests.results())      # the last run
 lab.tests.generate()            # write the Go, Python and TCL tests again
 ```

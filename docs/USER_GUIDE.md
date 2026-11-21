@@ -1588,6 +1588,16 @@ Every saved test is also written in Python and TCL next to its YAML (the Tests t
 
 The TCL scripts print TAP (`ok 1 - show version`, `not ok 2 - …` with the reason on `#` lines) and exit with 1 when a step failed, so any TAP or exit-code based runner can use them.
 
+### Scheduled runs
+
+**+** next to **Schedules** in the Tests tab runs tests by themselves while Termwright is open: all tests or the selected one, with a testbed, **daily**, on **weekdays**, **weekly** (a weekday and time) or **every N hours**. Each schedule shows its last result (green or red, with a link to its report) and its next run; **Run Now** starts it at once. A failed run shows a toast and a system notification. A schedule may use production sessions only when *May use production sessions* is ticked (asked when you save it); otherwise such a run is refused. Runs need Termwright to be open - for a server that runs tests around the clock use `termwright tests run` from the system's own scheduler (cron, Task Scheduler).
+
+### Tests and the AI assistant
+
+- **✦ Write a Test with AI**: describe what to check (*VLAN 42 is up on core-sw1 and the REST API lists it*); the assistant finds the saved sessions, writes the YAML with roles and checks, saves it with the `tests` tool and offers to run it.
+- **✦ Explain** (next to a failed test in the last run, or *Explain the Failure* under its steps): the test's YAML and the run - each step, the checks with what came back, the output of the failed step - go to the assistant, which says whether the device, the network or the test is wrong and shows a corrected test if the test needs one.
+- **Tests** is one of the assistant's tools (Settings → AI Assistant → tools), so a chat can also list, run and schedule tests; saving, running and scheduling are asked like other changes, and production always asks.
+
 ### Without the window: CI machines
 
 The `termwright` program runs tests without opening its window:

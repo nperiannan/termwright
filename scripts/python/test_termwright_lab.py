@@ -297,6 +297,9 @@ class ClientTest(unittest.TestCase):
         bodies = [b for _, p, b in Fake.state["calls"] if p == "/api/v1/tools/tests"]
         self.assertEqual(bodies[-2], {"action": "run", "testbed": "lab-a.yaml"})
         self.assertEqual(bodies[-1], {"action": "new_testbed", "name": "lab-a", "folder": "Lab"})
+        self.lab.tests.schedule("nightly", at="02:15", testbed="lab-a.yaml")
+        bodies = [b for _, p, b in Fake.state["calls"] if p == "/api/v1/tools/tests"]
+        self.assertEqual(bodies[-1], {"action": "schedule", "name": "nightly", "repeat": "daily", "at": "02:15", "testbed": "lab-a.yaml"})
 
     def test_syslog(self):
         self.assertEqual(self.lab.syslog.messages("link down", severity="err")[0]["id"], 7)

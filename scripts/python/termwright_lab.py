@@ -824,6 +824,20 @@ class Tests:
         """Write the Go, Python and TCL tests again (none: all); see USER_GUIDE "Tests"."""
         return self._run(action="generate", files=list(files) or None)
 
+    def schedules(self) -> str:
+        """The scheduled runs with their last result and next run."""
+        return self._run(action="schedules")
+
+    def schedule(self, name: str, repeat: str = "daily", at: Optional[str] = None, day: Optional[int] = None, hours: Optional[int] = None,
+                 files: Optional[list] = None, testbed: Optional[str] = None, production: bool = False, id: Optional[str] = None) -> str:
+        """Add (or, with id, change) a scheduled run: repeat daily, weekdays, weekly (day 0-6) or hours; at "HH:MM"."""
+        return self._run(action="schedule", name=name, repeat=repeat, at=at, day=day, hours=hours, files=files, testbed=testbed,
+                         production="true" if production else None, id=id)
+
+    def unschedule(self, id: str) -> str:
+        """Remove a scheduled run."""
+        return self._run(action="unschedule", id=id)
+
     def results(self) -> str:
         """The last run's report."""
         return self._run(action="results")
