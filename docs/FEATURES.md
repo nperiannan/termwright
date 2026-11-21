@@ -102,6 +102,15 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **Tests folder**: any folder, a Git repository too (Clone…; branch and changes shown); testbeds fill the variables; production sessions are asked first; tests with passwords are refused.
 - **Honest results**: device error messages (`% Invalid input`, `Error:` … built in for seven device types, your own per device type) fail a step; steps without checks are marked *ran, nothing checked* with their output; the recorder suggests checks from the configuration you recorded (`contains v200`, in the cleanup `does not contain v200`) and asks before saving read steps without checks.
 - **Failed cleanups**: a test whose cleanup fails is reported as *failed (cleanup)*; the run then stops (remaining tests skipped, with the reason), restores the configuration saved before the run, or resets the devices to factory default (never production), waits for them and goes on.
+- **Checks from the configuration**: while recording, show commands get the checks for what was configured before them (field, word + value, or text; *does not contain* in the cleanup), only ones that hold for the recorded output.
+- **Tables**: TextFSM templates (ntc-templates format, built-ins for EXOS, VOSS and Cisco) turn output into tables; table checks and saves by row and column, in runs and generated code.
+- **Suites, tags, dependencies**: suites/*.yaml, tag filters, dependsOn with skipping and ordering; run by suite or tag in the GUI, CLI, schedules and API.
+- **Logic**: wait, if, retry until the checks pass, loops over values, ranges or variables - in Termwright's runs and the generated Go, Python and TCL.
+- **Testbeds at scale**: locks in the tests folder (shared, stale after 12 h, take-over and release) and the same tests on several testbeds at once.
+- **Watching and comparing**: syslog and SNMP notifications that fail a test while it runs, configuration compared before and after, lab traffic test steps, software upgrade steps.
+- **History**: pass rate, flips (flaky), durations and results per software version; versions recorded in each run and report.
+- **Integrations**: qTest (send results with the report), Jira (defects with steps and output), Git host token - addresses in the settings, tokens in the OS keychain; automatic sending and defects.
+- **Workspace**: Tests, Runs, Schedules, Testbeds and Library; tests as tables with expected vs got; a Run panel for every run setting.
 - **Edit and select**: edit steps and checks in the Tests tab, rename, duplicate and delete tests (to `.removed/`), run only the ticked tests or a folder; the `lib/` helpers are listed apart from the tests.
 - **Tests for AI and automation**: the `tests` tool for the AI assistant and MCP apps, `POST /api/v1/tools/tests`, and `lab.tests` in Python.
 

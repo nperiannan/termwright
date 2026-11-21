@@ -1494,7 +1494,7 @@ When a test runs, its commands go over **one background login per session** (the
 
 ### The Tests tab
 
-**Tests → Tests** opens the tests folder:
+**Tests → Tests** opens the tests folder. A rail switches between **Tests**, **Runs** (past runs with their counts, first problems, qTest and Jira), **Schedules**, **Testbeds** (with their locks) and **Library** (templates and the code helpers); the Git branch at its foot has Pull, Commit and Push. Each test shows its setup, steps and cleanup as a table; a click on a step shows expected vs got, its output (select and right-click to add a check) and its table; **History** shows its pass rate, flips (flaky) and results per software version; **▶ Run…** opens the Run panel (testbed or several at once, after each test, if a cleanup fails). The testing guide ([TESTS_GUIDE.md](TESTS_GUIDE.md)) walks through it with pictures. In short:
 
 - **Cases** by folder, with a dot for the last result (green passed, red failed, amber unreadable file); **Testbeds**; **Reports** (past runs - click one to open its HTML report).
 - The selected test as **Steps** (the last run's checks marked ✓ or ✗ with what came back), as **YAML** (edit and **Save** - the file is checked first) or as its generated **Go** test (read-only; *Open in VS Code*).
@@ -1601,6 +1601,27 @@ The TCL scripts print TAP (`ok 1 - show version`, `not ok 2 - …` with the reas
 ### Scheduled runs
 
 **+** next to **Schedules** in the Tests tab runs tests by themselves while Termwright is open: all tests or the selected one, with a testbed, **daily**, on **weekdays**, **weekly** (a weekday and time) or **every N hours**. Each schedule shows its last result (green or red, with a link to its report) and its next run; **Run Now** starts it at once. A failed run shows a toast and a system notification. A schedule may use production sessions only when *May use production sessions* is ticked (asked when you save it); otherwise such a run is refused. Runs need Termwright to be open - for a server that runs tests around the clock use `termwright tests run` from the system's own scheduler (cron, Task Scheduler).
+
+### Bigger suites
+
+| In the test file | What it does |
+|---|---|
+| `tags: [smoke, l2]` | groups tests; filter and run by tag (`--tag smoke,!slow`) |
+| `dependsOn: [cases/vlan/create.yaml]` | skipped when that test failed or was skipped in the run; run first |
+| `wait: 5` | pause before the step (alone: a pause step) |
+| `if: "{{model}} contains 5520"` | run the step only when it holds (`==`, `!=`, `contains`, `!contains`, `~`, `>`, `<`, `>=`, `<=`) |
+| `retry: {timeout: 120, interval: 5}` | run the step again until its checks pass |
+| `loop: {var: port, range: "1:1-1:8", steps: [...]}` | its steps once per value (`values: [...]`, `from: "{{list}}"`) |
+| `run: {…, parse: auto}` + `table: {where: {VLAN_ID: "200"}, column: STATUS, equals: active}` | the output as a table (TextFSM / ntc-templates in `templates/`) and a check on one value; `rows: N`, `exists: false`, `matches` |
+| `traffic: {test: rfc2544-1g}` | a saved traffic test of the emulated lab; checks on its JSON (`json: rows[0].loss, less: 0.01`) |
+| `upgrade: {session: "{{sw}}", image: summitX-32.7.xos}` | install software with the device type's **Upgrade** commands and wait for the device |
+| `watch: {syslog: [LINK-3-UPDOWN], traps: [linkDown]}` | fail when these arrive from the test's devices while it runs |
+| `configDiff: true` (+ `configIgnore: [...]`) | compare each device's configuration before the test and after its cleanup |
+| `qtest: {testCase: TC-12}` | the qTest test case its results go to |
+
+**Suites** (`suites/<name>.yaml`: `name`, `tests` - files, folders or suites - and `tags`) are named sets; *Save as suite…* keeps a selection. A run **locks** its testbed (`locks/` in the tests folder, stale after 12 hours; *Release* frees it) and can run on several testbeds at once. Every run records the software version of each device (its device facts) and adds its results to `reports/history.jsonl`. While recording, show commands get checks for what was configured before them (*Options* in the recorder turns it off).
+
+**Integrations** (Global Options): qTest (address, user, project id, test cycle id, token; *Send every run*), Jira / Atlassian (address, e-mail - empty for a Data Center personal access token -, project, issue type, token; *Defect for failures* for scheduled runs) and the Git host (host, user, token - used for Clone, Pull and Push of the tests folder). Tokens stay in the OS keychain. **Send to qTest** in a run and **+ defect** on a failed test do it by hand.
 
 ### Tests and the AI assistant
 

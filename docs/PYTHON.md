@@ -106,6 +106,11 @@ steps:
 """)
 print(lab.tests.run("cases/smoke/version.yaml", vars={"vlan": "42"}))  # pass/fail per step, report path
 print(lab.tests.run())          # all tests
+print(lab.tests.run("suites/nightly.yaml", tags=["smoke", "!slow"], cleanup="off"))
+print(lab.tests.run(testbeds=["testbeds/lab-a.yaml", "testbeds/lab-b.yaml"]))  # at the same time
+print(lab.tests.history("cases/smoke/version.yaml"))   # pass rate, flips, per software version
+print(lab.tests.send_qtest())                          # the last run to qTest
+print(lab.tests.defect("cases/smoke/version.yaml"))    # a Jira defect for a failed test
 print(lab.tests.run(on_cleanup_fail="restore"))  # after a failed cleanup put back the saved configuration (or "factory"; default "stop")
 print(lab.tests.run(testbed="lab-a.yaml"))   # the same tests on other devices
 lab.tests.new_testbed("lab-a", "Lab")        # a role per saved session of the Lab folder
