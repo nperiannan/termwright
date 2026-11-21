@@ -170,7 +170,7 @@ func (a *App) testsScheduler(ctx context.Context) {
 func (a *App) runSchedule(ctx context.Context, s testrec.Schedule) bool {
 	rctx, cancel := context.WithTimeout(ctx, 6*time.Hour)
 	defer cancel()
-	rep, err := a.runTests(rctx, TestRunRequest{Files: s.Files, Testbed: s.Testbed, Confirmed: s.Production, OnCleanupFail: s.OnCleanupFail, Cleanup: s.Cleanup, Tags: s.Tags}, nil)
+	rep, err := a.runTests(rctx, TestRunRequest{Files: s.Files, Testbed: s.Testbed, Confirmed: s.Production, OnCleanupFail: s.OnCleanupFail, Cleanup: s.Cleanup, Tags: s.Tags, scheduled: true}, nil)
 	if err != nil && len(rep.Results) == 0 && strings.Contains(err.Error(), "already running") {
 		return false
 	}
@@ -180,6 +180,7 @@ func (a *App) runSchedule(ctx context.Context, s testrec.Schedule) bool {
 	}
 	a.schedSetState(s.ID, state)
 	emitter{a}.Emit("tests:schedule", s.ID)
+	a.afterRun(rep, true)
 	switch {
 	case state.Error != "":
 		emitter{a}.Emit("toast", map[string]string{"level": "error", "message": "Scheduled tests " + s.Name + ": " + state.Error})

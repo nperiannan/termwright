@@ -166,3 +166,31 @@ func (f Folder) History(file string, limit int) []TestHistory {
 	sort.Slice(out, func(i, j int) bool { return out[i].File < out[j].File })
 	return out
 }
+
+// LoadReport reads a run's result.json.
+func (f Folder) LoadReport(dir string) (RunReport, error) {
+	var r RunReport
+	b, err := f.ReadText(strings.TrimSuffix(dir, "/") + "/result.json")
+	if err != nil {
+		return r, err
+	}
+	return r, json.Unmarshal([]byte(b), &r)
+}
+
+// SaveReport writes a run's result.json again (after qTest runs or defects were added).
+func (f Folder) SaveReport(r RunReport) error {
+	p, err := f.path(r.Dir + "/result.json")
+	if err != nil {
+		return err
+	}
+	b, _ := json.MarshalIndent(r, "", "  ")
+	return os.WriteFile(p, b, 0o644)
+}
+
+// CaseQTest: the qTest test case of a test file ("" = none).
+func (f Folder) CaseQTest(file string) string {
+	if c, err := f.Load(file); err == nil && c.QTest != nil {
+		return strings.TrimSpace(c.QTest.TestCase)
+	}
+	return ""
+}

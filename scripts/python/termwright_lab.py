@@ -823,6 +823,14 @@ class Tests:
         return self._run(timeout=timeout, action="run", files=list(files) or None, vars=vars, testbed=testbed,
                          on_cleanup_fail=on_cleanup_fail or None, cleanup=cleanup or None, tags=tags or None, testbeds=testbeds or None)
 
+    def send_qtest(self, dir: str = "", files: Optional[list] = None) -> str:
+        """Sends a run's results (default: the last run) to qTest - the tests that name a qTest test case."""
+        return self._run(action="send_qtest", dir=dir or None, files=files or None)
+
+    def defect(self, file: str, dir: str = "") -> str:
+        """Opens a Jira defect for a failed test of a run (default: the last run)."""
+        return self._run(action="defect", file=file, dir=dir or None)
+
     def history(self, file: str = "", limit: int = 30) -> str:
         """Past results of a test (or of every test): pass rate, flips (flaky) and results per software version."""
         return self._run(action="history", file=file or None, limit=limit)

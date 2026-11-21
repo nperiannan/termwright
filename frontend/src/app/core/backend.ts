@@ -316,6 +316,8 @@ export class Backend {
   testSaveFile(rel: string, text: string) { return this.call<void>('TestSaveFile', rel, text); }
   testSaveSuite(rel: string, s: { name?: string; description?: string; tests?: string[]; tags?: string[] }) { return this.call<string>('TestSaveSuite', rel, s); }
   testHistory(file: string, limit = 50) { return this.call<TestHistory[]>('TestHistory', file, limit); }
+  testSendQTest(dir: string, files: string[] = []) { return this.call<string>('TestSendQTest', dir, files); }
+  testCreateDefect(dir: string, file: string) { return this.call<string[]>('TestCreateDefect', dir, file); }
   testRemove(file: string) { return this.call<string>('TestRemove', file); }
   testRename(file: string, to: string, copy: boolean) { return this.call<string>('TestRename', file, to, copy); }
   testGenerateGo(file: string) { return this.call<string>('TestGenerateGo', file); }

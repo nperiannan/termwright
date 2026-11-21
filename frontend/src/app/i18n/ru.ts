@@ -5005,6 +5005,12 @@ const ru: Record<string, string> = {
   'Comma-separated, e.g. smoke, l2': 'Через запятую, напр. smoke, l2',
   'Depends On': 'Зависит от',
   'Tests that must pass first (files or names, comma-separated); when one fails, this test is skipped': 'Тесты, которые должны пройти раньше (файлы или имена через запятую); если один не прошёл, этот тест пропускается',
+  'Open a Jira Defect?': 'Открыть дефект в Jira?',
+  'A defect for "{0}" with its steps, the failed output and the report, in the Jira project of Global Options → Integrations.': 'Дефект для «{0}» с шагами, выводом ошибки и отчётом в проекте Jira из Общих параметров → Интеграции.',
+  'Open Defect': 'Открыть дефект',
+  'Opened {0}': 'Открыт {0}',
+  'qTest Test Case': 'Тестовый случай qTest',
+  'The id or PID of the qTest test case this test reports to, e.g. TC-12': 'Id или PID тестового случая qTest, в который отправляется этот тест, напр. TC-12',
 };
 
 export default ru;

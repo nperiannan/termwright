@@ -101,6 +101,7 @@ type TestRunRequest struct {
 	// testbed someone else has locked.
 	Testbeds  []string `json:"testbeds,omitempty"`
 	ForceLock bool     `json:"forceLock,omitempty"`
+	scheduled bool     // a schedule's run: afterRun is called by the scheduler
 	// Vars: values for {{variables}} that win over the tests' own.
 	Vars map[string]string `json:"vars,omitempty"`
 	// Testbed: a file in testbeds/ whose values are used as {{variables}} (Vars win).
@@ -226,6 +227,9 @@ func (a *App) runTests(ctx context.Context, r TestRunRequest, ask netAsker) (tes
 		testsMu.Lock()
 		testsLast = &rep
 		testsMu.Unlock()
+		if !r.scheduled {
+			go a.afterRun(rep, false)
+		}
 	}
 	return rep, err
 }
@@ -463,9 +467,35 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 			return "", err
 		}
 		return testsReportText(f, rep), nil
+	case "send_qtest":
+		d := argStr(args, "dir")
+		if d == "" {
+			if l := a.TestLastRun(); l != nil {
+				d = l.Dir
+			}
+		}
+		return a.TestSendQTest(d, argStrs(args, "files"))
+	case "defect":
+		d := argStr(args, "dir")
+		if d == "" {
+			if l := a.TestLastRun(); l != nil {
+				d = l.Dir
+			}
+		}
+		if err := ask("Open a Jira defect", "Open a Jira defect for "+argStr(args, "file"), false); err != nil {
+			return "", err
+		}
+		kl, err := a.TestCreateDefect(d, argStr(args, "file"))
+		if err != nil {
+			return "", err
+		}
+		return "Opened " + strings.Join(kl, " "), nil
 	case "history":
 		var b strings.Builder
-		for _, h := range func() []testrec.TestHistory { f, _ := a.testsFolder(); return f.History(argStr(args, "file"), argInt(args, "limit", 30, 500)) }() {
+		for _, h := range func() []testrec.TestHistory {
+			f, _ := a.testsFolder()
+			return f.History(argStr(args, "file"), argInt(args, "limit", 30, 500))
+		}() {
 			fmt.Fprintf(&b, "%s: %d passed, %d failed, %d skipped, %d flips, avg %d ms\n", h.File, h.Passed, h.Failed, h.Skipped, h.Flips, h.AvgMs)
 			for _, v := range h.ByVersion {
 				fmt.Fprintf(&b, "  %s: %d passed, %d failed\n", v.Version, v.Passed, v.Failed)

@@ -42,6 +42,11 @@ type Result struct {
 	Ms int64 `json:"ms"`
 	// Passed: every step (setup and cleanup too) passed.
 	Passed bool `json:"passed"`
+	// QTestRun: the qTest test run the result was sent to (TR-81); Defect / DefectURL: the Jira issue
+	// opened for it.
+	QTestRun  string `json:"qtestRun,omitempty"`
+	Defect    string `json:"defect,omitempty"`
+	DefectURL string `json:"defectUrl,omitempty"`
 	// Versions: the software each device of the case ran (session → version).
 	Versions map[string]string `json:"versions,omitempty"`
 	// CleanupFailed: a cleanup step (or the restore) failed - the device may not be clean; the case

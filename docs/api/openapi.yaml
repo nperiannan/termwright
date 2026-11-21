@@ -2154,6 +2154,8 @@ paths:
                                         - restore_state
                                         - results
                                         - history
+                                        - send_qtest
+                                        - defect
                                     type: string
                                 at:
                                     description: 'schedule: time of day HH:MM (daily, weekdays, weekly)'
@@ -2168,6 +2170,9 @@ paths:
                                 day:
                                     description: 'schedule: weekday for weekly, 0 Sunday … 6 Saturday'
                                     type: integer
+                                dir:
+                                    description: 'send_qtest/defect: a run''s folder (reports/…); default the last run'
+                                    type: string
                                 file:
                                     description: 'show/save/run: a test file relative to the tests folder, e.g. cases/vlan/add-vlan.yaml (cases/ and .yaml may be left out)'
                                     type: string

@@ -15,6 +15,8 @@ type Case struct {
 	// DependsOn: tests (files in cases/, or names) that must pass first; when one failed or was
 	// skipped in the run, this test is skipped. A run puts them before this test.
 	DependsOn []string `yaml:"dependsOn,omitempty" json:"dependsOn,omitempty"`
+	// QTest: the qTest test case this test reports to.
+	QTest *QTestLink `yaml:"qtest,omitempty" json:"qtest,omitempty"`
 	// Watch: syslog messages and SNMP notifications that fail the test when they arrive while it runs.
 	Watch *Watch `yaml:"watch,omitempty" json:"watch,omitempty"`
 	// ConfigDiff: compare each device's configuration before the test and after its cleanup; a
@@ -232,4 +234,9 @@ type TrafficStep struct {
 type UpgradeStep struct {
 	Session string `yaml:"session" json:"session"`
 	Image   string `yaml:"image" json:"image"`
+}
+
+// QTestLink names a qTest test case (its id, or its PID such as TC-12).
+type QTestLink struct {
+	TestCase string `yaml:"testCase" json:"testCase"`
 }

@@ -112,6 +112,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                   <span class="pill" [class]="rep.failed ? 'pill f' : rep.skipped ? 'pill s' : 'pill p'">{{ rep.failed ? rep.failed + ' failed' : rep.skipped ? rep.skipped + ' skipped' : 'all passed' }}</span>
                   <span class="sp"></span>
                   <button type="button" (click)="backend.testsOpen(rep.dir)">HTML report</button><button type="button" (click)="backend.testsOpen(rep.dir + '/junit.xml')">JUnit</button>
+                  <button type="button" (click)="sendQTest(rep)" [disabled]="sending()" title="Send each test's result to its qTest test case (Global Options → Integrations)">{{ sending() ? 'Sending…' : 'Send to qTest' }}</button>
                   @if (failedFiles(rep).length) { <button type="button" class="pri" (click)="openRun(failedFiles(rep), 'the failed tests')">▶ Run failed again</button> }
                 </div></div>
               <div class="body">
@@ -120,12 +121,13 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                   <div class="kpi"><b class="kwarn">{{ rep.skipped ?? 0 }}</b><span>skipped</span></div><div class="kpi"><b>{{ unchecked(rep) }}</b><span>steps not checked</span></div></div>
                 <div class="bar"><i class="okb" [style.flex]="rep.passed"></i><i class="badb" [style.flex]="rep.failed"></i><i class="warnb" [style.flex]="rep.skipped ?? 0"></i></div>
                 @if (rep.recovery?.length) { <div class="sec"><div class="sh">Bringing the devices back</div>@for (s of rep.recovery; track $index) { <div class="trow" [class.bad]="!s.passed"><span>{{ s.passed ? '✓' : '✗' }}</span><span>{{ s.name }}</span><span class="mut">{{ s.target }} {{ s.error }}</span></div> }</div> }
-                <div class="sec"><div class="rhd"><span></span><span>Test</span><span>First problem</span><span class="r">Time</span></div>
+                <div class="sec"><div class="rhd rq"><span></span><span>Test</span><span>First problem</span><span>qTest / Jira</span><span class="r">Time</span></div>
                   @for (r of rep.results; track $index) {
-                    <div class="rrow" (click)="r.file && openTest(r.file)" (keydown.enter)="r.file && openTest(r.file)" tabindex="0" role="button">
+                    <div class="rrow rq" (click)="r.file && openTest(r.file)" (keydown.enter)="r.file && openTest(r.file)" tabindex="0" role="button">
                       <span [class]="r.skipped ? 'warn' : r.passed ? 'ok' : 'bad'">{{ r.skipped ? '○' : r.passed ? '✓' : '✗' }}</span>
                       <span>{{ r.case }}@if (r.cleanupFailed) { <span class="pill f sm">cleanup</span> }</span>
                       <span class="mut">{{ r.passed ? notChecked(r) : failText(r) }}@if (!r.passed && !r.skipped) { · <button type="button" class="lnk" (click)="$event.stopPropagation(); explain(r)">✦ Explain</button> }</span>
+                      <span class="mut">{{ r.qtestRun }}@if (r.defect) { @if (r.qtestRun) { · } <button type="button" class="lnk" (click)="$event.stopPropagation(); backend.openURL(r.defectUrl!)">{{ r.defect }}</button> } @else if (!r.passed && !r.skipped) { @if (r.qtestRun) { · } <button type="button" class="lnk" (click)="$event.stopPropagation(); createDefect(rep.dir, r)" title="Open a Jira defect with the steps, the failed output and the report">+ defect</button> }</span>
                       <span class="r mut">{{ dur(r.ms) }}</span></div>
                   }
                 </div>
@@ -183,6 +185,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                     @if (varsText()) { <span>Defaults <b>{{ varsText() }}</b></span> }
                     @if (t.params?.length) { <span>Runs {{ t.params?.length }}× <b>{{ paramsText() }}</b></span> }
                     @if (t.restore?.length) { <span>Afterwards <b>{{ restoreText() }} put back</b></span> }
+                    @if (t.qtest?.testCase) { <span>qTest <b>{{ t.qtest?.testCase }}</b></span> }
                     @if (t.dependsOn?.length) { <span>Depends on <b>{{ t.dependsOn.join(', ') }}</b></span> }
                     @if (t.watch?.syslog?.length || t.watch?.traps?.length) { <span>Fails on <b>{{ watchText(t) }}</b></span> }
                     @if (t.configDiff) { <span>Configuration <b>compared before and after</b></span> }
@@ -256,7 +259,8 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                                   @if (r?.checks?.length) { <div class="ev">@for (c of r?.checks ?? []; track $index) { <span [class]="c.passed ? 'ok' : 'bad'">{{ c.passed ? '✓' : '✗' }}</span><span>{{ c.what }}</span><span [class.bad]="!c.passed">{{ c.got }}</span> }</div> }
                                   @else { <p class="mut">{{ s.expect?.length ? 'Run the test to see what came back.' : 'No checks: select text in the output and right-click to add one.' }}</p> }
                                   @if (r?.error) { <p class="bad">{{ r?.error }}</p> }
-                                  @if (r && !r.passed && !r.skipped && last()[sel()]; as lr) { <div class="row"><button type="button" (click)="explain(lr)">✦ Explain</button></div> }
+                                  @if (r && !r.passed && !r.skipped && last()[sel()]; as lr) { <div class="row"><button type="button" (click)="explain(lr)">✦ Explain</button>
+                                    @if (lr.defect) { <button type="button" class="lnk" (click)="backend.openURL(lr.defectUrl!)">{{ lr.defect }}</button> } @else if (report()?.dir) { <button type="button" (click)="createDefect(report()!.dir, lr)">Create Jira Defect</button> }</div> }
                                 </div>
                                 <div>
                                   @if (r?.table; as tb) { <h4>Table · {{ tb.rows.length }} rows</h4><div class="tbw"><table class="ptab"><tr>@for (h of tb.header; track $index) { <th>{{ h }}</th> }</tr>@for (x of tb.rows.slice(0, 200); track $index) { <tr>@for (c of x; track $index) { <td>{{ c }}</td> }</tr> }</table></div> }
@@ -398,6 +402,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; } .kpi { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel); } .kpi b { display: block; font-size: 21px; font-weight: 600; } .kpi span { color: var(--muted); font-size: 12px; } .kok { color: var(--ok, #3fbf75); } .kbad { color: var(--danger, #ef6161); } .kwarn { color: var(--warn, #e0a030); }
     .bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--text) 8%, transparent); flex: none; } .okb { background: var(--ok, #3fbf75); } .badb { background: var(--danger, #ef6161); } .warnb { background: var(--warn, #e0a030); }
     .rhd, .rrow { display: grid; grid-template-columns: 26px minmax(140px, 1fr) minmax(200px, 1.6fr) 64px; gap: 10px; padding: 8px 12px; align-items: center; } .rhd { background: var(--panel); color: var(--muted); font-size: 11.5px; padding: 5px 12px; } .rrow { border-top: 1px solid var(--border); cursor: pointer; } .rrow:hover { background: var(--hover, rgba(255,255,255,.03)); }
+    .rq { grid-template-columns: 26px minmax(140px, 1fr) minmax(200px, 1.6fr) 130px 64px; }
     .form { display: flex; flex-direction: column; gap: 10px; max-width: 620px; } .form label { display: flex; align-items: center; gap: 10px; } .form label > span { width: 130px; color: var(--muted); font-size: 12px; flex: none; } .form input:not([type=checkbox]), .form select { height: 29px; flex: 1; } .form .ck { padding-left: 140px; }
     .empty { margin: auto; }
     .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.35); z-index: 5; }
@@ -700,7 +705,6 @@ export class TestsView implements OnInit, OnDestroy {
   }
   async openRunReport(dir: string) {
     this.section.set('runs'); this.runSel.set(dir);
-    if (this.report()?.dir === dir) { this.runRep.set(this.report()); return; }
     try { this.runRep.set(JSON.parse(await this.backend.testFile(dir + '/result.json')) as TestRunReport); }
     catch (e) { this.runRep.set(null); this.ui.toast(errText(e), 'error'); }
   }
@@ -736,6 +740,7 @@ export class TestsView implements OnInit, OnDestroy {
       { label: 'Duplicate…', action: () => void this.rename(true) },
       { label: 'Tags…', action: () => void this.editTags() },
       { label: 'Depends On…', action: () => void this.editDeps() },
+      { label: 'qTest Test Case…', action: () => void this.editQTest() },
       { label: 'Open in VS Code', action: () => void this.backend.testsOpenInEditor(this.sel()) },
       { label: 'Record a New Test', action: () => this.recordMore() },
       { separator: true },
@@ -756,6 +761,27 @@ export class TestsView implements OnInit, OnDestroy {
     const t = this.test(); if (!t) return;
     const c = structuredClone(t); mod(c);
     try { await this.backend.testSave(this.sel(), c); await this.load(); } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  readonly sending = signal(false);
+  async sendQTest(rep: TestRunReport) {
+    this.sending.set(true);
+    try { this.ui.toast(await this.backend.testSendQTest(rep.dir), 'success'); await this.openRunReport(rep.dir); }
+    catch (e) { this.ui.toast(errText(e), 'error'); }
+    this.sending.set(false);
+  }
+  async createDefect(dir: string, r: TestResult) {
+    if (!(await this.ui.confirm(tr('Open a Jira Defect?'), tr('A defect for "{0}" with its steps, the failed output and the report, in the Jira project of Global Options → Integrations.', r.case), tr('Open Defect')))) return;
+    try {
+      const [key, link] = await this.backend.testCreateDefect(dir, r.file || r.case);
+      this.ui.toast(tr('Opened {0}', key), 'success');
+      r.defect = key; r.defectUrl = link; this.last.update(m => ({ ...m }));
+      if (this.runSel() === dir) await this.openRunReport(dir);
+    } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  async editQTest() {
+    const v = await this.ui.input(tr('qTest Test Case'), tr('The id or PID of the qTest test case this test reports to, e.g. TC-12'), this.test()?.qtest?.testCase ?? '');
+    if (v === null || v === undefined) return;
+    await this.saveCase(c => { if (v.trim()) c.qtest = { testCase: v.trim() }; else delete c.qtest; });
   }
   async editTags() {
     const v = await this.ui.input(tr('Tags'), tr('Comma-separated, e.g. smoke, l2'), (this.test()?.tags ?? []).join(', '));
