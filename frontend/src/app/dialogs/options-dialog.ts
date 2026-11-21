@@ -458,6 +458,26 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <label>Factory reset</label>
                   <textarea name="dtfr" class="mono" rows="2" [(ngModel)]="d.factoryReset" [placeholder]="factoryDefault(d.name) || 'Commands that reset to factory default and reboot, e.g. write erase / reload'"></textarea>
                   <label></label><div class="hint">For test runs with <b>On a failed cleanup: Factory default</b>; Termwright answers the confirmations and waits up to 15 minutes for the device. Never run on production sessions.</div>
+                  <label>Network map</label>
+                  <div class="mapd">
+                    <div class="hint">How the network map reads a device of this type with TextFSM templates - for any vendor. Neighbour templates give <code>LOCAL_PORT</code>, <code>NEIGHBOR</code>, <code>NEIGHBOR_PORT</code>, <code>CHASSIS_ID</code>, <code>MGMT_IP</code> (ntc-templates names work too); identity <code>HOSTNAME</code>, <code>CHASSIS_ID</code>, <code>MODEL</code>; ports <code>PORT</code>, <code>ADMIN</code>, <code>OPER</code>, <code>SPEED</code>. Only show/display commands run. {{ mapNote(d) }}</div>
+                    <div class="row2"><input name="dtmp" class="mono" [ngModel]="d.map?.paging" (ngModelChange)="setMap(d, 'paging', $event)" placeholder="Paging off, e.g. screen-length 0 temporary" />
+                      <button type="button" (click)="mapFromBuiltin(d)" [disabled]="!hasBuiltinMap(d.name)" title="Fill in the plan Termwright ships for this type, to change it">Start From Built-in</button></div>
+                    @for (k of mapKinds; track k.key) {
+                      <div class="mapk"><b>{{ k.label }}</b>
+                        <input [name]="'dtmc' + k.key" class="mono" [ngModel]="mapGet(d, k.key)" (ngModelChange)="setMap(d, k.key, $event)" [placeholder]="k.ph" />
+                        <textarea [name]="'dtmt' + k.key" class="mono" rows="4" [ngModel]="mapGet(d, k.key + 'Template')" (ngModelChange)="setMap(d, k.key + 'Template', $event)" placeholder="TextFSM template: Value LOCAL_PORT (\\S+) … Start …"></textarea>
+                      </div>
+                    }
+                    <details class="maptest"><summary>Test a template on pasted output</summary>
+                      <div class="row2"><select name="dtmts" [(ngModel)]="mapTestKind">@for (k of mapKinds; track k.key) {<option [value]="k.key">{{ k.label }}</option>}</select>
+                        <button type="button" (click)="mapTest(d)">Test</button></div>
+                      <textarea name="dtmto" class="mono" rows="5" [(ngModel)]="mapTestOut" placeholder="Paste what the device printed for the command"></textarea>
+                      @if (mapTestMsg()) { <div class="hint">{{ mapTestMsg() }}</div> }
+                      @if (mapTestRows().length) { <table class="maprows"><tr>@for (h of mapTestHead(); track h) {<th>{{ h }}</th>}</tr>
+                        @for (r of mapTestRows(); track $index) {<tr>@for (h of mapTestHead(); track h) {<td>{{ r[h] }}</td>}</tr>}</table> }
+                    </details>
+                  </div>
                   <label>Web server</label>
                   <div class="webd">
                     <textarea name="dtwc" class="mono" rows="1" [(ngModel)]="d.webCheck" [placeholder]="webDefault(d.name, 'check') || 'A command that shows the web server, e.g. show web-server'" title="Open Web Interface runs it in the background to see whether HTTP and HTTPS are on"></textarea>
@@ -841,6 +861,8 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
     .sktext { flex: 1; width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.55; resize: none; min-height: 0; margin-bottom: 8px; }
     .ske .small, .skp .small { font-size: 11.5px; } .ske .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; } .ske .bad { color: var(--danger); margin-bottom: 6px; }
 
+    .mapd { display: flex; flex-direction: column; gap: 6px; min-width: 0; .row2 { display: grid; grid-template-columns: 1fr auto; gap: 6px; } .mapk { display: grid; grid-template-columns: 90px 1fr; gap: 4px 8px; align-items: start; b { font-weight: 500; padding-top: 6px; } textarea { grid-column: 2; } }
+      .maptest summary { cursor: pointer; color: var(--muted); } .maptest { display: flex; flex-direction: column; gap: 6px; } .maprows { border-collapse: collapse; font: 11.5px var(--mono); th, td { border: 1px solid var(--border); padding: 2px 6px; text-align: left; } } }
     .webd { display: flex; flex-direction: column; gap: 6px; min-width: 0; .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } }
     .glist { max-width: 760px;
       .gt { font-size: calc(11px * var(--ui-scale, 1)); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 4px 0 6px 4px; }
@@ -940,6 +962,32 @@ export class OptionsDialog implements OnInit {
       'eltex mes': '^\\s*% *(Unrecognized|Invalid|Incomplete|Ambiguous|Error)', 'ruckus icx': 'Invalid input\n^\\s*Error' };
     const c = d[name.toLowerCase()];
     return c ? c + '\n(built-in)' : '';
+  }
+  readonly mapKinds = [
+    { key: 'neighbors', label: 'Neighbours', ph: 'e.g. display lldp neighbor' },
+    { key: 'identity', label: 'Identity', ph: 'e.g. display lldp local (optional)' },
+    { key: 'ports', label: 'Ports', ph: 'e.g. display interface brief (optional)' },
+  ] as const;
+  mapTestKind = 'neighbors'; mapTestOut = '';
+  readonly mapTestMsg = signal(''); readonly mapTestRows = signal<Record<string, string>[]>([]);
+  mapTestHead() { return Object.keys(this.mapTestRows()[0] ?? {}); }
+  mapGet(d: DeviceType, k: string) { return (d.map as Record<string, string> | null | undefined)?.[k] ?? ''; }
+  setMap(d: DeviceType, k: string, v: string) { d.map = { ...(d.map ?? {}), [k]: v }; }
+  hasBuiltinMap(name: string) { return /huawei|vrp|icx|ruckus|fastiron|eltex|^mes/i.test(name || ''); }
+  mapNote(d: DeviceType) {
+    if (d.map?.neighbors?.trim() && d.map?.neighborsTemplate?.trim()) return 'This plan is used for the type.';
+    if (this.hasBuiltinMap(d.name)) return 'Empty: the built-in templates for ' + d.name + '.';
+    return /exos|voss|fabric|switch engine|ios|nx-os|nexus|arista|eos|junos|juniper/i.test(d.name || '') ? 'Empty: the built-in reading for ' + d.name + '.' : 'Empty: the map reads this type by SNMP only.';
+  }
+  async mapFromBuiltin(d: DeviceType) {
+    try { const m = await this.backend.topoBuiltinMap(d.name); if (m) d.map = { ...m }; } catch (e) { this.mapTestMsg.set(String(e)); }
+  }
+  async mapTest(d: DeviceType) {
+    this.mapTestRows.set([]);
+    const tpl = this.mapGet(d, this.mapTestKind + 'Template');
+    if (!tpl.trim()) { this.mapTestMsg.set('Write the template first.'); return; }
+    try { const r = (await this.backend.topoTestMap(tpl, this.mapTestOut)) ?? []; this.mapTestRows.set(r); this.mapTestMsg.set(r.length ? `${r.length} rows` : 'No rows - check the patterns against the output.'); }
+    catch (e) { this.mapTestMsg.set(String(e)); }
   }
   factoryDefault(name: string) {
     const d: Record<string, string> = { exos: 'unconfigure switch all', 'cisco ios': 'write erase\nreload', 'cisco nx-os': 'write erase\nreload' };

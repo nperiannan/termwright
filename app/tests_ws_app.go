@@ -52,6 +52,9 @@ func (a *App) TestSaveFile(rel, text string) error {
 	if err != nil {
 		return err
 	}
+	if err := mayEdit(f); err != nil {
+		return err
+	}
 	return f.SaveText(rel, text)
 }
 
@@ -268,7 +271,7 @@ func (a *App) TestsGitCommit(message string) (string, error) {
 		return "", err
 	}
 	var paths []string
-	for _, p := range []string{"cases", "testbeds", "lib", "templates", "suites", "go.mod", ".gitignore", "README.md"} {
+	for _, p := range []string{"cases", "testbeds", "lib", "templates", "suites", "roles.yaml", "approvals", "go.mod", ".gitignore", "README.md"} {
 		if _, err := os.Stat(filepath.Join(f.Root, p)); err == nil {
 			paths = append(paths, p)
 		}
@@ -363,6 +366,9 @@ func (a *App) TestRemove(file string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if err := mayEdit(f); err != nil {
+		return "", err
+	}
 	f.Audit("delete", file)
 	return f.Remove(file)
 }
@@ -371,6 +377,9 @@ func (a *App) TestRemove(file string) (string, error) {
 func (a *App) TestRename(file, to string, copy bool) (string, error) {
 	f, err := a.testsFolder()
 	if err != nil {
+		return "", err
+	}
+	if err := mayEdit(f); err != nil {
 		return "", err
 	}
 	f.Audit(map[bool]string{true: "duplicate", false: "rename"}[copy], file+" → "+to)

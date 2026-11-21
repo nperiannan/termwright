@@ -5,7 +5,7 @@ import { Ui } from './ui.service';
 import { tr } from './i18n';
 import { SECRET } from './history.service';
 import { TestCase, TestExpect, TestStep, TestTable } from './models';
-import { configValues, predictApiChecks, predictChecks } from './predict';
+import { configValues, predictApiChecks, predictChecks, predictSnmpChecks } from './predict';
 
 /** A recorded step; for a terminal step the marker on its command line finds its output later. */
 export type RecPhase = 'setup' | 'steps' | 'cleanup';
@@ -98,10 +98,16 @@ export class Recorder {
   snmp(s: NonNullable<TestStep['snmp']>, rows: { name: string; display: string }[], old?: { value: string; type?: string }) {
     if (!this.recording() || !s.session) return;
     const op = s.op === 'table' ? 'walk' : s.op;
-    const expect: TestExpect[] = op === 'get' ? rows.slice(0, 5).map(r => ({ oid: r.name.replace(/^[\w-]+::/, ''), equals: r.display })) : [];
+    let expect: TestExpect[] = [];
+    if (op !== 'set') {
+      const l = this.steps().filter(x => x.phase !== 'cleanup');
+      const sets = l.filter(x => x.step.snmp?.session === s.session && x.step.snmp?.op === 'set').flatMap(x => x.step.snmp!.values ?? []).map(v => ({ oid: v.oid, value: v.value }));
+      const configs = this.autoChecks() ? l.filter(x => x.step.run && !isRead(x.step)).map(x => x.step.run!.command) : [];
+      expect = predictSnmpChecks(op || 'get', rows, sets, configs);
+    }
     // a set: setting the old value back undoes it
     const v = s.values?.[0], undo: TestStep | undefined = this.phase() === 'steps' && op === 'set' && v && old ? { snmp: { session: s.session, op: 'set', values: [{ oid: v.oid, type: old.type || v.type, value: old.value }] } } : undefined;
-    this.push({ step: { snmp: { ...s, op }, expect }, phase: this.phase(), undo, output: rows.map(r => r.name + ' = ' + r.display).join('\n') });
+    this.push({ step: { snmp: { ...s, op }, expect }, phase: this.phase(), undo, output: rows.map(r => r.name + ' = ' + r.display).join('\n'), auto: expect.length });
   }
 
   /** Adds a step's suggested undo to the cleanup (the cleanup runs in reverse order of what it undoes). */

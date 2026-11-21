@@ -149,3 +149,28 @@ export function predictApiChecks(writes: { url: string; body?: string }[], url: 
   }
   return res;
 }
+
+/** SNMP values that change by themselves (counters, times): never checked by equals. */
+export const VOLATILE_OID = /octets|pkts|packets|uptime|ticks|counter|errors|discards|time|load|util|cpu|memory|free|used|age|seconds/i;
+
+/**
+ * Checks for an SNMP get or walk: the values an earlier SNMP set wrote to the same objects, and the names and
+ * numbers the configuration commands recorded before it set (a VLAN name in a row of the walk); for a get, also
+ * the other values that do not change by themselves. Only values seen in this answer are returned.
+ */
+export function predictSnmpChecks(op: string, rows: { name: string; display: string }[], sets: { oid: string; value: string }[], configs: string[], have: TestExpect[] = []): TestExpect[] {
+  const short = (n: string) => n.replace(/^[\w-]+::/, '');
+  const seen = new Set(have.map(e => e.oid)), res: TestExpect[] = [];
+  const add = (oid: string, v: string) => { if (!seen.has(oid) && res.length < 6) { res.push({ oid, equals: v }); seen.add(oid); } };
+  for (const s of sets) {
+    const r = rows.find(r => short(r.name) === short(s.oid) || r.name.endsWith(s.oid));
+    if (r && r.display === s.value) add(short(r.name), r.display);
+  }
+  const vals = [...new Set(configs.flatMap(c => configValues(c).map(v => v.value)))].filter(v => /[A-Za-z]/.test(v) || v.length > 3);
+  for (const v of vals) {
+    const r = rows.find(r => r.display === v || r.display === '"' + v + '"');
+    if (r) add(short(r.name), r.display);
+  }
+  if (op === 'get') for (const r of rows.slice(0, 5)) if (!VOLATILE_OID.test(r.name) && r.display.length <= 120) add(short(r.name), r.display);
+  return res;
+}

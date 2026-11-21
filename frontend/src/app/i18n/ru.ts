@@ -3282,7 +3282,7 @@ const ru: Record<string, string> = {
   'Errors': 'Ошибки',
   'Warnings': 'Предупреждения',
   'Info': 'Info',
-  'Debug': 'Debug',
+  'Debug': 'Debug', 'Emergency': 'Авария', 'Alert': 'Тревога', 'Critical': 'Критично', 'Warning': 'Предупреждение', 'Notice': 'Уведомление', 'Informational': 'Информация',
   'Verbose': 'Verbose',
   'Nothing in the log yet.': 'В журнале пока ничего нет.',
   'Slate tiles': 'Сланцевые плитки',

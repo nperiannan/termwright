@@ -68,8 +68,8 @@ func (a *App) TestImportManual(device string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	p, err := wruntime.OpenFileDialog(a.ctx, wruntime.OpenDialogOptions{Title: "Import Manual Test Cases",
-		Filters: []wruntime.FileFilter{{DisplayName: "Test cases (*.xlsx, *.csv)", Pattern: "*.xlsx;*.csv"}}})
+	p, err := wruntime.OpenFileDialog(a.ctx, wruntime.OpenDialogOptions{Title: "Import Test Cases",
+		Filters: []wruntime.FileFilter{{DisplayName: "Test cases (Excel, CSV, Postman, OpenAPI)", Pattern: "*.xlsx;*.csv;*.json;*.yaml;*.yml"}}})
 	if err != nil || p == "" {
 		return nil, err
 	}
@@ -77,8 +77,18 @@ func (a *App) TestImportManual(device string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	return a.importTests(f, p, b, device)
+}
+
+// importTests saves the tests made from an imported file (Excel, CSV, a Postman collection or an OpenAPI description).
+func (a *App) importTests(f testrec.Folder, p string, b []byte, device string) ([]string, error) {
 	var cs []testrec.ImportedCase
-	if strings.EqualFold(filepath.Ext(p), ".xlsx") {
+	var err error
+	if ext := strings.ToLower(filepath.Ext(p)); ext == ".json" || ext == ".yaml" || ext == ".yml" {
+		if cs, err = testrec.ImportAPI(b, device); err != nil {
+			return nil, err
+		}
+	} else if strings.EqualFold(filepath.Ext(p), ".xlsx") {
 		rows, err := testrec.XLSXRows(b)
 		if err != nil {
 			return nil, err

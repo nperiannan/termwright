@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import type { TopoRequest, TopoResult, LayoutRequest, LayoutResult, TestCase, TestCaseInfo, TestRunReport, TestsTree, TestsGitInfo, TestSchedule, TestScheduleView, IntegrationsConfig, TestTable, TestHistory } from './models';
+import type { TestApproval, TopoPlan, TopoRequest, TopoResult, LayoutRequest, LayoutResult, TestCase, TestCaseInfo, TestRunReport, TestsTree, TestsGitInfo, TestSchedule, TestScheduleView, IntegrationsConfig, TestTable, TestHistory } from './models';
 import { EmuEngines, EmuHostNIC, EmuTrex,
   EmuServer, EmuServerView,
   AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange, SNMPRequest, SNMPResult, SNMPMibNode, SNMPModule, SNMPSecretState, SNMPTrapState, SNMPTrapsView, HSendRequest, HResponse, HCollection, HCollectionInfo, HRunRequest, HRunResult, HHistoryItem, HRequest, AISkill, HEnv, HVar, HHostCookies, SyslogSettings, SyslogState, SyslogMsg, SyslogRule, SyslogQuery, SyslogSendIn } from './models';
@@ -311,6 +311,9 @@ export class Backend {
   testsOpenInEditor(rel: string) { return this.call<void>('TestsOpenInEditor', rel); }
   runTests(r: { files?: string[]; vars?: Record<string, string>; testbed?: string; confirmed?: boolean; onCleanupFail?: string; cleanup?: string; tags?: string[]; forceLock?: boolean }) { return this.call<TestRunReport>('RunTests', r); }
   runTestsParallel(r: { files?: string[]; testbeds: string[]; confirmed?: boolean; onCleanupFail?: string; cleanup?: string; forceLock?: boolean }) { return this.call<TestRunReport[]>('RunTestsParallel', r); }
+  testApprovals() { return this.call<TestApproval[]>('TestApprovals'); }
+  testRequestApproval(files: string[], testbed: string, reason: string) { return this.call<TestApproval>('TestRequestApproval', files, testbed, reason); }
+  testDecide(id: string, approve: boolean, note: string) { return this.call<TestApproval>('TestDecide', id, approve, note); }
   testReleaseLock(testbed: string) { return this.call<void>('TestReleaseLock', testbed); }
   testParse(session: string, command: string, template: string, output: string) { return this.call<TestTable>('TestParse', session, command, template, output); }
   testSaveFile(rel: string, text: string) { return this.call<void>('TestSaveFile', rel, text); }
@@ -505,6 +508,8 @@ export class Backend {
   aiState() { return this.call<AIStatus>('AIState'); }
   integrationTokens() { return this.call<Record<string, boolean>>('IntegrationTokens'); }
   integrationSetToken(kind: string, token: string) { return this.call<void>('IntegrationSetToken', kind, token); }
+  topoTestMap(template: string, output: string) { return this.call<Record<string, string>[] | null>('TopoTestMap', template, output); }
+  topoBuiltinMap(deviceType: string) { return this.call<TopoPlan | null>('TopoBuiltinMap', deviceType); }
   integrationTest(kind: string, cfg?: IntegrationsConfig) { return this.call<string>('IntegrationTest', kind, cfg ?? null); }
   aiSetKey(provider: string, key: string) { return this.call<void>('AISetKey', provider, key); }
   aiModels(s: AISettings) { return this.call<string[]>('AIModels', s); }

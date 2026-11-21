@@ -5,7 +5,7 @@ import { Backend, errText } from '../core/backend';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { Recorder, escapeRe, fieldPattern } from '../core/recorder.service';
-import { CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestHistory, TestStepResult, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
+import { TestApproval, CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestHistory, TestStepResult, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
 import { expectLabel, parseTableCheck, stepText } from './recorder-panel';
 import { AIChat } from '../core/ai-chat.service';
 import { Icon } from './icon';
@@ -66,7 +66,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                       <li><b>Run</b> - on the same devices or a testbed, with or without cleanup.</li>
                       <li><b>Report</b> - results with expected vs got, history, qTest and Jira.</li></ol>
                     <button type="button" class="pri" (click)="recordMore()">● Record a Test</button>
-                    <button type="button" (click)="importManual()">Import Manual Test Cases…</button>
+                    <button type="button" (click)="importManual()">Import Test Cases…</button>
                     <button type="button" (click)="writeWithAI()">✦ Write a Test with AI</button>
                     <span class="mut">Import reads your test case sheet (Excel or CSV): Suite, Test, Step, Device, Expected.</span>
                   </div>
@@ -85,6 +85,17 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
           @case ('runs') {
             <div class="stop"><b>Runs</b><span class="mut">past runs of this tests folder, newest first</span></div>
             <div class="list">
+              @if (approvals().length) {
+                <div class="fold"><span>Approvals</span></div>
+                @for (a of approvals().slice(0, 8); track a.id) {
+                  <div class="appr" [title]="a.files.join('\n')">
+                    <div class="cn">{{ a.files.length === 1 ? base(a.files[0]) : a.files.length + ' tests' }} <span class="mut">on {{ a.testbed || 'no testbed' }}</span></div>
+                    <div class="mut">by {{ a.requestedBy }}{{ a.reason ? ' - ' + a.reason : '' }}</div>
+                    @if (!a.approvedBy) { <div class="aact"><button type="button" class="okbtn" (click)="decide(a.id, true)">Approve</button><button type="button" (click)="decide(a.id, false)">Reject</button></div> }
+                    @else { <span class="pill" [class.p]="!a.rejected && !a.expired" [class.f]="a.rejected">{{ a.rejected ? 'rejected' : a.expired ? 'expired' : 'approved' }} by {{ a.approvedBy }}</span> }
+                  </div>
+                }
+              }
               @for (r of runList(); track r.dir) {
                 @if (r.day) { <div class="fold"><span>{{ r.day }}</span></div> }
                 <div class="case" [class.sel]="runSel() === r.dir" (click)="openRunReport(r.dir)" (keydown.enter)="openRunReport(r.dir)" tabindex="0" role="button">
@@ -110,7 +121,8 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
           @case ('library') {
             <div class="stop"><b>Library</b><span class="mut">helpers of the generated code, and output templates</span>
               <button type="button" (click)="fetchTemplates()" [disabled]="fetching()" title="Download the community ntc-templates: TextFSM templates for hundreds of commands of many vendors">{{ fetching() ? 'Downloading…' : 'Get Community Templates' }}</button>
-              <button type="button" class="lnk" (click)="openFile('reports/audit.log')" title="Who ran, saved, deleted or reported what, and when">Audit log</button></div>
+              <button type="button" class="lnk" (click)="openFile('reports/audit.log')" title="Who ran, saved, deleted or reported what, and when">Audit log</button>
+              <button type="button" class="lnk" (click)="openRoles()" title="Who may edit, run and approve tests here, and which runs need an approval">Team roles</button></div>
             <div class="list">
               <div class="fold"><span>suites</span><span class="cnt">{{ tree()?.suites?.length ?? 0 }}</span></div>
               @for (l of tree()?.suites ?? []; track l.file) { <div class="case" [class.sel]="fileSel() === l.file" (click)="openFile(l.file)" (keydown.enter)="openFile(l.file)" tabindex="0" role="button"><span class="cn">{{ l.name }}</span><span class="n">{{ l.tests }}</span></div> }
@@ -421,14 +433,14 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     </div>
 `,
   styles: [`
-    :host { display: block; height: 100%; min-height: 0; font-family: var(--ui-font, inherit); font-size: 13px; color: var(--text); }
+    :host { display: block; height: 100%; min-height: 0; border-radius: 10px; overflow: hidden; background: var(--bg); font-family: var(--ui-font, inherit); font-size: 13px; color: var(--text); }
     :host button { font-size: 12.5px; } :host button:not(.lnk):not(.case):not(.tag) { height: 28px; padding: 0 12px; border-radius: 7px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
     .tv { display: grid; grid-template-columns: 64px 360px minmax(0, 1fr); height: 100%; min-height: 0; position: relative; }
     button { font: inherit; } .sp { flex: 1; } .grow { flex: 1; } .grow2 { flex: 2; } .mut { color: var(--muted); font-size: 12px; } .ok { color: var(--ok, #3fbf75); } .bad { color: var(--danger, #ef6161); } .warn { color: var(--warn, #e0a030); }
     .row { display: flex; align-items: center; gap: 6px; } .r { text-align: right; } .fl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pri { background: var(--accent); color: #fff; border-color: transparent; } .ghost { background: none; border-color: transparent; color: var(--muted); }
     .lnk { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0 4px; }
-    .rail { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 8px 6px; background: color-mix(in srgb, var(--bg, #000) 70%, #000); border-right: 1px solid var(--border); }
+    .rail { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 8px 6px; background: var(--chrome); border-right: 1px solid var(--border); }
     .rail button { display: flex !important; flex-direction: column; align-items: center; justify-content: center; gap: 4px; height: auto !important; min-height: 52px; line-height: 1.15; padding: 6px 2px !important; font-size: 10.5px !important; border: 0; border-radius: 9px; background: none; color: var(--muted); font-size: 10.5px; cursor: pointer; }
     .rail button:hover { color: var(--text); } .rail button.on { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--text); } .ri { font-size: 16px; line-height: 1.1; }
     .rail .gitb { font-size: 10px; word-break: break-all; } .rail i { font-style: normal; color: var(--accent); }
@@ -451,12 +463,12 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .empty-s { color: var(--muted); font-size: 12px; padding: 18px 8px; text-align: center; line-height: 1.6; }
     .selbar { display: flex; align-items: center; gap: 8px; margin: 8px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: color-mix(in srgb, var(--text) 4%, transparent); }
     .selbar.col { flex-direction: column; align-items: stretch; } .selbar .full { justify-content: center; width: 100%; } .selbar b { font-weight: 600; font-size: 12.5px; }
-    .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .main { background: var(--bg); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
     .head { padding: 12px 20px 0; border-bottom: 1px solid var(--border); } .crumb { color: var(--muted); font-size: 12px; }
     .title { display: flex; align-items: center; gap: 8px; margin: 3px 0 10px; } .title h1 { font-size: 17px; margin: 0; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 120px; } .title button { white-space: nowrap; flex: none; } .title .mut.fl { flex: 1 1 0; }
     .pill { font-size: 11.5px; padding: 2px 9px; border-radius: 10px; white-space: nowrap; background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--muted); }
     .pill.f { background: color-mix(in srgb, var(--danger, #ef6161) 18%, transparent); color: var(--danger, #ef6161); } .pill.p { background: color-mix(in srgb, var(--ok, #3fbf75) 18%, transparent); color: var(--ok, #3fbf75); } .pill.s { background: color-mix(in srgb, var(--warn, #e0a030) 18%, transparent); color: var(--warn, #e0a030); } .pill.sm { font-size: 10.5px; padding: 0 6px; margin-left: 6px; }
-    .tabs { display: flex; align-items: center; gap: 18px; } .tabs > button { border: 0; background: none; color: var(--muted); padding: 8px 0; border-bottom: 2px solid transparent; cursor: pointer; } .tabs > button.on { color: var(--text); border-color: var(--accent); }
+    .tabs { display: flex; align-items: center; gap: 18px; } .tabs > button { border: 0 !important; border-radius: 0 !important; box-shadow: none !important; min-height: 0 !important; height: auto !important; outline: none; background: none !important; color: var(--muted); padding: 8px 0; border-bottom: 2px solid transparent; cursor: pointer; } .tabs > button.on { color: var(--text); box-shadow: inset 0 -2px var(--accent) !important; font-weight: 600; }
     .seg { display: flex; gap: 2px; background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: 7px; padding: 2px; } .seg button { border: 0; background: none; padding: 2px 10px; border-radius: 5px; color: var(--muted); cursor: pointer; } .seg button.on { background: color-mix(in srgb, var(--accent) 28%, transparent); color: var(--text); }
     .body { flex: 1; overflow: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; min-height: 0; } .body p { margin: 0; }
     .meta { display: flex; flex-wrap: wrap; gap: 6px 22px; color: var(--muted); font-size: 12px; } .meta b { color: var(--text); font-weight: 500; }
@@ -469,10 +481,10 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .chips { display: flex; flex-wrap: wrap; gap: 4px; } .chip { font-size: 11.5px; padding: 1px 8px; border-radius: 9px; background: color-mix(in srgb, var(--ok, #3fbf75) 14%, transparent); color: var(--ok, #3fbf75); }
     .chip.b { background: color-mix(in srgb, var(--danger, #ef6161) 14%, transparent); color: var(--danger, #ef6161); } .chip.w { background: color-mix(in srgb, var(--warn, #e0a030) 14%, transparent); color: var(--warn, #e0a030); }
     .x { border: 0; background: none; color: inherit; cursor: pointer; padding: 0 0 0 4px; }
-    .exp { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; padding: 12px 12px 14px 48px; border-top: 1px solid var(--border); background: color-mix(in srgb, var(--bg, #000) 60%, transparent); }
+    .exp { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; padding: 12px 12px 14px 48px; border-top: 1px solid var(--border); background: color-mix(in srgb, var(--text) 3%, transparent); }
     .exp h4 { margin: 0 0 6px; font-size: 11px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .05em; } .exp h4 + * { margin-bottom: 10px; }
     .ev { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); gap: 4px 12px; font-size: 12px; } .ev span { overflow-wrap: anywhere; }
-    .exp pre { margin: 0; font: 12px/1.5 var(--mono, monospace); background: var(--term-bg, rgba(0,0,0,.3)); border-radius: 7px; padding: 8px 10px; max-height: 280px; overflow: auto; white-space: pre-wrap; }
+    .exp pre { margin: 0; font: 12px/1.5 var(--mono, monospace); background: var(--cbg); border-radius: 7px; padding: 8px 10px; max-height: 280px; overflow: auto; white-space: pre-wrap; }
     .tbw { max-height: 220px; overflow: auto; border: 1px solid var(--border); border-radius: 7px; } .ptab { border-collapse: collapse; font: 12px var(--mono, monospace); } .ptab th { position: sticky; top: 0; background: var(--panel); text-align: left; padding: 2px 8px; color: var(--muted); font-weight: 500; } .ptab td { padding: 2px 8px; border-top: 1px solid var(--border); white-space: nowrap; }
     .trow { display: flex; gap: 8px; font-size: 12px; } .none { color: var(--muted); font-size: 12px; padding: 10px 12px; border-top: 1px solid var(--border); }
     .ed { padding: 9px 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px; } .num { width: 18px; color: var(--muted); font-weight: 500; }
@@ -480,14 +492,14 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .opts .wide { flex: 1; } .opts .wide .cmdi { height: 26px; }
     .dots { display: flex; gap: 3px; flex-wrap: wrap; } .dots i { width: 10px; height: 18px; border-radius: 3px; } .dp { background: var(--ok, #3fbf75); } .df { background: var(--danger, #ef6161); } .dw { background: var(--warn, #e0a030); }
     .vrow { display: grid; grid-template-columns: minmax(160px, 1fr) 90px 90px 1.2fr; gap: 10px; padding: 7px 12px; border-top: 1px solid var(--border); font-size: 12.5px; align-items: center; } .bar2 { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--text) 8%, transparent); }
-    .diff { margin: 0 0 10px; font: 12px/1.45 var(--mono, monospace); background: var(--term-bg, rgba(0,0,0,.3)); border-radius: 7px; padding: 8px 10px; max-height: 220px; overflow: auto; white-space: pre-wrap; }
+    .diff { margin: 0 0 10px; font: 12px/1.45 var(--mono, monospace); background: var(--cbg); border-radius: 7px; padding: 8px 10px; max-height: 220px; overflow: auto; white-space: pre-wrap; }
     .da { color: var(--ok, #3fbf75); } .dr { color: var(--danger, #ef6161); } .cmp { display: block; margin-bottom: 8px; }
     .inner { padding-left: 46px !important; } .body.cmdi, textarea.body { height: auto !important; min-height: 44px; resize: vertical; }
     .srow:focus-visible, .case:focus-visible, .rrow:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-    .console { display: flex; flex-direction: column; border-bottom: 1px solid var(--border); background: var(--term-bg, #0e0f12); }
+    .console { display: flex; flex-direction: column; border-bottom: 1px solid var(--border); background: #111317; }
     .console .ch { display: flex; align-items: center; gap: 10px; padding: 5px 20px; font-size: 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
     .console pre { margin: 0; height: 240px; min-height: 80px; resize: vertical; overflow: auto; padding: 8px 20px; font: 12px/1.45 var(--mono, monospace); color: #cfd3da; white-space: pre-wrap; }
-    .logdlg { width: min(1000px, 94vw); height: min(80vh, 900px); } .logpre { flex: 1; margin: 0; overflow: auto; padding: 10px 12px; border-radius: 8px; background: var(--term-bg, #0e0f12); color: #cfd3da; font: 12px/1.5 var(--mono, monospace); white-space: pre-wrap; }
+    .logdlg { width: min(1000px, 94vw); height: min(80vh, 900px); } .logpre { flex: 1; margin: 0; overflow: auto; padding: 10px 12px; border-radius: 8px; background: #111317; color: #cfd3da; font: 12px/1.5 var(--mono, monospace); white-space: pre-wrap; }
     .live { display: flex; align-items: center; gap: 10px; padding: 7px 20px; background: color-mix(in srgb, var(--accent) 12%, var(--panel)); border-bottom: 1px solid var(--border); font-size: 12.5px; }
     .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); border-top-color: var(--accent); animation: sp 0.9s linear infinite; } @keyframes sp { to { transform: rotate(360deg); } }
     .scrim.fixed { position: fixed; z-index: 50; } .mdlg { position: fixed; z-index: 51; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(560px, 92vw); display: flex; flex-direction: column; gap: 10px; padding: 20px 22px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 24px 60px rgba(0,0,0,.45); }
@@ -503,15 +515,18 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .codebar { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; } .codebar > .mut { flex: 1 1 0; min-width: 0; }
     .lang { display: inline-flex; padding: 3px; gap: 2px; border-radius: 8px; background: color-mix(in srgb, var(--text) 6%, transparent); border: 1px solid var(--border); }
     .lang button { height: 24px !important; padding: 0 12px !important; border: 0 !important; border-radius: 6px !important; background: none !important; color: var(--muted) !important; font-size: 12px !important; }
-    .lang button.on { background: var(--panel) !important; color: var(--text) !important; box-shadow: 0 1px 2px rgba(0,0,0,.35); }
-    .hl { tab-size: 4; } :host ::ng-deep .hl-c { color: #7f8b99; font-style: italic; } :host ::ng-deep .hl-s { color: #a5d6a7; } :host ::ng-deep .hl-k { color: #82aaff; } :host ::ng-deep .hl-w { color: #c792ea; } :host ::ng-deep .hl-n { color: #f78c6c; } :host ::ng-deep .hl-v { color: #ffcb6b; } :host ::ng-deep .hl-f { color: #89ddff; }
-    .code { flex: 1; min-height: 260px; font: 12.5px/1.5 var(--mono, monospace); resize: none; white-space: pre; overflow: auto; margin: 0; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--term-bg, rgba(0,0,0,.25)); color: var(--text); }
+    .lang button.on { background: var(--panel) !important; color: var(--text) !important; box-shadow: 0 1px 2px rgba(0,0,0,.2) !important; } .lang button:focus, .tabs > button:focus { outline: none; box-shadow: none; }
+    .hl { tab-size: 4; } :host { --cbg: color-mix(in srgb, var(--text) 4%, var(--bg)); --hc: #7f8b99; --hs: #a5d6a7; --hk: #82aaff; --hw: #c792ea; --hn: #f78c6c; --hv: #ffcb6b; --hf: #89ddff; }
+    :host-context(.light) { --hc: #6a737d; --hs: #22863a; --hk: #005cc5; --hw: #8a3ffc; --hn: #b5520b; --hv: #a15c00; --hf: #0b7285; }
+    :host ::ng-deep .hl-c { color: var(--hc); font-style: italic; } :host ::ng-deep .hl-s { color: var(--hs); } :host ::ng-deep .hl-k { color: var(--hk); } :host ::ng-deep .hl-w { color: var(--hw); } :host ::ng-deep .hl-n { color: var(--hn); } :host ::ng-deep .hl-v { color: var(--hv); } :host ::ng-deep .hl-f { color: var(--hf); }
+    .code { flex: 1; min-height: 260px; font: 12.5px/1.5 var(--mono, monospace); resize: none; white-space: pre; overflow: auto; margin: 0; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--cbg); color: var(--text); }
     .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; } .kpi { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel); } .kpi b { display: block; font-size: 21px; font-weight: 600; } .kpi span { color: var(--muted); font-size: 12px; } .kok { color: var(--ok, #3fbf75); } .kbad { color: var(--danger, #ef6161); } .kwarn { color: var(--warn, #e0a030); }
     .bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--text) 8%, transparent); flex: none; } .okb { background: var(--ok, #3fbf75); } .badb { background: var(--danger, #ef6161); } .warnb { background: var(--warn, #e0a030); }
     .rhd, .rrow { display: grid; grid-template-columns: 26px minmax(140px, 1fr) minmax(200px, 1.6fr) 64px; gap: 10px; padding: 8px 12px; align-items: center; } .rhd { background: var(--panel); color: var(--muted); font-size: 11.5px; padding: 5px 12px; } .rrow { border-top: 1px solid var(--border); cursor: pointer; } .rrow:hover { background: var(--hover, rgba(255,255,255,.03)); }
     .rq { grid-template-columns: 26px minmax(140px, 1fr) minmax(200px, 1.6fr) 130px 64px; }
     .form { display: flex; flex-direction: column; gap: 10px; max-width: 620px; } .form label { display: flex; align-items: center; gap: 10px; } .form label > span { width: 130px; color: var(--muted); font-size: 12px; flex: none; } .form input:not([type=checkbox]), .form select { height: 29px; flex: 1; } .form .ck { padding-left: 140px; }
     .empty { margin: auto; }
+    .appr { display: flex; flex-direction: column; gap: 3px; padding: 7px 10px; margin: 2px 6px; border: 1px solid var(--border); border-radius: 8px; } .aact { display: flex; gap: 6px; margin-top: 3px; } .aact button { height: 24px; padding: 0 10px; }
     .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.35); z-index: 5; }
     .drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 380px; z-index: 6; display: flex; flex-direction: column; gap: 14px; padding: 18px; background: var(--panel); border-left: 1px solid var(--border); box-shadow: -20px 0 40px rgba(0,0,0,.35); }
     .drawer h2 { margin: 0; font-size: 16px; } .fld { display: flex; flex-direction: column; gap: 6px; } .fld > span { color: var(--muted); font-size: 12px; } .fld select { height: 30px; }
@@ -689,6 +704,7 @@ export class TestsView implements OnInit, OnDestroy {
         if (await this.ui.confirm(tr('Run on Production?'), t + '. ' + tr('Their commands and requests are sent to those devices.'), tr('Run'), true)) return this.run(files, true, forceLock);
         return;
       }
+      if (/needs an approval/i.test(t)) { this.busy.set(false); this.showLive.set(false); return this.askApproval(files, this.testbed || '', t); }
       this.ui.toast(t, 'error');
     }
     this.busy.set(false);
@@ -808,6 +824,7 @@ export class TestsView implements OnInit, OnDestroy {
   filesOf(g: { cases: TestCaseInfo[] }) { return g.cases.map(c => c.file); }
   go(k: Section) {
     this.section.set(k);
+    if (k === 'runs') void this.loadApprovals();
     if (k === 'runs' && !this.runRep()) { const r = this.report() ?? null; if (r) { this.runRep.set(r); this.runSel.set(r.dir); } else { const d = this.tree()?.reports?.[0]?.dir; if (d) void this.openRunReport(d); } }
   }
   /** The tests shown: search and tag filter. */
@@ -847,12 +864,29 @@ export class TestsView implements OnInit, OnDestroy {
   failedFiles(r: TestRunReport) { return [...new Set(r.results.filter(x => !x.passed && x.file).map(x => x.file!))]; }
   unchecked(r: TestRunReport) { return r.results.reduce((n, x) => n + x.steps.filter(s => s.unchecked && !s.skipped).length, 0); }
   notChecked(r: TestResult) { const n = r.steps.filter(s => s.unchecked && !s.skipped).length; return n ? n + (n === 1 ? ' step' : ' steps') + ' not checked' : ''; }
+  readonly approvals = signal<TestApproval[]>([]);
+  async loadApprovals() { this.approvals.set((await this.backend.testApprovals().catch(() => [])) ?? []); }
+  async decide(id: string, ok: boolean) {
+    const note = ok ? '' : await this.ui.input(tr('Reject the Run'), tr('Why (optional)'), '');
+    if (note === null) return;
+    try { await this.backend.testDecide(id, ok, note ?? ''); this.ui.toast(ok ? tr('Approved - the run may start within 24 hours') : tr('Rejected'), 'success'); } catch (e) { this.ui.toast(errText(e), 'error'); }
+    await this.loadApprovals();
+  }
+  private async askApproval(files: string[], testbed: string, why: string) {
+    const reason = await this.ui.input(tr('Ask for an Approval'), why + '. ' + tr('Why should it run? An approver sees the request in Runs, approves it, and then you run it again.'), '');
+    if (reason === null || reason === undefined) return;
+    try { await this.backend.testRequestApproval(files, testbed, reason); this.ui.toast(tr('Approval requested'), 'success'); await this.loadApprovals(); } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  async openRoles() {
+    await this.openFile('roles.yaml');
+    if (this.fileText.startsWith('#') && !this.fileText.includes('approval')) this.fileText = '# Who may do what in this tests folder (user names as in "Run by"; an empty list lets everyone).\n# Shared through Git: it keeps an honest team in step, it is not a security boundary.\neditors: []\nrunners: []\napprovers: []\n# approval: production   # runs on production sessions need an approved request (or: always)\n';
+  }
   async openFile(f: string) { this.fileSel.set(f); this.fileText = await this.backend.testFile(f).catch(e => '# ' + errText(e)); }
   async saveFile() { try { await this.backend.testSaveFile(this.fileSel(), this.fileText); this.ui.toast(tr('Saved'), 'success'); await this.load(); } catch (e) { this.ui.toast(errText(e), 'error'); } }
   moreMenu(ev: MouseEvent) {
     this.ui.showMenu(ev, [
       { label: 'Write a Test with AI…', action: () => void this.writeWithAI() },
-      { label: 'Import Manual Test Cases (Excel, CSV)…', action: () => void this.importManual() },
+      { label: 'Import Test Cases (Excel, CSV, Postman, OpenAPI)…', action: () => void this.importManual() },
       { separator: true },
       { label: 'Open a Tests Folder…', action: () => void this.openFolder() },
       { label: 'Clone a Git Repository…', action: () => void this.clone() },
@@ -1006,6 +1040,7 @@ export class TestsView implements OnInit, OnDestroy {
         if (await this.ui.confirm(tr('Run on Production?'), t + '. ' + tr('Their commands and requests are sent to those devices.'), tr('Run'), true)) return this.runMany(files, testbeds, forceLock, true);
         return;
       }
+      if (/needs an approval/i.test(t)) { this.busy.set(false); for (const tb of testbeds) await this.askApproval(files, tb, t); return; }
       this.ui.toast(t, 'error'); await this.load();
     }
     this.busy.set(false);
@@ -1113,7 +1148,7 @@ export class TestsView implements OnInit, OnDestroy {
     try { this.logView.set({ title, file, text: await this.backend.testFile(file) }); } catch (e) { this.ui.toast(errText(e), 'error'); }
   }
   async importManual() {
-    const dev = await this.ui.input(tr('Import Manual Test Cases'), tr('Session for steps without a Device column (empty: such steps become manual steps). Then pick the Excel or CSV file.'), '');
+    const dev = await this.ui.input(tr('Import Test Cases'), tr('Excel or CSV: the session for steps without a Device column (empty: such steps become manual steps). Postman or OpenAPI: the API session the requests go to (empty: full URLs). Then pick the file.'), '');
     if (dev === null || dev === undefined) return;
     try {
       const l = await this.backend.testImportManual(dev.trim());

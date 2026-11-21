@@ -103,7 +103,7 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
     .nm { height: 30px; } .hint, .mut { color: var(--muted); font-size: 12px; line-height: 1.45; } .warn { color: var(--warn, #e0a030); }
     .list { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 8px; min-height: 0; padding: 10px; }
     .st { border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; align-items: stretch; background: color-mix(in srgb, var(--text) 3%, transparent); }
-    .st.read { border-left: 3px solid color-mix(in srgb, var(--accent) 60%, transparent); }
+    .st.read { }
     .top b { color: var(--muted); font-weight: 500; } .tg { color: var(--muted); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 12px; } .cmd { font-family: var(--mono, monospace); white-space: pre-wrap; overflow-wrap: anywhere; }
     .ic { padding: 0 6px; height: 22px; flex: none; } .chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
     .chip { font-size: 11.5px; padding: 1px 4px 1px 8px; border-radius: 10px; background: color-mix(in srgb, var(--ok, #4ec07a) 15%, transparent); color: var(--ok, #4ec07a); display: inline-flex; gap: 4px; align-items: center; max-width: 100%; overflow: hidden; }

@@ -2156,6 +2156,10 @@ paths:
                                         - history
                                         - send_qtest
                                         - defect
+                                        - approvals
+                                        - request_approval
+                                        - approve
+                                        - reject
                                     type: string
                                 at:
                                     description: 'schedule: time of day HH:MM (daily, weekdays, weekly)'
@@ -2191,7 +2195,7 @@ paths:
                                     description: 'schedule: every N hours (repeat hours)'
                                     type: integer
                                 id:
-                                    description: 'schedule/unschedule: the schedule''s id (schedules lists them)'
+                                    description: 'schedule/unschedule: the schedule''s id (schedules lists them); approve/reject: the request''s id'
                                     type: string
                                 kinds:
                                     description: 'save_state: what to save'
@@ -2203,6 +2207,9 @@ paths:
                                     type: array
                                 name:
                                     description: 'new_testbed: the testbed''s name'
+                                    type: string
+                                note:
+                                    description: 'approve/reject: a note'
                                     type: string
                                 on_cleanup_fail:
                                     description: 'run: when a test''s cleanup fails - stop (skip the rest), restore (the configuration saved before the run) or factory (factory default)'
@@ -2216,6 +2223,9 @@ paths:
                                     enum:
                                         - "true"
                                         - "false"
+                                    type: string
+                                reason:
+                                    description: 'request_approval: why the run should go ahead'
                                     type: string
                                 repeat:
                                     description: 'schedule: how often'

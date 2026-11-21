@@ -35,7 +35,7 @@ export interface Session {
 /** A login profile for a kind of device (EXOS, VOSS, Cisco IOS …). */
 export interface DeviceType {
   name: string; icon?: string; protocol: string; port: number; username: string; credential: string; initialCr: boolean;
-  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string; undoRules?: string; testSave?: string; testRestore?: string; errorPatterns?: string; factoryReset?: string; upgrade?: string; aiInstructions?: string; detect?: string; detectCommand?: string; tunnel?: string; webCheck?: string; webHttp?: string; webHttps?: string; webOn?: string; webSave?: string; aiReadOnly?: string;
+  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string; undoRules?: string; testSave?: string; testRestore?: string; errorPatterns?: string; factoryReset?: string; upgrade?: string; map?: TopoPlan | null; aiInstructions?: string; detect?: string; detectCommand?: string; tunnel?: string; webCheck?: string; webHttp?: string; webHttps?: string; webOn?: string; webSave?: string; aiReadOnly?: string;
   facts?: FactRule[] | null;
 }
 /** A value read from command output after connecting: the first group of regex. every = at each connect. */
@@ -610,3 +610,9 @@ export type CleanupMode = '' | 'off' | 'auto';
 export type OnCleanupFail = '' | 'stop' | 'restore' | 'factory';
 export interface TestHistory { file: string; runs: { at: string; dir: string; file: string; case: string; passed: boolean; skipped?: boolean; ms: number; testbed?: string; versions?: Record<string, string>; problem?: string }[]; passed: number; failed: number; skipped: number; flips: number; avgMs: number; byVersion: { version: string; passed: number; failed: number }[]; }
 export interface TestRunReport { runBy?: string; versions?: Record<string, string>; testbed?: string; cleanup?: CleanupMode; dir: string; passed: number; failed: number; skipped?: number; onCleanupFail?: OnCleanupFail; recovery?: TestStepResult[]; ms: number; results: TestResult[]; }
+
+/** How the network map reads a device type with TextFSM templates (any vendor). */
+export interface TopoPlan { paging?: string; identity?: string; identityTemplate?: string; neighbors?: string; neighborsTemplate?: string; ports?: string; portsTemplate?: string; }
+
+/** A request to run tests that need an approval (roles.yaml). */
+export interface TestApproval { id: string; files: string[]; testbed?: string; reason?: string; requestedBy: string; at: string; approvedBy?: string; approvedAt?: string; rejected?: boolean; note?: string; expired?: boolean; }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"github.com/termwright/termwright/internal/textfsm"
 	"net"
 	"os"
 	"strings"
@@ -210,7 +211,7 @@ func (a *App) topoSessions(targets []string, anyType bool) ([]string, error) {
 	}
 	var out []string
 	for _, p := range paths {
-		if s, err := a.store.Get(p); err == nil && (anyType || topo.OSFor(s.DeviceType) != "") {
+		if s, err := a.store.Get(p); err == nil && (anyType || topo.OSFor(s.DeviceType) != "" || a.topoCustom(s.DeviceType) != nil) {
 			out = append(out, p)
 		}
 	}
@@ -253,8 +254,12 @@ func (a *App) topoDevice(ctx context.Context, p, mode, community string) topo.De
 	if mode == "snmp" {
 		return viaSNMP()
 	}
+	custom := a.topoCustom(s.DeviceType)
+	if custom != nil && t.OS == "" {
+		t.OS = "custom"
+	}
 	if t.OS == "" {
-		return topo.Device{Session: p, Name: s.Name, Err: "set the session's device type (EXOS, VOSS, Cisco IOS, Arista EOS or Juniper Junos)"}
+		return topo.Device{Session: p, Name: s.Name, Err: "set the session's device type, or give its device type a network map (Options > Device Types > Network Map)"}
 	}
 	s, err = a.consoleSession(a.withFolderDefaults(s))
 	if err != nil {
@@ -274,7 +279,12 @@ func (a *App) topoDevice(ctx context.Context, p, mode, community string) topo.De
 		}
 		return a.terms.CaptureEach(cctx, s, cmds, prompt)
 	}
-	d := topo.Collect(ctx, t, run, time.Now())
+	var d topo.Device
+	if custom != nil {
+		d = topo.CollectCustom(ctx, t, *custom, run, time.Now())
+	} else {
+		d = topo.Collect(ctx, t, run, time.Now())
+	}
 	if d.Err != "" && mode == "both" {
 		if sd := viaSNMP(); sd.Err == "" {
 			sd.Notes = append(sd.Notes, "read by SNMP: the login failed ("+d.Err+")")
@@ -341,4 +351,41 @@ func (a *App) SaveMapPDF(title, name, jpegBase64 string) (string, error) {
 		return "", err
 	}
 	return p, nil
+}
+
+// topoCustom is the template plan for a device type: the type's own network map, else the one Termwright
+// ships for its family (Huawei, Ruckus ICX, Eltex); nil when the type is read by the built-in parsers or not at all.
+func (a *App) topoCustom(deviceType string) *topo.Custom {
+	if deviceType != "" && a.terms.DeviceType != nil {
+		if dt, ok := a.terms.DeviceType(deviceType); ok && dt.Map != nil && dt.Map.Set() {
+			c := *dt.Map
+			return &c
+		}
+	}
+	if c, ok := topo.BuiltinCustom(topo.OSFor(deviceType)); ok {
+		return &c
+	}
+	return nil
+}
+
+// TopoTestMap runs a network map template on pasted output, for the Device Types editor: the neighbours (or
+// rows) it finds.
+func (a *App) TopoTestMap(template, output string) ([]map[string]string, error) {
+	t, err := textfsm.Parse(template)
+	if err != nil {
+		return nil, err
+	}
+	tab, err := t.Run(output)
+	if err != nil {
+		return nil, err
+	}
+	return tab.Maps(), nil
+}
+
+// TopoBuiltinMap is the template plan Termwright ships for a device type's name, to start a custom one from.
+func (a *App) TopoBuiltinMap(deviceType string) *topo.Custom {
+	if c, ok := topo.BuiltinCustom(topo.OSFor(deviceType)); ok {
+		return &c
+	}
+	return nil
 }

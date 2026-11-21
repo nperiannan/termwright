@@ -65,6 +65,9 @@ func (a *App) TestSave(file string, c testrec.Case) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if err := mayEdit(f); err != nil {
+		return "", err
+	}
 	b, err := testrec.Marshal(c)
 	if err != nil {
 		return "", err
@@ -221,6 +224,20 @@ func (a *App) runTests(ctx context.Context, r TestRunRequest, ask netAsker) (tes
 		if err := ask("Run tests", "Run "+testsWhich(r.Files)+" (their commands are sent to the devices)", false); err != nil {
 			return testrec.RunReport{}, err
 		}
+	}
+	roles, err := f.Roles()
+	if err != nil {
+		return testrec.RunReport{}, err
+	}
+	if err := roles.May(testrec.Me(), "run"); err != nil {
+		return testrec.RunReport{}, err
+	}
+	if roles.NeedsApproval(len(a.testsProduction(f, r.Files, r.Vars)) > 0, r.Testbed) {
+		ap, ok := f.Approved(r.Files, r.Testbed)
+		if !ok {
+			return testrec.RunReport{}, fmt.Errorf("%w (roles.yaml: approval %s) - request one and ask an approver", testrec.ErrNeedsApproval, roles.Approval)
+		}
+		f.Audit("approved run", ap.ID+" approved by "+ap.ApprovedBy)
 	}
 	testsRun.Lock()
 	if testsBusy[r.Testbed] {
@@ -512,6 +529,41 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 			return "", err
 		}
 		return testsReportText(f, rep), nil
+	case "approvals":
+		l, err := a.TestApprovals()
+		if err != nil {
+			return "", err
+		}
+		var b strings.Builder
+		for _, x := range l {
+			st := "waiting"
+			if x.ApprovedBy != "" {
+				st = map[bool]string{true: "rejected", false: "approved"}[x.Rejected] + " by " + x.ApprovedBy
+				if x.Expired {
+					st += " (expired)"
+				}
+			}
+			fmt.Fprintf(&b, "%s  %s on %s by %s: %s  [%s]\n", x.ID, strings.Join(x.Files, ", "), orDash(x.Testbed), x.RequestedBy, x.Reason, st)
+		}
+		if b.Len() == 0 {
+			return "No approval requests.", nil
+		}
+		return b.String(), nil
+	case "request_approval":
+		x, err := a.TestRequestApproval(argStrs(args, "files"), argStr(args, "testbed"), argStr(args, "reason"))
+		if err != nil {
+			return "", err
+		}
+		return "Requested " + x.ID + " - an approver approves it in the Tests tab (Runs).", nil
+	case "approve", "reject":
+		if err := ask("Approve a test run", "Mark run request "+argStr(args, "id")+" as "+act+"d", true); err != nil {
+			return "", err
+		}
+		x, err := a.TestDecide(argStr(args, "id"), act == "approve", argStr(args, "note"))
+		if err != nil {
+			return "", err
+		}
+		return x.ID + " " + act + "d by " + x.ApprovedBy, nil
 	case "send_qtest":
 		d := argStr(args, "dir")
 		if d == "" {
@@ -741,4 +793,50 @@ func testsReportText(f testrec.Folder, rep testrec.RunReport) string {
 		}
 	}
 	return b.String()
+}
+
+// mayEdit refuses a change to the tests when roles.yaml names the editors and the user is not one of them.
+func mayEdit(f testrec.Folder) error {
+	r, err := f.Roles()
+	if err != nil {
+		return err
+	}
+	return r.May(testrec.Me(), "edit")
+}
+
+// TestRoles reads the team's roles.yaml (empty lists = everyone) and says who the user is.
+func (a *App) TestRoles() (map[string]any, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return nil, err
+	}
+	r, err := f.Roles()
+	return map[string]any{"roles": r, "me": testrec.Me()}, err
+}
+
+// TestApprovals lists the run approval requests, newest first.
+func (a *App) TestApprovals() ([]testrec.Approval, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return nil, err
+	}
+	return f.Approvals()
+}
+
+// TestRequestApproval asks for a run to be approved (the tests and testbed it is for).
+func (a *App) TestRequestApproval(files []string, testbed, reason string) (testrec.Approval, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return testrec.Approval{}, err
+	}
+	return f.RequestApproval(files, testbed, reason)
+}
+
+// TestDecide approves or rejects a run request (approvers only, not your own).
+func (a *App) TestDecide(id string, approve bool, note string) (testrec.Approval, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return testrec.Approval{}, err
+	}
+	return f.Decide(id, approve, note)
 }

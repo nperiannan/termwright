@@ -827,6 +827,22 @@ class Tests:
         """Sends a run's results (default: the last run) to qTest - the tests that name a qTest test case."""
         return self._run(action="send_qtest", dir=dir or None, files=files or None)
 
+    def approvals(self) -> str:
+        """Run approval requests (roles.yaml approval: production|always), newest first."""
+        return self._run(action="approvals")
+
+    def request_approval(self, files: list, testbed: str = "", reason: str = "") -> str:
+        """Asks for a run of these tests on a testbed to be approved."""
+        return self._run(action="request_approval", files=list(files), testbed=testbed or None, reason=reason or None)
+
+    def approve(self, id: str, note: str = "") -> str:
+        """Approves a run request (approvers only, not your own); the run may start within 24 hours."""
+        return self._run(action="approve", id=id, note=note or None)
+
+    def reject(self, id: str, note: str = "") -> str:
+        """Rejects a run request."""
+        return self._run(action="reject", id=id, note=note or None)
+
     def defect(self, file: str, dir: str = "") -> str:
         """Opens a Jira defect for a failed test of a run (default: the last run)."""
         return self._run(action="defect", file=file, dir=dir or None)
