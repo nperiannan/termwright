@@ -74,6 +74,8 @@ type Result struct {
 
 // StepResult is one step of a run.
 type StepResult struct {
+	// Vars: the variables the step used ({{name}}) and saved, with their values then (debugging).
+	Vars map[string]string `json:"vars,omitempty"`
 	// Name of the step.
 	Name string `json:"name"`
 	// Kind: run, http or snmp.
@@ -221,6 +223,18 @@ func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt 
 	}
 	run := func(list []Step, phase string, always bool) {
 		for i, st := range list {
+			if phase == "" && ((opt.From > 0 && i+1 < opt.From) || (opt.Only > 0 && i+1 != opt.Only)) {
+				why := fmt.Sprintf("not run: this run started at step %d", opt.From)
+				if opt.Only > 0 {
+					why = fmt.Sprintf("not run: this run was only step %d", opt.Only)
+				}
+				r.Steps = append(r.Steps, StepResult{Name: Fill(stepName(st, i), v), Kind: stepKind(st), Phase: phase, Skipped: true, Error: why})
+				continue
+			}
+			if phase == "setup" && opt.Only > 0 {
+				r.Steps = append(r.Steps, StepResult{Name: Fill(stepName(st, i), v), Kind: stepKind(st), Phase: phase, Skipped: true, Error: "not run: only one step was run"})
+				continue
+			}
 			if (failed && !always) || (ctx.Err() != nil && !always) {
 				r.Steps = append(r.Steps, StepResult{Name: Fill(stepName(st, i), v), Kind: stepKind(st), Phase: phase, Skipped: true})
 				continue
@@ -234,13 +248,41 @@ func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt 
 			if opt.OnStepStart != nil {
 				opt.OnStepStart(opt.file, r.Case, PhaseLabel(phase)+Fill(stepName(st, i), v))
 			}
-			for _, sr := range execStep(sctx, st, i, d, v) {
+		retry:
+			refs := stepVars(st, v)
+			srs := execStep(sctx, st, i, d, v)
+			for k, sr := range srs {
 				sr.Phase = phase
+				sr.Vars = refs
+				for _, sv := range st.Save {
+					if sr.Vars == nil {
+						sr.Vars = map[string]string{}
+					}
+					sr.Vars[sv.Var] = v[sv.Var]
+				}
+				failedNow := !sr.Passed && !sr.Skipped
+				if failedNow && phase != "cleanup" && opt.Pause != nil && k == len(srs)-1 {
+					if opt.OnStep != nil {
+						opt.OnStep(opt.file, r.Case, sr)
+					}
+					switch opt.Pause(ctx, opt.file, r.Case, sr) {
+					case "retry":
+						goto retry
+					case "continue":
+						sr.Error = strings.TrimSpace(sr.Error + " (went on after a pause)")
+						r.Steps = append(r.Steps, sr)
+						r.Passed = false
+						continue
+					}
+					r.Steps = append(r.Steps, sr)
+					r.Passed, failed = false, true
+					continue
+				}
 				r.Steps = append(r.Steps, sr)
 				if opt.OnStep != nil {
 					opt.OnStep(opt.file, r.Case, sr)
 				}
-				if !sr.Passed && !sr.Skipped {
+				if failedNow {
 					r.Passed = false
 					if phase == "cleanup" {
 						r.CleanupFailed = true
@@ -1038,4 +1080,26 @@ type Versioner interface {
 type ManualAsker interface {
 	CanAsk() bool
 	AskManual(ctx context.Context, name, instruction, expected string) (passed bool, note string, err error)
+}
+
+var varRef = regexp.MustCompile(`\{\{\s*([\w.-]+)\s*\}\}`)
+
+// stepVars are the variables a step uses ({{name}}) with their values when it runs.
+func stepVars(st Step, v map[string]string) map[string]string {
+	b, err := json.Marshal(st)
+	if err != nil {
+		return nil
+	}
+	var out map[string]string
+	for _, m := range varRef.FindAllStringSubmatch(string(b), -1) {
+		if out == nil {
+			out = map[string]string{}
+		}
+		if val, ok := v[m[1]]; ok {
+			out[m[1]] = val
+		} else {
+			out[m[1]] = "(not set)"
+		}
+	}
+	return out
 }

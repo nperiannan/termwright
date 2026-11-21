@@ -2191,6 +2191,9 @@ paths:
                                 force_lock:
                                     description: 'run: take over the testbed when someone else''s run has it locked'
                                     type: boolean
+                                from:
+                                    description: 'run: start each test at this step (1-based; the setup still runs)'
+                                    type: integer
                                 hours:
                                     description: 'schedule: every N hours (repeat hours)'
                                     type: integer
@@ -2218,6 +2221,9 @@ paths:
                                         - restore
                                         - factory
                                     type: string
+                                only:
+                                    description: 'run: run only this step of the test (no setup, no cleanup with cleanup off)'
+                                    type: integer
                                 production:
                                     description: 'schedule: allow production sessions (asked)'
                                     enum:

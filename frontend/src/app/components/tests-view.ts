@@ -4,7 +4,8 @@ import { NgTemplateOutlet } from '@angular/common';
 import { Backend, errText } from '../core/backend';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
-import { Recorder, escapeRe, fieldPattern } from '../core/recorder.service';
+import { Recorder, escapeRe, fieldPattern, isRead } from '../core/recorder.service';
+import { Tabs } from '../core/tabs.service';
 import { TestApproval, CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestHistory, TestStepResult, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
 import { expectLabel, parseTableCheck, stepText } from './recorder-panel';
 import { AIChat } from '../core/ai-chat.service';
@@ -144,6 +145,17 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
             <button type="button" (click)="showLive.set(!showLive())">{{ showLive() ? 'Hide log' : 'Show log' }}</button>
             <button type="button" (click)="stopRun()" title="Stop after the step that runs now (cleanups still run)">■ Stop</button>
           </div>
+          @if (paused(); as pz) {
+            <div class="pausebar" role="alert">
+              <span class="pzi">❚❚</span><div class="pzt"><b>Paused at a failed step</b> <span class="mut">{{ pz.case }} · {{ pz.step.name }}</span>
+                <div class="bad">{{ pz.step.error || failedCheck(pz.step) || 'a check failed' }}</div></div>
+              <span class="sp"></span>
+              @if (pz.step.target) { <button type="button" (click)="openDevice(pz.step.target)" title="Open the device in a terminal tab to look around (a new login)">Open Device</button> }
+              <button type="button" class="go" (click)="resume('retry')" title="Run the step again - after you fixed the device or the test">↻ Retry Step</button>
+              <button type="button" (click)="resume('continue')" title="Go on with the next step (the test still fails)">Continue</button>
+              <button type="button" class="badbtn" (click)="resume('stop')" title="End the test; its cleanup runs">Stop Test</button>
+            </div>
+          }
         }
         @if (showLive() && liveLog().length) {
           <div class="console" [class.max]="conMax()">
@@ -234,7 +246,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
               <div class="head">
                 <div class="crumb">{{ sel() }}</div>
                 <div class="title"><h1>{{ t.name || sel() }}</h1>
-                  @if (last()[sel()]; as lr) { <span class="pill" [class]="lr.skipped ? 'pill s' : lr.passed ? 'pill p' : 'pill f'">{{ lr.skipped ? 'skipped' : lr.passed ? 'passed' : lr.cleanupFailed ? 'failed (cleanup)' : 'failed' }} · {{ ago(lr.start) }}</span> } @else { <span class="pill">not run yet</span> }
+                  @if (busy() && runningNow(sel())) { <span class="pill run"><i class="spin sm"></i>running</span> } @else if (last()[sel()]; as lr) { <span class="pill" [class]="lr.skipped ? 'pill s' : lr.passed ? 'pill p' : 'pill f'">{{ lr.skipped ? 'skipped' : lr.passed ? 'passed' : lr.cleanupFailed ? 'failed (cleanup)' : 'failed' }} · {{ ago(lr.start) }}</span> } @else { <span class="pill">not run yet</span> }
                   @for (g of t.tags ?? []; track g) { <span class="tag">{{ g }}</span> }
                   <span class="sp"></span>
                   @if (last()[sel()]?.log; as lg) { <button type="button" (click)="openLog(lg, t.name || sel())" title="The last run's log: every step, what was sent and what came back">Run Log</button> }
@@ -324,10 +336,10 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                           <div class="srow hd"><span>#</span><span>Device</span><span>Command</span><span>Checks</span><span>Result</span><span class="r">Time</span></div>
                           @for (s of listOf(t, ph.k); track $index; let i = $index) {
                             @let r = resOf(ph.k, i);
-                            <div class="srow" [attr.aria-expanded]="isOpen(ph.k, i)" [class.f]="r && !r.passed && !r.skipped" [class.open]="isOpen(ph.k, i)" (click)="toggleRow(ph.k, i)" (keydown.enter)="toggleRow(ph.k, i)" tabindex="0" role="button">
+                            <div class="srow" [attr.aria-expanded]="isOpen(ph.k, i)" [class.f]="r && !r.passed && !r.skipped" [class.open]="isOpen(ph.k, i)" (click)="toggleRow(ph.k, i)" (keydown.enter)="toggleRow(ph.k, i)" (contextmenu)="stepMenu($event, ph.k, i)" tabindex="0" role="button">
                               <span class="mut">{{ i + 1 }}</span><span class="dev" [title]="target(s)">{{ s.loop ? 'loop' : s.manual ? 'you' : shortDev(target(s)) }}</span><span class="cmd" [class.manual]="!!s.manual">{{ text(s) }}@if (logicText(s)) { <span class="logic">{{ logicText(s) }}</span> }@if (s.expected) { <span class="expd">Expected: {{ s.expected }}</span> }</span>
                               <span class="chips">@for (e of s.expect ?? []; track $index; let j = $index) { <span class="chip" [class.b]="r?.checks?.[j]?.passed === false">{{ r?.checks?.[j]?.passed === false ? '✗' : r ? '✓' : '' }} {{ label(e) }}</span> }
-                                @if (!(s.expect?.length) && !s.manual) { <span class="chip w" title="Without checks the step passes when the device accepts the command">○ not checked</span> }@if (s.manual) { <span class="chip m">you decide</span> }</span>
+                                @if (!(s.expect?.length) && !s.manual) { @if (isReadStep(s)) { <span class="chip w" title="A read step without checks passes whatever it shows: select text in its output and right-click to add one">○ not checked</span> } @else { <span class="chip n" title="Fails when the device answers with an error message (the device type's error patterns)">✓ device errors</span> } }@if (s.manual) { <span class="chip m">you decide</span> }</span>
                               <span [class]="r ? (r.skipped ? 'mut' : r.passed ? 'ok' : 'bad') : 'mut'">{{ r ? (r.skipped ? '– skipped' : r.passed ? '✓ passed' : '✗ failed') : '' }}</span>
                               <span class="r mut">{{ r && !r.skipped ? dur(r.ms) : '' }}</span>
                             </div>
@@ -343,6 +355,8 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                                   @if (r?.checks?.length) { <div class="ev">@for (c of r?.checks ?? []; track $index) { <span [class]="c.passed ? 'ok' : 'bad'">{{ c.passed ? '✓' : '✗' }}</span><span>{{ c.what }}</span><span [class.bad]="!c.passed">{{ c.got }}</span> }</div> }
                                   @else { <p class="mut">{{ s.expect?.length ? 'Run the test to see what came back.' : 'No checks: select text in the output and right-click to add one.' }}</p> }
                                   @if (r?.error) { <p class="bad">{{ r?.error }}</p> }
+                                  @if (varList(r); as vl) { @if (vl.length) { <h4>Variables</h4><div class="vars">@for (x of vl; track x[0]) { <span class="vk">{{ '{{' + x[0] + '}}' }}</span><span class="vv" [class.mut]="x[1] === '(not set)'">{{ x[1] }}</span> }</div> } }
+                                  @if (ph.k === 'steps' && !busy()) { <div class="dbg"><button type="button" (click)="runStep(i, 'only')" title="Run only this step on the devices (no setup, no cleanup)"><app-icon name="play" [size]="11" /> Run This Step</button><button type="button" (click)="runStep(i, 'from')" title="Run the setup, then this step and the rest">Run From Here</button></div> }
                                   @if (r && !r.passed && !r.skipped && last()[sel()]; as lr) { <div class="row"><button type="button" (click)="explain(lr)">✦ Explain</button>
                                     @if (lr.defect) { <button type="button" class="lnk" (click)="backend.openURL(lr.defectUrl!)">{{ lr.defect }}</button> } @else if (report()?.dir) { <button type="button" (click)="createDefect(report()!.dir, lr)">Create Jira Defect</button> }</div> }
                                 </div>
@@ -449,6 +463,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
           @if (cleanupMode !== 'off') {
             <label class="fld"><span>If a cleanup fails</span><select [(ngModel)]="onCleanupFail" (ngModelChange)="keepOcf()"><option value="stop">Stop the run - skip the rest</option><option value="restore">Restore the configuration saved before the run</option><option value="factory">Factory default, then go on</option></select></label>
           }
+          @if (!multi()) { <label class="chk" title="When a step fails, the run waits with the devices' connections open: look at the device, then run the step again, go on or stop"><input type="checkbox" [(ngModel)]="pauseOnFail" /> <span><b>Pause when a step fails</b><small class="mut"> - debug: retry the step, go on or stop</small></span></label> }
           <span class="sp"></span>
           <div class="row"><button type="button" class="grow" (click)="runFiles.set(null)">Cancel</button><button type="button" class="go grow2" (click)="startRun()" [disabled]="multi() && multiPick.length < 1"><app-icon name="play" [size]="12" /> Run {{ rf.length ? rf.length + (rf.length === 1 ? ' test' : ' tests') : 'all' }}{{ multi() ? ' on ' + multiPick.length + ' testbeds' : '' }}</button></div>
         </aside>
@@ -491,6 +506,13 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
     :host-context(.light) .recb:hover { background: #f3f4f6 !important; border-color: #b9bdc5 !important; }
     .go { display: inline-flex; align-items: center; gap: 6px; justify-content: center; height: 28px !important; padding: 0 12px !important; border-radius: 6px !important; background: #1f9d55 !important; color: #fff !important; border: 1px solid #188a4a !important; font-size: 12.5px; font-weight: 600; box-shadow: none !important; }
     .go:hover:not(:disabled) { background: #188a4a !important; } .go:disabled { opacity: .55; }
+    .pausebar { display: flex; align-items: center; gap: 10px; padding: 10px 20px; background: color-mix(in srgb, var(--warn, #e0a030) 14%, var(--panel)); border-bottom: 1px solid color-mix(in srgb, var(--warn, #e0a030) 45%, var(--border)); }
+    .pausebar .pzi { color: var(--warn, #e0a030); font-weight: 700; } .pausebar .pzt { min-width: 0; } .pausebar .pzt > .mut { margin-left: 8px; } .pausebar .pzt .bad { font-size: 12px; margin-top: 2px; } .pausebar button { height: 28px; }
+    .chip.n { background: color-mix(in srgb, var(--text) 7%, transparent); color: var(--muted); }
+    .pill.run { display: inline-flex; align-items: center; gap: 6px; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); } .spin.sm { width: 10px; height: 10px; border-width: 2px; }
+    .vars { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; font: 12px/1.45 var(--mono, monospace); margin-bottom: 8px; } .vars .vk { color: var(--accent); } .vars .vv { word-break: break-all; }
+    .dbg { display: flex; gap: 6px; margin-top: 10px; } .dbg button { height: 26px; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+    .chk { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; cursor: pointer; } .chk input { margin-top: 2px; }
     .selbar > * { white-space: nowrap; } .selbar { display: flex; align-items: center; gap: 8px; margin: 8px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: color-mix(in srgb, var(--text) 4%, transparent); }
     .selbar.col { flex-direction: column; align-items: stretch; } .selbar .full { justify-content: center; width: 100%; } .selbar b { font-weight: 600; font-size: 12.5px; }
     .main { position: relative; background: var(--bg); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -582,6 +604,7 @@ export class TestsView implements OnInit, OnDestroy {
   readonly visible = input(true);
   readonly backend = inject(Backend);
   private readonly ui = inject(Ui);
+  private readonly tabsSvc = inject(Tabs);
   private readonly rec = inject(Recorder);
   private readonly ai = inject(AIChat);
   readonly tree = signal<TestsTree | null>(null);
@@ -683,6 +706,8 @@ export class TestsView implements OnInit, OnDestroy {
       this.liveStep.set(e); this.liveCount.update(n => n + 1);
       this.pushLive({ k: 'res', s: e.step });
     }));
+    this.offs.push(this.backend.on('tests:paused', (e: { case: string; step: TestStepResult }) => { this.paused.set(e); this.showLive.set(true); }));
+    this.offs.push(this.backend.on('tests:resumed', () => this.paused.set(null)));
     this.offs.push(this.backend.on('tests:step-start', (e: { case: string; step: string }) => this.pushLive({ k: 'head', c: e.case, t: e.step })));
     this.offs.push(this.backend.on('tests:out', (e: { session: string; text: string }) => this.addLive(e.text)));
     this.offs.push(this.backend.on('tests:manual', (m: { id: string; name: string; instruction: string; expected: string }) => { this.manualNote = ''; this.manual.set(m); }));
@@ -743,19 +768,21 @@ export class TestsView implements OnInit, OnDestroy {
     } catch (e) { this.ui.toast(errText(e), 'error'); }
   }
 
-  async run(files: string[], confirmed = false, forceLock = false): Promise<void> {
+  async run(files: string[], confirmed = false, forceLock = false, extra: { from?: number; only?: number } = {}): Promise<void> {
+    this.paused.set(null); this.runningFiles = files;
     this.liveStep.set(null); this.liveCount.set(0); this.liveLog.set([]); this.livePart = ''; this.showLive.set(true);
     if (!confirmed && this.cleanupMode !== 'off' && this.onCleanupFail === 'factory' && !(await this.ui.confirm(tr('Factory Default on a Failed Cleanup?'),
       tr('When a cleanup fails, the devices of that test are reset to factory default and rebooted, then the run goes on. A factory default may remove the management address: use console sessions. Production sessions are never reset.'), tr('Run'), true))) return;
     this.busy.set(true);
     try {
-      this.took(await this.backend.runTests({ files, testbed: this.testbed || undefined, confirmed, forceLock, onCleanupFail: this.cleanupMode === 'off' ? undefined : this.onCleanupFail, cleanup: this.cleanupMode || undefined }));
+      const cleanup = extra.only ? 'off' : this.cleanupMode || undefined;
+      this.took(await this.backend.runTests({ files, testbed: this.testbed || undefined, confirmed, forceLock, onCleanupFail: cleanup === 'off' ? undefined : this.onCleanupFail, cleanup, from: extra.from, only: extra.only, pauseOnFail: this.pauseOnFail }));
       await this.load();
     } catch (e) {
       const t = errText(e);
       if (!confirmed && /production sessions/i.test(t)) {
         this.busy.set(false);
-        if (await this.ui.confirm(tr('Run on Production?'), t + '. ' + tr('Their commands and requests are sent to those devices.'), tr('Run'), true)) return this.run(files, true, forceLock);
+        if (await this.ui.confirm(tr('Run on Production?'), t + '. ' + tr('Their commands and requests are sent to those devices.'), tr('Run'), true)) return this.run(files, true, forceLock, extra);
         return;
       }
       if (/needs an approval/i.test(t)) { this.busy.set(false); this.showLive.set(false); return this.askApproval(files, this.testbed || '', t); }
@@ -1047,12 +1074,32 @@ export class TestsView implements OnInit, OnDestroy {
     }
     return out;
   }
+  pauseOnFail = (() => { try { return localStorage.getItem('tw.tests.pause') === '1'; } catch { return false; } })();
+  readonly paused = signal<{ case: string; step: TestStepResult } | null>(null);
+  async resume(act: 'retry' | 'continue' | 'stop') { this.paused.set(null); await this.backend.testResume(act).catch(e => this.ui.toast(errText(e), 'error')); }
+  openDevice(path: string) { void this.tabsSvc.openSession(path); }
+  runningNow(file: string) { const f = this.runningFiles; return !f.length || f.includes(file); }
+  private runningFiles: string[] = [];
+  isReadStep(s: TestStep) { return isRead(s); }
+  varList(r?: TestStepResult | null): [string, string][] { return r?.vars ? Object.entries(r.vars).sort((a, b) => a[0].localeCompare(b[0])) : []; }
+  stepMenu(ev: MouseEvent, p: Phase, i: number) {
+    ev.preventDefault();
+    if (p !== 'steps' || this.busy()) return;
+    this.ui.showMenu(ev, [
+      { label: 'Run This Step', icon: 'play', action: () => this.runStep(i, 'only') },
+      { label: 'Run From Here', action: () => this.runStep(i, 'from') },
+    ]);
+  }
+  runStep(i: number, how: 'only' | 'from') {
+    const f = this.sel(); if (!f) return;
+    void this.run([f], false, false, how === 'only' ? { only: i + 1 } : { from: i + 1 });
+  }
   failedCheck(x: TestStepResult) { const c = x.checks?.find(y => !y.passed); return c ? c.what + ', got ' + (c.got ?? '') : ''; }
   logicText(s: TestStep) { return [s.if ? 'if ' + s.if : '', s.retry ? 'retry ' + (s.retry.timeout ?? 60) + ' s' : '', s.wait && (s.run || s.http || s.snmp) ? 'wait ' + s.wait + ' s first' : ''].filter(Boolean).join(' · '); }
   secSummary(p: Phase) {
     const t = this.test(); if (!t) return '';
     const l = this.listOf(t, p), rs = l.map((_, i) => this.resOf(p, i));
-    const failed = rs.filter(r => r && !r.passed && !r.skipped).length, bare = l.filter(s => !s.expect?.length).length;
+    const failed = rs.filter(r => r && !r.passed && !r.skipped).length, bare = l.filter(s => !s.expect?.length && !s.manual && this.isReadStep(s)).length;
     return [l.length + (l.length === 1 ? ' step' : ' steps'), failed ? failed + ' failed' : '', bare ? bare + ' not checked' : ''].filter(Boolean).join(' · ');
   }
   isOpen(p: Phase, i: number) { return this.open().includes(p + i); }
@@ -1068,6 +1115,7 @@ export class TestsView implements OnInit, OnDestroy {
   lockText(tb: string) { const l = this.lockOf(tb); return l ? (l.mine ? '  · running' : '  · in use by ' + l.user) : ''; }
   async releaseLock(tb: string) { try { await this.backend.testReleaseLock(tb); await this.load(); } catch (e) { this.ui.toast(errText(e), 'error'); } }
   async startRun() {
+    try { localStorage.setItem('tw.tests.pause', this.pauseOnFail ? '1' : '0'); } catch { /* not kept */ }
     const f = this.runFiles() ?? [];
     const tbs = this.multi() ? this.multiPick : this.testbed ? [this.testbed] : [];
     const held = tbs.map(t => this.lockOf(t)).filter(l => l && !l.mine);

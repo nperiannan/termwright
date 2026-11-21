@@ -99,6 +99,11 @@ func (a *App) TestGenerateGo(file string) (string, error) {
 
 // TestRunRequest runs tests.
 type TestRunRequest struct {
+	// From: start at this step of each test (1-based; the setup still runs). Only: run just this step.
+	From int `json:"from,omitempty"`
+	Only int `json:"only,omitempty"`
+	// PauseOnFail: when a step fails, wait (connections open) for TestResume: retry, continue or stop.
+	PauseOnFail bool `json:"pauseOnFail,omitempty"`
 	// Files: tests relative to the tests folder (none: all of them).
 	Files []string `json:"files,omitempty"`
 	// Tags: only tests with one of these tags ("!tag" leaves its tests out).
@@ -270,7 +275,24 @@ func (a *App) runTests(ctx context.Context, r TestRunRequest, ask netAsker) (tes
 		},
 		OnStep: func(file, name string, sr testrec.StepResult) {
 			emitter{a}.Emit("tests:step", map[string]any{"file": file, "case": name, "testbed": r.Testbed, "step": sr})
-		}}
+		}, From: r.From, Only: r.Only}
+	if r.PauseOnFail && r.interactive {
+		opt.Pause = func(ctx context.Context, file, name string, sr testrec.StepResult) string {
+			ch := make(chan string, 1)
+			testsPauseMu.Lock()
+			testsPause = ch
+			testsPauseMu.Unlock()
+			defer func() { testsPauseMu.Lock(); testsPause = nil; testsPauseMu.Unlock() }()
+			emitter{a}.Emit("tests:paused", map[string]any{"file": file, "case": name, "testbed": r.Testbed, "step": sr})
+			select {
+			case act := <-ch:
+				emitter{a}.Emit("tests:resumed", act)
+				return act
+			case <-ctx.Done():
+				return "stop"
+			}
+		}
+	}
 	rep, err := f.RunFilesWith(ctx, r.Files, drv, r.Vars, opt, func(res testrec.Result) {
 		emitter{a}.Emit("tests:progress", res)
 	})
@@ -509,7 +531,7 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 		}
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 		defer cancel()
-		req := TestRunRequest{Files: files, Vars: vars, Testbed: argStr(args, "testbed"), OnCleanupFail: argStr(args, "on_cleanup_fail"), Cleanup: argStr(args, "cleanup"), Tags: argStrs(args, "tags"), ForceLock: args["force_lock"] == true}
+		req := TestRunRequest{Files: files, Vars: vars, Testbed: argStr(args, "testbed"), OnCleanupFail: argStr(args, "on_cleanup_fail"), Cleanup: argStr(args, "cleanup"), Tags: argStrs(args, "tags"), ForceLock: args["force_lock"] == true, From: argInt(args, "from", 0, 10000), Only: argInt(args, "only", 0, 10000)}
 		if tbs := argStrs(args, "testbeds"); len(tbs) > 1 {
 			req.Testbed, req.Testbeds = "", tbs
 			reps, err := a.runParallel(ctx, req, ask)
@@ -839,4 +861,24 @@ func (a *App) TestDecide(id string, approve bool, note string) (testrec.Approval
 		return testrec.Approval{}, err
 	}
 	return f.Decide(id, approve, note)
+}
+
+var (
+	testsPauseMu sync.Mutex
+	testsPause   chan string
+)
+
+// TestResume answers a run paused at a failed step: "retry" runs the step again, "continue" goes on,
+// "stop" ends the test (its cleanup still runs).
+func (a *App) TestResume(action string) error {
+	testsPauseMu.Lock()
+	defer testsPauseMu.Unlock()
+	if testsPause == nil {
+		return errors.New("no run is paused")
+	}
+	select {
+	case testsPause <- action:
+	default:
+	}
+	return nil
 }

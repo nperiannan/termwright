@@ -862,7 +862,8 @@ class Tests:
         return self._run(action="save", file=file, yaml=yaml_text)
 
     def run(self, *files: str, vars: Optional[dict] = None, testbed: Optional[str] = None, on_cleanup_fail: str = "",
-            cleanup: str = "", tags: Optional[list] = None, testbeds: Optional[list] = None, timeout: float = 1800) -> str:
+            cleanup: str = "", tags: Optional[list] = None, testbeds: Optional[list] = None, timeout: float = 1800,
+            step_from: int = 0, step_only: int = 0) -> str:
         """Run tests (none: all), optionally on a testbed (a file in testbeds/). on_cleanup_fail: what happens
         when a test's cleanup fails - "stop" (default: the remaining tests are skipped), "restore" (put back the
         configuration saved before the run) or "factory" (factory default); both may reboot the devices.
@@ -871,7 +872,8 @@ class Tests:
         tags: only tests with one of these tags ("!slow" leaves those out). testbeds: run on several at the same time.
         Returns pass/fail per step and the report's path (JUnit XML and HTML in reports/)."""
         return self._run(timeout=timeout, action="run", files=list(files) or None, vars=vars, testbed=testbed,
-                         on_cleanup_fail=on_cleanup_fail or None, cleanup=cleanup or None, tags=tags or None, testbeds=testbeds or None)
+                         on_cleanup_fail=on_cleanup_fail or None, cleanup=cleanup or None, tags=tags or None, testbeds=testbeds or None,
+                         **{k: v for k, v in {"from": step_from, "only": step_only}.items() if v})
 
     def send_qtest(self, dir: str = "", files: Optional[list] = None) -> str:
         """Sends a run's results (default: the last run) to qTest - the tests that name a qTest test case."""

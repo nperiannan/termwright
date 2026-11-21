@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -59,6 +60,8 @@ func TestGenerateGoGolden(t *testing.T) {
 
 // The generated tests and lib compile and run against a fake Termwright API: the sample passes;
 // a failed check fails its step and skips the next one; junit makes XML of go test -json.
+var fkMu sync.Mutex
+
 func TestGeneratedGoRuns(t *testing.T) {
 	gobin, err := exec.LookPath("go")
 	if err != nil || testing.Short() {
@@ -77,6 +80,8 @@ func TestGeneratedGoRuns(t *testing.T) {
 			Token    string   `json:"token"`
 		}
 		json.NewDecoder(r.Body).Decode(&in)
+		fkMu.Lock() // the generated tests run in parallel (t.Parallel / several packages)
+		defer fkMu.Unlock()
 		switch in.Action {
 		case "save_state":
 			fk.sent = append(fk.sent, "save "+strings.Join(in.Sessions, ","))
@@ -92,6 +97,7 @@ func TestGeneratedGoRuns(t *testing.T) {
 		json.NewEncoder(w).Encode(map[string]string{"result": string(b)})
 	}))
 	defer srv.Close()
+	sent := func() []string { fkMu.Lock(); defer fkMu.Unlock(); return append([]string(nil), fk.sent...) }
 	f := Folder{Root: t.TempDir()}
 	f.Init()
 	c, _ := Parse([]byte(sample))
@@ -157,14 +163,14 @@ steps:
 	if out, err := run("test", "-count=1", "./cases/vlan/", "./cases/snmp/", "./cases/tables/", "./cases/logic/"); err != nil {
 		t.Fatalf("vlan: %v\n%s", err, out)
 	}
-	if out, err := run("test", "-count=1", "-v", "./cases/params/", "-args", "-tw.testbed=testbeds/nested.yaml"); err != nil || !strings.Contains(out, "[vlan=42]") || !strings.Contains(fk.sent[len(fk.sent)-1], "Lab/sw1: show vlan 42") {
-		t.Fatalf("params: %v\n%s\n%v", err, out, fk.sent)
+	if out, err := run("test", "-count=1", "-v", "./cases/params/", "-args", "-tw.testbed=testbeds/nested.yaml"); err != nil || !strings.Contains(out, "[vlan=42]") || !strings.Contains(sent()[len(sent())-1], "Lab/sw1: show vlan 42") {
+		t.Fatalf("params: %v\n%s\n%v", err, out, sent())
 	}
 	checkClean := func(lang, out string) {
 		t.Helper()
-		n := len(fk.sent)
-		if n < 2 || fk.sent[n-1] != "restore t1" || fk.sent[n-2] != "Lab/sw1: show vlan 42" {
-			t.Fatalf("%s clean: cleanup or restore did not run: %v\n%s", lang, fk.sent, out)
+		n := len(sent())
+		if n < 2 || sent()[n-1] != "restore t1" || sent()[n-2] != "Lab/sw1: show vlan 42" {
+			t.Fatalf("%s clean: cleanup or restore did not run: %v\n%s", lang, sent(), out)
 		}
 	}
 	if out, err := run("test", "-count=1", "-v", "./cases/clean/"); err == nil || !strings.Contains(out, "cleanup:_show_vlan_42") {
