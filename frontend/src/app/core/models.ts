@@ -601,10 +601,10 @@ export interface TestCaseInfo { file: string; name: string; description?: string
 export interface TestCheckResult { what: string; passed: boolean; got?: string; }
 export interface TestStepResult { name: string; kind: string; phase?: '' | 'setup' | 'cleanup' | 'restore'; target?: string; sent?: string; status?: number; output?: string; ms: number; passed: boolean; skipped?: boolean; unchecked?: boolean; error?: string; checks?: TestCheckResult[]; table?: TestTable; }
 export interface TestResult { case: string; file?: string; start: string; ms: number; passed: boolean; skipped?: boolean; cleanupFailed?: boolean; error?: string; steps: TestStepResult[]; }
-export interface TestsTree { root: string; cases: TestCaseInfo[]; testbeds: string[]; reports: { dir: string; passed: number; failed: number; ms: number }[]; lib?: string[]; }
+export interface TestsTree { root: string; cases: TestCaseInfo[]; testbeds: string[]; reports: { dir: string; passed: number; failed: number; ms: number; skipped?: number; testbed?: string }[]; lib?: string[]; templates?: string[]; }
 export interface TestSchedule { id: string; name: string; files?: string[]; testbed?: string; repeat: 'daily' | 'weekdays' | 'weekly' | 'hours'; at?: string; day?: number; hours?: number; production?: boolean; off?: boolean; onCleanupFail?: OnCleanupFail; cleanup?: CleanupMode; }
 export interface TestScheduleView extends TestSchedule { state: { last: string; passed: number; failed: number; dir?: string; error?: string }; next?: string; when: string; }
 export interface TestsGitInfo { repo: boolean; branch?: string; changed: number; upstream?: boolean; ahead?: number; behind?: number; hasGo: boolean; hasGit: boolean; }
 export type CleanupMode = '' | 'off' | 'auto';
 export type OnCleanupFail = '' | 'stop' | 'restore' | 'factory';
-export interface TestRunReport { dir: string; passed: number; failed: number; skipped?: number; onCleanupFail?: OnCleanupFail; recovery?: TestStepResult[]; ms: number; results: TestResult[]; }
+export interface TestRunReport { testbed?: string; cleanup?: CleanupMode; dir: string; passed: number; failed: number; skipped?: number; onCleanupFail?: OnCleanupFail; recovery?: TestStepResult[]; ms: number; results: TestResult[]; }

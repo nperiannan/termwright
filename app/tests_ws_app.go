@@ -46,6 +46,15 @@ func (a *App) TestFile(rel string) (string, error) {
 	return f.ReadText(rel)
 }
 
+// TestSaveFile writes a testbed, template, suite or library file of the tests folder.
+func (a *App) TestSaveFile(rel, text string) error {
+	f, err := a.testsFolder()
+	if err != nil {
+		return err
+	}
+	return f.SaveText(rel, text)
+}
+
 // TestSaveYAML checks and saves a test from its YAML text (and writes its Go test).
 func (a *App) TestSaveYAML(rel, text string) (string, error) {
 	c, err := testrec.Parse([]byte(text))

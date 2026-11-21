@@ -1,8 +1,9 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Recorder, RecPhase } from '../core/recorder.service';
+import { Recorder, RecPhase, isRead } from '../core/recorder.service';
 import { AIChat } from '../core/ai-chat.service';
 import { TestExpect, TestTableExpect, TestStep } from '../core/models';
+import { fieldName } from '../core/predict';
 
 type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid' | 'status' | 'maxMs';
 
@@ -12,47 +13,52 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
   imports: [FormsModule],
   host: { class: 'recp', role: 'complementary', '[attr.aria-label]': "'Test Recorder'" },
   template: `
-    <div class="hd">
+    <div class="bar" [class.pz]="rec.paused()">
       <span class="dot" [class.pz]="rec.paused()"></span><b>{{ rec.paused() ? 'Paused' : 'Recording' }}</b>
       <span class="sp"></span>
-      <button type="button" (click)="rec.paused.set(!rec.paused())" [title]="rec.paused() ? 'Resume recording' : 'Pause: commands typed now are not recorded'">{{ rec.paused() ? '▶' : '⏸' }}</button>
+      <button type="button" class="bb" (click)="rec.paused.set(!rec.paused())" [title]="rec.paused() ? 'Resume recording' : 'Pause: commands typed now are not recorded'">{{ rec.paused() ? '▶ Resume' : '⏸ Pause' }}</button>
+      <button type="button" class="bb" (click)="rec.discard()">Discard</button>
+      <button type="button" class="pri" (click)="rec.save()" [disabled]="!rec.steps().length">Save…</button>
     </div>
-    <input class="nm" [ngModel]="rec.name()" (ngModelChange)="rec.name.set($event)" placeholder="Test name" aria-label="Test name" />
-    <div class="phases" role="tablist" aria-label="Record into">
-      @for (p of phases; track p.k) { <button type="button" role="tab" [class.on]="rec.phase() === p.k" (click)="rec.phase.set(p.k)" [title]="p.t">{{ p.l }} <span class="n">{{ count(p.k) }}</span></button> }
+    <div class="pad">
+      <input class="nm" [ngModel]="rec.name()" (ngModelChange)="rec.name.set($event)" placeholder="Test name" aria-label="Test name" />
+      <div class="phases" role="tablist" aria-label="Record into">
+        @for (p of phases; track p.k) { <button type="button" role="tab" [class.on]="rec.phase() === p.k" (click)="rec.phase.set(p.k)" [title]="p.t">{{ p.l }} <span class="n">{{ count(p.k) }}</span></button> }
+      </div>
+      <div class="hint">@switch (rec.phase()) {
+        @case ('setup') { Setup puts the devices in a known state before the test. }
+        @case ('cleanup') { Cleanup undoes what the test changed; it runs when the run is set to clean up. }
+        @default { Commands, API requests and SNMP queries become steps. Select output and right-click → <b>Expect this</b>.@if (rec.autoChecks()) { Checks for what you configured are added by themselves. } }
+      }</div>
     </div>
-    <div class="hint">@switch (rec.phase()) {
-      @case ('setup') { <b>Setup</b>: steps that put the devices in a known state before the test. }
-      @case ('cleanup') { <b>Cleanup</b>: steps that undo what the test changed - they always run, also after a failure, so the next test finds a clean device. }
-      @default { Type commands in terminal tabs, send requests in the API Client or use the SNMP Browser. Select output and right-click → <b>Expect this</b> to add a check. }
-    }</div>
     <div class="list">
       @for (s of rec.steps(); track $index; let i = $index) {
         @if (i === 0 || rec.steps()[i - 1].phase !== s.phase) { <div class="ph">{{ phaseName(s.phase) }}</div> }
-        <div class="st" [class.cl]="s.phase === 'cleanup'" [class.su]="s.phase === 'setup'">
+        <div class="st" [class.cl]="s.phase === 'cleanup'" [class.su]="s.phase === 'setup'" [class.read]="isReadStep(s.step)">
           <div class="top"><b>{{ numIn(i) }}</b>
             <span class="tg" [title]="target(s.step)">{{ short(target(s.step)) }}</span>
             <span class="sp"></span>
+            @if (s.step.run && (s.term || s.output) && !s.table) { <button type="button" class="ic" (click)="rec.parseStep(i)" title="Show the output as a table (a TextFSM template from templates/) and check its values">⊞</button> }
             <button type="button" class="ic" (click)="rec.moveStep(i, -1)" [disabled]="i === 0" title="Move up">↑</button>
             <button type="button" class="ic" (click)="rec.removeStep(i)" title="Remove the step">✕</button>
           </div>
           <div class="cmd">{{ sent(s.step) }}</div>
-          @if (s.step.run && (s.term || s.output)) {
-            @if (s.table; as tb) {
-              <div class="tbw"><table class="ptab"><tr>@for (h of tb.header; track $index) { <th>{{ h }}</th> }</tr>
-                @for (r of tb.rows.slice(0, 40); track $index) { <tr>@for (c of r; track $index; let ci = $index) { <td (click)="rec.addCellCheck(i, r, ci)" title="Check this value">{{ c }}</td> }</tr> }</table></div>
-              <div class="mut">{{ tb.rows.length }} rows · click a value to check it</div>
-            } @else { <button type="button" class="lnk sm" (click)="rec.parseStep(i)" title="Turn the output into a table with a TextFSM template (templates/ in the tests folder)">⊞ Parse as Table</button> }
+          @if (s.table; as tb) {
+            <div class="tbw"><table class="ptab"><tr>@for (h of tb.header; track $index) { <th>{{ h }}</th> }</tr>
+              @for (r of tb.rows.slice(0, 40); track $index) { <tr>@for (c of r; track $index; let ci = $index) { <td (click)="rec.addCellCheck(i, r, ci)" title="Check this value">{{ c }}</td> }</tr> }</table></div>
+            <div class="mut">{{ tb.rows.length }} rows · click a value to check it</div>
           }
-          @for (e of s.step.expect ?? []; track $index; let j = $index) {
-            <span class="chip">✓ {{ label(e) }}<button type="button" (click)="rec.removeCheck(i, j)" title="Remove the check">×</button></span>
+          @if (s.step.expect?.length || s.step.save?.length) {
+            <div class="chips">
+              @for (e of s.step.expect ?? []; track $index; let j = $index) { <span class="chip">✓ {{ label(e) }}<button type="button" (click)="rec.removeCheck(i, j)" title="Remove the check">×</button></span> }
+              @for (v of s.step.save ?? []; track $index; let j = $index) { <span class="chip var">{{ '{{' + v.var + '}}' }} ← {{ v.field || v.json || v.oid || v.column }}<button type="button" (click)="rec.removeSave(i, j)" title="Remove">×</button></span> }
+            </div>
+            @if (s.auto) { <div class="mut">✦ {{ s.auto }} {{ s.auto === 1 ? 'check' : 'checks' }} added from the configuration before it</div> }
+          } @else if (isReadStep(s.step)) { <div class="mut warn">○ no checks yet - it passes whenever the device answers</div> }
+          @if (rec.suggest(i).length) {
+            <div class="chips"><span class="mut">Suggested:</span>@for (x of rec.suggest(i); track $index) { <button type="button" class="sug" (click)="rec.addSuggested(i, x)" [title]="s.phase === 'cleanup' ? 'The cleanup removed it: check that it is gone' : 'A configuration command before this step set it: check that it is there'">+ {{ label(x) }}</button> }</div>
           }
-          @for (v of s.step.save ?? []; track $index; let j = $index) {
-            <span class="chip var">{{ '{{' + v.var + '}}' }} ← {{ v.field || v.json || v.oid }}<button type="button" (click)="rec.removeSave(i, j)" title="Remove">×</button></span>
-          }
-          @if (!(s.step.expect?.length)) { <div class="mut">no checks - passes when it runs without an error</div> }
-          @for (x of rec.suggest(i); track $index) { <button type="button" class="lnk sug" (click)="rec.addSuggested(i, x)" [title]="s.phase === 'cleanup' ? 'The cleanup removed it: check that it is gone' : 'A configuration command before this step created it: check that it is there'">+ {{ label(x) }}</button> }
-          @if (s.undo && !s.undone) { <div class="undo"><span class="mut">↩ undo:</span> <code>{{ sent(s.undo) }}</code><button type="button" class="lnk" (click)="rec.addUndo(i)" title="Add this undo to the cleanup">+ Cleanup</button></div> }
+          @if (s.undo && !s.undone) { <div class="undo"><span class="mut">↩ cleanup:</span> <code>{{ sent(s.undo) }}</code><button type="button" class="lnk" (click)="rec.addUndo(i)" title="Add this undo to the cleanup">+ add</button></div> }
           @if (adding() === i) {
             <div class="add">
               <select [(ngModel)]="kind">
@@ -62,43 +68,51 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
               <input [(ngModel)]="value" [placeholder]="kind === 'status' ? '200' : kind === 'maxMs' ? '500' : kind === 'field' || kind === 'json' || kind === 'oid' ? 'equals (empty: is there)' : 'text'" (keydown.enter)="addCheck(i)" />
               <div class="row"><button type="button" (click)="adding.set(-1)">Cancel</button><button type="button" class="pri" (click)="addCheck(i)">Add</button></div>
             </div>
-          } @else {
-            <button type="button" class="lnk" (click)="openAdd(i, s.step)">+ Check</button>
-          }
+          } @else { <button type="button" class="lnk" (click)="openAdd(i, s.step)">+ Check</button> }
         </div>
-      } @empty { <div class="mut empty">No steps yet.</div> }
+      } @empty { <div class="mut empty">No steps yet.<br />Type a command in a terminal tab.</div> }
     </div>
-    <div class="rst"><span class="mut">Afterwards put back:</span>
-      <label title="Save the configuration before the test and restore it after the cleanup (the device type's save and restore commands)"><input type="checkbox" [ngModel]="rec.restore().includes('config')" (ngModelChange)="rec.toggleRestore('config', $event)" /> configuration</label>
-      <label title="Take a checkpoint of each emulated lab switch before the test and go back to it after the cleanup"><input type="checkbox" [ngModel]="rec.restore().includes('lab')" (ngModelChange)="rec.toggleRestore('lab', $event)" /> lab snapshot</label></div>
-    <div class="row"><button type="button" (click)="rec.addAllUndos()" [disabled]="!rec.undos()" title="Add every suggested undo to the cleanup, the last change first">↩ Undo All in Cleanup ({{ rec.undos() }})</button>
-      <button type="button" (click)="cleanupWithAI()" [disabled]="!rec.steps().length" title="Ask the AI assistant to write the cleanup for these steps">✦ Cleanup with AI</button></div>
-    <label class="roles" title="Sessions are saved as {{ '{{' }}role{{ '}}' }} variables with these sessions as defaults, so a testbed can point the test at other devices"><input type="checkbox" [ngModel]="rec.roles()" (ngModelChange)="rec.roles.set($event)" /> Sessions as roles</label>
     <div class="ft">
-      <span class="mut">{{ rec.steps().length }} steps · {{ rec.checks() }} checks</span><span class="sp"></span>
-      <button type="button" (click)="rec.discard()">Discard</button>
-      <button type="button" class="pri" (click)="rec.save()" [disabled]="!rec.steps().length">Save Test…</button>
+      @if (rec.undos()) { <div class="row"><span class="mut grow">↩ {{ rec.undos() }} {{ rec.undos() === 1 ? 'undo' : 'undos' }} suggested</span><button type="button" class="lnk" (click)="rec.addAllUndos()" title="Add every suggested undo to the cleanup, the last change first">Add all to Cleanup</button></div> }
+      <div class="row"><span class="mut grow">{{ rec.steps().length }} steps · {{ rec.checks() }} checks</span>
+        <button type="button" class="lnk" (click)="cleanupWithAI()" [disabled]="!rec.steps().length" title="Ask the AI assistant to write the cleanup for these steps">✦ Cleanup with AI</button>
+        <button type="button" class="lnk" (click)="opts.set(!opts())">{{ opts() ? 'Hide options' : 'Options' }}</button></div>
+      @if (opts()) {
+        <div class="opts">
+          <label title="Add the checks a show command most likely needs from the configuration recorded before it"><input type="checkbox" [ngModel]="rec.autoChecks()" (ngModelChange)="rec.autoChecks.set($event)" /> Add checks for what was configured</label>
+          <label title="Sessions are saved as {{ '{{' }}role{{ '}}' }} variables with these sessions as defaults, so a testbed can point the test at other devices"><input type="checkbox" [ngModel]="rec.roles()" (ngModelChange)="rec.roles.set($event)" /> Sessions as roles</label>
+          <span class="mut">Afterwards put back:</span>
+          <label title="Save the configuration before the test and restore it afterwards (the device type's save and restore commands)"><input type="checkbox" [ngModel]="rec.restore().includes('config')" (ngModelChange)="rec.toggleRestore('config', $event)" /> configuration</label>
+          <label title="Take a checkpoint of each emulated lab switch before the test and go back to it afterwards"><input type="checkbox" [ngModel]="rec.restore().includes('lab')" (ngModelChange)="rec.toggleRestore('lab', $event)" /> lab snapshot</label>
+        </div>
+      }
     </div>`,
   styles: [`
-    :host { flex: none; width: 320px; display: flex; flex-direction: column; gap: 8px; min-height: 0; padding: 10px; background: var(--panel); border-left: 1px solid var(--border); color: var(--text); font-size: calc(13px * var(--ui-scale, 1)); }
-    .hd, .top, .ft, .row { display: flex; align-items: center; gap: 6px; } .sp { flex: 1; }
+    :host { flex: none; width: 360px; display: flex; flex-direction: column; min-height: 0; background: var(--panel); border-left: 1px solid var(--border); color: var(--text); font-size: calc(13px * var(--ui-scale, 1)); }
+    .top, .row { display: flex; align-items: center; gap: 6px; } .sp, .grow { flex: 1; }
+    .bar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: color-mix(in srgb, #ef5b5b 16%, var(--panel)); border-bottom: 1px solid color-mix(in srgb, #ef5b5b 40%, var(--border)); }
+    .bar.pz { background: color-mix(in srgb, var(--text) 6%, var(--panel)); border-bottom-color: var(--border); } .bb { font-size: 12px; padding: 2px 9px; }
     .dot { width: 9px; height: 9px; border-radius: 50%; background: #ef5b5b; box-shadow: 0 0 0 4px rgba(239, 91, 91, .2); animation: blink 1.4s infinite; } .dot.pz { animation: none; background: var(--muted); box-shadow: none; }
     @keyframes blink { 50% { opacity: .35; } }
-    .nm { height: 30px; } .hint, .mut { color: var(--muted); font-size: 12px; line-height: 1.45; }
-    .list { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
-    .st { border: 1px solid var(--border); border-radius: 8px; padding: 7px 8px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
-    .top { width: 100%; } .top .ic { flex: none; } .top b { margin-right: 2px; } .tg { color: var(--muted); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; } .cmd { font-family: var(--mono, monospace); white-space: pre-wrap; overflow-wrap: anywhere; width: 100%; }
-    .ic { padding: 0 6px; height: 22px; } .chip { font-size: 11.5px; padding: 1px 4px 1px 8px; border-radius: 10px; background: color-mix(in srgb, var(--ok, #4ec07a) 15%, transparent); color: var(--ok, #4ec07a); display: inline-flex; gap: 4px; align-items: center; max-width: 100%; overflow: hidden; }
+    .pad { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-bottom: 1px solid var(--border); }
+    .nm { height: 30px; } .hint, .mut { color: var(--muted); font-size: 12px; line-height: 1.45; } .warn { color: var(--warn, #e0a030); }
+    .list { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 8px; min-height: 0; padding: 10px; }
+    .st { border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; align-items: stretch; background: color-mix(in srgb, var(--text) 3%, transparent); }
+    .st.read { border-left: 3px solid color-mix(in srgb, var(--accent) 60%, transparent); }
+    .top b { color: var(--muted); font-weight: 500; } .tg { color: var(--muted); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 12px; } .cmd { font-family: var(--mono, monospace); white-space: pre-wrap; overflow-wrap: anywhere; }
+    .ic { padding: 0 6px; height: 22px; flex: none; } .chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+    .chip { font-size: 11.5px; padding: 1px 4px 1px 8px; border-radius: 10px; background: color-mix(in srgb, var(--ok, #4ec07a) 15%, transparent); color: var(--ok, #4ec07a); display: inline-flex; gap: 4px; align-items: center; max-width: 100%; overflow: hidden; }
     .chip.var { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); } .chip button { border: 0; background: none; color: inherit; padding: 0 3px; cursor: pointer; }
-    .lnk { border: 0; background: none; color: var(--accent); padding: 0; cursor: pointer; font-size: 12px; }
-    .add { display: flex; flex-direction: column; gap: 5px; width: 100%; } .add .row { justify-content: flex-end; }
-    .pri { background: var(--accent); color: #fff; border-color: transparent; } .empty { padding: 16px 0; text-align: center; }
+    .lnk { border: 0; background: none; color: var(--accent); padding: 0; cursor: pointer; font-size: 12px; align-self: flex-start; }
+    .add { display: flex; flex-direction: column; gap: 5px; } .add .row { justify-content: flex-end; }
+    .pri { background: var(--accent); color: #fff; border-color: transparent; } .empty { padding: 24px 0; text-align: center; }
     .phases { display: flex; gap: 2px; background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: 7px; padding: 2px; } .phases button { flex: 1; border: 0; background: none; color: var(--text); padding: 4px 6px; border-radius: 5px; cursor: pointer; } .phases button.on { background: color-mix(in srgb, var(--accent) 28%, transparent); } .phases .n { color: var(--muted); font-size: 11px; }
     .ph { font-size: 11px; letter-spacing: .06em; color: var(--muted); text-transform: uppercase; margin-top: 2px; } .st.cl { border-color: color-mix(in srgb, var(--warn, #e0a030) 45%, var(--border)); } .st.su { border-style: dashed; }
-    .sug { font-size: 12px; padding: 1px 4px; margin: 3px 4px 0 0; border: 1px dashed color-mix(in srgb, var(--accent) 50%, transparent); border-radius: 10px; }
-    .tbw { max-height: 180px; overflow: auto; margin: 4px 0; border: 1px solid var(--border); border-radius: 6px; } .ptab { border-collapse: collapse; font: 11.5px var(--mono, monospace); width: 100%; } .ptab th { position: sticky; top: 0; background: var(--panel); text-align: left; padding: 2px 6px; color: var(--muted); font-weight: 500; } .ptab td { padding: 2px 6px; cursor: pointer; border-top: 1px solid var(--border); white-space: nowrap; } .ptab td:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
-    .undo { font-size: 12px; display: flex; gap: 6px; align-items: center; width: 100%; } .undo code { font-family: var(--mono, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
-    .rst { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12px; } .rst label { display: flex; gap: 4px; align-items: center; } .row { display: flex; gap: 6px; } .row button { flex: 1; font-size: 12px; } .roles { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+    .sug { font-size: 11.5px; padding: 1px 7px; border: 1px dashed color-mix(in srgb, var(--accent) 50%, transparent); border-radius: 10px; background: none; color: var(--accent); cursor: pointer; }
+    .tbw { max-height: 180px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; } .ptab { border-collapse: collapse; font: 11.5px var(--mono, monospace); width: 100%; } .ptab th { position: sticky; top: 0; background: var(--panel); text-align: left; padding: 2px 6px; color: var(--muted); font-weight: 500; } .ptab td { padding: 2px 6px; cursor: pointer; border-top: 1px solid var(--border); white-space: nowrap; } .ptab td:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+    .undo { font-size: 12px; display: flex; gap: 6px; align-items: center; } .undo code { font-family: var(--mono, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+    .ft { display: flex; flex-direction: column; gap: 6px; padding: 9px 10px; border-top: 1px solid var(--border); }
+    .opts { display: flex; flex-direction: column; gap: 5px; font-size: 12px; } .opts label { display: flex; gap: 6px; align-items: center; }
   `],
 })
 export class RecorderPanel {
@@ -121,6 +135,8 @@ export class RecorderPanel {
     void this.ai.send('Write the cleanup for these recorded Termwright test steps: the commands, REST requests or SNMP sets that undo every change they make, in the right order and in the right configuration mode for each device type (find the sessions to see their device types). Answer with a YAML cleanup: list I can paste into the test, and say which changes cannot be undone.');
   }
   readonly adding = signal(-1);
+  readonly opts = signal(false);
+  isReadStep = isRead;
   kind: AddKind = 'contains';
   subject = '';
   value = '';
@@ -180,6 +196,7 @@ export function parseTableCheck(text: string): TestTableExpect | null {
 }
 export function expectLabel(e: TestExpect): string {
   if (e.table) return tableLabel(e.table);
+  if (e.field && e.equals !== undefined && fieldName(e.field) !== e.field) return `${fieldName(e.field)} = ${e.equals}`;
   const cmp = [e.equals !== undefined ? `= ${e.equals}` : '', e.notEquals !== undefined ? `≠ ${e.notEquals}` : '', e.greater !== undefined ? `> ${e.greater}` : '', e.less !== undefined ? `< ${e.less}` : '', e.exists === false ? 'missing' : ''].filter(Boolean).join(' ');
   if (e.contains) return `contains "${e.contains}"`;
   if (e.notContains) return `no "${e.notContains}"`;

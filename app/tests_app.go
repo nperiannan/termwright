@@ -156,7 +156,7 @@ func (a *App) runTests(ctx context.Context, r TestRunRequest, ask netAsker) (tes
 		return testrec.RunReport{}, errors.New("tests are already running")
 	}
 	defer testsRun.Unlock()
-	rep, err := f.RunFilesWith(ctx, r.Files, newTestDriver(a), r.Vars, testrec.RunOptions{OnCleanupFail: r.OnCleanupFail, Cleanup: r.Cleanup}, func(res testrec.Result) {
+	rep, err := f.RunFilesWith(ctx, r.Files, newTestDriver(a), r.Vars, testrec.RunOptions{OnCleanupFail: r.OnCleanupFail, Cleanup: r.Cleanup, Testbed: r.Testbed}, func(res testrec.Result) {
 		emitter{a}.Emit("tests:progress", res)
 	})
 	if err == nil || len(rep.Results) > 0 {

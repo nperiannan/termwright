@@ -311,6 +311,7 @@ export class Backend {
   testsOpenInEditor(rel: string) { return this.call<void>('TestsOpenInEditor', rel); }
   runTests(r: { files?: string[]; vars?: Record<string, string>; testbed?: string; confirmed?: boolean; onCleanupFail?: string; cleanup?: string }) { return this.call<TestRunReport>('RunTests', r); }
   testParse(session: string, command: string, template: string, output: string) { return this.call<TestTable>('TestParse', session, command, template, output); }
+  testSaveFile(rel: string, text: string) { return this.call<void>('TestSaveFile', rel, text); }
   testRemove(file: string) { return this.call<string>('TestRemove', file); }
   testRename(file: string, to: string, copy: boolean) { return this.call<string>('TestRename', file, to, copy); }
   testGenerateGo(file: string) { return this.call<string>('TestGenerateGo', file); }

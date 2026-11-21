@@ -247,6 +247,9 @@ func (f Folder) Save(rel string, c Case) (string, error) {
 
 // RunReport is a run of one or more cases with its reports.
 type RunReport struct {
+	// Testbed the run used ("" = the tests' own sessions) and its cleanup mode.
+	Testbed string `json:"testbed,omitempty"`
+	Cleanup string `json:"cleanup,omitempty"`
 	// Dir: the run's folder under reports/, relative to the tests folder.
 	Dir string `json:"dir"`
 	// Passed and Failed: cases.
@@ -275,6 +278,8 @@ type RunOptions struct {
 	// Cleanup: "" (each test's cleanup steps and restore), "off" (none: tests build on what earlier
 	// ones configured) or "auto" (the cleanup steps; without them the undo of the commands that ran).
 	Cleanup string `json:"cleanup,omitempty"`
+	// Testbed: shown in the report.
+	Testbed string `json:"testbed,omitempty"`
 }
 
 // Recoverer is a Driver that can bring devices back after a failed cleanup: Baseline saves their
@@ -307,7 +312,7 @@ func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars
 	if mode != "restore" && mode != "factory" {
 		mode = "stop"
 	}
-	rep := RunReport{OnCleanupFail: mode}
+	rep := RunReport{OnCleanupFail: mode, Testbed: opt.Testbed, Cleanup: opt.Cleanup}
 	rc, canRecover := d.(Recoverer)
 	cases := map[string]Case{}
 	var all []string // every device the run uses, for the configuration saved before it
@@ -447,6 +452,8 @@ type Tree struct {
 	Reports []ReportInfo `json:"reports"`
 	// Lib: the files in lib/ (the helpers of the generated tests and your own).
 	Lib []string `json:"lib"`
+	// Templates: the TextFSM templates and their index in templates/.
+	Templates []string `json:"templates"`
 }
 
 // ReportInfo is a past run.
@@ -459,11 +466,14 @@ type ReportInfo struct {
 	Failed int `json:"failed"`
 	// Ms: how long the run took.
 	Ms int64 `json:"ms"`
+	// Skipped cases and the testbed.
+	Skipped int    `json:"skipped,omitempty"`
+	Testbed string `json:"testbed,omitempty"`
 }
 
 // Tree lists the folder.
 func (f Folder) Tree() Tree {
-	t := Tree{Root: f.Root, Cases: f.List(), Testbeds: []string{}, Reports: []ReportInfo{}, Lib: f.LibFiles()}
+	t := Tree{Root: f.Root, Cases: f.List(), Testbeds: []string{}, Reports: []ReportInfo{}, Lib: f.LibFiles(), Templates: f.dirFiles("templates")}
 	if t.Cases == nil {
 		t.Cases = []CaseInfo{}
 	}
@@ -483,7 +493,7 @@ func (f Folder) Tree() Tree {
 			if b, err := os.ReadFile(filepath.Join(f.Root, "reports", es[i].Name(), "result.json")); err == nil {
 				var r RunReport
 				if json.Unmarshal(b, &r) == nil {
-					ri.Passed, ri.Failed, ri.Ms = r.Passed, r.Failed, r.Ms
+					ri.Passed, ri.Failed, ri.Ms, ri.Skipped, ri.Testbed = r.Passed, r.Failed, r.Ms, r.Skipped, r.Testbed
 				}
 			}
 			t.Reports = append(t.Reports, ri)
@@ -707,4 +717,36 @@ func (f Folder) LibFiles() []string {
 		return nil
 	})
 	return out
+}
+
+// dirFiles lists the files directly in a folder of the tests folder (relative paths), at most 300.
+func (f Folder) dirFiles(dir string) []string {
+	out := []string{}
+	es, _ := os.ReadDir(filepath.Join(f.Root, dir))
+	for _, e := range es {
+		if !e.IsDir() && !strings.HasPrefix(e.Name(), ".") && len(out) < 300 {
+			out = append(out, dir+"/"+e.Name())
+		}
+	}
+	return out
+}
+
+// SaveText writes a testbed, template, suite or library file (not tests: those are checked first).
+func (f Folder) SaveText(rel, text string) error {
+	rel = filepath.ToSlash(strings.TrimSpace(rel))
+	ok := false
+	for _, d := range []string{"testbeds/", "templates/", "suites/", "lib/"} {
+		ok = ok || strings.HasPrefix(rel, d)
+	}
+	if !ok {
+		return fmt.Errorf("%s: only testbeds, templates, suites and lib files are saved this way", rel)
+	}
+	p, err := f.path(rel)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(p, []byte(text), 0o644)
 }

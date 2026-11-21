@@ -5,12 +5,13 @@ import { Ui } from './ui.service';
 import { tr } from './i18n';
 import { SECRET } from './history.service';
 import { TestCase, TestExpect, TestStep, TestTable } from './models';
+import { predictChecks } from './predict';
 
 /** A recorded step; for a terminal step the marker on its command line finds its output later. */
 export type RecPhase = 'setup' | 'steps' | 'cleanup';
 /** A recorded step; for a terminal step the marker on its command line finds its output later. undo: the
  *  suggested cleanup step (from the device type's undo rules, a POST's DELETE or an SNMP set's old value). */
-export interface RecStep { table?: TestTable; step: TestStep; phase: RecPhase; undo?: TestStep; undone?: boolean; tab?: string; term?: Terminal; marker?: IMarker; output?: string; status?: number; ms?: number; }
+export interface RecStep { auto?: number; table?: TestTable; step: TestStep; phase: RecPhase; undo?: TestStep; undone?: boolean; tab?: string; term?: Terminal; marker?: IMarker; output?: string; status?: number; ms?: number; }
 
 export type ExpectKind = 'contains' | 'field' | 'matches' | 'notContains' | 'save';
 
@@ -24,6 +25,8 @@ export class Recorder {
   readonly paused = signal(false);
   /** Saved sessions become {{roles}} (their paths kept as the test's defaults), so a testbed can point the test at other devices. */
   readonly roles = signal(true);
+  /** Add the checks a read step most likely needs, from the configuration recorded before it (on by default). */
+  readonly autoChecks = signal(true);
   /** Where new steps go: setup, the test's own steps or the cleanup. */
   readonly phase = signal<RecPhase>('steps');
   /** What Termwright saves before the test and puts back after it. */
@@ -47,6 +50,7 @@ export class Recorder {
     if (!this.recording() || !session || !cmd.trim()) return;
     if (SECRET.test(cmd)) { this.ui.toast(tr('Not recorded: the command may hold a secret'), 'info'); return; }
     this.fillOutput(tab);
+    this.autoCheck(this.lastOf(tab));
     const marker = term.registerMarker(0);
     const u = this.phase() === 'steps' ? undoOf(this.undoRules(deviceType), cmd) : '';
     this.push({ step: { run: { session, command: cmd.trim() } }, phase: this.phase(), undo: u ? { run: { session, command: u } } : undefined, tab, term, marker });
@@ -210,6 +214,16 @@ export class Recorder {
     return { name: this.name().trim() || tr('New test'), vars, ...extra, steps };
   }
 
+  /** Adds the predicted checks to a recorded read step whose output is complete (see predictChecks). */
+  autoCheck(i: number) {
+    const l = this.steps(), s = l[i];
+    if (!this.autoChecks() || i < 0 || !s?.step.run || s.auto !== undefined || !isRead(s.step)) return;
+    const out = this.output(s);
+    const configs = l.slice(0, i).filter(x => x.step.run && x.step.run.session === s.step.run!.session && !isRead(x.step) && x.phase !== 'cleanup').map(x => x.step.run!.command);
+    const add = predictChecks(configs, s.step.run.command, out, s.phase === 'cleanup', s.step.expect ?? []);
+    this.steps.update(m => m.map((x, j) => j === i ? { ...x, auto: add.length, step: { ...x.step, expect: [...(x.step.expect ?? []), ...add] } } : x));
+  }
+
   /** Checks worth adding to a read step: the names and numbers of the configuration commands recorded before it
    *  on the same device - in the steps, what they created must be in the output (contains); in the cleanup, what was
    *  removed must be gone (does not contain). */
@@ -253,6 +267,7 @@ export class Recorder {
 
   async save(): Promise<boolean> {
     if (!this.steps().length) { this.ui.toast(tr('Nothing recorded yet'), 'info'); return false; }
+    for (const tab of new Set(this.steps().map(s => s.tab).filter(Boolean))) this.autoCheck(this.lastOf(tab!));
     const bare = this.steps().filter(s => isRead(s.step) && !s.step.expect?.length).length;
     if (bare && !(await this.ui.confirm(tr('Save Without Checks?'), tr('{0} steps read the device but check nothing, so they pass whenever they run. Add a check: select the value and choose Expect this, or use a suggested check.', bare), tr('Save Anyway')))) return false;
     const file = await this.ui.input(tr('Save Test'), tr('File in the tests folder (cases/…)'), 'cases/' + slugFile(this.name()) + '.yaml');

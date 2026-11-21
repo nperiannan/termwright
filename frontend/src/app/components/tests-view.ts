@@ -1,5 +1,6 @@
 import { Component, OnDestroy, OnInit, computed, effect, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { NgTemplateOutlet } from '@angular/common';
 import { Backend, errText } from '../core/backend';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
@@ -10,211 +11,329 @@ import { AIChat } from '../core/ai-chat.service';
 
 type View = 'steps' | 'yaml' | 'go' | 'py' | 'tcl';
 type Phase = 'setup' | 'steps' | 'cleanup';
+type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
 
 /** The Tests tab: the tests folder's tree, the selected test (steps, YAML, generated Go) and the last run. */
 @Component({
   selector: 'app-tests-view',
-  imports: [FormsModule],
+  imports: [FormsModule, NgTemplateOutlet],
   template: `
     <div class="tv">
+      <nav class="rail" aria-label="Tests sections">
+        @for (r of rails; track r.k) {
+          <button type="button" [class.on]="section() === r.k" (click)="go(r.k)" [title]="r.t"><span class="ri">{{ r.i }}</span>{{ r.l }}</button>
+        }
+        <span class="sp"></span>
+        <button type="button" class="gitb" (click)="gitMenu($event)" [title]="git()?.repo ? 'Git: ' + git()?.changed + ' changed' : 'Git'"><span class="ri">⎇</span>{{ git()?.repo ? (git()?.branch || 'git') : 'Git' }}@if (git()?.ahead) { <i>↑{{ git()?.ahead }}</i> }@if (git()?.behind) { <i>↓{{ git()?.behind }}</i> }</button>
+      </nav>
       <aside class="side">
-        <div class="row"><button type="button" (click)="openFolder()" title="Use another folder as the tests folder">Open…</button><button type="button" (click)="clone()" title="Clone a Git repository of tests">Clone…</button>
-          <span class="sp"></span><button type="button" (click)="run([])" [disabled]="busy() || !tree()?.cases?.length" title="Run all tests">▶▶</button></div>
-        <label class="ocf" title="Whether each test cleans up after itself. Off: the next test starts from what this one configured"><span>After each test</span>
-          <select [(ngModel)]="cleanupMode" (ngModelChange)="keepOcf()"><option value="off">No cleanup - tests build on each other</option><option value="">Run its cleanup steps</option><option value="auto">Cleanup steps, else undo its configuration</option></select></label>
-        @if (cleanupMode !== 'off') {
-        <label class="ocf" title="What happens when a test's cleanup fails: the devices may not be clean for the next test"><span>On a failed cleanup</span>
-          <select [(ngModel)]="onCleanupFail" (ngModelChange)="keepOcf()"><option value="stop">Stop the run</option><option value="restore">Restore the saved configuration</option><option value="factory">Factory default</option></select></label>
-        }
-        @if (picked().length) { <div class="row"><button type="button" class="pri" (click)="run(picked())" [disabled]="busy()">▶ Run Selected ({{ picked().length }})</button><button type="button" class="lnk" (click)="picked.set([])">Clear</button></div> }
-        <div class="git" [title]="tree()?.root ?? ''">@if (git()?.repo) { <span>⎇ {{ git()?.branch }}</span><span>{{ git()?.changed }} changed</span>
-            @if (git()?.ahead) { <span title="Commits not pushed yet">↑{{ git()?.ahead }}</span> } @if (git()?.behind) { <span title="Commits on the remote not pulled yet">↓{{ git()?.behind }}</span> } } @else { <span>{{ folderName() }}</span> }
-          <span class="sp"></span><button type="button" class="lnk" (click)="backend.testsOpenInEditor('')" title="Open the folder in VS Code (or the file manager)">⧉</button></div>
-        @if (git()?.repo) {
-          <div class="row gb">
-            <button type="button" (click)="gitDo('pull')" [disabled]="busy() || !git()?.upstream" title="Get the remote's commits (fast-forward only)">Pull</button>
-            <button type="button" (click)="gitDo('commit')" [disabled]="busy() || !git()?.changed" title="Commit the tests, testbeds and library (not the reports)">Commit…</button>
-            <button type="button" (click)="gitDo('push')" [disabled]="busy() || (!!git()?.upstream && !git()?.ahead)" title="Send your commits to the remote">Push</button>
-          </div>
-        } @else if (git()?.hasGit) {
-          <button type="button" class="lnk sm" (click)="gitDo('init')" title="Keep the tests' history with Git (reports are left out)">Make it a Git repository</button>
-        }
-        <button type="button" class="aiw" (click)="writeWithAI()" title="Describe a test; the AI assistant writes it as YAML, saves it and can run it">✦ Write a Test with AI</button>
-        <div class="tree">
-          <div class="h">CASES</div>
-          @for (g of groups(); track g.dir) {
-            <div class="grp">{{ g.dir || 'cases' }}<button type="button" class="lnk" (click)="run(filesOf(g))" [disabled]="busy()" [title]="'Run the ' + g.cases.length + ' tests in ' + (g.dir || 'cases')">▶</button></div>
-            @for (c of g.cases; track c.file) {
-              <div class="itr"><input type="checkbox" [checked]="picked().includes(c.file)" (change)="pick(c.file)" [attr.aria-label]="'Select ' + c.name" title="Select to run with ▶ Run Selected" />
-              <button type="button" class="it" [class.sel]="c.file === sel() && !libSel()" (click)="select(c.file)" [title]="c.error || c.description || c.file">
-                <span class="dot" [class]="dot(c)">●</span>{{ c.name }}<span class="n">{{ c.steps }}</span></button></div>
+        @switch (section()) {
+          @case ('tests') {
+            <div class="stop">
+              <div class="row"><button type="button" class="pri grow" (click)="recordMore()">● Record a Test</button><button type="button" (click)="moreMenu($event)" title="Open, clone, write with AI, folder">⋯</button></div>
+              <input class="search" type="search" placeholder="Search tests" [ngModel]="q()" (ngModelChange)="q.set($event)" aria-label="Search tests" />
+              <div class="tags">@for (t of tagList(); track t.k) { <button type="button" class="tag" [class.on]="tag() === t.k" (click)="tag.set(t.k)">{{ t.l }} <i>{{ t.n }}</i></button> }</div>
+            </div>
+            <div class="list">
+              @for (g of groups(); track g.dir) {
+                <div class="fold"><button type="button" class="lnk fl" (click)="toggleFold(g.dir)">{{ folded().includes(g.dir) ? '▸' : '▾' }} {{ g.dir || 'cases' }}</button><span class="cnt">{{ g.cases.length }}</span>
+                  <button type="button" class="lnk" (click)="openRun(filesOf(g), g.dir || 'cases')" [title]="'Run the tests in ' + (g.dir || 'cases')">▶</button></div>
+                @if (!folded().includes(g.dir)) {
+                  @for (c of g.cases; track c.file) {
+                    <div class="case" [class.sel]="c.file === sel() && section() === 'tests'" (click)="select(c.file)" (keydown.enter)="select(c.file)" tabindex="0" role="button" [title]="c.error || c.description || c.file">
+                      <input type="checkbox" [checked]="picked().includes(c.file)" (click)="$event.stopPropagation()" (change)="pick(c.file)" [attr.aria-label]="'Select ' + c.name" />
+                      <span class="dot" [class]="dot(c)"></span><span class="cn">{{ c.name }}</span><span class="n">{{ c.steps }}</span></div>
+                  }
+                }
+              } @empty { <div class="empty-s">No tests yet.<br />Record one, or ⋯ → Write a Test with AI.</div> }
+            </div>
+            @if (picked().length) {
+              <div class="selbar"><span>{{ picked().length }} selected</span><span class="sp"></span><button type="button" class="ghost" (click)="picked.set([])">Clear</button><button type="button" class="pri" (click)="openRun(picked(), picked().length + ' tests')">▶ Run…</button></div>
+            } @else {
+              <div class="selbar"><span class="mut">{{ tree()?.cases?.length ?? 0 }} tests</span><span class="sp"></span><button type="button" (click)="openRun([], 'all tests')" [disabled]="!tree()?.cases?.length">▶ Run all…</button></div>
             }
-          } @empty { <div class="mut">No tests yet. Tests → Record a Test, or ask the AI assistant to write one.</div> }
-          <div class="h hb">TESTBEDS<button type="button" class="lnk" (click)="newTestbed()" title="New testbed from a session folder: a role for each session">+</button></div>
-          @for (b of tree()?.testbeds ?? []; track b) { <button type="button" class="it" (click)="backend.testsOpen(b)">{{ b.slice(9) }}</button> } @empty { <div class="mut">none - add files in testbeds/</div> }
-          <div class="h hb">SCHEDULES<button type="button" class="lnk" (click)="editSchedule(null)" title="Run tests by themselves while Termwright is open">+</button></div>
-          @for (s of schedules(); track s.id) {
-            <button type="button" class="it" [class.sel]="sched()?.id === s.id" (click)="editSchedule(s)" [title]="s.next ? 'Next: ' + s.next : 'Off'">
-              <span class="dot" [class]="s.state.last ? (s.state.failed || s.state.error ? 'dot f' : 'dot p') : 'dot'">●</span>{{ s.name }}<span class="n">{{ s.off ? 'off' : s.when }}</span></button>
-          } @empty { <div class="mut">none</div> }
-          <div class="h">LIB</div>
-          @for (l of tree()?.lib ?? []; track l) { <button type="button" class="it" [class.sel]="libSel() === l" (click)="openLib(l)" title="The helpers the generated tests use, and your own">{{ l.slice(4) }}</button> } @empty { <div class="mut">none</div> }
-          <div class="h">REPORTS</div>
-          @for (r of (tree()?.reports ?? []).slice(0, 12); track r.dir) {
-            <button type="button" class="it" (click)="backend.testsOpen(r.dir)" title="Open the HTML report">{{ when(r.dir) }} <span [class]="r.failed ? 'bad' : 'ok'">{{ r.passed }}/{{ r.passed + r.failed }}</span></button>
           }
-        </div>
+          @case ('runs') {
+            <div class="stop"><b>Runs</b><span class="mut">past runs of this tests folder, newest first</span></div>
+            <div class="list">
+              @for (r of runList(); track r.dir) {
+                @if (r.day) { <div class="fold"><span>{{ r.day }}</span></div> }
+                <div class="case" [class.sel]="runSel() === r.dir" (click)="openRunReport(r.dir)" (keydown.enter)="openRunReport(r.dir)" tabindex="0" role="button">
+                  <span class="dot" [class]="r.failed ? 'dot f' : 'dot p'"></span><span class="cn">{{ r.time }}@if (r.testbed) { <span class="mut"> · {{ base(r.testbed) }}</span> }</span><span class="n">{{ r.passed }}/{{ r.passed + r.failed + (r.skipped ?? 0) }}</span></div>
+              } @empty { <div class="empty-s">No runs yet.</div> }
+            </div>
+          }
+          @case ('schedules') {
+            <div class="stop"><div class="row"><b class="grow">Schedules</b><button type="button" (click)="editSchedule(null)">+ New</button></div><span class="mut">run by themselves while Termwright is open</span></div>
+            <div class="list">
+              @for (s of schedules(); track s.id) {
+                <div class="case" [class.sel]="sched()?.id === s.id" (click)="editSchedule(s)" (keydown.enter)="editSchedule(s)" tabindex="0" role="button" [title]="s.next ? 'Next: ' + s.next : 'Off'">
+                  <span class="dot" [class]="s.state.last ? (s.state.failed || s.state.error ? 'dot f' : 'dot p') : 'dot'"></span><span class="cn">{{ s.name }}</span><span class="n">{{ s.off ? 'off' : s.when }}</span></div>
+              } @empty { <div class="empty-s">No schedules.</div> }
+            </div>
+          }
+          @case ('testbeds') {
+            <div class="stop"><div class="row"><b class="grow">Testbeds</b><button type="button" (click)="newTestbed()" title="A role for each session of a session folder">+ New</button></div><span class="mut">which devices a run uses</span></div>
+            <div class="list">
+              @for (b of tree()?.testbeds ?? []; track b) { <div class="case" [class.sel]="fileSel() === b" (click)="openFile(b)" (keydown.enter)="openFile(b)" tabindex="0" role="button"><span class="cn">{{ base(b) }}</span></div> } @empty { <div class="empty-s">No testbeds.</div> }
+            </div>
+          }
+          @case ('library') {
+            <div class="stop"><b>Library</b><span class="mut">helpers of the generated code, and output templates</span></div>
+            <div class="list">
+              <div class="fold"><span>templates</span><span class="cnt">{{ tree()?.templates?.length ?? 0 }}</span></div>
+              @for (l of tree()?.templates ?? []; track l) { <div class="case" [class.sel]="fileSel() === l" (click)="openFile(l)" (keydown.enter)="openFile(l)" tabindex="0" role="button"><span class="cn">{{ l.slice(10) }}</span></div> }
+              <div class="fold"><span>lib</span><span class="cnt">{{ tree()?.lib?.length ?? 0 }}</span></div>
+              @for (l of tree()?.lib ?? []; track l) { <div class="case" [class.sel]="fileSel() === l" (click)="openFile(l)" (keydown.enter)="openFile(l)" tabindex="0" role="button"><span class="cn">{{ l.slice(4) }}</span></div> }
+            </div>
+          }
+        }
       </aside>
       <section class="main">
-        @if (sched(); as s) {
-          <header><b class="ttl">{{ s.id ? 'Schedule' : 'New Schedule' }}</b><span class="mut">runs while Termwright is open; a failed run shows a notification</span></header>
-          <div class="body sf">
-            <label><span>Name</span><input [(ngModel)]="s.name" placeholder="Nightly smoke tests" /></label>
-            <label><span>Tests</span><select [(ngModel)]="schedWhat"><option value="all">All tests</option>@if (sel()) { <option value="sel">{{ sel() }}</option> }@if (s.files?.length && schedWhat === 'keep') { <option value="keep">{{ s.files?.join(', ') }}</option> }</select></label>
-            <label><span>Testbed</span><select [(ngModel)]="s.testbed"><option value="">None</option>@for (b of tree()?.testbeds ?? []; track b) { <option [value]="b">{{ b.slice(9) }}</option> }</select></label>
-            <label><span>Repeat</span><select [(ngModel)]="s.repeat"><option value="daily">Daily</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly</option><option value="hours">Every N hours</option></select></label>
-            @if (s.repeat === 'hours') { <label><span>Every</span><input type="number" min="1" max="168" [(ngModel)]="s.hours" /> hours</label> }
-            @else {
-              @if (s.repeat === 'weekly') { <label><span>Day</span><select [(ngModel)]="s.day">@for (d of days; track $index) { <option [ngValue]="$index">{{ d }}</option> }</select></label> }
-              <label><span>At</span><input type="time" [(ngModel)]="s.at" /></label>
-            }
-            <label><span>Cleanup</span><select [(ngModel)]="s.cleanup"><option [ngValue]="undefined">Run each test's cleanup steps</option><option value="off">No cleanup - tests build on each other</option><option value="auto">Cleanup steps, else undo its configuration</option></select></label>
-            <label><span>Failed cleanup</span><select [(ngModel)]="s.onCleanupFail"><option [ngValue]="undefined">Stop the run</option><option value="restore">Restore the saved configuration</option><option value="factory">Factory default</option></select></label>
-            <label class="ck"><input type="checkbox" [(ngModel)]="s.production" /> May use production sessions</label>
-            <label class="ck"><input type="checkbox" [(ngModel)]="s.off" /> Off</label>
-            @if (schedView(); as v) { @if (v.state.last) { <p class="mut">Last run {{ v.state.last.slice(0, 16).replace('T', ' ') }}: {{ v.state.error || (v.state.passed + ' passed, ' + v.state.failed + ' failed') }}@if (v.state.dir) { · <button type="button" class="lnk" (click)="backend.testsOpen(v.state.dir!)">report</button> }</p> } }
-            <div class="row"><button type="button" (click)="sched.set(null)">Close</button><span class="sp"></span>
-              @if (s.id) { <button type="button" (click)="removeSchedule(s)">Remove</button><button type="button" (click)="runScheduleNow(s)">Run Now</button> }
-              <button type="button" class="pri" (click)="saveSchedule(s)">Save</button></div>
-          </div>
-        } @else if (libSel(); as lf) {
-          <header><b class="ttl">{{ lf }}</b><span class="mut">library - shared by the tests</span><span class="sp"></span><button type="button" (click)="backend.testsOpenInEditor(lf)">Open in VS Code</button></header>
-          <div class="body"><pre class="code ro">{{ goSrc() }}</pre>
-            <div class="row"><span class="mut">Files in lib/ that Termwright writes (twtest, run_tests) are written again when it updates; keep your own helpers in other files.</span></div></div>
-        } @else if (sel(); as file) {
-          <header>
-            <b class="ttl">{{ test()?.name || file }}</b><span class="mut fl">{{ file }}</span><span class="sp"></span>
-            <div class="seg">
-              @for (v of views; track v.k) { <button type="button" [class.on]="view() === v.k" (click)="setView(v.k)">{{ v.l }}</button> }
-            </div>
-            <select [(ngModel)]="testbed" title="Testbed: its values fill the {{ '{{variables}}' }}"><option value="">No testbed</option>@for (b of tree()?.testbeds ?? []; track b) { <option [value]="b">{{ b.slice(9) }}</option> }</select>
-            <button type="button" class="pri" (click)="run([file])" [disabled]="busy()">{{ busy() ? 'Running…' : '▶ Run' }}</button>
-          </header>
-          <div class="body">
-            @switch (view()) {
-              @case ('steps') {
-                @if (test()?.description) { <p class="mut">{{ test()?.description }}</p> }
-                @if (test()?.params?.length) { <p class="mut">Runs {{ test()?.params?.length }} times: {{ paramsText() }}</p> }
-                @if (varsText()) { <p class="mut">Defaults: {{ varsText() }} - a testbed's values win.</p> }
-                @if (test()?.restore?.length) { <p class="mut">Puts back afterwards: {{ restoreText() }}</p> }
-                @for (r of restoreRes(); track $index) { <div class="rr2" [class.bad]="!r.passed"><span>{{ r.passed ? '✓' : '✗' }}</span> {{ r.name }} <span class="mut">{{ r.target }}</span>@if (r.error) { <span> - {{ r.error }}</span> }</div> }
-                @if (last()[sel()]?.cleanupFailed) { <div class="warnbox">The cleanup failed: the device may not be clean for the next test.</div> }
-                @if (draft(); as d) {
-                  @for (ph of phases; track ph.k) {
-                    <div class="phh">{{ ph.l }} <button type="button" class="lnk" (click)="addStep(ph.k)">+ Step</button></div>
-                    @for (s of listOf(d, ph.k); track $index; let i = $index; let lastI = $last) {
-                      <div class="st ed" [class.cl]="ph.k === 'cleanup'" [class.su]="ph.k === 'setup'">
-                        <div class="row"><b>{{ i + 1 }}</b>
-                          @if (s.run) { <input class="ses" [(ngModel)]="s.run.session" placeholder="session" aria-label="Session" /><input class="cmdi" [(ngModel)]="s.run.command" placeholder="command" aria-label="Command" /> }
-                          @else if (s.http) { <select [(ngModel)]="s.http.method" aria-label="Method">@for (m of methods; track m) { <option [value]="m">{{ m }}</option> }</select><input class="cmdi" [(ngModel)]="s.http.url" placeholder="URL" aria-label="URL" /> }
-                          @else { <span class="cmd fl">{{ text(s) }}</span><span class="sp"></span> }
-                          <button type="button" class="lnk" (click)="moveStep(ph.k, i, -1)" [disabled]="i === 0" title="Move up">↑</button><button type="button" class="lnk" (click)="moveStep(ph.k, i, 1)" [disabled]="lastI" title="Move down">↓</button><button type="button" class="lnk" (click)="removeStep(ph.k, i)" title="Remove the step">✕</button>
-                        </div>
-                        <div class="row opts"><label>Timeout <input type="number" min="0" class="num" [(ngModel)]="s.timeout" /> s</label>
-                          <label><input type="checkbox" [(ngModel)]="s.continueOnFail" /> Go on when it fails</label>
-                          @if (s.run) { <label title="Do not fail the step when the device answers with an error message"><input type="checkbox" [(ngModel)]="s.ignoreErrors" /> Ignore device errors</label>
-                            <label title="Turn the output into a table with a TextFSM template: auto (templates/index) or a file in templates/">Parse <input class="pin" [(ngModel)]="s.run.parse" placeholder="off" list="tw-parse" /></label> }</div>
-                        <div>@for (e of s.expect ?? []; track $index; let j = $index) { <span class="chip">{{ label(e) }} <button type="button" class="x" (click)="removeCheck(s, j)" title="Remove the check">×</button></span> }
-                          @if (ck(ph.k, i); as c) {
-                            <span class="addck"><select [(ngModel)]="c.k" aria-label="Check">@for (k of checkKinds(s); track k.k) { <option [value]="k.k">{{ k.l }}</option> }</select>
-                              <input [(ngModel)]="c.v" [placeholder]="checkHint(c.k)" aria-label="Value" (keydown.enter)="addCheck(s, c)" /><button type="button" (click)="addCheck(s, c)" [disabled]="!c.v.trim()">+ Check</button></span>
-                          }</div>
-                      </div>
-                    } @empty { <div class="mut">no {{ ph.l.toLowerCase() }} steps</div> }
+        @switch (section()) {
+          @case ('runs') {
+            @if (runRep(); as rep) {
+              <div class="head"><div class="crumb">{{ rep.dir }} · {{ rep.testbed ? 'testbed ' + base(rep.testbed) : "the tests' own sessions" }} · {{ rep.cleanup === 'off' ? 'no cleanup' : rep.cleanup === 'auto' ? 'cleanup or undo' : 'cleanup steps' }} · {{ dur(rep.ms) }}</div>
+                <div class="title"><h1>Run · {{ when(rep.dir) }}</h1>
+                  <span class="pill" [class]="rep.failed ? 'pill f' : rep.skipped ? 'pill s' : 'pill p'">{{ rep.failed ? rep.failed + ' failed' : rep.skipped ? rep.skipped + ' skipped' : 'all passed' }}</span>
+                  <span class="sp"></span>
+                  <button type="button" (click)="backend.testsOpen(rep.dir)">HTML report</button><button type="button" (click)="backend.testsOpen(rep.dir + '/junit.xml')">JUnit</button>
+                  @if (failedFiles(rep).length) { <button type="button" class="pri" (click)="openRun(failedFiles(rep), 'the failed tests')">▶ Run failed again</button> }
+                </div></div>
+              <div class="body">
+                <div class="kpis">
+                  <div class="kpi"><b class="kok">{{ rep.passed }}</b><span>passed</span></div><div class="kpi"><b class="kbad">{{ rep.failed }}</b><span>failed</span></div>
+                  <div class="kpi"><b class="kwarn">{{ rep.skipped ?? 0 }}</b><span>skipped</span></div><div class="kpi"><b>{{ unchecked(rep) }}</b><span>steps not checked</span></div></div>
+                <div class="bar"><i class="okb" [style.flex]="rep.passed"></i><i class="badb" [style.flex]="rep.failed"></i><i class="warnb" [style.flex]="rep.skipped ?? 0"></i></div>
+                @if (rep.recovery?.length) { <div class="sec"><div class="sh">Bringing the devices back</div>@for (s of rep.recovery; track $index) { <div class="trow" [class.bad]="!s.passed"><span>{{ s.passed ? '✓' : '✗' }}</span><span>{{ s.name }}</span><span class="mut">{{ s.target }} {{ s.error }}</span></div> }</div> }
+                <div class="sec"><div class="rhd"><span></span><span>Test</span><span>First problem</span><span class="r">Time</span></div>
+                  @for (r of rep.results; track $index) {
+                    <div class="rrow" (click)="r.file && openTest(r.file)" (keydown.enter)="r.file && openTest(r.file)" tabindex="0" role="button">
+                      <span [class]="r.skipped ? 'warn' : r.passed ? 'ok' : 'bad'">{{ r.skipped ? '○' : r.passed ? '✓' : '✗' }}</span>
+                      <span>{{ r.case }}@if (r.cleanupFailed) { <span class="pill f sm">cleanup</span> }</span>
+                      <span class="mut">{{ r.passed ? notChecked(r) : failText(r) }}@if (!r.passed && !r.skipped) { · <button type="button" class="lnk" (click)="$event.stopPropagation(); explain(r)">✦ Explain</button> }</span>
+                      <span class="r mut">{{ dur(r.ms) }}</span></div>
                   }
-                  <datalist id="tw-parse"><option value="auto"></option></datalist>
-                  <div class="row"><span class="mut">Saving writes the test's YAML and its Go, Python and TCL code again.</span><span class="sp"></span><button type="button" (click)="draft.set(null)">Cancel</button><button type="button" class="pri" (click)="saveDraft()">Save</button></div>
-                } @else {
-                @for (row of rows(); track $index) {
-                  @if ($index === 0 || rows()[$index - 1].phase !== row.phase) { <div class="phh">{{ row.phase === 'setup' ? 'Setup' : row.phase === 'cleanup' ? (cleanupMode === 'off' ? 'Cleanup - off for runs from here (After each test)' : 'Cleanup - runs after the steps, also when one failed') : 'Steps' }}</div> }
-                  <div class="st" [class.f]="res(row)?.passed === false && !res(row)?.skipped" [class.cl]="row.phase === 'cleanup'" [class.su]="row.phase === 'setup'">
-                    <div><b>{{ row.i + 1 }}</b> <span class="mut">{{ row.s.run?.session ?? row.s.http?.session ?? row.s.snmp?.session ?? '' }} ›</span> <span class="cmd">{{ text(row.s) }}</span>
-                      @if (res(row); as r) { <span class="ms">{{ r.skipped ? 'skipped' : r.ms + ' ms' }}</span> }</div>
-                    @for (e of row.s.expect ?? []; track $index; let j = $index) {
-                      <span class="chip" [class.b]="res(row)?.checks?.[j]?.passed === false">{{ res(row)?.checks?.[j]?.passed === false ? '✗' : '✓' }} {{ label(e) }}@if (res(row)?.checks?.[j]?.passed === false) { · got {{ res(row)?.checks?.[j]?.got }} }</span>
-                    }
-                    @for (v of row.s.save ?? []; track $index) { <span class="chip v">{{ '{{' + v.var + '}}' }}</span> }
-                    @if (res(row); as r) { @if (r.unchecked && r.passed && !r.skipped) { <span class="chip u" title="The step has no checks: it passes when the command runs and the device does not answer with an error">○ ran, nothing checked</span> } }
-                    @if (res(row)?.error) { <div class="bad">{{ res(row)?.error }}</div> }
-                    @if (res(row); as r) { @if (r.table; as tb) { <details class="out"><summary>Table · {{ tb.rows.length }} rows</summary><div class="tbw"><table class="ptab"><tr>@for (h of tb.header; track $index) { <th>{{ h }}</th> }</tr>@for (x of tb.rows.slice(0, 200); track $index) { <tr>@for (c of x; track $index) { <td>{{ c }}</td> }</tr> }</table></div></details> } }
-                    @if (res(row); as r) { @if (r.output && !r.skipped) { <details class="out"><summary>Output</summary><pre (contextmenu)="outMenu($event, row)" title="Select text and right-click to check it">{{ r.output }}</pre></details> } }
+                </div>
+              </div>
+            } @else { <div class="empty mut">Select a run.</div> }
+          }
+          @case ('schedules') {
+            @if (sched(); as s) {
+              <div class="head"><div class="crumb">schedules</div><div class="title"><h1>{{ s.id ? s.name || 'Schedule' : 'New Schedule' }}</h1><span class="mut">runs while Termwright is open; a failed run shows a notification</span></div></div>
+              <div class="body"><div class="form">
+                <label><span>Name</span><input [(ngModel)]="s.name" placeholder="Nightly smoke tests" /></label>
+                <label><span>Tests</span><select [(ngModel)]="schedWhat"><option value="all">All tests</option>@if (sel()) { <option value="sel">{{ sel() }}</option> }@if (picked().length) { <option value="picked">The {{ picked().length }} selected tests</option> }@if (s.files?.length && schedWhat === 'keep') { <option value="keep">{{ s.files?.join(', ') }}</option> }</select></label>
+                <label><span>Testbed</span><select [(ngModel)]="s.testbed"><option value="">The tests' own sessions</option>@for (b of tree()?.testbeds ?? []; track b) { <option [value]="b">{{ base(b) }}</option> }</select></label>
+                <label><span>Repeat</span><select [(ngModel)]="s.repeat"><option value="daily">Daily</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly</option><option value="hours">Every N hours</option></select></label>
+                @if (s.repeat === 'hours') { <label><span>Every</span><input type="number" min="1" max="168" [(ngModel)]="s.hours" /> hours</label> }
+                @else {
+                  @if (s.repeat === 'weekly') { <label><span>Day</span><select [(ngModel)]="s.day">@for (d of days; track $index) { <option [ngValue]="$index">{{ d }}</option> }</select></label> }
+                  <label><span>At</span><input type="time" [(ngModel)]="s.at" /></label>
+                }
+                <label><span>After each test</span><select [(ngModel)]="s.cleanup"><option [ngValue]="undefined">Run its cleanup steps</option><option value="off">No cleanup - tests build on each other</option><option value="auto">Cleanup steps, else undo its configuration</option></select></label>
+                <label><span>If a cleanup fails</span><select [(ngModel)]="s.onCleanupFail"><option [ngValue]="undefined">Stop the run - skip the rest</option><option value="restore">Restore the saved configuration</option><option value="factory">Factory default</option></select></label>
+                <label class="ck"><input type="checkbox" [(ngModel)]="s.production" /> May use production sessions</label>
+                <label class="ck"><input type="checkbox" [(ngModel)]="s.off" /> Off</label>
+                @if (schedView(); as v) { @if (v.state.last) { <p class="mut">Last run {{ v.state.last.slice(0, 16).replace('T', ' ') }}: {{ v.state.error || (v.state.passed + ' passed, ' + v.state.failed + ' failed') }}@if (v.state.dir) { · <button type="button" class="lnk" (click)="openRunReport(v.state.dir!)">open</button> }</p> } }
+                <div class="row"><span class="sp"></span>@if (s.id) { <button type="button" (click)="removeSchedule(s)">Remove</button><button type="button" (click)="runScheduleNow(s)">Run Now</button> }<button type="button" class="pri" (click)="saveSchedule(s)">Save</button></div>
+              </div></div>
+            } @else { <div class="empty mut">Select a schedule, or + New.</div> }
+          }
+          @case ('testbeds') { <ng-container *ngTemplateOutlet="fileView" /> }
+          @case ('library') { <ng-container *ngTemplateOutlet="fileView" /> }
+          @default {
+            @if (sel() && test(); as t) {
+              <div class="head">
+                <div class="crumb">{{ sel() }}</div>
+                <div class="title"><h1>{{ t.name || sel() }}</h1>
+                  @if (last()[sel()]; as lr) { <span class="pill" [class]="lr.skipped ? 'pill s' : lr.passed ? 'pill p' : 'pill f'">{{ lr.skipped ? 'skipped' : lr.passed ? 'passed' : lr.cleanupFailed ? 'failed (cleanup)' : 'failed' }} · {{ ago(lr.start) }}</span> } @else { <span class="pill">not run yet</span> }
+                  @for (g of t.tags ?? []; track g) { <span class="tag">{{ g }}</span> }
+                  <span class="sp"></span>
+                  @if (!draft()) { <button type="button" (click)="edit()">✎ Edit</button> }
+                  <button type="button" (click)="testMenu($event)" title="Rename, duplicate, delete, open">⋯</button>
+                  <button type="button" class="pri" (click)="openRun([sel()], t.name || sel())" [disabled]="busy()">{{ busy() ? 'Running…' : '▶ Run…' }}</button>
+                </div>
+                <div class="tabs">
+                  <button type="button" [class.on]="view() === 'steps'" (click)="setView('steps')">Steps</button>
+                  <button type="button" [class.on]="view() !== 'steps'" (click)="setView(view() === 'steps' ? 'yaml' : view())">Code</button>
+                  @if (view() !== 'steps') { <span class="seg">@for (v of views.slice(1); track v.k) { <button type="button" [class.on]="view() === v.k" (click)="setView(v.k)">{{ v.l }}</button> }</span> }
+                </div>
+              </div>
+              <div class="body">
+                @if (view() === 'steps') {
+                  @if (t.description) { <p class="mut">{{ t.description }}</p> }
+                  <div class="meta">
+                    @if (varsText()) { <span>Defaults <b>{{ varsText() }}</b></span> }
+                    @if (t.params?.length) { <span>Runs {{ t.params?.length }}× <b>{{ paramsText() }}</b></span> }
+                    @if (t.restore?.length) { <span>Afterwards <b>{{ restoreText() }} put back</b></span> }
+                    <span>After each test <b>{{ cleanupLabel() }}</b></span>
                   </div>
+                  @for (r of restoreRes(); track $index) { <div class="trow" [class.bad]="!r.passed"><span>{{ r.passed ? '✓' : '✗' }}</span><span>{{ r.name }}</span><span class="mut">{{ r.target }} {{ r.error }}</span></div> }
+                  @if (draft(); as d) {
+                    @for (ph of phases; track ph.k) {
+                      <div class="sec">
+                        <div class="sh">{{ ph.l }}<span class="sp"></span><button type="button" class="lnk" (click)="addStep(ph.k)">+ Step</button></div>
+                        @for (s of listOf(d, ph.k); track $index; let i = $index; let lastI = $last) {
+                          <div class="ed">
+                            <div class="row"><b class="num">{{ i + 1 }}</b>
+                              @if (s.run) { <input class="ses" [(ngModel)]="s.run.session" placeholder="session" aria-label="Session" /><input class="cmdi" [(ngModel)]="s.run.command" placeholder="command" aria-label="Command" /> }
+                              @else if (s.http) { <select [(ngModel)]="s.http.method" aria-label="Method">@for (m of methods; track m) { <option [value]="m">{{ m }}</option> }</select><input class="cmdi" [(ngModel)]="s.http.url" placeholder="URL" aria-label="URL" /> }
+                              @else { <span class="cmd fl">{{ text(s) }}</span><span class="sp"></span> }
+                              <button type="button" class="lnk" (click)="moveStep(ph.k, i, -1)" [disabled]="i === 0" title="Move up">↑</button><button type="button" class="lnk" (click)="moveStep(ph.k, i, 1)" [disabled]="lastI" title="Move down">↓</button><button type="button" class="lnk" (click)="removeStep(ph.k, i)" title="Remove the step">✕</button>
+                            </div>
+                            <div class="row opts"><label>Timeout <input type="number" min="0" class="num2" [(ngModel)]="s.timeout" /> s</label>
+                              <label><input type="checkbox" [(ngModel)]="s.continueOnFail" /> Go on when it fails</label>
+                              @if (s.run) { <label title="Do not fail the step when the device answers with an error message"><input type="checkbox" [(ngModel)]="s.ignoreErrors" /> Ignore device errors</label>
+                                <label title="Turn the output into a table with a TextFSM template: auto (templates/index) or a file in templates/">Parse <input class="pin" [(ngModel)]="s.run.parse" placeholder="off" list="tw-parse" /></label> }</div>
+                            <div class="chips">@for (e of s.expect ?? []; track $index; let j = $index) { <span class="chip">{{ label(e) }} <button type="button" class="x" (click)="removeCheck(s, j)" title="Remove the check">×</button></span> }
+                              @if (ck(ph.k, i); as c) {
+                                <span class="addck"><select [(ngModel)]="c.k" aria-label="Check">@for (k of checkKinds(s); track k.k) { <option [value]="k.k">{{ k.l }}</option> }</select>
+                                  <input [(ngModel)]="c.v" [placeholder]="checkHint(c.k)" aria-label="Value" (keydown.enter)="addCheck(s, c)" /><button type="button" (click)="addCheck(s, c)" [disabled]="!c.v.trim()">+ Check</button></span>
+                              }</div>
+                          </div>
+                        } @empty { <div class="none">no {{ ph.l.toLowerCase() }} steps</div> }
+                      </div>
+                    }
+                    <datalist id="tw-parse"><option value="auto"></option></datalist>
+                    <div class="row"><span class="mut">Saving writes the test's YAML and its Go, Python and TCL code again.</span><span class="sp"></span><button type="button" (click)="draft.set(null)">Cancel</button><button type="button" class="pri" (click)="saveDraft()">Save</button></div>
+                  } @else {
+                    @for (ph of phases; track ph.k) {
+                      @if (ph.k === 'steps' || listOf(t, ph.k).length) {
+                        <div class="sec">
+                          <div class="sh">{{ ph.k === 'cleanup' ? 'Cleanup' : ph.l }}<span class="sp"></span><span class="norm">{{ secSummary(ph.k) }}</span></div>
+                          <div class="srow hd"><span>#</span><span>Device</span><span>Command</span><span>Checks</span><span>Result</span><span class="r">Time</span></div>
+                          @for (s of listOf(t, ph.k); track $index; let i = $index) {
+                            @let r = resOf(ph.k, i);
+                            <div class="srow" [class.f]="r && !r.passed && !r.skipped" [class.open]="isOpen(ph.k, i)" (click)="toggleRow(ph.k, i)" (keydown.enter)="toggleRow(ph.k, i)" tabindex="0" role="button">
+                              <span class="mut">{{ i + 1 }}</span><span class="dev" [title]="target(s)">{{ shortDev(target(s)) }}</span><span class="cmd">{{ text(s) }}</span>
+                              <span class="chips">@for (e of s.expect ?? []; track $index; let j = $index) { <span class="chip" [class.b]="r?.checks?.[j]?.passed === false">{{ r?.checks?.[j]?.passed === false ? '✗' : r ? '✓' : '' }} {{ label(e) }}</span> }
+                                @if (!(s.expect?.length)) { <span class="chip w" title="Without checks the step passes when the device accepts the command">○ not checked</span> }</span>
+                              <span [class]="r ? (r.skipped ? 'mut' : r.passed ? 'ok' : 'bad') : 'mut'">{{ r ? (r.skipped ? '– skipped' : r.passed ? '✓ passed' : '✗ failed') : '' }}</span>
+                              <span class="r mut">{{ r && !r.skipped ? dur(r.ms) : '' }}</span>
+                            </div>
+                            @if (isOpen(ph.k, i)) {
+                              <div class="exp">
+                                <div>
+                                  <h4>Checks - expected vs got</h4>
+                                  @if (r?.checks?.length) { <div class="ev">@for (c of r?.checks ?? []; track $index) { <span [class]="c.passed ? 'ok' : 'bad'">{{ c.passed ? '✓' : '✗' }}</span><span>{{ c.what }}</span><span [class.bad]="!c.passed">{{ c.got }}</span> }</div> }
+                                  @else { <p class="mut">{{ s.expect?.length ? 'Run the test to see what came back.' : 'No checks: select text in the output and right-click to add one.' }}</p> }
+                                  @if (r?.error) { <p class="bad">{{ r?.error }}</p> }
+                                  @if (r && !r.passed && !r.skipped && last()[sel()]; as lr) { <div class="row"><button type="button" (click)="explain(lr)">✦ Explain</button></div> }
+                                </div>
+                                <div>
+                                  @if (r?.table; as tb) { <h4>Table · {{ tb.rows.length }} rows</h4><div class="tbw"><table class="ptab"><tr>@for (h of tb.header; track $index) { <th>{{ h }}</th> }</tr>@for (x of tb.rows.slice(0, 200); track $index) { <tr>@for (c of x; track $index) { <td>{{ c }}</td> }</tr> }</table></div> }
+                                  <h4>Output · select text, right-click to check it</h4>
+                                  @if (r?.output) { <pre (contextmenu)="outMenu($event, { i: i, phase: ph.k === 'steps' ? '' : ph.k })">{{ r?.output }}</pre> } @else { <p class="mut">{{ r ? 'no output' : 'not run yet' }}</p> }
+                                </div>
+                              </div>
+                            }
+                          }
+                        </div>
+                      }
+                    }
+                  }
+                } @else if (view() === 'yaml') {
+                  <textarea class="code" [(ngModel)]="yaml" spellcheck="false" aria-label="Test YAML"></textarea>
+                  <div class="row"><span class="mut">Saving checks the test and writes its Go, Python and TCL code again.</span><span class="sp"></span><button type="button" (click)="setView('yaml')">Revert</button><button type="button" class="pri" (click)="saveYaml()">Save</button></div>
+                } @else {
+                  <pre class="code ro">{{ goSrc() }}</pre>
+                  <div class="row"><span class="mut">Written from the test - edit the steps or the YAML, not this file. {{ runHint() }}</span><span class="sp"></span><button type="button" (click)="backend.testsOpenInEditor(view() === 'go' ? goFile() : view() === 'py' ? pyFile() : tclFile())">Open in VS Code</button></div>
                 }
-                <div class="row"><button type="button" (click)="edit()" title="Change, add, move or remove steps and checks">✎ Edit Steps</button><button type="button" (click)="recordMore()">● Record a New Test</button>
-                  @if (last()[file]?.passed === false) { <button type="button" (click)="explain(last()[file])" title="Ask the AI assistant why this test failed">✦ Explain the Failure</button> }
-                  <span class="sp"></span><button type="button" (click)="rename(false)" title="Move the test to another name or folder">Rename…</button><button type="button" (click)="rename(true)" title="Copy the test under a new name">Duplicate…</button><button type="button" (click)="remove()" title="Move the test and its code to .removed/ in the tests folder">Delete</button></div>
-                }
-              }
-              @case ('yaml') {
-                <textarea class="code" [(ngModel)]="yaml" spellcheck="false" aria-label="Test YAML"></textarea>
-                <div class="row"><span class="mut">Saving checks the test and writes its Go test again.</span><span class="sp"></span><button type="button" (click)="setView('yaml')">Revert</button><button type="button" class="pri" (click)="saveYaml()">Save</button></div>
-              }
-              @case ('go') {
-                <pre class="code ro">{{ goSrc() }}</pre>
-                <div class="row"><span class="mut">Generated from the YAML - edit the YAML, not this file.@if (git()?.hasGo) { Run outside Termwright: go test ./cases/... in the tests folder. }</span><span class="sp"></span><button type="button" (click)="backend.testsOpenInEditor(goFile())">Open in VS Code</button></div>
-              }
-              @case ('py') {
-                <pre class="code ro">{{ goSrc() }}</pre>
-                <div class="row"><span class="mut">Generated from the YAML - edit the YAML, not this file. Run: python lib/python/run_tests.py (or pytest cases) in the tests folder.</span><span class="sp"></span><button type="button" (click)="backend.testsOpenInEditor(pyFile())">Open in VS Code</button></div>
-              }
-              @case ('tcl') {
-                <pre class="code ro">{{ goSrc() }}</pre>
-                <div class="row"><span class="mut">Generated from the YAML - edit the YAML, not this file. Run: tclsh lib/tcl/run_tests.tcl in the tests folder (TAP output).</span><span class="sp"></span><button type="button" (click)="backend.testsOpenInEditor(tclFile())">Open in VS Code</button></div>
-              }
+              </div>
+            } @else { <div class="empty mut">Select a test, or record one.</div> }
+          }
+        }
+        <ng-template #fileView>
+          @if (fileSel(); as fp) {
+            <div class="head"><div class="crumb">{{ fp }}</div><div class="title"><h1>{{ base(fp) }}</h1><span class="sp"></span><button type="button" (click)="backend.testsOpenInEditor(fp)">Open in VS Code</button><button type="button" class="pri" (click)="saveFile()">Save</button></div></div>
+            <div class="body"><textarea class="code" [(ngModel)]="fileText" spellcheck="false" [attr.aria-label]="fp"></textarea>
+              <div class="row"><span class="mut">{{ fp.startsWith('lib/') ? 'Termwright writes twtest and run_tests again when it is updated: keep your own helpers in other files.' : fp.startsWith('templates/') ? 'TextFSM templates; the index says which command each one parses (ntc-templates format).' : 'Roles and values: role: Folder/session, name: value.' }}</span></div></div>
+          } @else { <div class="empty mut">Select a file.</div> }
+        </ng-template>
+      </section>
+      @if (runFiles(); as rf) {
+        <div class="scrim" (click)="runFiles.set(null)" aria-hidden="true"></div>
+        <aside class="drawer" role="dialog" aria-label="Run tests">
+          <h2>Run {{ runLabel() }}</h2>
+          <span class="mut">{{ rf.length ? rf.length + (rf.length === 1 ? ' test' : ' tests') : 'every test in the folder' }}</span>
+          <label class="fld"><span>Testbed - which devices</span><select [(ngModel)]="testbed"><option value="">The tests' own sessions</option>@for (b of tree()?.testbeds ?? []; track b) { <option [value]="b">{{ base(b) }}</option> }</select></label>
+          <div class="fld"><span>After each test</span>
+            @for (o of cleanupOpts; track o.k) {
+              <label class="radio" [class.on]="cleanupMode === o.k"><input type="radio" name="twcl" [value]="o.k" [(ngModel)]="cleanupMode" (ngModelChange)="keepOcf()" /><span>{{ o.l }}<small>{{ o.d }}</small></span></label>
             }
           </div>
-        } @else { <div class="empty mut">Select a test, or record one: Tests → Record a Test.</div> }
-        @if (report(); as rep) {
-          <footer>
-            <div class="row"><b>Last run</b><span class="ok">{{ rep.passed }} passed</span>@if (rep.failed) { <span class="bad">{{ rep.failed }} failed</span> }@if (rep.skipped) { <span class="warn">{{ rep.skipped }} skipped</span> }<span class="mut">{{ (rep.ms / 1000).toFixed(1) }} s</span><span class="sp"></span>
-              <button type="button" (click)="backend.testsOpen(rep.dir)">Open Report</button><button type="button" (click)="backend.testsOpen(rep.dir + '/junit.xml')">JUnit XML</button></div>
-            <div class="res">
-              @for (s of rep.recovery ?? []; track $index) { <div class="rr2" [class.bad]="!s.passed">{{ s.passed ? '✓' : '✗' }} {{ s.name }} <span class="mut">{{ s.target }}</span>@if (s.error) { <span> - {{ s.error }}</span> }</div> }
-              @for (r of rep.results; track $index) {
-                <button type="button" class="rr" (click)="r.file && select(r.file)"><span [class]="r.skipped ? 'warn' : r.passed ? 'ok' : 'bad'">{{ r.skipped ? '○' : r.passed ? '✓' : '✗' }}</span>{{ r.file || r.case }}{{ paramOf(r.case) }}@if (r.cleanupFailed) { <span class="bad">failed (cleanup)</span> }<span class="mut">{{ r.passed ? '' : failText(r) }}</span><span class="sp"></span>@if (!r.passed && !r.skipped) { <span class="lnk ex" role="button" tabindex="0" (click)="$event.stopPropagation(); explain(r)" (keydown.enter)="$event.stopPropagation(); explain(r)" title="Ask the AI assistant why it failed">✦ Explain</span> }<span class="mut">{{ (r.ms / 1000).toFixed(1) }} s</span></button>
-              }
-            </div>
-          </footer>
-        }
-      </section>
-    </div>`,
+          @if (cleanupMode !== 'off') {
+            <label class="fld"><span>If a cleanup fails</span><select [(ngModel)]="onCleanupFail" (ngModelChange)="keepOcf()"><option value="stop">Stop the run - skip the rest</option><option value="restore">Restore the configuration saved before the run</option><option value="factory">Factory default, then go on</option></select></label>
+          }
+          <span class="sp"></span>
+          <div class="row"><button type="button" class="grow" (click)="runFiles.set(null)">Cancel</button><button type="button" class="pri grow2" (click)="startRun()">▶ Run {{ rf.length ? rf.length + (rf.length === 1 ? ' test' : ' tests') : 'all' }}</button></div>
+        </aside>
+      }
+    </div>
+`,
   styles: [`
-    :host { display: block; height: 100%; min-height: 0; } .tv { display: flex; height: 100%; min-height: 0; }
-    .side { width: 250px; flex: none; display: flex; flex-direction: column; gap: 8px; padding: 10px; border-right: 1px solid var(--border); background: var(--panel); min-height: 0; }
-    .row { display: flex; align-items: center; gap: 6px; } .sp { flex: 1; } .mut { color: var(--muted); font-size: 12px; } .ok { color: var(--ok, #4ec07a); } .bad { color: var(--danger, #ef6161); }
-    .git { display: flex; gap: 8px; font-size: 12px; color: var(--muted); align-items: center; } .lnk { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0 4px; }
-    .gb button { flex: 1; padding: 3px 6px; } .sm { font-size: 12px; text-align: left; } .tree { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 1px; } .hb { display: flex; justify-content: space-between; align-items: center; } .h { font-size: 11px; letter-spacing: .06em; color: var(--muted); margin: 8px 0 3px; } .grp { font-size: 12px; color: var(--muted); padding: 2px 4px; }
-    .it { display: flex; gap: 6px; align-items: center; text-align: left; border: 0; background: none; color: var(--text); padding: 4px 8px; border-radius: 6px; cursor: pointer; font: inherit; }
-    .it:hover { background: var(--hover, rgba(255,255,255,.05)); } .it.sel { background: color-mix(in srgb, var(--accent) 20%, transparent); } .it .n { margin-left: auto; color: var(--muted); font-size: 11px; }
-    .dot { font-size: 9px; color: var(--muted); } .dot.p { color: var(--ok, #4ec07a); } .dot.f { color: var(--danger, #ef6161); } .dot.e { color: var(--warn, #e0a030); }
-    .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-    header { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); } .ttl { font-size: 15px; } .fl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-    header select { height: 28px; max-width: 160px; }
-    .seg { display: flex; gap: 2px; background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: 7px; padding: 2px; } .seg button { border: 0; background: none; padding: 3px 10px; border-radius: 5px; color: var(--text); cursor: pointer; } .seg button.on { background: color-mix(in srgb, var(--accent) 28%, transparent); }
-    .body p { margin: 0; } .phh { font-size: 11px; letter-spacing: .06em; color: var(--muted); text-transform: uppercase; margin-top: 4px; } .st.cl { border-color: color-mix(in srgb, var(--warn, #e0a030) 45%, var(--border)); } .st.su { border-style: dashed; } .rr2 { font-size: 12px; } .warnbox { font-size: 12px; color: var(--warn, #e0a030); border: 1px solid color-mix(in srgb, var(--warn, #e0a030) 45%, transparent); border-radius: 6px; padding: 6px 9px; } .body { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
-    .st { border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; } .st.f { border-color: color-mix(in srgb, var(--danger, #ef6161) 60%, transparent); } .cmd { font-family: var(--mono, monospace); margin-left: 4px; } .st > div > b { margin-right: 8px; } .ms { float: right; color: var(--muted); font-size: 11px; }
-    .chip { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 10px; margin: 4px 4px 0 0; background: color-mix(in srgb, var(--ok, #4ec07a) 15%, transparent); color: var(--ok, #4ec07a); }
-    .chip.b { background: color-mix(in srgb, var(--danger, #ef6161) 15%, transparent); color: var(--danger, #ef6161); } .chip.v { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
-    .code { flex: 1; min-height: 240px; font: 12.5px/1.5 var(--mono, monospace); resize: none; white-space: pre; overflow: auto; margin: 0; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--term-bg, rgba(0,0,0,.25)); color: var(--text); }
-    .sf label { display: flex; align-items: center; gap: 10px; } .sf label > span { width: 90px; color: var(--muted); font-size: 12px; } .sf input:not([type=checkbox]), .sf select { height: 28px; min-width: 220px; } .sf .ck { padding-left: 100px; font-size: 13px; } .aiw { text-align: left; } .ex { font-size: 12px; margin-right: 8px; cursor: pointer; } .pri { background: var(--accent); color: #fff; border-color: transparent; } .empty { margin: auto; }
-    .ocf { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--muted); } .ocf select { height: 26px; } .warn { color: var(--warn, #e0a030); }
-    .itr { display: flex; align-items: center; gap: 2px; } .itr .it { flex: 1; min-width: 0; } .itr input { margin: 0 0 0 2px; } .grp { display: flex; justify-content: space-between; align-items: center; }
-    .ed .row { gap: 6px; margin-bottom: 4px; } .ses { width: 150px; height: 26px; } .cmdi { flex: 1; min-width: 0; height: 26px; font-family: var(--mono, monospace); } .num { width: 60px; height: 24px; } .opts { font-size: 12px; color: var(--muted); gap: 14px; } .opts label { display: flex; align-items: center; gap: 4px; }
-    .x { border: 0; background: none; color: inherit; cursor: pointer; padding: 0 0 0 4px; } .addck { display: inline-flex; gap: 4px; margin-top: 4px; } .addck select, .addck input { height: 24px; font-size: 12px; } .addck input { width: 200px; }
-    .pin { width: 110px; height: 24px; } .tbw { max-height: 260px; overflow: auto; margin-top: 4px; border: 1px solid var(--border); border-radius: 6px; } .ptab { border-collapse: collapse; font: 12px var(--mono, monospace); } .ptab th { position: sticky; top: 0; background: var(--panel); text-align: left; padding: 2px 8px; color: var(--muted); font-weight: 500; } .ptab td { padding: 2px 8px; border-top: 1px solid var(--border); white-space: nowrap; }
-    .chip.u { background: color-mix(in srgb, var(--warn, #e0a030) 15%, transparent); color: var(--warn, #e0a030); } .out summary { font-size: 11.5px; color: var(--muted); cursor: pointer; margin-top: 4px; } .out pre { font: 12px/1.45 var(--mono, monospace); max-height: 260px; overflow: auto; margin: 4px 0 0; padding: 6px 8px; border-radius: 6px; background: var(--term-bg, rgba(0,0,0,.25)); white-space: pre-wrap; }
-    footer { border-top: 1px solid var(--border); padding: 8px 12px; max-height: 32%; display: flex; flex-direction: column; gap: 4px; min-height: 0; } .res { overflow: auto; }
-    .rr { display: flex; gap: 8px; width: 100%; border: 0; background: none; color: var(--text); padding: 3px 4px; text-align: left; cursor: pointer; font: inherit; } .rr:hover { background: var(--hover, rgba(255,255,255,.05)); }
+    :host { display: block; height: 100%; min-height: 0; }
+    .tv { display: grid; grid-template-columns: 64px 272px 1fr; height: 100%; min-height: 0; position: relative; }
+    button { font: inherit; } .sp { flex: 1; } .grow { flex: 1; } .grow2 { flex: 2; } .mut { color: var(--muted); font-size: 12px; } .ok { color: var(--ok, #3fbf75); } .bad { color: var(--danger, #ef6161); } .warn { color: var(--warn, #e0a030); }
+    .row { display: flex; align-items: center; gap: 6px; } .r { text-align: right; } .fl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pri { background: var(--accent); color: #fff; border-color: transparent; } .ghost { background: none; border-color: transparent; color: var(--muted); }
+    .lnk { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0 4px; }
+    .rail { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 8px 6px; background: color-mix(in srgb, var(--bg, #000) 70%, #000); border-right: 1px solid var(--border); }
+    .rail button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; height: auto; min-height: 50px; line-height: 1.15; padding: 6px 2px; border: 0; border-radius: 9px; background: none; color: var(--muted); font-size: 10.5px; cursor: pointer; }
+    .rail button:hover { color: var(--text); } .rail button.on { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--text); } .ri { font-size: 16px; line-height: 1.1; }
+    .rail .gitb { font-size: 10px; word-break: break-all; } .rail i { font-style: normal; color: var(--accent); }
+    .side { display: flex; flex-direction: column; min-height: 0; background: var(--panel); border-right: 1px solid var(--border); }
+    .stop { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-bottom: 1px solid var(--border); }
+    .search { height: 30px; padding: 0 10px; border-radius: 7px; }
+    .tags { display: flex; flex-wrap: wrap; gap: 5px; } .tag { font-size: 11px; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--border); background: color-mix(in srgb, var(--text) 5%, transparent); color: var(--muted); cursor: pointer; }
+    .tag.on { border-color: var(--accent); color: var(--text); } .tag i { font-style: normal; opacity: .7; }
+    .list { flex: 1; overflow: auto; padding: 6px; display: flex; flex-direction: column; gap: 1px; }
+    .fold { display: flex; align-items: center; gap: 6px; padding: 7px 6px 3px; color: var(--muted); font-size: 12px; } .fold .lnk { color: var(--muted); padding: 0; text-align: left; } .fold .fl { flex: 1; } .cnt { font-size: 11px; }
+    .case { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 7px; cursor: pointer; }
+    .case:hover { background: var(--hover, rgba(255,255,255,.05)); } .case.sel { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+    .case input { margin: 0; } .cn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .n { color: var(--muted); font-size: 11px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--text) 25%, transparent); flex: none; } .dot.p { background: var(--ok, #3fbf75); } .dot.f { background: var(--danger, #ef6161); } .dot.e { background: var(--warn, #e0a030); }
+    .empty-s { color: var(--muted); font-size: 12px; padding: 18px 8px; text-align: center; line-height: 1.6; }
+    .selbar { display: flex; align-items: center; gap: 6px; margin: 8px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: color-mix(in srgb, var(--text) 4%, transparent); }
+    .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .head { padding: 12px 20px 0; border-bottom: 1px solid var(--border); } .crumb { color: var(--muted); font-size: 12px; }
+    .title { display: flex; align-items: center; gap: 8px; margin: 3px 0 10px; } .title h1 { font-size: 18px; margin: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 120px; } .title button { white-space: nowrap; flex: none; } .title .mut.fl { flex: 1 1 0; }
+    .pill { font-size: 11.5px; padding: 2px 9px; border-radius: 10px; white-space: nowrap; background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--muted); }
+    .pill.f { background: color-mix(in srgb, var(--danger, #ef6161) 18%, transparent); color: var(--danger, #ef6161); } .pill.p { background: color-mix(in srgb, var(--ok, #3fbf75) 18%, transparent); color: var(--ok, #3fbf75); } .pill.s { background: color-mix(in srgb, var(--warn, #e0a030) 18%, transparent); color: var(--warn, #e0a030); } .pill.sm { font-size: 10.5px; padding: 0 6px; margin-left: 6px; }
+    .tabs { display: flex; align-items: center; gap: 18px; } .tabs > button { border: 0; background: none; color: var(--muted); padding: 8px 0; border-bottom: 2px solid transparent; cursor: pointer; } .tabs > button.on { color: var(--text); border-color: var(--accent); }
+    .seg { display: flex; gap: 2px; background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: 7px; padding: 2px; } .seg button { border: 0; background: none; padding: 2px 10px; border-radius: 5px; color: var(--muted); cursor: pointer; } .seg button.on { background: color-mix(in srgb, var(--accent) 28%, transparent); color: var(--text); }
+    .body { flex: 1; overflow: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; min-height: 0; } .body p { margin: 0; }
+    .meta { display: flex; flex-wrap: wrap; gap: 6px 22px; color: var(--muted); font-size: 12px; } .meta b { color: var(--text); font-weight: 500; }
+    .sec { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; flex: none; }
+    .sh { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--panel); font-size: 11.5px; color: var(--muted); letter-spacing: .05em; text-transform: uppercase; } .sh .norm { text-transform: none; letter-spacing: 0; }
+    .srow { display: grid; grid-template-columns: 26px minmax(80px, 140px) minmax(160px, 1.3fr) minmax(160px, 1fr) 78px 60px; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--border); cursor: pointer; }
+    .srow:hover { background: var(--hover, rgba(255,255,255,.03)); } .srow.f { background: color-mix(in srgb, var(--danger, #ef6161) 6%, transparent); } .srow.open { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+    .srow.hd { cursor: default; background: var(--panel); color: var(--muted); font-size: 11.5px; padding: 5px 12px; }
+    .dev { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .cmd { font-family: var(--mono, monospace); font-size: 12.5px; overflow-wrap: anywhere; }
+    .chips { display: flex; flex-wrap: wrap; gap: 4px; } .chip { font-size: 11.5px; padding: 1px 8px; border-radius: 9px; background: color-mix(in srgb, var(--ok, #3fbf75) 14%, transparent); color: var(--ok, #3fbf75); }
+    .chip.b { background: color-mix(in srgb, var(--danger, #ef6161) 14%, transparent); color: var(--danger, #ef6161); } .chip.w { background: color-mix(in srgb, var(--warn, #e0a030) 14%, transparent); color: var(--warn, #e0a030); }
+    .x { border: 0; background: none; color: inherit; cursor: pointer; padding: 0 0 0 4px; }
+    .exp { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; padding: 12px 12px 14px 48px; border-top: 1px solid var(--border); background: color-mix(in srgb, var(--bg, #000) 60%, transparent); }
+    .exp h4 { margin: 0 0 6px; font-size: 11px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .05em; } .exp h4 + * { margin-bottom: 10px; }
+    .ev { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); gap: 4px 12px; font-size: 12px; } .ev span { overflow-wrap: anywhere; }
+    .exp pre { margin: 0; font: 12px/1.5 var(--mono, monospace); background: var(--term-bg, rgba(0,0,0,.3)); border-radius: 7px; padding: 8px 10px; max-height: 280px; overflow: auto; white-space: pre-wrap; }
+    .tbw { max-height: 220px; overflow: auto; border: 1px solid var(--border); border-radius: 7px; } .ptab { border-collapse: collapse; font: 12px var(--mono, monospace); } .ptab th { position: sticky; top: 0; background: var(--panel); text-align: left; padding: 2px 8px; color: var(--muted); font-weight: 500; } .ptab td { padding: 2px 8px; border-top: 1px solid var(--border); white-space: nowrap; }
+    .trow { display: flex; gap: 8px; font-size: 12px; } .none { color: var(--muted); font-size: 12px; padding: 10px 12px; border-top: 1px solid var(--border); }
+    .ed { padding: 9px 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px; } .num { width: 18px; color: var(--muted); font-weight: 500; }
+    .ses { width: 160px; height: 27px; } .cmdi { flex: 1; min-width: 0; height: 27px; font-family: var(--mono, monospace); } .num2 { width: 60px; height: 24px; } .pin { width: 100px; height: 24px; }
+    .opts { font-size: 12px; color: var(--muted); gap: 16px; padding-left: 24px; } .opts label { display: flex; align-items: center; gap: 4px; } .ed .chips { padding-left: 24px; }
+    .addck { display: inline-flex; gap: 4px; } .addck select, .addck input { height: 24px; font-size: 12px; } .addck input { width: 220px; }
+    .code { flex: 1; min-height: 260px; font: 12.5px/1.5 var(--mono, monospace); resize: none; white-space: pre; overflow: auto; margin: 0; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--term-bg, rgba(0,0,0,.25)); color: var(--text); }
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; } .kpi { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel); } .kpi b { display: block; font-size: 21px; font-weight: 600; } .kpi span { color: var(--muted); font-size: 12px; } .kok { color: var(--ok, #3fbf75); } .kbad { color: var(--danger, #ef6161); } .kwarn { color: var(--warn, #e0a030); }
+    .bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--text) 8%, transparent); flex: none; } .okb { background: var(--ok, #3fbf75); } .badb { background: var(--danger, #ef6161); } .warnb { background: var(--warn, #e0a030); }
+    .rhd, .rrow { display: grid; grid-template-columns: 26px minmax(140px, 1fr) minmax(200px, 1.6fr) 64px; gap: 10px; padding: 8px 12px; align-items: center; } .rhd { background: var(--panel); color: var(--muted); font-size: 11.5px; padding: 5px 12px; } .rrow { border-top: 1px solid var(--border); cursor: pointer; } .rrow:hover { background: var(--hover, rgba(255,255,255,.03)); }
+    .form { display: flex; flex-direction: column; gap: 10px; max-width: 620px; } .form label { display: flex; align-items: center; gap: 10px; } .form label > span { width: 130px; color: var(--muted); font-size: 12px; flex: none; } .form input:not([type=checkbox]), .form select { height: 29px; flex: 1; } .form .ck { padding-left: 140px; }
+    .empty { margin: auto; }
+    .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.35); z-index: 5; }
+    .drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 380px; z-index: 6; display: flex; flex-direction: column; gap: 14px; padding: 18px; background: var(--panel); border-left: 1px solid var(--border); box-shadow: -20px 0 40px rgba(0,0,0,.35); }
+    .drawer h2 { margin: 0; font-size: 16px; } .fld { display: flex; flex-direction: column; gap: 6px; } .fld > span { color: var(--muted); font-size: 12px; } .fld select { height: 30px; }
+    .radio { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; } .radio.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); } .radio input { margin-top: 3px; } .radio small { display: block; color: var(--muted); font-size: 11.5px; }
   `],
 })
 export class TestsView implements OnInit, OnDestroy {
@@ -243,10 +362,27 @@ export class TestsView implements OnInit, OnDestroy {
   private timer?: ReturnType<typeof setInterval>;
   private offs: (() => void)[] = [];
   readonly picked = signal<string[]>([]);
-  readonly libSel = signal('');
+  readonly section = signal<Section>('tests');
+  readonly rails: { k: Section; l: string; i: string; t: string }[] = [
+    { k: 'tests', l: 'Tests', i: '☰', t: 'Tests: record, edit and run' }, { k: 'runs', l: 'Runs', i: '▶', t: 'Past runs and their results' },
+    { k: 'schedules', l: 'Sched.', i: '⏱', t: 'Scheduled runs' }, { k: 'testbeds', l: 'Testbeds', i: '⌗', t: 'Which devices a run uses' }, { k: 'library', l: 'Library', i: '{ }', t: 'Templates and code helpers' }];
+  readonly q = signal('');
+  readonly tag = signal('all');
+  readonly folded = signal<string[]>([]);
+  readonly runSel = signal('');
+  readonly runRep = signal<TestRunReport | null>(null);
+  readonly fileSel = signal('');
+  fileText = '';
+  readonly runFiles = signal<string[] | null>(null);
+  readonly runLabel = signal('');
+  private readonly open = signal<string[]>([]);
+  readonly cleanupOpts: { k: CleanupMode; l: string; d: string }[] = [
+    { k: 'off', l: 'No cleanup', d: 'the next test starts from what this one configured' },
+    { k: '', l: 'Run the cleanup steps', d: 'also when a step failed' },
+    { k: 'auto', l: 'Cleanup steps, else undo the configuration', d: "from the device type's undo rules, the last change first" }];
   /** The test being edited in the Steps view (a copy; Save writes it). */
   readonly draft = signal<TestCase | null>(null);
-  readonly phases: { k: Phase; l: string }[] = [{ k: 'setup', l: 'Setup' }, { k: 'steps', l: 'Steps' }, { k: 'cleanup', l: 'Cleanup - always runs' }];
+  readonly phases: { k: Phase; l: string }[] = [{ k: 'setup', l: 'Setup' }, { k: 'steps', l: 'Steps' }, { k: 'cleanup', l: 'Cleanup - runs when the run cleans up' }];
   readonly methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
   private cks = new Map<string, { k: string; v: string }>();
   cleanupMode: CleanupMode = (() => { try { const v = localStorage.getItem('tw.tests.cleanup'); return (v === null ? 'off' : v) as CleanupMode; } catch { return 'off'; } })();
@@ -256,7 +392,7 @@ export class TestsView implements OnInit, OnDestroy {
 
   readonly groups = computed(() => {
     const m = new Map<string, TestCaseInfo[]>();
-    for (const c of this.tree()?.cases ?? []) {
+    for (const c of this.filtered()) {
       const d = c.file.replace(/^cases\/?/, '').split('/').slice(0, -1).join('/');
       m.set(d, [...(m.get(d) ?? []), c]);
     }
@@ -305,7 +441,7 @@ export class TestsView implements OnInit, OnDestroy {
   async select(file: string, keepView = false) {
     if (!keepView) {
       if (this.draft() && file !== this.sel() && !(await this.ui.confirm(tr('Discard the changes?'), tr('The steps you changed are not saved.'), tr('Discard'), true))) return;
-      this.sched.set(null); this.libSel.set(''); this.draft.set(null);
+      this.sched.set(null); this.draft.set(null); this.open.set([]);
     }
     this.sel.set(file);
     try { this.test.set(await this.backend.testCase(file)); } catch (e) { this.test.set(null); this.ui.toast(errText(e), 'error'); }
@@ -349,6 +485,10 @@ export class TestsView implements OnInit, OnDestroy {
 
   private took(r: TestRunReport) {
     this.report.set(r);
+    if (this.runSel() === r.dir || (r.results?.length ?? 0) > 1) { this.runRep.set(r); this.runSel.set(r.dir); }
+    if ((r.results?.length ?? 0) > 1 && this.section() === 'tests') this.section.set('runs');
+    const f = r.results?.find(x => x.file === this.sel() && !x.passed);
+    if (f) { const i = f.steps.findIndex(s => !s.passed && !s.skipped); if (i >= 0) { const st = f.steps[i], ph = (st.phase || 'steps') as Phase, idx = f.steps.filter((x, j) => j < i && (x.phase || 'steps') === ph).length; this.open.set([ph + idx]); } }
     this.last.update(m => { const n = { ...m }; for (const x of r.results ?? []) if (x.file) n[x.file] = x; return n; });
   }
 
@@ -385,7 +525,7 @@ export class TestsView implements OnInit, OnDestroy {
     void this.ai.send(tr('Write a Termwright test that checks: {0}. Find the saved sessions it needs first, then save it with the tests tool (action save, a file under cases/), using roles ({{role}} variables with the sessions as defaults) and checks on what must be true. Then show the YAML and offer to run it.', what.trim()));
   }
   editSchedule(s: TestScheduleView | null) {
-    this.libSel.set('');
+    this.section.set('schedules');
     this.sched.set(s ? structuredClone({ ...s, state: undefined, next: undefined, when: undefined }) as TestSchedule : { id: '', name: '', repeat: 'daily', at: '06:00', day: 1, hours: 4, testbed: this.testbed });
     this.schedWhat = s?.files?.length ? 'keep' : 'all';
   }
@@ -455,10 +595,93 @@ export class TestsView implements OnInit, OnDestroy {
   keepOcf() { try { localStorage.setItem('tw.tests.ocf', this.onCleanupFail); localStorage.setItem('tw.tests.cleanup', this.cleanupMode); } catch { /* not kept */ } }
   pick(f: string) { this.picked.update(l => l.includes(f) ? l.filter(x => x !== f) : [...l, f]); }
   filesOf(g: { cases: TestCaseInfo[] }) { return g.cases.map(c => c.file); }
-  async openLib(f: string) {
-    this.sched.set(null); this.libSel.set(f);
-    this.goSrc.set(await this.backend.testFile(f).catch(e => errText(e)));
+  go(k: Section) {
+    this.section.set(k);
+    if (k === 'runs' && !this.runRep()) { const r = this.report() ?? null; if (r) { this.runRep.set(r); this.runSel.set(r.dir); } else { const d = this.tree()?.reports?.[0]?.dir; if (d) void this.openRunReport(d); } }
   }
+  /** The tests shown: search and tag filter. */
+  readonly filtered = computed(() => {
+    const q = this.q().trim().toLowerCase(), t = this.tag();
+    return (this.tree()?.cases ?? []).filter(c => (!q || (c.name + ' ' + c.file + ' ' + (c.tags ?? []).join(' ')).toLowerCase().includes(q))
+      && (t === 'all' || (t === '#failed' ? this.last()[c.file]?.passed === false : (c.tags ?? []).includes(t))));
+  });
+  readonly tagList = computed(() => {
+    const cs = this.tree()?.cases ?? [], m = new Map<string, number>();
+    for (const c of cs) for (const g of c.tags ?? []) m.set(g, (m.get(g) ?? 0) + 1);
+    const failed = cs.filter(c => this.last()[c.file]?.passed === false).length;
+    return [{ k: 'all', l: 'all', n: cs.length }, ...[...m.entries()].sort().map(([k, n]) => ({ k, l: k, n })), ...(failed ? [{ k: '#failed', l: 'failed', n: failed }] : [])];
+  });
+  toggleFold(d: string) { this.folded.update(l => l.includes(d) ? l.filter(x => x !== d) : [...l, d]); }
+  readonly runList = computed(() => {
+    let prev = '';
+    return (this.tree()?.reports ?? []).map(r => {
+      const m = r.dir.match(/(\d{4}-\d\d-\d\d)_(\d\d)(\d\d)/), day = m ? this.dayName(m[1]) : '', out = { ...r, day: day !== prev ? day : '', time: m ? m[2] + ':' + m[3] : r.dir };
+      prev = day;
+      return out;
+    });
+  });
+  private dayName(d: string) {
+    const t = new Date(), y = new Date(Date.now() - 864e5), f = (x: Date) => x.toISOString().slice(0, 10);
+    return d === f(t) ? 'Today' : d === f(y) ? 'Yesterday' : d;
+  }
+  async openRunReport(dir: string) {
+    this.section.set('runs'); this.runSel.set(dir);
+    if (this.report()?.dir === dir) { this.runRep.set(this.report()); return; }
+    try { this.runRep.set(JSON.parse(await this.backend.testFile(dir + '/result.json')) as TestRunReport); }
+    catch (e) { this.runRep.set(null); this.ui.toast(errText(e), 'error'); }
+  }
+  openTest(f: string) { this.section.set('tests'); void this.select(f); }
+  base(p: string) { return (p.split('/').pop() ?? p).replace(/\.ya?ml$/, ''); }
+  dur(ms: number) { return ms < 1000 ? ms + ' ms' : ms < 60000 ? (ms / 1000).toFixed(1) + ' s' : Math.floor(ms / 60000) + ' m ' + Math.round(ms % 60000 / 1000) + ' s'; }
+  ago(iso: string) { const s = (Date.now() - new Date(iso).getTime()) / 1000; return s < 90 ? 'just now' : s < 3600 ? Math.round(s / 60) + ' min ago' : s < 86400 ? Math.round(s / 3600) + ' h ago' : iso.slice(0, 10); }
+  failedFiles(r: TestRunReport) { return [...new Set(r.results.filter(x => !x.passed && x.file).map(x => x.file!))]; }
+  unchecked(r: TestRunReport) { return r.results.reduce((n, x) => n + x.steps.filter(s => s.unchecked && !s.skipped).length, 0); }
+  notChecked(r: TestResult) { const n = r.steps.filter(s => s.unchecked && !s.skipped).length; return n ? n + (n === 1 ? ' step' : ' steps') + ' not checked' : ''; }
+  async openFile(f: string) { this.fileSel.set(f); this.fileText = await this.backend.testFile(f).catch(e => '# ' + errText(e)); }
+  async saveFile() { try { await this.backend.testSaveFile(this.fileSel(), this.fileText); this.ui.toast(tr('Saved'), 'success'); await this.load(); } catch (e) { this.ui.toast(errText(e), 'error'); } }
+  moreMenu(ev: MouseEvent) {
+    this.ui.showMenu(ev, [
+      { label: 'Write a Test with AI…', action: () => void this.writeWithAI() },
+      { separator: true },
+      { label: 'Open a Tests Folder…', action: () => void this.openFolder() },
+      { label: 'Clone a Git Repository…', action: () => void this.clone() },
+      { label: 'Open the Folder in VS Code', action: () => void this.backend.testsOpenInEditor('') },
+    ]);
+  }
+  gitMenu(ev: MouseEvent) {
+    const g = this.git();
+    this.ui.showMenu(ev, g?.repo ? [
+      { label: tr('Pull') + (g.behind ? ' (' + g.behind + ')' : ''), action: () => void this.gitDo('pull'), disabled: !g.upstream },
+      { label: tr('Commit…') + (g.changed ? ' (' + g.changed + ' changed)' : ''), action: () => void this.gitDo('commit'), disabled: !g.changed },
+      { label: tr('Push') + (g.ahead ? ' (' + g.ahead + ')' : ''), action: () => void this.gitDo('push'), disabled: !!g.upstream && !g.ahead },
+    ] : [{ label: 'Make it a Git Repository', action: () => void this.gitDo('init'), disabled: !g?.hasGit }, { label: 'Clone a Git Repository…', action: () => void this.clone() }]);
+  }
+  testMenu(ev: MouseEvent) {
+    this.ui.showMenu(ev, [
+      { label: 'Rename…', action: () => void this.rename(false) },
+      { label: 'Duplicate…', action: () => void this.rename(true) },
+      { label: 'Open in VS Code', action: () => void this.backend.testsOpenInEditor(this.sel()) },
+      { label: 'Record a New Test', action: () => this.recordMore() },
+      { separator: true },
+      { label: 'Delete…', action: () => void this.remove() },
+    ]);
+  }
+  cleanupLabel() { return this.cleanupMode === 'off' ? 'no cleanup' : this.cleanupMode === 'auto' ? 'cleanup steps, else undo' : 'run the cleanup steps'; }
+  /** A step's result in the last run. */
+  resOf(p: Phase, i: number) { return this.last()[this.sel()]?.steps?.filter(x => (x.phase ?? '') === (p === 'steps' ? '' : p))[i]; }
+  secSummary(p: Phase) {
+    const t = this.test(); if (!t) return '';
+    const l = this.listOf(t, p), rs = l.map((_, i) => this.resOf(p, i));
+    const failed = rs.filter(r => r && !r.passed && !r.skipped).length, bare = l.filter(s => !s.expect?.length).length;
+    return [l.length + (l.length === 1 ? ' step' : ' steps'), failed ? failed + ' failed' : '', bare ? bare + ' not checked' : ''].filter(Boolean).join(' · ');
+  }
+  isOpen(p: Phase, i: number) { return this.open().includes(p + i); }
+  toggleRow(p: Phase, i: number) { const k = p + i; this.open.update(l => l.includes(k) ? l.filter(x => x !== k) : [...l, k]); }
+  target(s: TestStep) { return s.run?.session ?? s.http?.session ?? s.snmp?.session ?? ''; }
+  shortDev(t: string) { return t.replace(/^\{\{\s*|\s*\}\}$/g, '').split('/').pop() ?? t; }
+  runHint() { const v = this.view(); return v === 'go' ? 'Run: go test ./cases/...' : v === 'py' ? 'Run: python lib/python/run_tests.py' : v === 'tcl' ? 'Run: tclsh lib/tcl/run_tests.tcl' : ''; }
+  openRun(files: string[], label: string) { this.runFiles.set(files); this.runLabel.set(label); }
+  startRun() { const f = this.runFiles() ?? []; this.runFiles.set(null); void this.run(f); }
   /** Rename (move) or duplicate the selected test. */
   async rename(copy: boolean) {
     const cur = this.sel().replace(/^cases\//, '').replace(/\.ya?ml$/, '');
