@@ -203,6 +203,10 @@ class Step:
     def __init__(self, run, skip=False):
         self.r, self.skip, self.errors, self._retry = run, skip, [], None
 
+    def traffic(self, test, timeout=0):
+        """Runs a saved lab traffic test; its results are JSON (a.json("rows[0].loss"))."""
+        return self._send({"traffic": {"test": self.r.fill(test)}, "timeout": timeout})
+
     def wait(self, seconds):
         if not self.skip:
             time.sleep(seconds)

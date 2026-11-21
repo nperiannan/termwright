@@ -2178,6 +2178,9 @@ paths:
                                 folder:
                                     description: 'new_testbed: a session folder, e.g. Lab'
                                     type: string
+                                force_lock:
+                                    description: 'run: take over the testbed when someone else''s run has it locked'
+                                    type: boolean
                                 hours:
                                     description: 'schedule: every N hours (repeat hours)'
                                     type: integer
@@ -2232,6 +2235,11 @@ paths:
                                 testbed:
                                     description: 'run: a file in testbeds/ whose values are used as {{variables}}'
                                     type: string
+                                testbeds:
+                                    description: 'run: several testbeds - the tests run on each at the same time'
+                                    items:
+                                        type: string
+                                    type: array
                                 token:
                                     description: 'restore_state: the token save_state returned'
                                     type: string

@@ -87,7 +87,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
           @case ('testbeds') {
             <div class="stop"><div class="row"><b class="grow">Testbeds</b><button type="button" (click)="newTestbed()" title="A role for each session of a session folder">+ New</button></div><span class="mut">which devices a run uses</span></div>
             <div class="list">
-              @for (b of tree()?.testbeds ?? []; track b) { <div class="case" [class.sel]="fileSel() === b" (click)="openFile(b)" (keydown.enter)="openFile(b)" tabindex="0" role="button"><span class="cn">{{ base(b) }}</span></div> } @empty { <div class="empty-s">No testbeds.</div> }
+              @for (b of tree()?.testbeds ?? []; track b) { <div class="case" [class.sel]="fileSel() === b" (click)="openFile(b)" (keydown.enter)="openFile(b)" tabindex="0" role="button"><span class="cn">{{ base(b) }}</span>@if (lockOf(b); as l) { <span class="n" [title]="'Locked by ' + l.user + ' on ' + l.host + ' since ' + l.since.slice(11, 16)">🔒 {{ l.mine ? 'running' : l.user }}</span> }</div> } @empty { <div class="empty-s">No testbeds.</div> }
             </div>
           }
           @case ('library') {
@@ -183,18 +183,28 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                     @if (t.params?.length) { <span>Runs {{ t.params?.length }}× <b>{{ paramsText() }}</b></span> }
                     @if (t.restore?.length) { <span>Afterwards <b>{{ restoreText() }} put back</b></span> }
                     @if (t.dependsOn?.length) { <span>Depends on <b>{{ t.dependsOn.join(', ') }}</b></span> }
+                    @if (t.watch?.syslog?.length || t.watch?.traps?.length) { <span>Fails on <b>{{ watchText(t) }}</b></span> }
+                    @if (t.configDiff) { <span>Configuration <b>compared before and after</b></span> }
                     <span>After each test <b>{{ cleanupLabel() }}</b></span>
                   </div>
                   @for (r of restoreRes(); track $index) { <div class="trow" [class.bad]="!r.passed"><span>{{ r.passed ? '✓' : '✗' }}</span><span>{{ r.name }}</span><span class="mut">{{ r.target }} {{ r.error }}</span></div> }
                   @if (draft(); as d) {
+                    <div class="sec"><div class="sh">While the test runs</div>
+                      <div class="ed">
+                        <div class="row opts"><label class="wide" title="Words, or /regex/; one per line or comma-separated. The syslog server must be on.">Fail on syslog <input class="cmdi" [ngModel]="(d.watch?.syslog ?? []).join(', ')" (ngModelChange)="setWatch(d, 'syslog', $event)" placeholder="e.g. LINK-3-UPDOWN, /%.*-[0-2]-/" /></label></div>
+                        <div class="row opts"><label class="wide" title="Notification names, OIDs or text. The trap receiver must be on.">Fail on SNMP notifications <input class="cmdi" [ngModel]="(d.watch?.traps ?? []).join(', ')" (ngModelChange)="setWatch(d, 'traps', $event)" placeholder="e.g. linkDown, coldStart" /></label></div>
+                        <div class="row opts"><label title="Reads each device's configuration (its device type's backup commands) before the test and after the cleanup; a difference fails the test"><input type="checkbox" [(ngModel)]="d.configDiff" /> Compare the configuration before and after (needs the cleanup on)</label>
+                          @if (d.configDiff) { <label class="wide">ignore lines <input class="cmdi" [ngModel]="(d.configIgnore ?? []).join(', ')" (ngModelChange)="d.configIgnore = splitTags($event)" placeholder="regular expressions, e.g. ^! Last configuration change" /></label> }</div>
+                      </div></div>
                     @for (ph of phases; track ph.k) {
                       <div class="sec">
-                        <div class="sh">{{ ph.l }}<span class="sp"></span><button type="button" class="lnk" (click)="addStep(ph.k)">+ Step</button><button type="button" class="lnk" (click)="addWait(ph.k)">+ Wait</button><button type="button" class="lnk" (click)="addLoop(ph.k)" title="Run steps once per value">+ Loop</button></div>
+                        <div class="sh">{{ ph.l }}<span class="sp"></span><button type="button" class="lnk" (click)="addStep(ph.k)">+ Step</button><button type="button" class="lnk" (click)="addWait(ph.k)">+ Wait</button><button type="button" class="lnk" (click)="addTraffic(ph.k)" title="Run a saved traffic test of the emulated lab">+ Traffic</button><button type="button" class="lnk" (click)="addLoop(ph.k)" title="Run steps once per value">+ Loop</button></div>
                         @for (s of listOf(d, ph.k); track $index; let i = $index; let lastI = $last) {
                           <div class="ed">
                             <div class="row"><b class="num">{{ i + 1 }}</b>
                               @if (s.run) { <input class="ses" [(ngModel)]="s.run.session" placeholder="session" aria-label="Session" /><input class="cmdi" [(ngModel)]="s.run.command" placeholder="command" aria-label="Command" /> }
                               @else if (s.http) { <select [(ngModel)]="s.http.method" aria-label="Method">@for (m of methods; track m) { <option [value]="m">{{ m }}</option> }</select><input class="cmdi" [(ngModel)]="s.http.url" placeholder="URL" aria-label="URL" /> }
+                              @else if (s.traffic) { <span class="mut">traffic test</span><input class="cmdi" [(ngModel)]="s.traffic.test" placeholder="saved lab traffic test" aria-label="Traffic test" /> }
                               @else { <span class="cmd fl">{{ text(s) }}</span><span class="sp"></span>@if (s.loop) { <span class="mut">edit loops in the YAML</span> } }
                               <button type="button" class="lnk" (click)="moveStep(ph.k, i, -1)" [disabled]="i === 0" title="Move up">↑</button><button type="button" class="lnk" (click)="moveStep(ph.k, i, 1)" [disabled]="lastI" title="Move down">↓</button><button type="button" class="lnk" (click)="removeStep(ph.k, i)" title="Remove the step">✕</button>
                             </div>
@@ -271,7 +281,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
         }
         <ng-template #fileView>
           @if (fileSel(); as fp) {
-            <div class="head"><div class="crumb">{{ fp }}</div><div class="title"><h1>{{ base(fp) }}</h1><span class="sp"></span><button type="button" (click)="backend.testsOpenInEditor(fp)">Open in VS Code</button><button type="button" class="pri" (click)="saveFile()">Save</button></div></div>
+            <div class="head"><div class="crumb">{{ fp }}</div><div class="title"><h1>{{ base(fp) }}</h1>@if (lockOf(fp); as l) { <span class="pill s">🔒 in use by {{ l.user }} on {{ l.host }} since {{ l.since.slice(11, 16) }}</span><button type="button" (click)="releaseLock(fp)" title="Free the testbed when that run is over">Release</button> }<span class="sp"></span><button type="button" (click)="backend.testsOpenInEditor(fp)">Open in VS Code</button><button type="button" class="pri" (click)="saveFile()">Save</button></div></div>
             <div class="body"><textarea class="code" [(ngModel)]="fileText" spellcheck="false" [attr.aria-label]="fp"></textarea>
               <div class="row"><span class="mut">{{ fp.startsWith('lib/') ? 'Termwright writes twtest and run_tests again when it is updated: keep your own helpers in other files.' : fp.startsWith('templates/') ? 'TextFSM templates; the index says which command each one parses (ntc-templates format).' : 'Roles and values: role: Folder/session, name: value.' }}</span></div></div>
           } @else { <div class="empty mut">Select a file.</div> }
@@ -282,7 +292,15 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
         <aside class="drawer" role="dialog" aria-label="Run tests">
           <h2>Run {{ runLabel() }}</h2>
           <span class="mut">{{ rf.length ? rf.length + (rf.length === 1 ? ' test' : ' tests') : 'every test in the folder' }}</span>
-          <label class="fld"><span>Testbed - which devices</span><select [(ngModel)]="testbed"><option value="">The tests' own sessions</option>@for (b of tree()?.testbeds ?? []; track b) { <option [value]="b">{{ base(b) }}</option> }</select></label>
+          @if (!multi()) {
+            <label class="fld"><span>Testbed - which devices</span><select [(ngModel)]="testbed"><option value="">The tests' own sessions</option>@for (b of tree()?.testbeds ?? []; track b) { <option [value]="b">{{ base(b) }}{{ lockText(b) }}</option> }</select>
+              @if (testbed) { <small class="mut">{{ lockOf(testbed) && !lockOf(testbed)!.mine ? '🔒 in use by ' + lockOf(testbed)!.user + ' on ' + lockOf(testbed)!.host + ' - Run takes it over after asking' : '🔒 free - locked to you while the run lasts' }}</small> }</label>
+            @if ((tree()?.testbeds?.length ?? 0) > 1) { <button type="button" class="lnk sm" (click)="multi.set(true); multiPick = testbed ? [testbed] : []">Run on several testbeds at the same time…</button> }
+          } @else {
+            <div class="fld"><span>Testbeds - each runs the tests at the same time</span>
+              @for (b of tree()?.testbeds ?? []; track b) { <label class="radio" [class.on]="multiPick.includes(b)"><input type="checkbox" [checked]="multiPick.includes(b)" (change)="toggleMulti(b)" /><span>{{ base(b) }}<small>{{ lockText(b) || 'free' }}</small></span></label> }
+              <button type="button" class="lnk sm" (click)="multi.set(false)">One testbed</button></div>
+          }
           <div class="fld"><span>After each test</span>
             @for (o of cleanupOpts; track o.k) {
               <label class="radio" [class.on]="cleanupMode === o.k"><input type="radio" name="twcl" [value]="o.k" [(ngModel)]="cleanupMode" (ngModelChange)="keepOcf()" /><span>{{ o.l }}<small>{{ o.d }}</small></span></label>
@@ -292,7 +310,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
             <label class="fld"><span>If a cleanup fails</span><select [(ngModel)]="onCleanupFail" (ngModelChange)="keepOcf()"><option value="stop">Stop the run - skip the rest</option><option value="restore">Restore the configuration saved before the run</option><option value="factory">Factory default, then go on</option></select></label>
           }
           <span class="sp"></span>
-          <div class="row"><button type="button" class="grow" (click)="runFiles.set(null)">Cancel</button><button type="button" class="pri grow2" (click)="startRun()">▶ Run {{ rf.length ? rf.length + (rf.length === 1 ? ' test' : ' tests') : 'all' }}</button></div>
+          <div class="row"><button type="button" class="grow" (click)="runFiles.set(null)">Cancel</button><button type="button" class="pri grow2" (click)="startRun()" [disabled]="multi() && multiPick.length < 1">▶ Run {{ rf.length ? rf.length + (rf.length === 1 ? ' test' : ' tests') : 'all' }}{{ multi() ? ' on ' + multiPick.length + ' testbeds' : '' }}</button></div>
         </aside>
       }
     </div>
@@ -319,6 +337,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .case:hover { background: var(--hover, rgba(255,255,255,.05)); } .case.sel { background: color-mix(in srgb, var(--accent) 18%, transparent); }
     .case input { margin: 0; } .cn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .n { color: var(--muted); font-size: 11px; }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--text) 25%, transparent); flex: none; } .dot.p { background: var(--ok, #3fbf75); } .dot.f { background: var(--danger, #ef6161); } .dot.e { background: var(--warn, #e0a030); }
+    .sm { font-size: 12px; align-self: flex-start; } .drawer small { font-size: 11.5px; }
     .sui { color: var(--accent); font-size: 10px; width: 14px; text-align: center; }
     .empty-s { color: var(--muted); font-size: 12px; padding: 18px 8px; text-align: center; line-height: 1.6; }
     .selbar { display: flex; align-items: center; gap: 6px; margin: 8px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: color-mix(in srgb, var(--text) 4%, transparent); }
@@ -348,6 +367,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .trow { display: flex; gap: 8px; font-size: 12px; } .none { color: var(--muted); font-size: 12px; padding: 10px 12px; border-top: 1px solid var(--border); }
     .ed { padding: 9px 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px; } .num { width: 18px; color: var(--muted); font-weight: 500; }
     .ses { width: 160px; height: 27px; } .cmdi { flex: 1; min-width: 0; height: 27px; font-family: var(--mono, monospace); } .num2 { width: 60px; height: 24px; } .pin { width: 100px; height: 24px; }
+    .opts .wide { flex: 1; } .opts .wide .cmdi { height: 26px; }
     .logic { display: inline-block; margin-left: 8px; font: 11px var(--ui-font, inherit); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); padding: 0 6px; border-radius: 8px; }
     .opts { flex-wrap: wrap; font-size: 12px; color: var(--muted); gap: 16px; padding-left: 24px; } .opts label { display: flex; align-items: center; gap: 4px; } .ed .chips { padding-left: 24px; }
     .addck { display: inline-flex; gap: 4px; } .addck select, .addck input { height: 24px; font-size: 12px; } .addck input { width: 220px; }
@@ -491,18 +511,18 @@ export class TestsView implements OnInit, OnDestroy {
     } catch (e) { this.ui.toast(errText(e), 'error'); }
   }
 
-  async run(files: string[], confirmed = false): Promise<void> {
+  async run(files: string[], confirmed = false, forceLock = false): Promise<void> {
     if (!confirmed && this.cleanupMode !== 'off' && this.onCleanupFail === 'factory' && !(await this.ui.confirm(tr('Factory Default on a Failed Cleanup?'),
       tr('When a cleanup fails, the devices of that test are reset to factory default and rebooted, then the run goes on. A factory default may remove the management address: use console sessions. Production sessions are never reset.'), tr('Run'), true))) return;
     this.busy.set(true);
     try {
-      this.took(await this.backend.runTests({ files, testbed: this.testbed || undefined, confirmed, onCleanupFail: this.cleanupMode === 'off' ? undefined : this.onCleanupFail, cleanup: this.cleanupMode || undefined }));
+      this.took(await this.backend.runTests({ files, testbed: this.testbed || undefined, confirmed, forceLock, onCleanupFail: this.cleanupMode === 'off' ? undefined : this.onCleanupFail, cleanup: this.cleanupMode || undefined }));
       await this.load();
     } catch (e) {
       const t = errText(e);
       if (!confirmed && /production sessions/i.test(t)) {
         this.busy.set(false);
-        if (await this.ui.confirm(tr('Run on Production?'), t + '. ' + tr('Their commands and requests are sent to those devices.'), tr('Run'), true)) return this.run(files, true);
+        if (await this.ui.confirm(tr('Run on Production?'), t + '. ' + tr('Their commands and requests are sent to those devices.'), tr('Run'), true)) return this.run(files, true, forceLock);
         return;
       }
       this.ui.toast(t, 'error');
@@ -760,7 +780,43 @@ export class TestsView implements OnInit, OnDestroy {
   shortDev(t: string) { return t.replace(/^\{\{\s*|\s*\}\}$/g, '').split('/').pop() ?? t; }
   runHint() { const v = this.view(); return v === 'go' ? 'Run: go test ./cases/...' : v === 'py' ? 'Run: python lib/python/run_tests.py' : v === 'tcl' ? 'Run: tclsh lib/tcl/run_tests.tcl' : ''; }
   openRun(files: string[], label: string) { this.runFiles.set(files); this.runLabel.set(label); }
-  startRun() { const f = this.runFiles() ?? []; this.runFiles.set(null); void this.run(f); }
+  readonly multi = signal(false);
+  multiPick: string[] = [];
+  toggleMulti(b: string) { this.multiPick = this.multiPick.includes(b) ? this.multiPick.filter(x => x !== b) : [...this.multiPick, b]; }
+  lockOf(tb: string) { return this.tree()?.locks?.find(l => l.testbed === tb); }
+  lockText(tb: string) { const l = this.lockOf(tb); return l ? (l.mine ? '  · running' : '  · in use by ' + l.user) : ''; }
+  async releaseLock(tb: string) { try { await this.backend.testReleaseLock(tb); await this.load(); } catch (e) { this.ui.toast(errText(e), 'error'); } }
+  async startRun() {
+    const f = this.runFiles() ?? [];
+    const tbs = this.multi() ? this.multiPick : this.testbed ? [this.testbed] : [];
+    const held = tbs.map(t => this.lockOf(t)).filter(l => l && !l.mine);
+    let force = false;
+    if (held.length) {
+      if (!(await this.ui.confirm(tr('Testbed in Use'), held.map(l => tr('{0} is in use by {1} on {2}', this.base(l!.testbed), l!.user, l!.host)).join('\n') + '\n' + tr('Take it over? Their run may still be sending commands.'), tr('Take Over'), true))) return;
+      force = true;
+    }
+    this.runFiles.set(null);
+    if (this.multi() && tbs.length > 1) void this.runMany(f, tbs, force); else void this.run(f, false, force);
+  }
+  private async runMany(files: string[], testbeds: string[], forceLock: boolean, confirmed = false): Promise<void> {
+    this.busy.set(true);
+    try {
+      const reps = await this.backend.runTestsParallel({ files, testbeds, confirmed, forceLock, onCleanupFail: this.cleanupMode === 'off' ? undefined : this.onCleanupFail, cleanup: this.cleanupMode || undefined });
+      for (const r of reps ?? []) if (r?.dir) this.took(r);
+      const first = reps?.find(r => r?.dir);
+      if (first) await this.openRunReport(first.dir);
+      await this.load();
+    } catch (e) {
+      const t = errText(e);
+      if (!confirmed && /production sessions/i.test(t)) {
+        this.busy.set(false);
+        if (await this.ui.confirm(tr('Run on Production?'), t + '. ' + tr('Their commands and requests are sent to those devices.'), tr('Run'), true)) return this.runMany(files, testbeds, forceLock, true);
+        return;
+      }
+      this.ui.toast(t, 'error'); await this.load();
+    }
+    this.busy.set(false);
+  }
   /** Rename (move) or duplicate the selected test. */
   async rename(copy: boolean) {
     const cur = this.sel().replace(/^cases\//, '').replace(/\.ya?ml$/, '');
@@ -785,6 +841,13 @@ export class TestsView implements OnInit, OnDestroy {
     this.listOf(d, p).push({ run: { session: ses, command: '' } });
     this.touch();
   }
+  addTraffic(p: Phase) { const d = this.draft(); if (!d) return; this.listOf(d, p).push({ traffic: { test: '' }, expect: [{ json: 'rows[0].loss', less: 0.01 }] }); this.touch(); }
+  setWatch(d: TestCase, k: 'syslog' | 'traps', v: string) {
+    const l = v.split(/[,\n]/).map(x => x.trim()).filter(Boolean);
+    const w = { ...(d.watch ?? {}) }; if (l.length) w[k] = l; else delete w[k];
+    d.watch = w.syslog?.length || w.traps?.length ? w : undefined;
+  }
+  watchText(t: TestCase) { return [...(t.watch?.syslog ?? []).map(x => 'syslog ' + x), ...(t.watch?.traps ?? []).map(x => 'trap ' + x)].join(', '); }
   addWait(p: Phase) { const d = this.draft(); if (!d) return; this.listOf(d, p).push({ wait: 5 }); this.touch(); }
   addLoop(p: Phase) {
     const d = this.draft(); if (!d) return;

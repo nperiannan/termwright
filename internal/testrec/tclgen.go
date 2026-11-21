@@ -259,6 +259,8 @@ func tclStep(b *bytes.Buffer, st Step, i int, phase, ind, suffix string) {
 			args = append(args, "-timeout", strconv.Itoa(st.Timeout))
 		}
 		fmt.Fprintf(b, "%stw::http %s\n", in, strings.Join(args, " "))
+	case st.Traffic != nil:
+		fmt.Fprintf(b, "%stw::traffic %s %d\n", in, tclStr(st.Traffic.Test), st.Timeout)
 	case st.SNMP != nil:
 		sn := st.SNMP
 		op := strings.ToLower(sn.Op)

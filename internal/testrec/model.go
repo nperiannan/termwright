@@ -15,6 +15,12 @@ type Case struct {
 	// DependsOn: tests (files in cases/, or names) that must pass first; when one failed or was
 	// skipped in the run, this test is skipped. A run puts them before this test.
 	DependsOn []string `yaml:"dependsOn,omitempty" json:"dependsOn,omitempty"`
+	// Watch: syslog messages and SNMP notifications that fail the test when they arrive while it runs.
+	Watch *Watch `yaml:"watch,omitempty" json:"watch,omitempty"`
+	// ConfigDiff: compare each device's configuration before the test and after its cleanup; a
+	// difference fails the test (lines matching ConfigIgnore do not count).
+	ConfigDiff   bool     `yaml:"configDiff,omitempty" json:"configDiff,omitempty"`
+	ConfigIgnore []string `yaml:"configIgnore,omitempty" json:"configIgnore,omitempty"`
 	// Vars: values used as {{name}} in the steps; a run's own values win.
 	Vars map[string]string `yaml:"vars,omitempty" json:"vars,omitempty"`
 	// Params: the test runs once per entry, with its values as {{variables}} (data-driven tests);
@@ -59,6 +65,9 @@ type Step struct {
 	If string `yaml:"if,omitempty" json:"if,omitempty"`
 	// Retry: run the step again until its checks pass (or the time is up).
 	Retry *Retry `yaml:"retry,omitempty" json:"retry,omitempty"`
+	// Traffic: run a saved lab traffic test; its results are JSON (rows[0].loss, rows[0].mbps …) for
+	// json checks.
+	Traffic *TrafficStep `yaml:"traffic,omitempty" json:"traffic,omitempty"`
 	// Loop: run its steps once per value, with the value in {{var}}.
 	Loop *Loop `yaml:"loop,omitempty" json:"loop,omitempty"`
 }
@@ -199,4 +208,19 @@ type Loop struct {
 	Range  string   `yaml:"range,omitempty" json:"range,omitempty"`
 	From   string   `yaml:"from,omitempty" json:"from,omitempty"`
 	Steps  []Step   `yaml:"steps" json:"steps"`
+}
+
+// Watch lists what must not happen while a test runs.
+type Watch struct {
+	// Syslog: patterns (words, or /regex/) of messages that fail the test, e.g. "LINK-3-UPDOWN" or "/%.*-[0-2]-/".
+	Syslog []string `yaml:"syslog,omitempty" json:"syslog,omitempty"`
+	// Traps: patterns of SNMP notifications (name, OID or text) that fail the test, e.g. linkDown.
+	Traps []string `yaml:"traps,omitempty" json:"traps,omitempty"`
+	// Devices: only from these sessions ("" = the test's own devices; "any" = from anyone).
+	Devices []string `yaml:"devices,omitempty" json:"devices,omitempty"`
+}
+
+// TrafficStep runs a saved traffic test of the emulated lab.
+type TrafficStep struct {
+	Test string `yaml:"test" json:"test"`
 }

@@ -256,6 +256,8 @@ func pyStep(b *bytes.Buffer, st Step, i int, phase, ind, suffix string) {
 			args = append(args, "headers="+pyDict(h.Headers))
 		}
 		fmt.Fprintf(b, "%sa = s.http(%s%s)\n", in, strings.Join(args, ", "), to)
+	case st.Traffic != nil:
+		fmt.Fprintf(b, "%sa = s.traffic(%s%s)\n", in, pyStr(st.Traffic.Test), to)
 	case st.SNMP != nil:
 		sn := st.SNMP
 		op := strings.ToLower(sn.Op)

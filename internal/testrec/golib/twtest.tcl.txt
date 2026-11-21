@@ -578,3 +578,8 @@ proc tw::cond {expr} {
 proc tw::retry_until {timeout interval expect} {
     variable retry "\"retry\":\{\"timeout\":$timeout,\"interval\":$interval\},\"expect\":$expect"
 }
+
+# tw::traffic test ?timeout?: runs a saved lab traffic test; its results are JSON (tw::check json rows[0].loss less 0.1).
+proc tw::traffic {test {timeout 0}} {
+    tw::_send "\{\"traffic\":\{\"test\":[tw::jstr [tw::fill $test]]\},\"timeout\":$timeout\}"
+}

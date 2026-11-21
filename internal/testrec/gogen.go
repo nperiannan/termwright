@@ -402,6 +402,8 @@ func goAction(b *bytes.Buffer, st Step) {
 			f = append(f, "Timeout: "+strconv.Itoa(st.Timeout))
 		}
 		fmt.Fprintf(b, "\t\ta := s.HTTP(twtest.Request{%s})\n", strings.Join(f, ", "))
+	case st.Traffic != nil:
+		fmt.Fprintf(b, "\t\ta := s.Traffic(%s, %d)\n", q(st.Traffic.Test), st.Timeout)
 	case st.SNMP != nil:
 		sn := st.SNMP
 		op := strings.ToLower(sn.Op)

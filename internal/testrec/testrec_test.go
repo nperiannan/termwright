@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 type fake struct {
@@ -523,5 +524,56 @@ steps:
 	}
 	if _, err := Parse([]byte("steps: [{loop: {var: x, steps: [{run: {session: s, command: a}}]}}]")); err == nil {
 		t.Fatal("loop without values parsed")
+	}
+}
+
+func TestLocks(t *testing.T) {
+	f := Folder{Root: t.TempDir()}
+	f.Init()
+	if err := f.TakeLock("testbeds/lab-a.yaml", false); err != nil {
+		t.Fatal(err)
+	}
+	if l := f.LockOf("testbeds/lab-a.yaml"); l == nil || !l.Mine {
+		t.Fatal(l)
+	}
+	os.WriteFile(filepath.Join(f.Root, "locks", "lab-b.lock"), []byte(`{"testbed":"testbeds/lab-b.yaml","user":"ana","host":"other","pid":1,"since":"`+time.Now().Format(time.RFC3339)+`"}`), 0o644)
+	if err := f.TakeLock("testbeds/lab-b.yaml", false); !errors.Is(err, ErrLocked) {
+		t.Fatal(err)
+	}
+	if err := f.TakeLock("testbeds/lab-b.yaml", true); err != nil {
+		t.Fatal(err)
+	}
+	f.ReleaseLock("testbeds/lab-a.yaml")
+	if len(f.Locks()) != 1 || !fileThere(f, ".removed/locks") {
+		t.Fatal(f.Locks())
+	}
+}
+
+type watchFake struct {
+	fake
+	cfg  []string
+	hits []string
+}
+
+func (w *watchFake) WatchMark(*Watch) (any, error) { return 1, nil }
+func (w *watchFake) WatchHits(any, Watch, []string) ([]string, error) { return w.hits, nil }
+func (w *watchFake) ConfigSnapshot(context.Context, string) (string, error) {
+	c := w.cfg[0]
+	if len(w.cfg) > 1 {
+		w.cfg = w.cfg[1:]
+	}
+	return c, nil
+}
+
+func TestWatchConfigDiff(t *testing.T) {
+	c, _ := Parse([]byte("watch: {syslog: [LINK]}\nconfigDiff: true\nconfigIgnore: ['^! time']\nsteps: [{run: {session: s, command: show version}}]\n"))
+	w := &watchFake{cfg: []string{"vlan 1\n! time 1", "vlan 1\n! time 2"}}
+	if r := Run(context.Background(), c, w, nil); !r.Passed {
+		t.Fatal(r.Steps)
+	}
+	w = &watchFake{cfg: []string{"vlan 1", "vlan 1\nvlan 42"}, hits: []string{"syslog s: LINK down"}}
+	r := Run(context.Background(), c, w, nil)
+	if r.Passed || !r.CleanupFailed || !strings.Contains(r.Steps[len(r.Steps)-1].Output, "+ vlan 42") || !strings.Contains(r.Steps[1].Error, "LINK down") {
+		t.Fatal(r.Steps)
 	}
 }

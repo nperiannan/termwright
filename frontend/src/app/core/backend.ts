@@ -309,7 +309,9 @@ export class Backend {
   testsGit() { return this.call<TestsGitInfo>('TestsGit'); }
   testsOpen(rel: string) { return this.call<void>('TestsOpen', rel); }
   testsOpenInEditor(rel: string) { return this.call<void>('TestsOpenInEditor', rel); }
-  runTests(r: { files?: string[]; vars?: Record<string, string>; testbed?: string; confirmed?: boolean; onCleanupFail?: string; cleanup?: string; tags?: string[] }) { return this.call<TestRunReport>('RunTests', r); }
+  runTests(r: { files?: string[]; vars?: Record<string, string>; testbed?: string; confirmed?: boolean; onCleanupFail?: string; cleanup?: string; tags?: string[]; forceLock?: boolean }) { return this.call<TestRunReport>('RunTests', r); }
+  runTestsParallel(r: { files?: string[]; testbeds: string[]; confirmed?: boolean; onCleanupFail?: string; cleanup?: string; forceLock?: boolean }) { return this.call<TestRunReport[]>('RunTestsParallel', r); }
+  testReleaseLock(testbed: string) { return this.call<void>('TestReleaseLock', testbed); }
   testParse(session: string, command: string, template: string, output: string) { return this.call<TestTable>('TestParse', session, command, template, output); }
   testSaveFile(rel: string, text: string) { return this.call<void>('TestSaveFile', rel, text); }
   testSaveSuite(rel: string, s: { name?: string; description?: string; tests?: string[]; tags?: string[] }) { return this.call<string>('TestSaveSuite', rel, s); }

@@ -97,6 +97,10 @@ type TestRunRequest struct {
 	Files []string `json:"files,omitempty"`
 	// Tags: only tests with one of these tags ("!tag" leaves its tests out).
 	Tags []string `json:"tags,omitempty"`
+	// Testbeds: run on these testbeds at the same time (RunTestsParallel); ForceLock takes over a
+	// testbed someone else has locked.
+	Testbeds  []string `json:"testbeds,omitempty"`
+	ForceLock bool     `json:"forceLock,omitempty"`
 	// Vars: values for {{variables}} that win over the tests' own.
 	Vars map[string]string `json:"vars,omitempty"`
 	// Testbed: a file in testbeds/ whose values are used as {{variables}} (Vars win).
@@ -116,8 +120,9 @@ type TestRunRequest struct {
 var errTestsProduction = errors.New("these tests use production sessions")
 
 var (
-	testsRun  sync.Mutex // one run at a time
-	testsMu   sync.Mutex // guards testsLast
+	testsRun  sync.Mutex          // guards testsBusy
+	testsBusy = map[string]bool{} // testbeds ("" = the tests' own sessions) with a run going
+	testsMu   sync.Mutex          // guards testsLast
 	testsLast *testrec.RunReport
 )
 
@@ -125,6 +130,52 @@ var (
 // uses production sessions needs Confirmed (the error lists them).
 func (a *App) RunTests(r TestRunRequest) (testrec.RunReport, error) {
 	return a.runTests(context.Background(), r, nil)
+}
+
+// RunTestsParallel runs the same tests on several testbeds at once (each locked for its run); it
+// returns one report per testbed, in order.
+func (a *App) RunTestsParallel(r TestRunRequest) ([]testrec.RunReport, error) {
+	return a.runParallel(context.Background(), r, nil)
+}
+
+func (a *App) runParallel(ctx context.Context, r TestRunRequest, ask netAsker) ([]testrec.RunReport, error) {
+	tbs := r.Testbeds
+	if len(tbs) == 0 {
+		tbs = []string{r.Testbed}
+	}
+	out := make([]testrec.RunReport, len(tbs))
+	errs := make([]error, len(tbs))
+	var wg sync.WaitGroup
+	for i, tb := range tbs {
+		rr := r
+		rr.Testbed, rr.Testbeds = tb, nil
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			out[i], errs[i] = a.runTests(ctx, rr, ask)
+		}()
+	}
+	wg.Wait()
+	var msgs []string
+	for i, e := range errs {
+		if e != nil {
+			msgs = append(msgs, orDash(tbs[i])+": "+e.Error())
+		}
+	}
+	if len(msgs) > 0 {
+		return out, errors.New(strings.Join(msgs, "; "))
+	}
+	return out, nil
+}
+
+// TestReleaseLock frees a testbed locked by a run that ended without releasing it (or someone
+// else's, when they are done).
+func (a *App) TestReleaseLock(testbed string) error {
+	f, err := a.testsFolder()
+	if err != nil {
+		return err
+	}
+	return f.ReleaseLock(testbed)
 }
 
 func (a *App) runTests(ctx context.Context, r TestRunRequest, ask netAsker) (testrec.RunReport, error) {
@@ -154,10 +205,20 @@ func (a *App) runTests(ctx context.Context, r TestRunRequest, ask netAsker) (tes
 			return testrec.RunReport{}, err
 		}
 	}
-	if !testsRun.TryLock() {
-		return testrec.RunReport{}, errors.New("tests are already running")
+	testsRun.Lock()
+	if testsBusy[r.Testbed] {
+		testsRun.Unlock()
+		return testrec.RunReport{}, errors.New("tests are already running on " + orDash(r.Testbed))
 	}
-	defer testsRun.Unlock()
+	testsBusy[r.Testbed] = true
+	testsRun.Unlock()
+	defer func() { testsRun.Lock(); delete(testsBusy, r.Testbed); testsRun.Unlock() }()
+	if r.Testbed != "" {
+		if err := f.TakeLock(r.Testbed, r.ForceLock); err != nil {
+			return testrec.RunReport{}, err
+		}
+		defer f.ReleaseLock(r.Testbed)
+	}
 	rep, err := f.RunFilesWith(ctx, r.Files, newTestDriver(a), r.Vars, testrec.RunOptions{OnCleanupFail: r.OnCleanupFail, Cleanup: r.Cleanup, Testbed: r.Testbed, Tags: r.Tags}, func(res testrec.Result) {
 		emitter{a}.Emit("tests:progress", res)
 	})
@@ -382,7 +443,22 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 		}
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 		defer cancel()
-		rep, err := a.runTests(ctx, TestRunRequest{Files: files, Vars: vars, Testbed: argStr(args, "testbed"), OnCleanupFail: argStr(args, "on_cleanup_fail"), Cleanup: argStr(args, "cleanup"), Tags: argStrs(args, "tags")}, ask)
+		req := TestRunRequest{Files: files, Vars: vars, Testbed: argStr(args, "testbed"), OnCleanupFail: argStr(args, "on_cleanup_fail"), Cleanup: argStr(args, "cleanup"), Tags: argStrs(args, "tags"), ForceLock: args["force_lock"] == true}
+		if tbs := argStrs(args, "testbeds"); len(tbs) > 1 {
+			req.Testbed, req.Testbeds = "", tbs
+			reps, err := a.runParallel(ctx, req, ask)
+			var b strings.Builder
+			for _, r := range reps {
+				if r.Dir != "" {
+					fmt.Fprintf(&b, "Testbed %s:\n%s\n", r.Testbed, testsReportText(f, r))
+				}
+			}
+			if err != nil {
+				fmt.Fprintf(&b, "Errors: %v\n", err)
+			}
+			return b.String(), nil
+		}
+		rep, err := a.runTests(ctx, req, ask)
 		if err != nil && len(rep.Results) == 0 {
 			return "", err
 		}

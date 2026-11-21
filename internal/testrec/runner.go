@@ -163,6 +163,41 @@ func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt 
 		}
 	}
 	failed := !r.Passed
+	// watching and the configuration before the test
+	var mark any
+	if c.Watch != nil {
+		if w, ok := d.(Watcher); ok {
+			var err error
+			if mark, err = w.WatchMark(c.Watch); err != nil {
+				r.Steps = append(r.Steps, StepResult{Name: "watch syslog and SNMP notifications", Kind: "watch", Error: err.Error()})
+				r.Passed, failed = false, true
+			}
+		} else {
+			r.Steps = append(r.Steps, StepResult{Name: "watch", Kind: "watch", Error: "this runner cannot watch syslog or SNMP notifications"})
+			r.Passed, failed = false, true
+		}
+	}
+	before := map[string]string{}
+	sess := Sessions(c, v)
+	snap, canSnap := d.(Snapshotter)
+	if c.ConfigDiff && opt.Cleanup != CleanupOff && !failed {
+		if !canSnap {
+			r.Steps = append(r.Steps, StepResult{Name: "save the configuration to compare", Kind: "config", Phase: "setup", Error: "this runner cannot read configurations"})
+			r.Passed, failed = false, true
+		}
+		for _, s := range sess {
+			if !canSnap {
+				break
+			}
+			cfg, err := snap.ConfigSnapshot(ctx, s)
+			if err != nil {
+				r.Steps = append(r.Steps, StepResult{Name: "read the configuration of " + s, Kind: "config", Target: s, Phase: "setup", Error: err.Error()})
+				r.Passed, failed = false, true
+				break
+			}
+			before[s] = cfg
+		}
+	}
 	run := func(list []Step, phase string, always bool) {
 		for i, st := range list {
 			if (failed && !always) || (ctx.Err() != nil && !always) {
@@ -200,6 +235,45 @@ func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt 
 		run(autoUndo(c, r.Steps, d, v), "cleanup", true)
 	default:
 		run(c.Cleanup, "cleanup", true)
+	}
+	if mark != nil {
+		hits, err := d.(Watcher).WatchHits(mark, *c.Watch, sess)
+		sr := StepResult{Name: "nothing unwanted in syslog or SNMP notifications", Kind: "watch", Passed: err == nil && len(hits) == 0, Output: strings.Join(hits, "\n")}
+		switch {
+		case err != nil:
+			sr.Error = err.Error()
+		case len(hits) > 0:
+			sr.Error = fmt.Sprintf("%d unwanted while the test ran: %s", len(hits), hits[0])
+		}
+		r.Steps = append(r.Steps, sr)
+		r.Passed = r.Passed && sr.Passed
+	}
+	if len(before) > 0 {
+		var ign []*regexp.Regexp
+		for _, p := range c.ConfigIgnore {
+			if re, err := regexp.Compile(p); err == nil {
+				ign = append(ign, re)
+			}
+		}
+		for _, s := range sess {
+			old, ok := before[s]
+			if !ok {
+				continue
+			}
+			sr := StepResult{Name: "configuration back as before: " + s, Kind: "config", Target: s, Phase: "cleanup"}
+			now, err := snap.ConfigSnapshot(context.Background(), s)
+			if err != nil {
+				sr.Error = err.Error()
+			} else if d := ConfigDiff(old, now, ign); d != "" {
+				sr.Error, sr.Output = "the configuration differs after the cleanup", d
+			} else {
+				sr.Passed = true
+			}
+			r.Steps = append(r.Steps, sr)
+			if !sr.Passed {
+				r.Passed, r.CleanupFailed = false, true
+			}
+		}
 	}
 	if restore != nil {
 		rctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
@@ -358,6 +432,9 @@ func stepKind(s Step) string {
 	if s.SNMP != nil {
 		return "snmp"
 	}
+	if s.Traffic != nil {
+		return "traffic"
+	}
 	return "run"
 }
 
@@ -367,6 +444,8 @@ func stepName(s Step, i int) string {
 		return s.Name
 	case s.Loop != nil:
 		return "loop " + s.Loop.Var
+	case s.Traffic != nil:
+		return "traffic test " + s.Traffic.Test
 	case actions(s) == 0 && s.Wait > 0:
 		return fmt.Sprintf("wait %g s", s.Wait)
 	case s.Run != nil:
@@ -388,6 +467,9 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 	to := time.Duration(st.Timeout) * time.Second
 	if to <= 0 {
 		to = 60 * time.Second
+		if st.Traffic != nil {
+			to = 30 * time.Minute
+		}
 	}
 	sctx, cancel := context.WithTimeout(ctx, to)
 	defer cancel()
@@ -427,6 +509,13 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 		sr.Target, sr.Sent = sn.Session, snmpText(sn)
 		rows, err = d.SNMP(sctx, sn)
 		sr.Rows, out = rows, SNMPOutput(rows)
+	case st.Traffic != nil:
+		sr.Target, sr.Sent = "lab", "traffic test "+Fill(st.Traffic.Test, v)
+		if tr, ok := d.(TrafficRunner); ok {
+			out, err = tr.Traffic(sctx, Fill(st.Traffic.Test, v))
+		} else {
+			err = errors.New("this runner has no lab traffic tests")
+		}
 	default:
 		err = errors.New("the step has nothing to do (run, http or snmp)")
 	}
@@ -533,7 +622,7 @@ func check(e Expect, out string, status int, ms int64, v map[string]string, rows
 		return c
 	case e.MaxMs != 0 && e.Field == "" && e.JSON == "":
 		return CheckResult{What: fmt.Sprintf("took ≤ %d ms", e.MaxMs), Passed: ms <= e.MaxMs, Got: fmt.Sprintf("%d ms", ms)}
-	case e.Field != "" || e.JSON != "":
+	case e.Field != "" || e.JSON != "" || false:
 		subj := "json " + e.JSON
 		if e.Field != "" {
 			subj = "field " + e.Field
@@ -694,7 +783,7 @@ type StepAnswer struct {
 // RunOne runs one step's action (variables already filled in) without its checks - for the
 // generated tests, which send their steps to Termwright one by one.
 func RunOne(ctx context.Context, st Step, d Driver) StepAnswer {
-	one := Step{Run: st.Run, HTTP: st.HTTP, SNMP: st.SNMP, Timeout: st.Timeout}
+	one := Step{Run: st.Run, HTTP: st.HTTP, SNMP: st.SNMP, Traffic: st.Traffic, Timeout: st.Timeout}
 	var sr StepResult
 	if st.Retry != nil { // the generated tests' retry: Termwright repeats the step until its checks pass
 		one.Expect, one.Retry = st.Expect, st.Retry
@@ -710,7 +799,7 @@ func RunOne(ctx context.Context, st Step, d Driver) StepAnswer {
 
 func actions(s Step) int {
 	n := 0
-	for _, b := range []bool{s.Run != nil, s.HTTP != nil, s.SNMP != nil} {
+	for _, b := range []bool{s.Run != nil, s.HTTP != nil, s.SNMP != nil, s.Traffic != nil} {
 		if b {
 			n++
 		}
@@ -793,4 +882,69 @@ func HasText(out, t string) bool {
 	}
 	n := func(s string) string { return strings.TrimSpace(spaceRun.ReplaceAllString(s, " ")) }
 	return strings.Contains(n(out), n(t))
+}
+
+// TrafficRunner runs saved lab traffic tests (traffic steps); it returns their results as JSON.
+type TrafficRunner interface {
+	Traffic(ctx context.Context, test string) (string, error)
+}
+
+// Watcher watches syslog and SNMP notifications while a case runs (Case.Watch).
+type Watcher interface {
+	// WatchMark notes where the messages are now (an error: the syslog server or trap receiver is off).
+	WatchMark(w *Watch) (any, error)
+	// WatchHits returns the messages since the mark that match (one line each).
+	WatchHits(mark any, w Watch, sessions []string) ([]string, error)
+}
+
+// Snapshotter reads a device's configuration (Case.ConfigDiff).
+type Snapshotter interface {
+	ConfigSnapshot(ctx context.Context, session string) (string, error)
+}
+
+// ConfigDiff lists the lines removed (-) and added (+) between two configurations; lines matching
+// ignore (and blank lines) do not count. "" = the same.
+func ConfigDiff(old, now string, ignore []*regexp.Regexp) string {
+	norm := func(s string) []string {
+		var out []string
+		for _, l := range strings.Split(strings.ReplaceAll(s, "\r", ""), "\n") {
+			l = strings.TrimRight(l, " \t")
+			if strings.TrimSpace(l) == "" {
+				continue
+			}
+			skip := false
+			for _, re := range ignore {
+				skip = skip || re.MatchString(l)
+			}
+			if !skip {
+				out = append(out, l)
+			}
+		}
+		return out
+	}
+	a, b := norm(old), norm(now)
+	count := map[string]int{}
+	for _, l := range b {
+		count[l]++
+	}
+	var out []string
+	for _, l := range a {
+		if count[l] > 0 {
+			count[l]--
+		} else {
+			out = append(out, "- "+l)
+		}
+	}
+	count = map[string]int{}
+	for _, l := range a {
+		count[l]++
+	}
+	for _, l := range b {
+		if count[l] > 0 {
+			count[l]--
+		} else {
+			out = append(out, "+ "+l)
+		}
+	}
+	return strings.Join(out, "\n")
 }

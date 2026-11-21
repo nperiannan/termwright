@@ -4996,6 +4996,15 @@ const ru: Record<string, string> = {
   'Write it as COLUMN=value: COLUMN = value (or rows N, missing, ~ pattern)': 'Запишите как СТОЛБЕЦ=значение: СТОЛБЕЦ = значение (или rows N, missing, ~ шаблон)',
   'The token is saved in the OS keychain.': 'Токен сохранён в связке ключей ОС.',
   'Check added to step {0}': 'Проверка добавлена к шагу {0}',
+  'Testbed in Use': 'Тестовый стенд занят',
+  '{0} is in use by {1} on {2}': '{0} занят пользователем {1} на {2}',
+  'Take it over? Their run may still be sending commands.': 'Забрать его? Их запуск может ещё отправлять команды.',
+  'Loop added: change its values and steps in the YAML after saving': 'Цикл добавлен: измените его значения и шаги в YAML после сохранения',
+  'Save as Suite': 'Сохранить как набор',
+  'Suite name (suites/<name>.yaml)': 'Имя набора (suites/<имя>.yaml)',
+  'Comma-separated, e.g. smoke, l2': 'Через запятую, напр. smoke, l2',
+  'Depends On': 'Зависит от',
+  'Tests that must pass first (files or names, comma-separated); when one fails, this test is skipped': 'Тесты, которые должны пройти раньше (файлы или имена через запятую); если один не прошёл, этот тест пропускается',
 };
 
 export default ru;

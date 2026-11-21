@@ -26,6 +26,7 @@ const testsCLIHelp = `termwright tests - Termwright tests without the window (fo
   termwright tests run [files or folders…] [--testbed lab.yaml] [--var name=value]… [--folder dir]
                        [--junit junit.xml] [--production] [--on-cleanup-failure stop|restore|factory]
                        [--cleanup steps|off|auto] [--tag smoke,!slow]
+                       (--testbed a.yaml,b.yaml runs on both at the same time; each testbed is locked)
       Runs tests (default: all) with Termwright's sessions, saved logins and device types, prints
       pass/fail per step and exits 1 when a test failed. --production lets tests use production
       sessions (refused otherwise). When a test's cleanup fails the run stops and the remaining
@@ -141,6 +142,22 @@ func (a *App) testsCLIRun(f testrec.Folder, files []string, testbed string, vars
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	req := TestRunRequest{Files: relFiles(f, files), Vars: vars, Testbed: testbed, Confirmed: prod, OnCleanupFail: onFail, Cleanup: cleanup, Tags: tags}
+	if tbs := splitList(testbed); len(tbs) > 1 { // several testbeds: at the same time
+		req.Testbed, req.Testbeds = "", tbs
+		reps, err := a.runParallel(ctx, req, nil)
+		code := 0
+		for _, rep := range reps {
+			fmt.Print(testsReportText(f, rep))
+			if rep.Failed > 0 || rep.Skipped > 0 || len(rep.Results) == 0 {
+				code = 1
+			}
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			code = 1
+		}
+		return code
+	}
 	rep, err := a.runTests(ctx, req, nil)
 	if err != nil && len(rep.Results) == 0 {
 		fmt.Fprintln(os.Stderr, err)

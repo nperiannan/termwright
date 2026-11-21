@@ -45,7 +45,7 @@ func (f Folder) Init() error {
 		}
 	}
 	if gi := filepath.Join(f.Root, ".gitignore"); !exists(gi) {
-		if err := os.WriteFile(gi, []byte("# run reports are kept out of Git\nreports/\n"), 0o644); err != nil {
+		if err := os.WriteFile(gi, []byte("# run reports and testbed locks are kept out of Git\nreports/\nlocks/\n"), 0o644); err != nil {
 			return err
 		}
 	}
@@ -225,15 +225,17 @@ func checkSteps(all []Step, in string) error {
 		}
 		switch {
 		case actions(s) == 0:
-			return fmt.Errorf("%sstep %d has none of run, http and snmp", in, i+1)
+			return fmt.Errorf("%sstep %d has none of run, http, snmp, traffic, loop and wait", in, i+1)
 		case actions(s) > 1:
-			return fmt.Errorf("%sstep %d has more than one of run, http and snmp", in, i+1)
+			return fmt.Errorf("%sstep %d has more than one of run, http, snmp and traffic", in, i+1)
 		case s.SNMP != nil && s.SNMP.Session == "":
 			return fmt.Errorf("%sstep %d: snmp needs a session", in, i+1)
 		case s.SNMP != nil && strings.EqualFold(s.SNMP.Op, "set") && len(s.SNMP.Values) == 0:
 			return fmt.Errorf("%sstep %d: an snmp set needs values", in, i+1)
 		case s.SNMP != nil && !strings.EqualFold(s.SNMP.Op, "set") && len(s.SNMP.OIDs) == 0:
 			return fmt.Errorf("%sstep %d: snmp needs oids", in, i+1)
+		case s.Traffic != nil && s.Traffic.Test == "":
+			return fmt.Errorf("%sstep %d: traffic needs a test (a saved lab traffic test)", in, i+1)
 		case s.Run != nil && (s.Run.Session == "" || s.Run.Command == ""):
 			return fmt.Errorf("%sstep %d: run needs a session and a command", in, i+1)
 		case s.HTTP != nil && s.HTTP.URL == "":
@@ -449,6 +451,15 @@ func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars
 	if len(files) == 1 {
 		dir += "_" + slug(rep.Results[0].Case)
 	}
+	if opt.Testbed != "" {
+		dir += "_" + slug(strings.TrimSuffix(filepath.Base(opt.Testbed), filepath.Ext(opt.Testbed)))
+	}
+	for n, base := 2, dir; ; n++ { // parallel runs may start in the same second
+		if _, err := os.Stat(filepath.Join(f.Root, dir)); err != nil {
+			break
+		}
+		dir = fmt.Sprintf("%s-%d", base, n)
+	}
 	rep.Dir = filepath.ToSlash(dir)
 	abs := filepath.Join(f.Root, dir)
 	if err := os.MkdirAll(abs, 0o755); err != nil {
@@ -495,6 +506,8 @@ type Tree struct {
 	Templates []string `json:"templates"`
 	// Suites: named sets of tests in suites/.
 	Suites []SuiteInfo `json:"suites"`
+	// Locks: testbeds in use.
+	Locks []Lock `json:"locks"`
 }
 
 // ReportInfo is a past run.
@@ -514,7 +527,7 @@ type ReportInfo struct {
 
 // Tree lists the folder.
 func (f Folder) Tree() Tree {
-	t := Tree{Root: f.Root, Cases: f.List(), Testbeds: []string{}, Reports: []ReportInfo{}, Lib: f.LibFiles(), Templates: f.dirFiles("templates"), Suites: f.Suites()}
+	t := Tree{Root: f.Root, Cases: f.List(), Testbeds: []string{}, Reports: []ReportInfo{}, Lib: f.LibFiles(), Templates: f.dirFiles("templates"), Suites: f.Suites(), Locks: f.Locks()}
 	if t.Cases == nil {
 		t.Cases = []CaseInfo{}
 	}
