@@ -9,6 +9,7 @@ import { CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestHis
 import { expectLabel, parseTableCheck, stepText } from './recorder-panel';
 import { AIChat } from '../core/ai-chat.service';
 import { Icon } from './icon';
+import { highlight, Lang } from '../core/highlight';
 
 type View = 'steps' | 'yaml' | 'go' | 'py' | 'tcl' | 'history';
 type Phase = 'setup' | 'steps' | 'cleanup';
@@ -210,7 +211,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                   <button type="button" [class.on]="view() === 'steps'" (click)="setView('steps')">Steps</button>
                   <button type="button" [class.on]="view() === 'history'" (click)="setView('history')">History</button>
                   <button type="button" [class.on]="view() !== 'steps' && view() !== 'history'" (click)="setView(view() === 'steps' || view() === 'history' ? 'yaml' : view())">Code</button>
-                  @if (view() !== 'steps' && view() !== 'history') { <span class="seg">@for (v of views.slice(1); track v.k) { <button type="button" [class.on]="view() === v.k" (click)="setView(v.k)">{{ v.l }}</button> }</span> }
+
                 </div>
               </div>
               <div class="body">
@@ -346,12 +347,19 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                           <span class="mut">{{ r.problem }}</span><span class="r mut">{{ dur(r.ms) }}</span></div>
                       }</div>
                   } @else { <p class="mut">No runs of this test yet.</p> }
-                } @else if (view() === 'yaml') {
-                  <textarea class="code" [(ngModel)]="yaml" spellcheck="false" aria-label="Test YAML"></textarea>
-                  <div class="row"><span class="mut">Saving checks the test and writes its Go, Python and TCL code again.</span><span class="sp"></span><button type="button" (click)="setView('yaml')">Revert</button><button type="button" class="pri" (click)="saveYaml()">Save</button></div>
                 } @else {
-                  <pre class="code ro">{{ goSrc() }}</pre>
-                  <div class="row"><span class="mut">Written from the test - edit the steps or the YAML, not this file. {{ runHint() }}</span><span class="sp"></span><button type="button" (click)="backend.testsOpenInEditor(view() === 'go' ? goFile() : view() === 'py' ? pyFile() : tclFile())">Open in VS Code</button></div>
+                  <div class="codebar">
+                    <div class="lang" role="tablist" aria-label="Language">@for (v of views.slice(1); track v.k) { <button type="button" role="tab" [class.on]="view() === v.k" (click)="yamlEdit.set(false); setView(v.k)">{{ v.l }}</button> }</div>
+                    <span class="mut fl" [title]="runHint()">{{ view() === 'yaml' ? (yamlEdit() ? 'Editing - Save checks the test and writes its code again' : 'The test file - the code is written from it') : 'Written from the test - change the steps or the YAML, not this file. ' + runHint() }}</span>
+                    <span class="sp"></span>
+                    <button type="button" (click)="copyText(view() === 'yaml' ? yaml : goSrc())" title="Copy to the clipboard"><app-icon name="copy" [size]="13" /> Copy</button>
+                    @if (view() === 'yaml') {
+                      @if (yamlEdit()) { <button type="button" (click)="yamlEdit.set(false); setView('yaml')">Cancel</button><button type="button" class="pri" (click)="saveYaml()">Save</button> }
+                      @else { <button type="button" (click)="yamlEdit.set(true)"><app-icon name="edit" [size]="13" /> Edit</button> }
+                    } @else { <button type="button" (click)="backend.testsOpenInEditor(view() === 'go' ? goFile() : view() === 'py' ? pyFile() : tclFile())" title="Open the file in VS Code (or the file's app)">Open in VS Code</button> }
+                  </div>
+                  @if (view() === 'yaml' && yamlEdit()) { <textarea class="code" [(ngModel)]="yaml" spellcheck="false" aria-label="Test YAML"></textarea> }
+                  @else { <pre class="code ro hl" [innerHTML]="codeHtml()"></pre> }
                 }
               </div>
             } @else { <div class="empty mut">Select a test, or record one.</div> }
@@ -359,7 +367,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
         }
         <ng-template #fileView>
           @if (fileSel(); as fp) {
-            <div class="head"><div class="crumb">{{ fp }}</div><div class="title"><h1>{{ base(fp) }}</h1>@if (fp.startsWith('reports/')) { <span class="pill">read only</span> }@if (lockOf(fp); as l) { <span class="pill s">🔒 in use by {{ l.user }} on {{ l.host }} since {{ l.since.slice(11, 16) }}</span><button type="button" (click)="releaseLock(fp)" title="Free the testbed when that run is over">Release</button> }<span class="sp"></span><button type="button" (click)="backend.testsOpenInEditor(fp)">Open in VS Code</button>@if (!fp.startsWith('reports/')) { <button type="button" class="pri" (click)="saveFile()">Save</button> }</div></div>
+            <div class="head"><div class="crumb">{{ fp }}</div><div class="title"><h1>{{ base(fp) }}</h1>@if (fp.startsWith('reports/')) { <span class="pill">read only</span> }@if (lockOf(fp); as l) { <span class="pill s">🔒 in use by {{ l.user }} on {{ l.host }} since {{ l.since.slice(11, 16) }}</span><button type="button" (click)="releaseLock(fp)" title="Free the testbed when that run is over">Release</button> }<span class="sp"></span><button type="button" (click)="copyText(fileText)" title="Copy to the clipboard"><app-icon name="copy" [size]="13" /> Copy</button><button type="button" (click)="backend.testsOpenInEditor(fp)">Open in VS Code</button>@if (!fp.startsWith('reports/')) { <button type="button" class="pri" (click)="saveFile()">Save</button> }</div></div>
             <div class="body"><textarea class="code" [(ngModel)]="fileText" spellcheck="false" [attr.aria-label]="fp"></textarea>
               <div class="row"><span class="mut">{{ fp.startsWith('lib/') ? 'Termwright writes twtest and run_tests again when it is updated: keep your own helpers in other files.' : fp.startsWith('templates/') ? 'TextFSM templates; the index says which command each one parses (ntc-templates format).' : 'Roles and values: role: Folder/session, name: value.' }}</span></div></div>
           } @else { <div class="empty mut">Select a file.</div> }
@@ -492,6 +500,11 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .logic { display: inline-block; margin-left: 8px; font: 11px var(--ui-font, inherit); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); padding: 0 6px; border-radius: 8px; }
     .opts { flex-wrap: wrap; font-size: 12px; color: var(--muted); gap: 16px; padding-left: 24px; } .opts label { display: flex; align-items: center; gap: 4px; } .ed .chips { padding-left: 24px; }
     .addck { display: inline-flex; gap: 4px; } .addck select, .addck input { height: 24px; font-size: 12px; } .addck input { width: 220px; }
+    .codebar { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; } .codebar > .mut { flex: 1 1 0; min-width: 0; }
+    .lang { display: inline-flex; padding: 3px; gap: 2px; border-radius: 8px; background: color-mix(in srgb, var(--text) 6%, transparent); border: 1px solid var(--border); }
+    .lang button { height: 24px !important; padding: 0 12px !important; border: 0 !important; border-radius: 6px !important; background: none !important; color: var(--muted) !important; font-size: 12px !important; }
+    .lang button.on { background: var(--panel) !important; color: var(--text) !important; box-shadow: 0 1px 2px rgba(0,0,0,.35); }
+    .hl { tab-size: 4; } :host ::ng-deep .hl-c { color: #7f8b99; font-style: italic; } :host ::ng-deep .hl-s { color: #a5d6a7; } :host ::ng-deep .hl-k { color: #82aaff; } :host ::ng-deep .hl-w { color: #c792ea; } :host ::ng-deep .hl-n { color: #f78c6c; } :host ::ng-deep .hl-v { color: #ffcb6b; } :host ::ng-deep .hl-f { color: #89ddff; }
     .code { flex: 1; min-height: 260px; font: 12.5px/1.5 var(--mono, monospace); resize: none; white-space: pre; overflow: auto; margin: 0; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--term-bg, rgba(0,0,0,.25)); color: var(--text); }
     .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; } .kpi { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel); } .kpi b { display: block; font-size: 21px; font-weight: 600; } .kpi span { color: var(--muted); font-size: 12px; } .kok { color: var(--ok, #3fbf75); } .kbad { color: var(--danger, #ef6161); } .kwarn { color: var(--warn, #e0a030); }
     .bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--text) 8%, transparent); flex: none; } .okb { background: var(--ok, #3fbf75); } .badb { background: var(--danger, #ef6161); } .warnb { background: var(--warn, #e0a030); }
@@ -633,18 +646,21 @@ export class TestsView implements OnInit, OnDestroy {
     }
     this.sel.set(file);
     try { this.test.set(await this.backend.testCase(file)); } catch (e) { this.test.set(null); this.ui.toast(errText(e), 'error'); }
-    if (keepView && this.view() === 'yaml') return; // unsaved edits stay
+    if (keepView && this.view() === 'yaml' && this.yamlEdit()) return; // unsaved edits stay
     await this.setView(keepView ? this.view() : 'steps');
   }
 
   readonly hist = signal<TestHistory | null>(null);
+  readonly yamlEdit = signal(false);
+  private yamlText = signal('');
+  readonly codeHtml = computed(() => { const v = this.view(); return highlight(v === 'yaml' ? this.yamlText() : this.goSrc(), (v === 'yaml' ? 'yaml' : v) as Lang); });
   rate(h: TestHistory) { const n = h.passed + h.failed; return n ? Math.round(h.passed * 100 / n) : 0; }
   verText(v?: Record<string, string>) { const l = [...new Set(Object.values(v ?? {}))]; return l.join(', '); }
   async setView(v: View) {
     this.view.set(v);
     if (v === 'history') { const l = await this.backend.testHistory(this.sel(), 50).catch(() => []); this.hist.set(l?.[0] ?? null); return; }
     const f = this.sel();
-    if (v === 'yaml') this.yaml = await this.backend.testFile(f).catch(e => '# ' + errText(e));
+    if (v === 'yaml') { this.yaml = await this.backend.testFile(f).catch(e => '# ' + errText(e)); this.yamlText.set(this.yaml); }
     if (v === 'go' || v === 'py' || v === 'tcl') this.goSrc.set(await this.backend.testFile(v === 'go' ? this.goFile() : v === 'py' ? this.pyFile() : this.tclFile()).catch(() => tr('No generated code yet: save the test (YAML → Save) to write it.')));
   }
 
@@ -652,7 +668,9 @@ export class TestsView implements OnInit, OnDestroy {
     try {
       await this.backend.testSaveYAML(this.sel(), this.yaml);
       this.ui.toast(tr('Saved'), 'success');
+      this.yamlEdit.set(false);
       await this.load();
+      await this.setView('yaml');
     } catch (e) { this.ui.toast(errText(e), 'error'); }
   }
 

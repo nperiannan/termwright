@@ -258,7 +258,7 @@ export class Recorder {
     }
     const res: TestExpect[] = [];
     for (const t of toks) {
-      if (have.has(t)) continue;
+      if (have.has(t) || /^\d{1,4}$/.test(t) || [...have].some(h => h.includes(t))) continue;
       const there = new RegExp('(^|[^\\w])' + t.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&') + '($|[^\\w])', 'm').test(out);
       if (s.phase === 'cleanup' && !there) res.push({ notContains: t });
       else if (s.phase !== 'cleanup' && there) res.push({ contains: t });
@@ -362,11 +362,11 @@ const CISCO_UNDO = `^(show|ping|traceroute|exit|end|copy|write|save|terminal|ena
 ^no (.+) => $1
 ^(.+) => no $1`;
 const BUILTIN_UNDO: Record<string, string> = {
-  exos: `^(show|ping|traceroute|save|top|clear) =>
+  exos: `^(show|sh|ping|traceroute|save|top|clear|disable clipaging|enable clipaging) =>
 ^create vlan (\\S+).* => delete vlan $1
-^configure vlan (\\S+) add ports (\\S+).* => configure vlan $1 delete ports $2
-^configure vlan (\\S+) ipaddress .* => unconfigure vlan $1 ipaddress
-^configure vlan (\\S+) tag .* =>
+^config(?:ure)? (?:vlan )?(\\S+) add ports? (\\S+).* => configure vlan $1 delete ports $2
+^config(?:ure)? (?:vlan )?(\\S+) ipaddress .* => unconfigure vlan $1 ipaddress
+^config(?:ure)? (?:vlan )?(\\S+) tag .* =>
 ^create (\\S+) (\\S+).* => delete $1 $2
 ^enable (.+) => disable $1
 ^disable (.+) => enable $1`,

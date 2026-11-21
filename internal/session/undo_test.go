@@ -43,3 +43,12 @@ func TestUndoOf(t *testing.T) {
 		t.Error("factory")
 	}
 }
+
+func TestUndoEXOSPort(t *testing.T) {
+	r := builtinUndo["exos"]
+	for in, want := range map[string]string{"configure vlan v200 add port 1:2 tagged": "configure vlan v200 delete ports 1:2", "config v200 add ports 1:3": "configure vlan v200 delete ports 1:3", "configure vlan v200 ipaddress 10.10.10.1/24": "unconfigure vlan v200 ipaddress", "sh vlan": ""} {
+		if got := UndoOf(r, in); got != want {
+			t.Fatalf("%q: %q", in, got)
+		}
+	}
+}

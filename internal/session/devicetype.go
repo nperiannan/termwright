@@ -381,11 +381,11 @@ var (
 
 // builtinUndo are the built-in undo rules by device type name (lower case).
 var builtinUndo = map[string]string{
-	"exos": `^(show|ping|traceroute|save|top|clear) =>
+	"exos": `^(show|sh|ping|traceroute|save|top|clear|disable clipaging|enable clipaging) =>
 ^create vlan (\S+).* => delete vlan $1
-^configure vlan (\S+) add ports (\S+).* => configure vlan $1 delete ports $2
-^configure vlan (\S+) ipaddress .* => unconfigure vlan $1 ipaddress
-^configure vlan (\S+) tag .* =>
+^config(?:ure)? (?:vlan )?(\S+) add ports? (\S+).* => configure vlan $1 delete ports $2
+^config(?:ure)? (?:vlan )?(\S+) ipaddress .* => unconfigure vlan $1 ipaddress
+^config(?:ure)? (?:vlan )?(\S+) tag .* =>
 ^create (\S+) (\S+).* => delete $1 $2
 ^enable (.+) => disable $1
 ^disable (.+) => enable $1`,

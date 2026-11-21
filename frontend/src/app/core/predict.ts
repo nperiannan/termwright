@@ -56,7 +56,7 @@ function labelOf(line: string, at: number): string {
 export function predictChecks(configs: string[], show: string, out: string, cleanup: boolean, have: TestExpect[] = []): TestExpect[] {
   if (!out.trim()) return [];
   const sw = words(show);
-  const seen = new Set(have.map(e => e.contains ?? e.notContains ?? e.equals ?? ''));
+  const seen = new Set(have.flatMap(e => [e.contains, e.notContains, e.equals].filter((x): x is string => !!x)));
   const res: TestExpect[] = [];
   // a command is related when it shares a topic word with the show command, names something the show command
   // names, or configures an object a related command made ("configure v200 ipaddress …" after "create vlan v200")
@@ -72,7 +72,7 @@ export function predictChecks(configs: string[], show: string, out: string, clea
     const vals = configValues(cmd);
     if (!vals.length || !rel.has(cmd)) continue;
     for (const { key, value } of vals) {
-      if (seen.has(value) || res.length >= 6) continue;
+      if (seen.has(value) || res.length >= 6 || [...seen].some(h => h.length > value.length && h.includes(value))) continue;
       const f = find(out, value);
       if (cleanup) {
         if (!f && /[A-Za-z]/.test(value)) { res.push({ notContains: value }); seen.add(value); }
