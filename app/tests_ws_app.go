@@ -414,6 +414,7 @@ func (a *App) TestsExport(o testrec.ExportOptions) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	o.Device = a.inventoryDevice
 	b, name, err := f.Export(o)
 	if err != nil {
 		return "", err
@@ -562,4 +563,26 @@ func (a *App) TestTrends(files []string, testbed string, limit int) (testrec.Tre
 		limit = 30
 	}
 	return f.SuiteTrends(exp, testbed, limit), nil
+}
+
+// inventoryDevice is a saved session as a standalone suite's device: how to reach it, never a secret.
+func (a *App) inventoryDevice(path string) (testrec.InventoryDevice, bool) {
+	s, err := a.store.Get(path)
+	if err != nil {
+		return testrec.InventoryDevice{}, false
+	}
+	d := testrec.InventoryDevice{Session: path, Host: s.Hostname, Port: s.Port, Username: s.Username, DeviceType: s.DeviceType,
+		KeyFile: s.IdentityFile, Jump: s.JumpSession}
+	switch strings.ToLower(s.Protocol) {
+	case "api":
+		d.Protocol, d.BaseURL, d.Auth, d.KeyName, d.Insecure = "api", s.APIBaseURL, s.APIAuth, s.APIKeyName, s.APIInsecure
+	case "telnet", "telnet/tls":
+		d.Protocol = "telnet"
+	default:
+		d.Protocol = "ssh"
+	}
+	if s.SNMPVersion != "" || s.SNMPUser != "" {
+		d.SNMPVer, d.SNMPHost, d.SNMPPort, d.SNMPUser, d.SNMPAuth, d.SNMPPriv = s.SNMPVersion, s.SNMPHost, s.SNMPPort, s.SNMPUser, s.SNMPAuth, s.SNMPPriv
+	}
+	return d, true
 }

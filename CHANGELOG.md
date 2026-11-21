@@ -4,6 +4,12 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Standalone Python suite - no Termwright needed**: ⋯ → Export Automation Suite → **On its own**. The zip logs in to the devices itself: SSH (paramiko, jump hosts too) and Telnet with prompt learning and paging turned off per device type, REST APIs, SNMP (net-snmp), NETCONF (ncclient), web steps (Playwright) and TextFSM tables. `inventory.yaml` is written from your saved sessions (host, protocol, port, user, device type, API and SNMP settings) - passwords are never in it: `TW_PASSWORD_<NAME>` / `TW_PASSWORD`, the system keyring or a prompt. `requirements.txt` lists the packages; `run.sh` / `run.ps1` writes JUnit XML and each test's run log as before.
+
+- **Procedures as Python functions**: the generated Python calls procedures as functions in `lib/python/twprocs.py` (`twprocs.create_vlan(tw, vlan="200")`) instead of copying their steps into each test, so hand-written tests reuse them too. The export includes `procs/` and `data/`.
+
+- **Fix**: a test with a **call** step (a procedure) could not be saved or run ("has none of run, http, …").
+
 - **Recorder: checks land on the right step and are verified**: a check now goes to the command whose output holds the selected text (it used to go to the tab's last command, and a step's output could take in the commands after it, so checks from a later `show` command were added to an earlier one). Before saving, every check is tried on what the device showed while recording; checks that would fail with nothing changed are listed with their step and can be removed.
 
 - **Procedures**: shared steps with parameters (`procs/<name>.yaml`) that tests call with **+ More → Call a Procedure** - choose it, fill its parameters (values or `{{variables}}`); change the procedure once and every test follows. The **Procedures** view lists them with their parameters, steps and how many tests use them; ⋯ on a test → **Make a Procedure from This Test** turns its steps into one (its variables become the parameters). Calls are expanded in Termwright's runs and in the generated Go, Python and TCL.

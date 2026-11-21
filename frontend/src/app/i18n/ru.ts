@@ -5234,6 +5234,10 @@ const ru: Record<string, string> = {
   'Mail server': 'Почтовый сервер',
   'Webhook address': 'Адрес вебхука',
   'Mail password': 'Пароль почты',
+  'How it reaches the devices': 'Как подключаться к устройствам',
+  'On its own - Termwright is not needed': 'Самостоятельно - Termwright не нужен',
+  'Through Termwright': 'Через Termwright',
+  'Python for now - Go comes next.': 'Пока Python - Go будет следующим.',
 };
 
 export default ru;

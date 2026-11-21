@@ -229,6 +229,12 @@ func checkSteps(all []Step, in string) error {
 			}
 			continue
 		}
+		if s.Call != nil {
+			if strings.TrimSpace(s.Call.Proc) == "" || actions(s) > 0 {
+				return fmt.Errorf("%sstep %d: a call step names its procedure (call: {proc: name, with: {...}}) and has nothing else to run", in, i+1)
+			}
+			continue
+		}
 		if actions(s) == 0 && s.Wait > 0 {
 			continue
 		}

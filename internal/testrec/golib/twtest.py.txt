@@ -5,6 +5,9 @@ Each step is sent to the running Termwright (its local API: commands log in with
 logins, requests go through API sessions, SNMP uses the sessions' SNMP settings) and the answer is
 checked here. Only Python's standard library is used.
 
+Standalone: with TW_ENGINE=local (the default when inventory.yaml is next to lib/ and TERMWRIGHT_API is not
+set) the steps run here without Termwright - twlocal.py logs in to the devices of inventory.yaml itself.
+
 Settings (environment): TERMWRIGHT_API and TERMWRIGHT_KEY (else mcp.json in Termwright's data
 folder); TW_TESTBED=testbeds/lab.yaml; TW_VAR_<name>=<value> for {{name}}; TW_LOG_DIR=<folder>: each
 test writes its run log there (what was sent, what came back, each check with expected and found).
@@ -117,8 +120,20 @@ class _Log:
             self.f.flush()
 
 
+def local():
+    """The steps run here (twlocal), not through Termwright."""
+    e = os.environ.get("TW_ENGINE", "").lower()
+    if e:
+        return e == "local"
+    return os.path.exists(os.path.join(_ROOT, "inventory.yaml")) and not os.environ.get("TERMWRIGHT_API")
+
+
 def _call(body):
     """A tests tool action; returns the JSON in its result."""
+    if local():
+        if body.get("action") in ("save_state", "restore_state"):
+            return {"token": "", "results": [{"name": "restore", "passed": True}]}
+        raise AssertionError("%s needs Termwright" % body.get("action"))
     api, key = endpoint()
     req = urllib.request.Request(api + "/tools/tests", data=json.dumps(body).encode(),
                                  headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"}, method="POST")
@@ -156,6 +171,26 @@ class Run:
         self.vars = _vars(base)
         self.stopped = False
         self.logf = _Log(tc.id())
+        self._scopes = []
+
+    @contextlib.contextmanager
+    def scope(self, proc, params, cleanup=False, go_on=False):
+        """A procedure's steps (twprocs): its parameters are variables while they run; step names get its name."""
+        old = self.vars
+        self.vars = dict(old)
+        self.vars.update({k: self.fill(v) for k, v in params.items()})
+        self._scopes.append((proc, cleanup, go_on))
+        try:
+            yield self
+        finally:
+            self._scopes.pop()
+            for k in params:  # values a step saved under another name stay
+                self.vars.pop(k, None)
+                if k in old:
+                    self.vars[k] = old[k]
+            saved = self.vars
+            self.vars = old
+            old.update({k: v for k, v in saved.items() if k not in params})
 
     def log(self, text):
         """A line in the run log (and on the console)."""
@@ -223,10 +258,13 @@ class Run:
     def step(self, name, continue_on_fail=False, cleanup=False):
         """A step; cleanup steps run even after a failed step and never skip the rest."""
         name = self.fill(name)
+        for proc, cl, go in reversed(self._scopes):
+            name = proc + " › " + name
+            cleanup, continue_on_fail = cleanup or cl, continue_on_fail or go
         with self.tc.subTest(step=name):
             s = Step(self, skip=self.stopped and not cleanup)
             t0 = time.time()
-            self.logf.w("\n=== %s%s ===" % ("cleanup: " if cleanup else "", name))
+            self.logf.w("\n=== %s%s ===" % ("cleanup: " if cleanup and not name.startswith("cleanup") else "", name))
             try:
                 yield s
             except _Fatal as e:
@@ -343,17 +381,21 @@ class Step:
         if self._retry:
             step.update(self._retry)
             self._retry = None
-        api, key = endpoint()
-        req = urllib.request.Request(api + "/tools/tests", data=json.dumps({"action": "step", "step": step}).encode(),
-                                     headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"}, method="POST")
-        try:
-            with urllib.request.urlopen(req, timeout=900) as res:
-                out = json.loads(res.read() or b"{}")
-        except urllib.error.HTTPError as e:
-            raise _Fatal("Termwright: %s %s" % (e.code, e.read().decode(errors="replace")))
-        except OSError as e:
-            raise _Fatal("Termwright: %s" % e)
-        ans = json.loads(out.get("result") or "{}")
+        if local():
+            import twlocal
+            ans = twlocal.execute(step)
+        else:
+            api, key = endpoint()
+            req = urllib.request.Request(api + "/tools/tests", data=json.dumps({"action": "step", "step": step}).encode(),
+                                         headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"}, method="POST")
+            try:
+                with urllib.request.urlopen(req, timeout=900) as res:
+                    out = json.loads(res.read() or b"{}")
+            except urllib.error.HTTPError as e:
+                raise _Fatal("Termwright: %s %s" % (e.code, e.read().decode(errors="replace")))
+            except OSError as e:
+                raise _Fatal("Termwright: %s" % e)
+            ans = json.loads(out.get("result") or "{}")
         if ans.get("error"):
             raise _Fatal(ans["error"])
         a.output, a.status, a.ms, a.rows = ans.get("output", ""), ans.get("status", 0), ans.get("ms", 0), ans.get("rows") or []

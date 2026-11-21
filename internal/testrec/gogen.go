@@ -32,7 +32,7 @@ func generated(b []byte) bool {
 func GoLibFiles() map[string][]byte {
 	rd := func(n string) []byte { b, _ := golib.ReadFile("golib/" + n); return b }
 	return map[string][]byte{"go.mod": rd("go.mod.txt"), "lib/twtest/twtest.go": rd("twtest.go.txt"), "lib/junit/main.go": rd("junit.go.txt"),
-		"lib/python/twtest.py": rd("twtest.py.txt"), "lib/python/run_tests.py": rd("run_tests.py.txt"),
+		"lib/python/twtest.py": rd("twtest.py.txt"), "lib/python/twlocal.py": rd("twlocal.py.txt"), "lib/python/run_tests.py": rd("run_tests.py.txt"),
 		"lib/tcl/twtest.tcl": rd("twtest.tcl.txt"), "lib/tcl/run_tests.tcl": rd("run_tests.tcl.txt")}
 }
 
@@ -208,9 +208,11 @@ func (f Folder) WriteGo(caseFile string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	withCalls := c // Python calls the procedures as functions (lib/python/twprocs.py)
 	if c, err = f.Prepare(c); err != nil { // procedures inlined, data rows as params
 		return "", err
 	}
+	withCalls.Params = c.Params
 	p, _ := f.find(caseFile)
 	rel, _ := filepath.Rel(f.Root, p)
 	rel = filepath.ToSlash(rel)
@@ -225,9 +227,14 @@ func (f Folder) WriteGo(caseFile string) (string, error) {
 	if err := f.writeGenerated(out, src); err != nil {
 		return out, err
 	}
-	py, err := GeneratePython(c, rel)
+	py, err := GeneratePython(withCalls, rel)
 	if err != nil {
 		return out, err
+	}
+	if len(f.Procs()) > 0 {
+		if err := f.writeGenerated("lib/python/twprocs.py", f.GeneratePyProcs()); err != nil {
+			return out, err
+		}
 	}
 	if err := f.writeGenerated(PyFile(rel), py); err != nil {
 		return out, err

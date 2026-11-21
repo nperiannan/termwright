@@ -79,7 +79,11 @@ def main(argv):
         spec.loader.exec_module(mod)
         suite.addTests(unittest.defaultTestLoader.loadTestsFromModule(mod))
     t0 = time.time()
-    res = unittest.TextTestRunner(verbosity=2, resultclass=Result).run(suite)
+    try:
+        res = unittest.TextTestRunner(verbosity=2, resultclass=Result).run(suite)
+    finally:
+        if "twlocal" in sys.modules:  # standalone: log out of the devices
+            sys.modules["twlocal"].close_all()
     if junit:
         s = ET.Element("testsuite", name="termwright", tests=str(len(res.rows)), time="%.3f" % (time.time() - t0),
                        failures=str(sum(r[2] == "fail" for r in res.rows)), skipped=str(sum(r[2] == "skip" for r in res.rows)))

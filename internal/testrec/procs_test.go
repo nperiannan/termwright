@@ -60,3 +60,12 @@ func TestXMLDocAndRPC(t *testing.T) {
 		t.Fatal("bad datastore")
 	}
 }
+
+func TestParseCallStep(t *testing.T) {
+	if _, err := Parse([]byte("name: x\nsteps:\n  - call: {proc: create-vlan, with: {name: v1}}\n")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Parse([]byte("name: x\nsteps:\n  - call: {proc: ''}\n")); err == nil {
+		t.Fatal("empty proc allowed")
+	}
+}

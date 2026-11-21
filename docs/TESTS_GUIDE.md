@@ -208,6 +208,16 @@ network-tests/
 
 The library is also what you build on: besides run, http, snmp and the checks, it has `configure(session, commands)`, `wait_for(session, command, pattern, timeout, interval)`, `log(text)` and `session(role)` (Go: `Configure`, `WaitFor`, `Log`, `Session`; TCL: `tw::configure`, `tw::wait_for`, `tw::log`, `tw::session`).
 
+
+**Without Termwright.** Choose **On its own** (Python) in the export dialog. The suite then logs in to the devices itself and needs no Termwright on that computer:
+
+1. `python3 -m pip install -r requirements.txt` (paramiko, textfsm, PyYAML; ncclient, playwright and keyring are optional; SNMP steps use the net-snmp commands).
+2. `inventory.yaml` lists every session the tests use - host, protocol (ssh, telnet, api), port, user name, device type, API and SNMP settings, jump host. Change it to run on other devices.
+3. Passwords are never written: set `TW_PASSWORD` (all devices) or `TW_PASSWORD_<NAME>` (the session's last part in capitals, other characters as `_`), keep them in the system keyring (service `termwright`, user = the session), or type them when asked. API tokens: `TW_TOKEN_<NAME>`; SNMP communities: `TW_COMMUNITY_<NAME>`.
+4. `./run.sh` (or `run.cmd`) - reports in `reports/<date-time>/` as above.
+
+Procedures become Python functions in `lib/python/twprocs.py`, so your own tests can call them: `twprocs.create_vlan(tw, vlan="200")`. Steps that need Termwright itself (software upgrades, lab traffic tests, manual steps, saving and restoring the configuration) are skipped or reported.
+
 ## 17. Code, CI and the AI assistant
 
 The generated tests run outside the window while Termwright is open - they send each step to Termwright, which logs in with the saved logins:

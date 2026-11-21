@@ -1586,6 +1586,8 @@ site:
 - **📅 Calendar** in Testbeds: book a testbed for a time; other people's runs ask first and their schedules are refused. Bookings are in `bookings.yaml` (share it with Git).
 - **Web steps**: + More → **Web Page (Playwright)** - click, type, check text and take screenshots on a web page; **Set Up Playwright** installs it once (Node.js needed).
 
+- **Export without Termwright**: ⋯ → Export Automation Suite → **On its own** gives a Python suite that logs in to the devices itself (inventory.yaml from your sessions; passwords from `TW_PASSWORD…`, the keyring or a prompt). Procedures become functions in `lib/python/twprocs.py`.
+
 ### Go tests
 
 Saving a test also writes it as a Go test next to it (`cases/vlan/vlan-42_test.go`): one subtest per step, checks as plain calls, for example ``a.Field(`Admin\s+State:\s*(\S+)`).Equals("Enabled")``. Termwright also writes `go.mod` (module `termwright-tests`) and `lib/twtest`, a small helper that uses only Go's standard library. Edit the YAML, not the Go file - it is written again on every save; files you add to `lib/` yourself are never replaced.
