@@ -2,7 +2,7 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
-## Unreleased
+## 0.43.0 (2026-11-21)
 
 - **Run log you can read**: the live log shows each step as a heading, the device's answer, a table of the checks (Expected, Found) with ✓ and ✗, and the result in green or red with its time; a step without checks says it passes when the device answers without an error. The saved run log has the checks as a table too (Result, Expected, Found), and the log viewer colours passed and failed lines.
 
