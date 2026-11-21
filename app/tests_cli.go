@@ -128,7 +128,6 @@ func relFiles(f testrec.Folder, in []string) []string {
 	return out
 }
 
-
 func (a *App) testsCLIRun(f testrec.Folder, files []string, testbed string, vars map[string]string, junit string, prod bool) int {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

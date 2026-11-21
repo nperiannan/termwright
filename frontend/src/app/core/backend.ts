@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import type { TopoRequest, TopoResult, LayoutRequest, LayoutResult, TestCase, TestCaseInfo, TestRunReport, TestsTree, TestsGitInfo } from './models';
+import type { TopoRequest, TopoResult, LayoutRequest, LayoutResult, TestCase, TestCaseInfo, TestRunReport, TestsTree, TestsGitInfo, TestSchedule, TestScheduleView } from './models';
 import { EmuEngines, EmuHostNIC, EmuTrex,
   EmuServer, EmuServerView,
   AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange, SNMPRequest, SNMPResult, SNMPMibNode, SNMPModule, SNMPSecretState, SNMPTrapState, SNMPTrapsView, HSendRequest, HResponse, HCollection, HCollectionInfo, HRunRequest, HRunResult, HHistoryItem, HRequest, AISkill, HEnv, HVar, HHostCookies, SyslogSettings, SyslogState, SyslogMsg, SyslogRule, SyslogQuery, SyslogSendIn } from './models';
@@ -302,6 +302,10 @@ export class Backend {
   testsGitPull() { return this.call<string>('TestsGitPull'); }
   testsGitCommit(message: string) { return this.call<string>('TestsGitCommit', message); }
   testsGitPush() { return this.call<string>('TestsGitPush'); }
+  testSchedules() { return this.call<TestScheduleView[]>('TestSchedules'); }
+  testSaveSchedule(s: TestSchedule) { return this.call<TestSchedule>('TestSaveSchedule', s); }
+  testRemoveSchedule(id: string) { return this.call<void>('TestRemoveSchedule', id); }
+  testRunScheduleNow(id: string) { return this.call<void>('TestRunScheduleNow', id); }
   testsGit() { return this.call<TestsGitInfo>('TestsGit'); }
   testsOpen(rel: string) { return this.call<void>('TestsOpen', rel); }
   testsOpenInEditor(rel: string) { return this.call<void>('TestsOpenInEditor', rel); }

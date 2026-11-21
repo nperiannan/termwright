@@ -389,6 +389,48 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 		}
 		txt, _ := f.ReadText(rel)
 		return "Wrote " + rel + ":\n" + txt, nil
+	case "schedules":
+		var b strings.Builder
+		for _, s := range a.TestSchedules() {
+			fmt.Fprintf(&b, "%s  %q  %s  tests: %s  testbed: %s", s.ID, s.Name, s.When, testsWhich(s.Files), orDash(s.Testbed))
+			if s.Off {
+				b.WriteString("  (off)")
+			}
+			if !s.State.Last.IsZero() {
+				fmt.Fprintf(&b, "  last %s: %d passed, %d failed", s.State.Last.Format("2006-01-02 15:04"), s.State.Passed, s.State.Failed)
+			}
+			if s.Next != "" {
+				b.WriteString("  next " + s.Next)
+			}
+			b.WriteByte('\n')
+		}
+		if b.Len() == 0 {
+			return "No schedules.", nil
+		}
+		return b.String(), nil
+	case "schedule":
+		s := testrec.Schedule{ID: argStr(args, "id"), Name: argStr(args, "name"), Files: argStrs(args, "files"), Testbed: argStr(args, "testbed"),
+			Repeat: argStr(args, "repeat"), At: argStr(args, "at"), Day: argInt(args, "day", 0, 6), Hours: argInt(args, "hours", 0, 168)}
+		if s.Production = argStr(args, "production") == "true"; s.Production {
+			if err := ask("Schedule tests on production sessions", "The schedule "+s.Name+" may send commands to production sessions without asking.", true); err != nil {
+				return "", err
+			}
+		} else if err := ask("Schedule tests", s.Name+": "+s.Text(), false); err != nil {
+			return "", err
+		}
+		saved, err := a.TestSaveSchedule(s)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("Saved schedule %s (%s): %s.", saved.ID, saved.Name, saved.Text()), nil
+	case "unschedule":
+		if err := ask("Remove a test schedule", argStr(args, "id"), false); err != nil {
+			return "", err
+		}
+		if err := a.TestRemoveSchedule(argStr(args, "id")); err != nil {
+			return "", err
+		}
+		return "Removed.", nil
 	case "results":
 		r := a.TestLastRun()
 		if r == nil {
@@ -396,7 +438,7 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 		}
 		return testsReportText(f, *r), nil
 	default:
-		return "", fmt.Errorf("unknown action %q (list, show, run, save, generate, step, new_testbed, results)", act)
+		return "", fmt.Errorf("unknown action %q (list, show, run, save, generate, step, new_testbed, schedules, schedule, unschedule, results)", act)
 	}
 }
 

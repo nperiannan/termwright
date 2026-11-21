@@ -22,17 +22,23 @@ import (
 type netAsker func(title, msg string, danger bool) error
 
 var netTools = []mcpTool{
-	{"tests", "Termwright tests: YAML files in the tests folder (cases/), each a list of steps - a command on a saved session (run), an HTTP request (http) or an SNMP get / walk / set (snmp) - with checks on what came back (contains, matches, a field, JSON or SNMP value equals / greater / less, status, time). list lists the tests; show gives one as YAML; run runs tests (files, or none for all) and returns pass/fail per step, writing a JUnit XML file and an HTML report under reports/; save writes a test from YAML (and its Go test); generate writes the Go, Python and TCL tests again (go test ./cases/..., python lib/python/run_tests.py or tclsh lib/tcl/run_tests.tcl in the tests folder runs them through Termwright); step runs one step without its checks and returns its answer as JSON (used by the generated Go tests); new_testbed writes testbeds/<name>.yaml with a role per saved session of a session folder (core-sw1 → {{core_sw1}}); a test with params runs once per entry; results gives the last run's report. Runs log in with the sessions' saved logins in the background; a run touching production sessions is asked first.",
+	{"tests", "Termwright tests: YAML files in the tests folder (cases/), each a list of steps - a command on a saved session (run), an HTTP request (http) or an SNMP get / walk / set (snmp) - with checks on what came back (contains, matches, a field, JSON or SNMP value equals / greater / less, status, time). list lists the tests; show gives one as YAML; run runs tests (files, or none for all) and returns pass/fail per step, writing a JUnit XML file and an HTML report under reports/; save writes a test from YAML (and its Go test); generate writes the Go, Python and TCL tests again (go test ./cases/..., python lib/python/run_tests.py or tclsh lib/tcl/run_tests.tcl in the tests folder runs them through Termwright); step runs one step without its checks and returns its answer as JSON (used by the generated Go tests); new_testbed writes testbeds/<name>.yaml with a role per saved session of a session folder (core-sw1 → {{core_sw1}}); a test with params runs once per entry; schedules lists the scheduled runs, schedule adds or (with id) changes one (repeat daily|weekdays|weekly|hours, at HH:MM, day 0-6, hours, files, testbed, production=true to allow production sessions), unschedule removes one; results gives the last run's report. Runs log in with the sessions' saved logins in the background; a run touching production sessions is asked first.",
 		mcpSchema(map[string]any{
-			"action":  map[string]any{"type": "string", "enum": []string{"list", "show", "run", "save", "generate", "step", "new_testbed", "results"}, "description": "what to do"},
-			"file":    map[string]any{"type": "string", "description": "show/save/run: a test file relative to the tests folder, e.g. cases/vlan/add-vlan.yaml (cases/ and .yaml may be left out)"},
-			"files":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "run: the tests to run (none: all)"},
-			"yaml":    map[string]any{"type": "string", "description": "save: the test as YAML"},
-			"step":    map[string]any{"type": "object", "description": "step: one step {run: {session, command, prompt}}, {http: {session, method, url, headers, body}} or {snmp: {session, op, oids, values}}, timeout"},
-			"name":    map[string]any{"type": "string", "description": "new_testbed: the testbed's name"},
-			"folder":  map[string]any{"type": "string", "description": "new_testbed: a session folder, e.g. Lab"},
-			"testbed": map[string]any{"type": "string", "description": "run: a file in testbeds/ whose values are used as {{variables}}"},
-			"vars":    map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}, "description": "run: values for {{variables}} that win over the tests' own"},
+			"action":     map[string]any{"type": "string", "enum": []string{"list", "show", "run", "save", "generate", "step", "new_testbed", "schedules", "schedule", "unschedule", "results"}, "description": "what to do"},
+			"file":       map[string]any{"type": "string", "description": "show/save/run: a test file relative to the tests folder, e.g. cases/vlan/add-vlan.yaml (cases/ and .yaml may be left out)"},
+			"files":      map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "run: the tests to run (none: all)"},
+			"yaml":       map[string]any{"type": "string", "description": "save: the test as YAML"},
+			"step":       map[string]any{"type": "object", "description": "step: one step {run: {session, command, prompt}}, {http: {session, method, url, headers, body}} or {snmp: {session, op, oids, values}}, timeout"},
+			"name":       map[string]any{"type": "string", "description": "new_testbed: the testbed's name"},
+			"folder":     map[string]any{"type": "string", "description": "new_testbed: a session folder, e.g. Lab"},
+			"id":         map[string]any{"type": "string", "description": "schedule/unschedule: the schedule's id (schedules lists them)"},
+			"repeat":     map[string]any{"type": "string", "enum": []string{"daily", "weekdays", "weekly", "hours"}, "description": "schedule: how often"},
+			"at":         map[string]any{"type": "string", "description": "schedule: time of day HH:MM (daily, weekdays, weekly)"},
+			"day":        map[string]any{"type": "integer", "description": "schedule: weekday for weekly, 0 Sunday … 6 Saturday"},
+			"hours":      map[string]any{"type": "integer", "description": "schedule: every N hours (repeat hours)"},
+			"production": map[string]any{"type": "string", "enum": []string{"true", "false"}, "description": "schedule: allow production sessions (asked)"},
+			"testbed":    map[string]any{"type": "string", "description": "run: a file in testbeds/ whose values are used as {{variables}}"},
+			"vars":       map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}, "description": "run: values for {{variables}} that win over the tests' own"},
 		}, "action")},
 	{"device", "A saved session's device facts and device type. facts: the model, version, serial number, MAC address, uptime and other facts read from it last time; refresh_facts logs in in the background (with the session's saved login) and reads them now with the device type's fact rules. identify logs in, runs the device types' detect commands (show version, display version …) and says which device type's Detect pattern matches; set_type sets the session's device type (asked first). types lists the device types with their Detect patterns. Nothing is typed in the user's tabs.",
 		mcpSchema(map[string]any{
@@ -244,7 +250,7 @@ func netWrites(name string, args map[string]any) bool {
 		return strings.EqualFold(argStr(args, "action"), "set_type")
 	case "tests":
 		act := strings.ToLower(argStr(args, "action"))
-		return act == "run" || act == "save" || act == "step"
+		return act == "run" || act == "save" || act == "step" || act == "schedule" || act == "unschedule"
 	case "snmp":
 		return strings.EqualFold(argStr(args, "action"), "set")
 	case "http":

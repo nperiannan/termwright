@@ -4,7 +4,7 @@ import { Backend, errText } from '../core/backend';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { Recorder } from '../core/recorder.service';
-import { TestCase, TestCaseInfo, TestResult, TestRunReport, TestsGitInfo, TestsTree } from '../core/models';
+import { TestCase, TestCaseInfo, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestsGitInfo, TestsTree } from '../core/models';
 import { expectLabel, stepText } from './recorder-panel';
 
 type View = 'steps' | 'yaml' | 'go' | 'py' | 'tcl';
@@ -41,6 +41,11 @@ type View = 'steps' | 'yaml' | 'go' | 'py' | 'tcl';
           } @empty { <div class="mut">No tests yet. Tests → Record a Test, or ask the AI assistant to write one.</div> }
           <div class="h hb">TESTBEDS<button type="button" class="lnk" (click)="newTestbed()" title="New testbed from a session folder: a role for each session">+</button></div>
           @for (b of tree()?.testbeds ?? []; track b) { <button type="button" class="it" (click)="backend.testsOpen(b)">{{ b.slice(9) }}</button> } @empty { <div class="mut">none - add files in testbeds/</div> }
+          <div class="h hb">SCHEDULES<button type="button" class="lnk" (click)="editSchedule(null)" title="Run tests by themselves while Termwright is open">+</button></div>
+          @for (s of schedules(); track s.id) {
+            <button type="button" class="it" [class.sel]="sched()?.id === s.id" (click)="editSchedule(s)" [title]="s.next ? 'Next: ' + s.next : 'Off'">
+              <span class="dot" [class]="s.state.last ? (s.state.failed || s.state.error ? 'dot f' : 'dot p') : 'dot'">●</span>{{ s.name }}<span class="n">{{ s.off ? 'off' : s.when }}</span></button>
+          } @empty { <div class="mut">none</div> }
           <div class="h">REPORTS</div>
           @for (r of (tree()?.reports ?? []).slice(0, 12); track r.dir) {
             <button type="button" class="it" (click)="backend.testsOpen(r.dir)" title="Open the HTML report">{{ when(r.dir) }} <span [class]="r.failed ? 'bad' : 'ok'">{{ r.passed }}/{{ r.passed + r.failed }}</span></button>
@@ -48,7 +53,26 @@ type View = 'steps' | 'yaml' | 'go' | 'py' | 'tcl';
         </div>
       </aside>
       <section class="main">
-        @if (sel(); as file) {
+        @if (sched(); as s) {
+          <header><b class="ttl">{{ s.id ? 'Schedule' : 'New Schedule' }}</b><span class="mut">runs while Termwright is open; a failed run shows a notification</span></header>
+          <div class="body sf">
+            <label><span>Name</span><input [(ngModel)]="s.name" placeholder="Nightly smoke tests" /></label>
+            <label><span>Tests</span><select [(ngModel)]="schedWhat"><option value="all">All tests</option>@if (sel()) { <option value="sel">{{ sel() }}</option> }@if (s.files?.length && schedWhat === 'keep') { <option value="keep">{{ s.files?.join(', ') }}</option> }</select></label>
+            <label><span>Testbed</span><select [(ngModel)]="s.testbed"><option value="">None</option>@for (b of tree()?.testbeds ?? []; track b) { <option [value]="b">{{ b.slice(9) }}</option> }</select></label>
+            <label><span>Repeat</span><select [(ngModel)]="s.repeat"><option value="daily">Daily</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly</option><option value="hours">Every N hours</option></select></label>
+            @if (s.repeat === 'hours') { <label><span>Every</span><input type="number" min="1" max="168" [(ngModel)]="s.hours" /> hours</label> }
+            @else {
+              @if (s.repeat === 'weekly') { <label><span>Day</span><select [(ngModel)]="s.day">@for (d of days; track $index) { <option [ngValue]="$index">{{ d }}</option> }</select></label> }
+              <label><span>At</span><input type="time" [(ngModel)]="s.at" /></label>
+            }
+            <label class="ck"><input type="checkbox" [(ngModel)]="s.production" /> May use production sessions</label>
+            <label class="ck"><input type="checkbox" [(ngModel)]="s.off" /> Off</label>
+            @if (schedView(); as v) { @if (v.state.last) { <p class="mut">Last run {{ v.state.last.slice(0, 16).replace('T', ' ') }}: {{ v.state.error || (v.state.passed + ' passed, ' + v.state.failed + ' failed') }}@if (v.state.dir) { · <button type="button" class="lnk" (click)="backend.testsOpen(v.state.dir!)">report</button> }</p> } }
+            <div class="row"><button type="button" (click)="sched.set(null)">Close</button><span class="sp"></span>
+              @if (s.id) { <button type="button" (click)="removeSchedule(s)">Remove</button><button type="button" (click)="runScheduleNow(s)">Run Now</button> }
+              <button type="button" class="pri" (click)="saveSchedule(s)">Save</button></div>
+          </div>
+        } @else if (sel(); as file) {
           <header>
             <b class="ttl">{{ test()?.name || file }}</b><span class="mut fl">{{ file }}</span><span class="sp"></span>
             <div class="seg">
@@ -126,7 +150,7 @@ type View = 'steps' | 'yaml' | 'go' | 'py' | 'tcl';
     .chip { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 10px; margin: 4px 4px 0 0; background: color-mix(in srgb, var(--ok, #4ec07a) 15%, transparent); color: var(--ok, #4ec07a); }
     .chip.b { background: color-mix(in srgb, var(--danger, #ef6161) 15%, transparent); color: var(--danger, #ef6161); } .chip.v { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
     .code { flex: 1; min-height: 240px; font: 12.5px/1.5 var(--mono, monospace); resize: none; white-space: pre; overflow: auto; margin: 0; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--term-bg, rgba(0,0,0,.25)); color: var(--text); }
-    .pri { background: var(--accent); color: #fff; border-color: transparent; } .empty { margin: auto; }
+    .sf label { display: flex; align-items: center; gap: 10px; } .sf label > span { width: 90px; color: var(--muted); font-size: 12px; } .sf input:not([type=checkbox]), .sf select { height: 28px; min-width: 220px; } .sf .ck { padding-left: 100px; font-size: 13px; } .pri { background: var(--accent); color: #fff; border-color: transparent; } .empty { margin: auto; }
     footer { border-top: 1px solid var(--border); padding: 8px 12px; max-height: 32%; display: flex; flex-direction: column; gap: 4px; min-height: 0; } .res { overflow: auto; }
     .rr { display: flex; gap: 8px; width: 100%; border: 0; background: none; color: var(--text); padding: 3px 4px; text-align: left; cursor: pointer; font: inherit; } .rr:hover { background: var(--hover, rgba(255,255,255,.05)); }
   `],
@@ -144,6 +168,11 @@ export class TestsView implements OnInit, OnDestroy {
   readonly goSrc = signal('');
   readonly report = signal<TestRunReport | null>(null);
   readonly busy = signal(false);
+  readonly schedules = signal<TestScheduleView[]>([]);
+  readonly sched = signal<TestSchedule | null>(null);
+  readonly schedView = computed(() => this.schedules().find(x => x.id === this.sched()?.id));
+  readonly days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  schedWhat = 'all';
   readonly views: { k: View; l: string }[] = [{ k: 'steps', l: 'Steps' }, { k: 'yaml', l: 'YAML' }, { k: 'go', l: 'Go' }, { k: 'py', l: 'Python' }, { k: 'tcl', l: 'TCL' }];
   yaml = '';
   testbed = '';
@@ -178,6 +207,7 @@ export class TestsView implements OnInit, OnDestroy {
   ngOnInit() {
     void this.load();
     void this.backend.testLastRun().then(r => { if (r) this.took(r); }).catch(() => {});
+    this.offs.push(this.backend.on('tests:schedule', () => void this.load()));
     this.offs.push(this.backend.on('tests:progress', (r: TestResult) => { if (r.file) this.last.update(m => ({ ...m, [r.file!]: r })); }));
     this.timer = setInterval(() => { if (this.visible()) void this.poll(); }, 4000);
   }
@@ -187,6 +217,7 @@ export class TestsView implements OnInit, OnDestroy {
     try {
       this.tree.set(await this.backend.testsTree());
       this.git.set(await this.backend.testsGit());
+      this.schedules.set(await this.backend.testSchedules().catch(() => []) ?? []);
       this.sig = await this.backend.testsSignature();
       const files = this.tree()?.cases.map(c => c.file) ?? [];
       if (this.sel() && files.includes(this.sel())) await this.select(this.sel(), true); else if (!this.sel() && files.length) await this.select(files[0]);
@@ -200,6 +231,7 @@ export class TestsView implements OnInit, OnDestroy {
   }
 
   async select(file: string, keepView = false) {
+    if (!keepView) this.sched.set(null);
     this.sel.set(file);
     try { this.test.set(await this.backend.testCase(file)); } catch (e) { this.test.set(null); this.ui.toast(errText(e), 'error'); }
     if (keepView && this.view() === 'yaml') return; // unsaved edits stay
@@ -252,6 +284,24 @@ export class TestsView implements OnInit, OnDestroy {
     this.busy.set(false);
   }
   recordMore() { this.rec.start(); }
+  editSchedule(s: TestScheduleView | null) {
+    this.sched.set(s ? structuredClone({ ...s, state: undefined, next: undefined, when: undefined }) as TestSchedule : { id: '', name: '', repeat: 'daily', at: '06:00', day: 1, hours: 4, testbed: this.testbed });
+    this.schedWhat = s?.files?.length ? 'keep' : 'all';
+  }
+  async saveSchedule(s: TestSchedule) {
+    const files = this.schedWhat === 'sel' && this.sel() ? [this.sel()] : this.schedWhat === 'keep' ? s.files : undefined;
+    const x: TestSchedule = { ...s, files, day: Number(s.day ?? 0), hours: Number(s.hours ?? 0) };
+    if (x.production && !s.id && !(await this.ui.confirm(tr('Schedule on Production?'), tr('These tests then send their commands to production sessions without asking.'), tr('Schedule'), true))) return;
+    try { this.sched.set(await this.backend.testSaveSchedule(x)); this.schedWhat = files?.length ? 'keep' : 'all'; this.ui.toast(tr('Saved'), 'success'); await this.load(); }
+    catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  async removeSchedule(s: TestSchedule) {
+    if (!(await this.ui.confirm(tr('Remove the schedule?'), s.name, tr('Remove'), true))) return;
+    try { await this.backend.testRemoveSchedule(s.id); this.sched.set(null); await this.load(); } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  async runScheduleNow(s: TestSchedule) {
+    try { await this.backend.testRunScheduleNow(s.id); this.ui.toast(tr('Running {0}…', s.name), 'info'); } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
   async gitDo(what: 'pull' | 'commit' | 'push' | 'init') {
     let msg = '';
     if (what === 'commit') {

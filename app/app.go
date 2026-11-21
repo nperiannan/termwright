@@ -79,6 +79,7 @@ func (a *App) startup(ctx context.Context) {
 	go a.startTeamSync()
 	go a.syncLoop(ctx)
 	go a.labAutoStart(ctx)
+	go a.testsScheduler(ctx)
 	a.applyKeepAwake()
 }
 

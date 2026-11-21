@@ -4,6 +4,7 @@ package config
 import (
 	"encoding/json"
 	"github.com/termwright/termwright/internal/session"
+	"github.com/termwright/termwright/internal/testrec"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -125,7 +126,8 @@ type Settings struct {
 	SessionsDir          string                       `json:"sessionsDir"`
 	LogDir               string                       `json:"logDir"`
 	DownloadDir          string                       `json:"downloadDir"`
-	TestsDir             string                       `json:"testsDir,omitempty"` // the tests folder (cases, lib, testbeds, reports); "" = tests in the data folder
+	TestsDir             string                       `json:"testsDir,omitempty"`      // the tests folder (cases, lib, testbeds, reports); "" = tests in the data folder
+	TestSchedules        []testrec.Schedule           `json:"testSchedules,omitempty"` // tests that run by themselves while Termwright is open
 	FontFamily           string                       `json:"fontFamily"`
 	FontSize             int                          `json:"fontSize"`
 	LineHeight           float64                      `json:"lineHeight"`           // terminal line spacing (1.0 = the font's own; 0 = 1.0)
