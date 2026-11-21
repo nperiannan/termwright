@@ -116,7 +116,8 @@ And much more - see the [feature list](docs/FEATURES.md).
 - **Record a test** while you work: commands in terminal tabs and REST requests become steps; right-click output → *Expect this* to add a check
 - **Tests tab**: run one or all tests on a testbed, see which check failed and what came back, open the HTML report or JUnit XML
 - **SNMP, CLI and REST** steps in one test; **roles and testbeds** run the same test on other devices, **params** run it once per set of values
-- **Plain files**: tests are YAML in a folder that can be a Git repository (Pull, Commit, Push in the Tests tab), and each is also written as a **Go test** (`go test ./cases/...`) - no passwords in either, Termwright logs in with the saved logins
+- **Plain files**: tests are YAML in a folder that can be a Git repository (Pull, Commit, Push in the Tests tab), and each is also written as **Go**, **Python** and **TCL** test code (`go test ./cases/...`, `python lib/python/run_tests.py`, `tclsh lib/tcl/run_tests.tcl`) - no passwords in any of them, Termwright logs in with the saved logins
+- **CI without the window**: `termwright tests run --junit junit.xml`, or `termwright tests serve` for the generated code; secrets from the credential store or `TERMWRIGHT_SECRET_…` variables
 - Usable from the AI assistant, MCP apps, the local REST API and Python
 
 ![Tests tab](docs/screenshots/tests.png)

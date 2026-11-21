@@ -1573,9 +1573,41 @@ A test with `params` becomes one subtest per entry. `-tw.testbed` reads nested t
 
 `TERMWRIGHT_API` and `TERMWRIGHT_KEY` point the tests at Termwright on another computer (otherwise they read `mcp.json` in the data folder).
 
+### Python and TCL tests
+
+Every saved test is also written in Python and TCL next to its YAML (the Tests tab shows them under **Python** and **TCL**). Like the Go tests they send each step to Termwright and check the answer themselves, so they hold no passwords; edit the YAML, not these files.
+
+| | Python | TCL |
+|---|---|---|
+| File | `cases/vlan/test_vlan_vlan_42_up.py` | `cases/vlan/vlan-42-up.test.tcl` |
+| Helper | `lib/python/twtest.py` (standard library only) | `lib/tcl/twtest.tcl` (Tcl 8.6, no extra packages) |
+| Style | a `unittest.TestCase`, one subTest per step (and per `params` entry) | `tw::test`, `tw::step`, `tw::run`, `tw::contains`, `tw::check field … equals …` |
+| Run all | `python lib/python/run_tests.py` (or `pytest cases`) | `tclsh lib/tcl/run_tests.tcl` |
+| JUnit | `python lib/python/run_tests.py --junit junit.xml` | `tclsh lib/tcl/run_tests.tcl -junit junit.xml` |
+| Variables | `TW_TESTBED=testbeds/lab.yaml`, `TW_VAR_vlan=7` | the same |
+
+The TCL scripts print TAP (`ok 1 - show version`, `not ok 2 - …` with the reason on `#` lines) and exit with 1 when a step failed, so any TAP or exit-code based runner can use them.
+
+### Without the window: CI machines
+
+The `termwright` program runs tests without opening its window:
+
+```sh
+termwright tests run                                   # all tests in the tests folder
+termwright tests run cases/vlan --testbed lab-a.yaml --var vlan=7 --junit junit.xml
+termwright tests run --folder ~/network-tests          # another tests folder (a Git checkout)
+termwright tests serve                                 # only the local API, for the Go/Python/TCL tests
+termwright tests secrets                               # which environment variables the tests may need
+```
+
+- `run` uses Termwright's sessions, saved logins and device types, prints pass/fail per step and exits with 1 when a test failed. Tests that use production sessions are refused unless you add `--production`.
+- `serve` starts only the local API (its address and key go to `mcp.json` in the data folder, where the generated tests find them) until Ctrl+C - then `go test ./cases/...`, `python lib/python/run_tests.py` or `tclsh lib/tcl/run_tests.tcl` work on that machine.
+- On a machine without a credential store, passwords, communities and keys can come from environment variables named `TERMWRIGHT_SECRET_` plus the key in capitals (a session's password: its path - `Lab/core-sw1` → `TERMWRIGHT_SECRET_LAB_CORE_SW1`; its SNMP community: `TERMWRIGHT_SECRET_SNMP_COMMUNITY_LAB_CORE_SW1`; an API session: `TERMWRIGHT_SECRET_API_SECRET_…`). `termwright tests secrets` lists the names for the tests' sessions and whether each is set - never the values. The credential store always wins when it has the key.
+- The sessions themselves come from the data folder (`TERMWRIGHT_HOME` can point at one prepared for CI, for example from Settings → Backup).
+
 ### From the AI assistant, the API and Python
 
-The `tests` tool (AI assistant, Claude connector, `POST /api/v1/tools/tests`) lists, shows, saves, runs (with a `testbed`) and generates tests and writes testbeds from a session folder (*new_testbed*); Git stays in your hands (the Tests tab) - *"write a test that checks VLAN 42 is up on core-sw1 and run it"*. In Python: `lab.tests.run("cases/vlan/vlan42.yaml")` (see PYTHON.md).
+The `tests` tool (AI assistant, Claude connector, `POST /api/v1/tools/tests`) lists, shows, saves, runs (with a `testbed`) and generates (Go, Python and TCL) tests and writes testbeds from a session folder (*new_testbed*); Git stays in your hands (the Tests tab) - *"write a test that checks VLAN 42 is up on core-sw1 and run it"*. In Python: `lab.tests.run("cases/vlan/vlan42.yaml")` (see PYTHON.md).
 
 ## 10. Automation: logon actions, triggers, scripts
 

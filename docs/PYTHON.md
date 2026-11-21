@@ -109,8 +109,10 @@ print(lab.tests.run())          # all tests
 print(lab.tests.run(testbed="lab-a.yaml"))   # the same tests on other devices
 lab.tests.new_testbed("lab-a", "Lab")        # a role per saved session of the Lab folder
 print(lab.tests.results())      # the last run
-lab.tests.generate()            # write the Go tests again
+lab.tests.generate()            # write the Go, Python and TCL tests again
 ```
+
+Each saved test is also written as a standalone Python test (`cases/…/test_*.py` with `lib/python/twtest.py`) that runs with `python lib/python/run_tests.py` or `pytest cases` - see USER_GUIDE "Python and TCL tests". `lab.tests` drives Termwright's own runner; the generated files are for CI and for reading the steps as code.
 
 ## Traffic
 

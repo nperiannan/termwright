@@ -821,7 +821,7 @@ class Tests:
         return self._run(action="new_testbed", name=name, folder=folder)
 
     def generate(self, *files: str) -> str:
-        """Write the Go tests again (none: all); run them with go test ./cases/... in the tests folder."""
+        """Write the Go, Python and TCL tests again (none: all); see USER_GUIDE "Tests"."""
         return self._run(action="generate", files=list(files) or None)
 
     def results(self) -> str:

@@ -93,6 +93,8 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **SNMP in tests**: gets, walks and sets in the SNMP Browser are recorded; SNMP values checked by name or OID, readable (`up`) or raw (`1`).
 - **Roles and testbeds**: recorded sessions become roles (`{{core_sw1}}`); a testbed written from a session folder (the emulated lab's, a site) points the same tests at other devices.
 - **Git**: Pull (fast-forward only), Commit… and Push in the Tests tab, with ↑ / ↓ counts; reports stay out of Git.
+- **Python and TCL tests**: each test is also written as a Python `unittest` test (pytest runs it too; `lib/python/run_tests.py` with JUnit) and a TCL script (Tcl 8.6, TAP output, `lib/tcl/run_tests.tcl` with JUnit); standard libraries only.
+- **Headless runs for CI**: `termwright tests run` (JUnit, exit code, `--production` to allow production sessions), `termwright tests serve` (only the local API, for the generated code), `termwright tests secrets`; `TERMWRIGHT_SECRET_<KEY>` environment variables where there is no credential store.
 - **Go tests**: each test is also written as a Go test with a small standard-library helper; `go test ./cases/...` runs them through Termwright (saved logins, no passwords in code); `go run ./lib/junit` makes JUnit XML for CI.
 - **Tests folder**: any folder, a Git repository too (Clone…; branch and changes shown); testbeds fill the variables; production sessions are asked first; tests with passwords are refused.
 - **Tests for AI and automation**: the `tests` tool for the AI assistant and MCP apps, `POST /api/v1/tools/tests`, and `lab.tests` in Python.
