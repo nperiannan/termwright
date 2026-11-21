@@ -74,7 +74,39 @@ func (m *Manager) captureEach(ctx context.Context, s session.Session, commands [
 // reYesNo is a yes/no question at the end of a line: "(y/N)", "[y/n]", "(yes/no)".
 var reYesNo = regexp.MustCompile(`(?i)[(\[]\s*(y/n|yes/no)\s*[)\]]\s*[:?]?\s*$`)
 
-func (m *Manager) capture(ctx context.Context, s session.Session, commands []string, prompt string, transcript *func() string, yes bool) ([]string, error) {
+// CaptureConn is a background login kept open so several commands run on it one after another
+// (the tests reuse one per session instead of logging in for every step). Not safe for parallel use.
+type CaptureConn struct {
+	m          *Manager
+	id         string
+	t          *Tab
+	mu         sync.Mutex
+	out        strings.Builder
+	strip      logging.Stripper
+	last       time.Time
+	unsub      func()
+	re, defRe  *regexp.Regexp
+	prompt     string
+	loose      bool
+	exact      string
+	yes        bool
+	answered   int
+	promptLine string
+	closed     bool
+}
+
+// OpenCapture logs in to s in the background like Capture (device type steps, logon actions,
+// saved passwords; nothing is asked) and keeps the connection for Run until Close.
+func (m *Manager) OpenCapture(ctx context.Context, s session.Session, prompt string) (*CaptureConn, error) {
+	var tr func() string
+	c, err := m.openCapture(ctx, s, prompt, false, &tr)
+	if err != nil && tr != nil {
+		return nil, &CaptureError{Err: err, Transcript: tr()}
+	}
+	return c, err
+}
+
+func (m *Manager) openCapture(ctx context.Context, s session.Session, prompt string, yes bool, transcript *func() string) (*CaptureConn, error) {
 	if prompt == "" {
 		prompt = DefaultPrompt
 	}
@@ -85,129 +117,178 @@ func (m *Manager) capture(ctx context.Context, s session.Session, commands []str
 	s.LogOnConnect, s.AutoReconnect, s.Triggers = false, false, nil
 	s.Cols, s.Rows = 400, 50
 	ti := m.Create(s)
-	id := ti.ID
-	m.quiet.Store(id, true)
+	c := &CaptureConn{m: m, id: ti.ID, re: re, defRe: regexp.MustCompile(DefaultPrompt), prompt: prompt, yes: yes, last: time.Now()}
+	m.quiet.Store(c.id, true)
+	ok := false
 	defer func() {
-		_ = m.Close(id)
-		m.quiet.Delete(id)
+		if !ok {
+			c.Close()
+		}
 	}()
-	t, err := m.get(id)
-	if err != nil {
+	if c.t, err = m.get(c.id); err != nil {
 		return nil, err
 	}
-	var mu sync.Mutex
-	var out strings.Builder
-	var strip logging.Stripper
-	last := time.Now()
-	unsub := t.subscribe(func(p []byte) {
-		mu.Lock()
-		out.Write(strip.Strip(p))
-		last = time.Now()
-		mu.Unlock()
+	c.unsub = c.t.subscribe(func(p []byte) {
+		c.mu.Lock()
+		c.out.Write(c.strip.Strip(p))
+		c.last = time.Now()
+		c.mu.Unlock()
 	})
-	defer unsub()
-	snapshot := func() (string, time.Duration) {
-		mu.Lock()
-		defer mu.Unlock()
-		return out.String(), time.Since(last)
-	}
-	*transcript = func() string { s, _ := snapshot(); return s }
-	if err := m.Start(id, 400, 50); err != nil {
+	*transcript = func() string { s, _ := c.snapshot(); return s }
+	if err := m.Start(c.id, 400, 50); err != nil {
 		return nil, err
 	}
-	// loose: also accept any common prompt (after-login steps such as
-	// "config terminal" change the prompt to "sw:1(config)#"); exact: the
-	// prompt the device showed after the after-login steps.
-	defRe := regexp.MustCompile(DefaultPrompt)
-	loose, exact := false, ""
-	answered := 0 // the output length when a yes/no question was last answered
-	// atPrompt: the output ends with the prompt and has been quiet for a moment
-	atPrompt := func(from int, quiet time.Duration) (bool, string) {
-		txt, idle := snapshot()
-		if from > len(txt) {
-			from = len(txt)
-		}
-		tail := strings.TrimRight(strings.ReplaceAll(txt[from:], "\r", ""), "\n")
-		if idle < quiet {
-			return false, ""
-		}
-		lines := strings.Split(tail, "\n")
-		lastLine := lines[len(lines)-1]
-		if reMore.MatchString(lastLine) {
-			_ = m.Write(id, []byte(" "))
-			return false, ""
-		}
-		if yes && reYesNo.MatchString(lastLine) && len(txt) > answered { // once per question
-			answered = len(txt)
-			_ = m.Write(id, []byte("y\r"))
-			return false, ""
-		}
-		ok := re.MatchString(lastLine) || (loose && defRe.MatchString(lastLine)) || (exact != "" && strings.TrimSpace(lastLine) == exact)
-		return ok, lastLine
-	}
-	wait := func(from int, limit time.Duration, what string) (string, error) {
-		deadline := time.Now().Add(limit)
-		for {
-			if err := ctx.Err(); err != nil {
-				return "", err
-			}
-			t.mu.Lock()
-			state, logon := t.state, t.logon
-			t.mu.Unlock()
-			if state == StateError || state == StateDisconnected {
-				msg := m.lastStatus(id)
-				if msg == "" {
-					msg = "the connection was closed"
-				}
-				return "", errors.New(msg)
-			}
-			if state == StateConnected && (logon == nil || logon.done()) {
-				if ok, p := atPrompt(from, 900*time.Millisecond); ok {
-					return p, nil
-				}
-			}
-			if time.Now().After(deadline) {
-				txt, _ := snapshot()
-				lastLine := strings.TrimSpace(lastLineOf(txt))
-				if lastLine == "" {
-					return "", fmt.Errorf("no prompt after %s (nothing received)", what)
-				}
-				return "", fmt.Errorf("no prompt after %s (last line: %q does not match the prompt pattern %s)", what, clip(lastLine, 120), prompt)
-			}
-			time.Sleep(150 * time.Millisecond)
-		}
-	}
-	promptLine, err := wait(0, 60*time.Second, "logging in")
-	if err != nil {
+	if c.promptLine, err = c.wait(ctx, 0, 60*time.Second, "logging in"); err != nil {
 		return nil, err
 	}
 	// After-login steps one at a time, each only when its expected text is in
 	// the prompt: "enable" is skipped when the account starts at "#", and
-	// nothing is typed before the device is ready for it.
-	loose = true
-	if dt, ok := m.deviceOf(t.sess); ok {
+	// nothing is typed before the device is ready for it. Meanwhile any common
+	// prompt is accepted ("config terminal" changes it to "sw:1(config)#").
+	c.loose = true
+	if dt, found := m.deviceOf(c.t.sess); found {
 		for _, a := range dt.After() {
-			if exp := Unescape(a.Expect); exp != "" && !strings.Contains(promptLine, exp) {
+			if exp := Unescape(a.Expect); exp != "" && !strings.Contains(c.promptLine, exp) {
 				continue
 			}
-			before, _ := snapshot()
-			t.mu.Lock()
-			conn := t.conn
-			t.mu.Unlock()
+			before, _ := c.snapshot()
+			c.t.mu.Lock()
+			conn := c.t.conn
+			c.t.mu.Unlock()
 			if conn == nil {
 				return nil, errors.New("the connection was closed")
 			}
-			m.runLogon(t, conn, []session.LogonAction{a})
-			if promptLine, err = wait(len(before), 45*time.Second, `after-login step "`+a.Send+`"`); err != nil {
+			m.runLogon(c.t, conn, []session.LogonAction{a})
+			if c.promptLine, err = c.wait(ctx, len(before), 45*time.Second, `after-login step "`+a.Send+`"`); err != nil {
 				return nil, err
 			}
 		}
 	}
-	loose, exact = false, strings.TrimSpace(promptLine)
+	// from now on: the prompt the device showed after the after-login steps
+	c.loose, c.exact = false, strings.TrimSpace(c.promptLine)
+	ok = true
+	return c, nil
+}
+
+func (c *CaptureConn) snapshot() (string, time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.out.String(), time.Since(c.last)
+}
+
+// atPrompt: the output ends with the prompt and has been quiet for a moment.
+func (c *CaptureConn) atPrompt(from int, quiet time.Duration) (bool, string) {
+	txt, idle := c.snapshot()
+	if from > len(txt) {
+		from = len(txt)
+	}
+	tail := strings.TrimRight(strings.ReplaceAll(txt[from:], "\r", ""), "\n")
+	if idle < quiet {
+		return false, ""
+	}
+	lines := strings.Split(tail, "\n")
+	lastLine := lines[len(lines)-1]
+	if reMore.MatchString(lastLine) {
+		_ = c.m.Write(c.id, []byte(" "))
+		return false, ""
+	}
+	if c.yes && reYesNo.MatchString(lastLine) && len(txt) > c.answered { // once per question
+		c.answered = len(txt)
+		_ = c.m.Write(c.id, []byte("y\r"))
+		return false, ""
+	}
+	ok := c.re.MatchString(lastLine) || (c.loose && c.defRe.MatchString(lastLine)) || (c.exact != "" && strings.TrimSpace(lastLine) == c.exact)
+	return ok, lastLine
+}
+
+func (c *CaptureConn) wait(ctx context.Context, from int, limit time.Duration, what string) (string, error) {
+	deadline := time.Now().Add(limit)
+	for {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		c.t.mu.Lock()
+		state, logon := c.t.state, c.t.logon
+		c.t.mu.Unlock()
+		if state == StateError || state == StateDisconnected {
+			msg := c.m.lastStatus(c.id)
+			if msg == "" {
+				msg = "the connection was closed"
+			}
+			return "", errors.New(msg)
+		}
+		if state == StateConnected && (logon == nil || logon.done()) {
+			if ok, p := c.atPrompt(from, 900*time.Millisecond); ok {
+				return p, nil
+			}
+		}
+		if time.Now().After(deadline) {
+			txt, _ := c.snapshot()
+			lastLine := strings.TrimSpace(lastLineOf(txt))
+			if lastLine == "" {
+				return "", fmt.Errorf("no prompt after %s (nothing received)", what)
+			}
+			return "", fmt.Errorf("no prompt after %s (last line: %q does not match the prompt pattern %s)", what, clip(lastLine, 120), c.prompt)
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+}
+
+// Run sends one command and returns its output without the echo and the prompt.
+func (c *CaptureConn) Run(ctx context.Context, cmd string) (string, error) {
+	cmd = strings.TrimSpace(cmd)
+	if c.closed {
+		return "", errors.New("the connection was closed")
+	}
+	if cmd == "" {
+		return "", nil
+	}
+	before, _ := c.snapshot()
+	if err := c.m.Write(c.id, []byte(cmd+"\r")); err != nil {
+		return "", err
+	}
+	p, err := c.wait(ctx, len(before), 3*time.Minute, `"`+cmd+`"`)
+	if err != nil {
+		return "", err
+	}
+	c.promptLine = p
+	txt, _ := c.snapshot()
+	return cleanOutput(txt[len(before):], cmd, p), nil
+}
+
+// Alive: the connection is still up.
+func (c *CaptureConn) Alive() bool {
+	if c.closed || c.t == nil {
+		return false
+	}
+	c.t.mu.Lock()
+	defer c.t.mu.Unlock()
+	return c.t.state == StateConnected
+}
+
+// Close logs out (closes the background connection).
+func (c *CaptureConn) Close() {
+	if c.closed {
+		return
+	}
+	c.closed = true
+	if c.unsub != nil {
+		c.unsub()
+	}
+	_ = c.m.Close(c.id)
+	c.m.quiet.Delete(c.id)
+}
+
+func (m *Manager) capture(ctx context.Context, s session.Session, commands []string, prompt string, transcript *func() string, yes bool) ([]string, error) {
+	c, err := m.openCapture(ctx, s, prompt, yes, transcript)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Close()
 	var res []string
 	total := 0
-	for _, c := range commands {
-		if strings.TrimSpace(c) != "" {
+	for _, cmd := range commands {
+		if strings.TrimSpace(cmd) != "" {
 			total++
 		}
 	}
@@ -215,20 +296,15 @@ func (m *Manager) capture(ctx context.Context, s session.Session, commands []str
 	if prog != nil {
 		prog(0, total)
 	}
-	for _, c := range commands {
-		c = strings.TrimSpace(c)
-		if c == "" {
+	for _, cmd := range commands {
+		if strings.TrimSpace(cmd) == "" {
 			continue
 		}
-		before, _ := snapshot()
-		if err := m.Write(id, []byte(c+"\r")); err != nil {
+		out, err := c.Run(ctx, cmd)
+		if err != nil {
 			return nil, err
 		}
-		if promptLine, err = wait(len(before), 3*time.Minute, `"`+c+`"`); err != nil {
-			return nil, err
-		}
-		txt, _ := snapshot()
-		res = append(res, cleanOutput(txt[len(before):], c, promptLine))
+		res = append(res, out)
 		if prog != nil {
 			prog(len(res), total)
 		}

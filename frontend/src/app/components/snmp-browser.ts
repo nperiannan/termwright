@@ -494,6 +494,8 @@ export class SnmpBrowser implements OnInit, OnDestroy {
     for (const r of [...res].reverse()) this.addHist({ at: Date.now() + res.indexOf(r), op, oid, session: r.session, n: r.rows.length, ms: r.ms, err: r.err, rows: r.rows.slice(0, 5000) });
     const ok = res.filter(r => !r.err).length;
     if (ok < res.length) this.error.set(tr('{0} of {1} devices answered', ok, res.length));
+    // recording: one step per device that answered (a device that did not answer is left out)
+    if (this.rec.recording()) for (const r of res) if (!r.err) this.rec.snmp({ session: r.session, op, oids: [oid] }, r.rows);
     this.busy.set(false);
   }
   addExtra(p: string) { if (p && p !== this.path() && !this.extra().includes(p)) this.extra.update(l => [...l, p]); }

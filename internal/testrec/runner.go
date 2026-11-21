@@ -87,8 +87,15 @@ type CheckResult struct {
 
 const maxOut = 64 << 10
 
+// CaseEnder is a Driver that keeps logins open while a case runs (one per session instead of one
+// per step); EndCase is called when the case is done so it logs out.
+type CaseEnder interface{ EndCase() }
+
 // Run runs a case. vars win over the case's own.
 func Run(ctx context.Context, c Case, d Driver, vars map[string]string) Result {
+	if e, ok := d.(CaseEnder); ok {
+		defer e.EndCase()
+	}
 	r := Result{Case: c.Name, Start: time.Now(), Passed: true}
 	v := map[string]string{}
 	for k, x := range c.Vars {

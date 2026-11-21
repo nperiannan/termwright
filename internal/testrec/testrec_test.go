@@ -9,7 +9,12 @@ import (
 	"testing"
 )
 
-type fake struct{ sent []string }
+type fake struct {
+	sent  []string
+	ended int
+}
+
+func (f *fake) EndCase() { f.ended++ }
 
 func (f *fake) Command(_ context.Context, session, cmd, _ string) (string, error) {
 	f.sent = append(f.sent, session+": "+cmd)
@@ -213,7 +218,11 @@ func TestParamsAndRoles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rs := RunParams(context.Background(), c, &fake{}, nil)
+	fk := &fake{}
+	rs := RunParams(context.Background(), c, fk, nil)
+	if fk.ended != 2 {
+		t.Fatal("EndCase per run:", fk.ended)
+	}
 	if len(rs) != 2 || rs[0].Case != "v [vlan=42]" || !rs[0].Passed || rs[1].Passed {
 		t.Fatalf("%+v", rs) // the fake only knows vlan 42
 	}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/termwright/termwright/internal/apiclient"
+	"github.com/termwright/termwright/internal/term"
 	"github.com/termwright/termwright/internal/testrec"
 )
 
@@ -148,7 +149,7 @@ func (a *App) runTests(ctx context.Context, r TestRunRequest, ask netAsker) (tes
 		return testrec.RunReport{}, errors.New("tests are already running")
 	}
 	defer testsRun.Unlock()
-	rep, err := f.RunFiles(ctx, r.Files, testDriver{a}, r.Vars, func(res testrec.Result) {
+	rep, err := f.RunFiles(ctx, r.Files, newTestDriver(a), r.Vars, func(res testrec.Result) {
 		emitter{a}.Emit("tests:progress", res)
 	})
 	if err == nil || len(rep.Results) > 0 {
@@ -214,19 +215,63 @@ func (a *App) TestLastRun() *testrec.RunReport {
 }
 
 // testDriver runs test steps with Termwright: commands log in to saved sessions in the background
-// (as Run and Collect does); requests go through the API client.
-type testDriver struct{ a *App }
+// (as Run and Collect does) and keep that login for the rest of the case; requests go through the
+// API client. Without own (the generated tests' single steps) logins come from the app's pool,
+// which logs out after a while unused.
+type testDriver struct {
+	a   *App
+	own map[string]*term.CaptureConn
+}
 
-func (d testDriver) Command(ctx context.Context, session, cmd, prompt string) (string, error) {
+func newTestDriver(a *App) *testDriver { return &testDriver{a: a, own: map[string]*term.CaptureConn{}} }
+
+// EndCase logs out of the case's sessions.
+func (d *testDriver) EndCase() {
+	for k, c := range d.own {
+		c.Close()
+		delete(d.own, k)
+	}
+}
+
+func (d *testDriver) Command(ctx context.Context, session, cmd, prompt string) (string, error) {
 	s, err := d.a.store.Get(session)
 	if err != nil {
 		return "", fmt.Errorf("no saved session %q", session)
 	}
-	outs, err := d.a.terms.CaptureEach(ctx, s, []string{cmd}, prompt)
-	return strings.Join(outs, ""), err
+	key := s.Path + "\x00" + prompt
+	for try := 0; ; try++ {
+		var c *term.CaptureConn
+		release := func(bool) {}
+		if d.own != nil {
+			if c = d.own[key]; c == nil || !c.Alive() {
+				if c != nil {
+					c.Close()
+				}
+				if c, err = d.a.terms.OpenCapture(ctx, s, prompt); err != nil {
+					return "", err
+				}
+				d.own[key] = c
+			}
+			release = func(bad bool) {
+				if bad {
+					c.Close()
+					delete(d.own, key)
+				}
+			}
+		} else if c, release, err = testPool.get(ctx, d.a, s, prompt); err != nil {
+			return "", err
+		}
+		out, err := c.Run(ctx, cmd)
+		bad := err != nil && ctx.Err() == nil
+		release(bad)
+		if bad && try == 0 && !c.Alive() {
+			continue // the connection went away (the device restarted, a timeout): log in again once
+		}
+		return out, err
+	}
 }
 
-func (d testDriver) HTTP(ctx context.Context, h testrec.HTTPStep) (testrec.HTTPAnswer, error) {
+func (d *testDriver) HTTP(ctx context.Context, h testrec.HTTPStep) (testrec.HTTPAnswer, error) {
 	req := apiclient.Request{Method: h.Method, URL: h.URL}
 	for k, v := range h.Headers {
 		req.Headers = append(req.Headers, apiclient.KV{Key: k, Value: v})
@@ -249,7 +294,7 @@ func (d testDriver) HTTP(ctx context.Context, h testrec.HTTPStep) (testrec.HTTPA
 	return testrec.HTTPAnswer{Status: res.Status, Body: res.Body}, nil
 }
 
-func (d testDriver) SNMP(ctx context.Context, sn testrec.SNMPStep) ([]testrec.SNMPValue, error) {
+func (d *testDriver) SNMP(ctx context.Context, sn testrec.SNMPStep) ([]testrec.SNMPValue, error) {
 	r := SNMPRequest{Session: sn.Session, Op: sn.Op, OIDs: sn.OIDs, Confirmed: true} // production was asked before the run
 	for _, v := range sn.Values {
 		r.Values = append(r.Values, SNMPValue{OID: v.OID, Type: v.Type, Value: v.Value})
@@ -376,7 +421,7 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 				return "", err
 			}
 		}
-		ans := testrec.RunOne(ctx, st, testDriver{a})
+		ans := testrec.RunOne(ctx, st, &testDriver{a: a})
 		j, _ := json.Marshal(ans)
 		return string(j), nil
 	case "new_testbed":

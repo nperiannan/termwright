@@ -1480,12 +1480,12 @@ Termwright can turn manual testing into repeatable tests, the way record-and-rep
   - *matches a pattern* - the text with its numbers turned into `\d+`;
   - *does not contain*;
   - **Save as Test Variable…** keeps the value for later steps as `{{name}}`.
-- Every get, walk or set you run in the **SNMP Browser** (on one device) becomes an `snmp` step; a get's values are added as checks (`ifOperStatus.5` = `up`).
+- Every get, walk or set you run in the **SNMP Browser** becomes an `snmp` step (run on several devices at once: one step per device that answered); a get's values are added as checks (`ifOperStatus.5` = `up`).
 - **Sessions as roles** (on by default) saves each session as a role - `Lab/core-sw1` becomes `{{core_sw1}}` with `Lab/core-sw1` as the test's default - so a testbed can point the same test at other devices.
 - **+ Check** on a step adds status, JSON path (`data.items[0].name`, `[-1]`, `length`), *takes at most (ms)*, contains, matches or field checks by hand.
 - ↑ and ✕ reorder or remove steps; ⏸ pauses recording. **Save Test…** writes the test into the tests folder (`cases/…yaml`).
 
-A step without checks passes when it runs without an error. Each recorded terminal step runs again in a **new background login**, so a command that only works in a mode (configure mode, a directory) needs the command that enters the mode recorded too.
+A step without checks passes when it runs without an error. When a test runs, its commands go over **one background login per session** (the device type's after-login steps run once), so later steps see what earlier ones left - configure mode, a directory - just as when you recorded them; the login ends with the test.
 
 ### The Tests tab
 
