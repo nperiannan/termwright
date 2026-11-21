@@ -29,6 +29,8 @@ var netTools = []mcpTool{
 			"files":           map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "run: the tests to run - files, folders of cases/ or suites/… files (none: all)"},
 			"dir":             map[string]any{"type": "string", "description": "send_qtest/defect: a run's folder (reports/…); default the last run"},
 			"reason":          map[string]any{"type": "string", "description": "request_approval: why the run should go ahead"},
+			"from":            map[string]any{"type": "integer", "description": "run: start each test at this step (1-based; the setup still runs)"},
+			"only":            map[string]any{"type": "integer", "description": "run: run only this step of the test (no setup, no cleanup with cleanup off)"},
 			"note":            map[string]any{"type": "string", "description": "approve/reject: a note"},
 			"testbeds":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "run: several testbeds - the tests run on each at the same time"},
 			"force_lock":      map[string]any{"type": "boolean", "description": "run: take over the testbed when someone else's run has it locked"},

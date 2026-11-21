@@ -88,6 +88,8 @@ A test whose dependency (**Depends On…**) failed is skipped with the reason; a
 
 While a run goes, the **live log** shows what is sent and what comes back: drag the bar under it to change its height, or **Expand** it over the page (Minimise brings it back).
 
+**Debugging.** Tick **Pause when a step fails** in the Run panel: at a failed step the run waits with the connections open - **Open Device** opens a terminal to look around, **Retry Step** runs it again after a fix, **Continue** goes on, **Stop Test** ends it (the cleanup still runs). Open a step's row (or right-click it) for **Run This Step** and **Run From Here**; the row also lists the variables the step used, with their values.
+
 ## 7. Runs and reports
 
 While a run goes, a bar shows each step with **■ Stop**, and the **live log** below it shows what is sent to each device and what comes back as it arrives, then each step's result. Every run keeps a **run log** per test (`logs/` in the run's folder): each step's device, command, full answer, checks and result - open it with **Run Log** on a test, **Log** in the Runs view or from the HTML report (the step that runs ends, the cleanups still run). **Runs** lists past runs. A run shows passed, failed, skipped and *steps not checked*, each test's first problem in words, the testbed, the cleanup mode and the software versions of the devices; **HTML report**, **JUnit**, **Send to qTest**, **+ defect** on failed tests and **▶ Run failed again**. Reports are kept in `reports/` (one folder per run): `report.html`, `junit.xml` and `results.xlsx` - an Excel workbook with a summary, a row per test and a row per step with expected vs got, for the people who keep results in spreadsheets.

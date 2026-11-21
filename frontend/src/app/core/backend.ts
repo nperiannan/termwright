@@ -309,7 +309,7 @@ export class Backend {
   testsGit() { return this.call<TestsGitInfo>('TestsGit'); }
   testsOpen(rel: string) { return this.call<void>('TestsOpen', rel); }
   testsOpenInEditor(rel: string) { return this.call<void>('TestsOpenInEditor', rel); }
-  runTests(r: { files?: string[]; vars?: Record<string, string>; testbed?: string; confirmed?: boolean; onCleanupFail?: string; cleanup?: string; tags?: string[]; forceLock?: boolean }) { return this.call<TestRunReport>('RunTests', r); }
+  runTests(r: { from?: number; only?: number; pauseOnFail?: boolean; files?: string[]; vars?: Record<string, string>; testbed?: string; confirmed?: boolean; onCleanupFail?: string; cleanup?: string; tags?: string[]; forceLock?: boolean }) { return this.call<TestRunReport>('RunTests', r); }
   runTestsParallel(r: { files?: string[]; testbeds: string[]; confirmed?: boolean; onCleanupFail?: string; cleanup?: string; forceLock?: boolean }) { return this.call<TestRunReport[]>('RunTestsParallel', r); }
   httpMockStart(collection: string, port = 0) { return this.call<HMockInfo>('HTTPMockStart', collection, port); }
   httpMockStop(collection: string) { return this.call<void>('HTTPMockStop', collection); }
@@ -339,6 +339,7 @@ export class Backend {
   testSendQTest(dir: string, files: string[] = []) { return this.call<string>('TestSendQTest', dir, files); }
   testCreateDefect(dir: string, file: string) { return this.call<string[]>('TestCreateDefect', dir, file); }
   testStop() { return this.call<void>('TestStop'); }
+  testResume(action: string) { return this.call<void>('TestResume', action); }
   testManualAnswer(id: string, result: string, note: string) { return this.call<void>('TestManualAnswer', id, result, note); }
   testImportManual(device: string) { return this.call<string[]>('TestImportManual', device); }
   testsFetchTemplates() { return this.call<string>('TestsFetchTemplates'); }

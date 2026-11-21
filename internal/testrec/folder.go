@@ -316,6 +316,14 @@ type RunOptions struct {
 	OnStepStart func(file, caseName, step string) `json:"-"`
 	// OnStep is called after each step (live progress).
 	OnStep func(file, caseName string, sr StepResult) `json:"-"`
+	// From: start at this step of the steps (1-based; the setup still runs, earlier steps are skipped).
+	From int `json:"from,omitempty"`
+	// Only: run only this step of the steps (no setup).
+	Only int `json:"only,omitempty"`
+	// Pause is called when a setup or test step fails (debugging): "retry" runs the step again,
+	// "continue" goes on as if it passed, anything else stops (the cleanup still runs). The devices'
+	// connections stay open while it waits.
+	Pause func(ctx context.Context, file, caseName string, sr StepResult) string `json:"-"`
 	file   string
 	// Testbed: shown in the report.
 	Testbed string `json:"testbed,omitempty"`

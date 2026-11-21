@@ -2,6 +2,14 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## Unreleased
+
+- **Faster steps**: after the first command, a prompt shaped like the last one (`Stack.5 #` after `Stack.4 #`) is recognised after 0.2 s of quiet instead of 0.9 s, so each command step takes about a third of the time.
+
+- **Debugging tests**: **Pause when a step fails** (Run panel) stops at the failed step with the devices' connections open - **Open Device** to look around, **Retry Step** after fixing something, **Continue** or **Stop Test** (its cleanup still runs). A step's row (or right-click) has **Run This Step** (only that step, no setup or cleanup) and **Run From Here** (the setup, then that step and the rest). Each step's result lists the **variables** it used and saved, with their values then.
+
+- **Clearer step results**: configuration steps without checks show *✓ device errors* (they fail when the device answers with an error) instead of an amber *not checked*, which is now only for read steps without checks; the test page says *running* while its run goes.
+
 ## 0.43.0 (2026-11-21)
 
 - **Run log you can read**: the live log shows each step as a heading, the device's answer, a table of the checks (Expected, Found) with ✓ and ✗, and the result in green or red with its time; a step without checks says it passes when the device answers without an error. The saved run log has the checks as a table too (Result, Expected, Found), and the log viewer colours passed and failed lines.

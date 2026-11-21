@@ -243,6 +243,13 @@ func (c *CaptureConn) wait(ctx context.Context, from int, limit time.Duration, w
 			return "", errors.New(msg)
 		}
 		if state == StateConnected && (logon == nil || logon.done()) {
+			// a prompt shaped like the last one ("Stack.5 #" after "Stack.4 #") needs only a short quiet
+			// moment; an unknown one waits longer so output that pauses is not cut
+			if c.promptLine != "" {
+				if ok, p := c.atPrompt(from, 200*time.Millisecond); ok && sameShape(p, c.promptLine) {
+					return p, nil
+				}
+			}
 			if ok, p := c.atPrompt(from, 900*time.Millisecond); ok {
 				return p, nil
 			}
@@ -378,4 +385,25 @@ func (c *CaptureConn) SetTap(f func(string)) {
 	c.mu.Lock()
 	c.tap = f
 	c.mu.Unlock()
+}
+
+// sameShape: two prompt lines that differ only in their numbers ("* Slot-1 Stack.5 #", "* Slot-1 Stack.6 #").
+func sameShape(a, b string) bool {
+	norm := func(s string) string {
+		var out []rune
+		dig := false
+		for _, r := range strings.TrimSpace(s) {
+			if r >= '0' && r <= '9' {
+				if !dig {
+					out = append(out, '9')
+				}
+				dig = true
+				continue
+			}
+			dig = false
+			out = append(out, r)
+		}
+		return string(out)
+	}
+	return a != "" && norm(a) == norm(b)
 }

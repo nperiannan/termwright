@@ -112,6 +112,7 @@ steps:
 print(lab.tests.run("cases/smoke/version.yaml", vars={"vlan": "42"}))  # pass/fail per step, report path
 print(lab.tests.run())          # all tests
 print(lab.tests.run("suites/nightly.yaml", tags=["smoke", "!slow"], cleanup="off"))
+print(lab.tests.run("cases/smoke/version.yaml", step_only=3))   # debug one step (step_from=3: from there on)
 print(lab.tests.run(testbeds=["testbeds/lab-a.yaml", "testbeds/lab-b.yaml"]))  # at the same time
 print(lab.tests.history("cases/smoke/version.yaml"))   # pass rate, flips, per software version
 print(lab.tests.send_qtest())                          # the last run to qTest
