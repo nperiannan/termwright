@@ -816,7 +816,9 @@ export class TerminalView implements AfterViewInit, OnDestroy {
 
   onContextMenu(ev: MouseEvent) {
     const id = this.tab().id;
-    if (this.ui.settings()?.rightClickPaste && !ev.shiftKey) {
+    // while recording a test, a right-click on selected output offers Expect this (Paste stays in the menu)
+    const recSel = this.rec.recording() && !!this.term?.getSelection().trim();
+    if (this.ui.settings()?.rightClickPaste && !ev.shiftKey && !recSel) {
       ev.preventDefault();
       void this.tabs.paste(id);
       return;

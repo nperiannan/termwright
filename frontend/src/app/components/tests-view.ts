@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Backend, errText } from '../core/backend';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
-import { Recorder } from '../core/recorder.service';
+import { Recorder, escapeRe, fieldPattern } from '../core/recorder.service';
 import { CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
 import { expectLabel, parseTableCheck, stepText } from './recorder-panel';
 import { AIChat } from '../core/ai-chat.service';
@@ -147,7 +147,7 @@ type Phase = 'setup' | 'steps' | 'cleanup';
                     @if (res(row); as r) { @if (r.unchecked && r.passed && !r.skipped) { <span class="chip u" title="The step has no checks: it passes when the command runs and the device does not answer with an error">○ ran, nothing checked</span> } }
                     @if (res(row)?.error) { <div class="bad">{{ res(row)?.error }}</div> }
                     @if (res(row); as r) { @if (r.table; as tb) { <details class="out"><summary>Table · {{ tb.rows.length }} rows</summary><div class="tbw"><table class="ptab"><tr>@for (h of tb.header; track $index) { <th>{{ h }}</th> }</tr>@for (x of tb.rows.slice(0, 200); track $index) { <tr>@for (c of x; track $index) { <td>{{ c }}</td> }</tr> }</table></div></details> } }
-                    @if (res(row); as r) { @if (r.output && !r.skipped) { <details class="out"><summary>Output</summary><pre>{{ r.output }}</pre></details> } }
+                    @if (res(row); as r) { @if (r.output && !r.skipped) { <details class="out"><summary>Output</summary><pre (contextmenu)="outMenu($event, row)" title="Select text and right-click to check it">{{ r.output }}</pre></details> } }
                   </div>
                 }
                 <div class="row"><button type="button" (click)="edit()" title="Change, add, move or remove steps and checks">✎ Edit Steps</button><button type="button" (click)="recordMore()">● Record a New Test</button>
@@ -425,6 +425,32 @@ export class TestsView implements OnInit, OnDestroy {
     if (!name) return;
     try { const rel = await this.backend.testsNewTestbed(name, folder); this.ui.toast(tr('Wrote {0}', rel), 'success'); await this.load(); void this.backend.testsOpen(rel); }
     catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  /** Right-click on selected text in a step's output: add it as a check of that step and save the test. */
+  outMenu(ev: MouseEvent, row: { i: number; phase: string }) {
+    const sel = (window.getSelection()?.toString() ?? '').replace(/\s*\r?\n\s*/g, ' ').trim();
+    if (!sel) return;
+    const out = this.res(row)?.output ?? '';
+    const field = fieldPattern(out, sel);
+    const short = sel.length > 30 ? sel.slice(0, 30) + '…' : sel;
+    const add = (e: TestExpect) => void this.addRunCheck(row, e);
+    this.ui.showMenu(ev, [
+      { label: tr('Expect this: contains "{0}"', short), action: () => add({ contains: sel }) },
+      ...(field ? [{ label: tr('Expect this: field = "{0}"', short), action: () => add({ field, equals: sel }) }] : []),
+      { label: 'Expect this: matches a pattern', action: () => add({ matches: escapeRe(sel).replace(/\d+/g, '\\d+') }) },
+      { label: 'Expect this: does not contain', action: () => add({ notContains: sel }) },
+      { separator: true },
+      { label: 'Copy', action: () => void navigator.clipboard?.writeText(sel).catch(() => {}) },
+    ]);
+  }
+  private async addRunCheck(row: { i: number; phase: string }, e: TestExpect) {
+    const t = this.test(); if (!t) return;
+    const c = structuredClone(t);
+    const list = row.phase === 'setup' ? c.setup : row.phase === 'cleanup' ? c.cleanup : c.steps;
+    const st = list?.[row.i]; if (!st) return;
+    (st.expect ??= []).push(e);
+    try { await this.backend.testSave(this.sel(), c); this.ui.toast(tr('Check added to step {0}', row.i + 1), 'success'); await this.load(); }
+    catch (err) { this.ui.toast(errText(err), 'error'); }
   }
   keepOcf() { try { localStorage.setItem('tw.tests.ocf', this.onCleanupFail); localStorage.setItem('tw.tests.cleanup', this.cleanupMode); } catch { /* not kept */ } }
   pick(f: string) { this.picked.update(l => l.includes(f) ? l.filter(x => x !== f) : [...l, f]); }
