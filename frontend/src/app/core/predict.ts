@@ -102,3 +102,47 @@ export function fieldName(pattern: string): string {
   const s = pattern.replace(/\(\?[a-z]+\)/g, '').replace(/\\s[+*]/g, ' ').replace(/\((?:[^()\\]|\\.)*\)\s*$/, '').replace(/\\(.)/g, '$1').replace(/[:\s]+$/, '').trim();
   return s && s.length <= 40 && !/[()[\]|*+?^$]/.test(s) ? s : pattern;
 }
+
+/** The scalar values of a JSON document by path ("name", "data.vlan.id", "ports[0]"). */
+function flatten(x: unknown, path = '', out: [string, string][] = [], depth = 0): [string, string][] {
+  if (depth > 6 || out.length > 200) return out;
+  if (x === null || typeof x !== 'object') {
+    if (path && (typeof x === 'string' || typeof x === 'number' || typeof x === 'boolean')) out.push([path, String(x)]);
+    return out;
+  }
+  if (Array.isArray(x)) x.slice(0, 50).forEach((v, i) => flatten(v, `${path}[${i}]`, out, depth + 1));
+  else for (const [k, v] of Object.entries(x as Record<string, unknown>)) flatten(v, path ? `${path}.${k}` : k, out, depth + 1);
+  return out;
+}
+
+const lastKey = (p: string) => p.replace(/\[\d+\]/g, '').split('.').pop() ?? p;
+const pathBase = (u: string) => u.replace(/^[a-z]+:\/\/[^/]+/i, '').split('?')[0].replace(/\/+$/, '');
+
+/**
+ * Checks for an API response from the requests that changed things before it: the values a POST, PUT or
+ * PATCH sent must come back - in its own answer, or in a later GET of the same resource or its list. A
+ * value is checked by the JSON path where it was found, and only when it is there in this response.
+ */
+export function predictApiChecks(writes: { url: string; body?: string }[], url: string, response: string, have: TestExpect[] = []): TestExpect[] {
+  let doc: unknown;
+  try { doc = JSON.parse(response); } catch { return []; }
+  const got = flatten(doc), base = pathBase(url), res: TestExpect[] = [];
+  const seen = new Set(have.map(e => e.json));
+  for (const w of writes) {
+    const wb = pathBase(w.url);
+    if (!(base === wb || base.startsWith(wb + '/') || wb.startsWith(base + '/') || wb === base.replace(/\/[^/]+$/, ''))) continue;
+    let sent: unknown;
+    try { sent = JSON.parse(w.body ?? ''); } catch { continue; }
+    for (const [p, v] of flatten(sent)) {
+      if (v === '' || v.length > 200 || res.length >= 6) continue;
+      const k = lastKey(p);
+      const hit = got.find(([gp, gv]) => gv === v && lastKey(gp) === k) ?? got.find(([gp, gv]) => gv === v && gp.endsWith(p));
+      if (!hit || seen.has(hit[0])) continue;
+      seen.add(hit[0]);
+      // in a list the position can change: check that the value is in the answer instead
+      if (/\[\d+\]/.test(hit[0])) { if (v.length >= 3 && /[A-Za-z]/.test(v) && !seen.has('#' + v)) { res.push({ contains: v }); seen.add('#' + v); } }
+      else res.push({ json: hit[0], equals: v });
+    }
+  }
+  return res;
+}

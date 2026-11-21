@@ -8,6 +8,7 @@ import { Recorder, escapeRe, fieldPattern } from '../core/recorder.service';
 import { CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestHistory, TestStepResult, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
 import { expectLabel, parseTableCheck, stepText } from './recorder-panel';
 import { AIChat } from '../core/ai-chat.service';
+import { Icon } from './icon';
 
 type View = 'steps' | 'yaml' | 'go' | 'py' | 'tcl' | 'history';
 type Phase = 'setup' | 'steps' | 'cleanup';
@@ -16,15 +17,15 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
 /** The Tests tab: the tests folder's tree, the selected test (steps, YAML, generated Go) and the last run. */
 @Component({
   selector: 'app-tests-view',
-  imports: [FormsModule, NgTemplateOutlet],
+  imports: [FormsModule, NgTemplateOutlet, Icon],
   template: `
     <div class="tv">
       <nav class="rail" aria-label="Tests sections">
         @for (r of rails; track r.k) {
-          <button type="button" [class.on]="section() === r.k" (click)="go(r.k)" [title]="r.t"><span class="ri">{{ r.i }}</span>{{ r.l }}</button>
+          <button type="button" [class.on]="section() === r.k" (click)="go(r.k)" [title]="r.t"><app-icon [name]="r.i" [size]="18" />{{ r.l }}</button>
         }
         <span class="sp"></span>
-        <button type="button" class="gitb" (click)="gitMenu($event)" [title]="git()?.repo ? 'Git: ' + git()?.changed + ' changed' : 'Git'"><span class="ri">⎇</span>{{ git()?.repo ? (git()?.branch || 'git') : 'Git' }}@if (git()?.ahead) { <i>↑{{ git()?.ahead }}</i> }@if (git()?.behind) { <i>↓{{ git()?.behind }}</i> }</button>
+        <button type="button" class="gitb" (click)="gitMenu($event)" [title]="git()?.repo ? 'Git: ' + git()?.changed + ' changed' : 'Git'"><app-icon name="tree" [size]="17" />{{ git()?.repo ? (git()?.branch || 'git') : 'Git' }}@if (git()?.ahead) { <i>↑{{ git()?.ahead }}</i> }@if (git()?.behind) { <i>↓{{ git()?.behind }}</i> }</button>
       </nav>
       <aside class="side">
         @switch (section()) {
@@ -36,33 +37,34 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
             </div>
             <div class="list">
               @if (tree()?.suites?.length) {
-                <div class="fold"><button type="button" class="lnk fl" (click)="toggleFold('#suites')">{{ folded().includes('#suites') ? '▸' : '▾' }} suites</button><span class="cnt">{{ tree()?.suites?.length }}</span></div>
+                <div class="fold"><button type="button" class="lnk fl" (click)="toggleFold('#suites')">{{ folded().includes('#suites') ? '▸' : '▾' }} Plans</button><span class="cnt">{{ tree()?.suites?.length }}</span></div>
                 @if (!folded().includes('#suites')) {
                   @for (s of tree()?.suites ?? []; track s.file) {
-                    <div class="case" (click)="openRun([s.file], 'suite ' + s.name)" (keydown.enter)="openRun([s.file], 'suite ' + s.name)" tabindex="0" role="button" [title]="s.error || 'Run the suite ' + s.name">
+                    <div class="case" (click)="openRun([s.file], 'plan ' + s.name)" (keydown.enter)="openRun([s.file], 'plan ' + s.name)" tabindex="0" role="button" [title]="s.error || 'Run the plan ' + s.name">
                       <span class="sui">▶</span><span class="cn">{{ s.name }}</span><span class="n">{{ s.tests }}</span>
                       <button type="button" class="lnk" (click)="$event.stopPropagation(); editSuite(s.file)" title="Open the suite file">✎</button></div>
                   }
                 }
               }
               @for (g of groups(); track g.dir) {
-                <div class="fold"><button type="button" class="lnk fl" (click)="toggleFold(g.dir)">{{ folded().includes(g.dir) ? '▸' : '▾' }} {{ g.dir || 'cases' }}</button><span class="cnt">{{ g.cases.length }}</span>
+                <div class="fold"><button type="button" class="lnk fl" (click)="toggleFold(g.dir)">{{ folded().includes(g.dir) ? '▸' : '▾' }} {{ g.dir || 'No suite' }}</button><span class="cnt">{{ g.cases.length }}</span>
                   <button type="button" class="lnk" (click)="openRun(filesOf(g), g.dir || 'cases')" [title]="'Run the tests in ' + (g.dir || 'cases')">▶</button></div>
                 @if (!folded().includes(g.dir)) {
                   @for (c of g.cases; track c.file) {
                     <div class="case" [class.sel]="c.file === sel() && section() === 'tests'" (click)="select(c.file)" (keydown.enter)="select(c.file)" tabindex="0" role="button" [title]="c.error || c.description || c.file">
                       <input type="checkbox" [checked]="picked().includes(c.file)" (click)="$event.stopPropagation()" (change)="pick(c.file)" [attr.aria-label]="'Select ' + c.name" />
-                      <span class="dot" [class]="dot(c)"></span><span class="cn">{{ c.name }}</span><span class="n">{{ c.steps }}</span></div>
+                      <span class="dot" [class]="dot(c)"></span><span class="cn">{{ caseName(c) }}</span><span class="n">{{ c.steps }}</span></div>
                   }
                 }
               } @empty { <div class="empty-s">No tests yet.<br />Record one, or ⋯ → Write a Test with AI.</div> }
             </div>
             @if (picked().length) {
-              <div class="selbar"><span>{{ picked().length }} selected</span><span class="sp"></span><button type="button" class="ghost" (click)="picked.set([])">Clear</button><button type="button" class="ghost" (click)="saveSuite()" title="Save the selected tests as a suite (suites/…) to run them together again">Save as suite…</button><button type="button" class="pri" (click)="openRun(picked(), picked().length + ' tests')">▶ Run…</button></div>
+              <div class="selbar col"><div class="row"><b>{{ picked().length }} selected</b><span class="sp"></span><button type="button" class="lnk" (click)="picked.set([])">Clear</button><button type="button" class="lnk" (click)="saveSuite()" title="Keep the selected tests as a plan (suites/…) to run them together again">Save as plan…</button></div>
+                <button type="button" class="pri full" (click)="openRun(picked(), picked().length + ' tests')"><app-icon name="play" [size]="13" /> Run {{ picked().length }} {{ picked().length === 1 ? 'test' : 'tests' }}…</button></div>
             } @else if (filtering()) {
-              <div class="selbar"><span class="mut">{{ filtered().length }} of {{ tree()?.cases?.length ?? 0 }} shown</span><span class="sp"></span><button type="button" (click)="openRun(shownFiles(), filtered().length + ' shown tests')" [disabled]="!filtered().length">▶ Run shown…</button></div>
+              <div class="selbar"><span class="mut">{{ filtered().length }} of {{ tree()?.cases?.length ?? 0 }} shown</span><span class="sp"></span><button type="button" (click)="openRun(shownFiles(), filtered().length + ' shown tests')" [disabled]="!filtered().length"><app-icon name="play" [size]="13" /> Run shown…</button></div>
             } @else {
-              <div class="selbar"><span class="mut">{{ tree()?.cases?.length ?? 0 }} tests</span><span class="sp"></span><button type="button" (click)="openRun([], 'all tests')" [disabled]="!tree()?.cases?.length">▶ Run all…</button></div>
+              <div class="selbar"><span class="mut">{{ tree()?.cases?.length ?? 0 }} tests</span><span class="sp"></span><button type="button" (click)="openRun([], 'all tests')" [disabled]="!tree()?.cases?.length"><app-icon name="play" [size]="13" /> Run all…</button></div>
             }
           }
           @case ('runs') {
@@ -341,14 +343,15 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     </div>
 `,
   styles: [`
-    :host { display: block; height: 100%; min-height: 0; }
+    :host { display: block; height: 100%; min-height: 0; font-family: var(--ui-font, inherit); font-size: 13px; color: var(--text); }
+    :host button { font-size: 12.5px; } :host button:not(.lnk):not(.case):not(.tag) { height: 28px; padding: 0 12px; border-radius: 7px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
     .tv { display: grid; grid-template-columns: 64px 272px 1fr; height: 100%; min-height: 0; position: relative; }
     button { font: inherit; } .sp { flex: 1; } .grow { flex: 1; } .grow2 { flex: 2; } .mut { color: var(--muted); font-size: 12px; } .ok { color: var(--ok, #3fbf75); } .bad { color: var(--danger, #ef6161); } .warn { color: var(--warn, #e0a030); }
     .row { display: flex; align-items: center; gap: 6px; } .r { text-align: right; } .fl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pri { background: var(--accent); color: #fff; border-color: transparent; } .ghost { background: none; border-color: transparent; color: var(--muted); }
     .lnk { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0 4px; }
     .rail { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 8px 6px; background: color-mix(in srgb, var(--bg, #000) 70%, #000); border-right: 1px solid var(--border); }
-    .rail button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; height: auto; min-height: 50px; line-height: 1.15; padding: 6px 2px; border: 0; border-radius: 9px; background: none; color: var(--muted); font-size: 10.5px; cursor: pointer; }
+    .rail button { display: flex !important; flex-direction: column; align-items: center; justify-content: center; gap: 4px; height: auto !important; min-height: 52px; line-height: 1.15; padding: 6px 2px !important; font-size: 10.5px !important; border: 0; border-radius: 9px; background: none; color: var(--muted); font-size: 10.5px; cursor: pointer; }
     .rail button:hover { color: var(--text); } .rail button.on { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--text); } .ri { font-size: 16px; line-height: 1.1; }
     .rail .gitb { font-size: 10px; word-break: break-all; } .rail i { font-style: normal; color: var(--accent); }
     .side { display: flex; flex-direction: column; min-height: 0; background: var(--panel); border-right: 1px solid var(--border); }
@@ -365,10 +368,11 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .sm { font-size: 12px; align-self: flex-start; } .drawer small { font-size: 11.5px; }
     .sui { color: var(--accent); font-size: 10px; width: 14px; text-align: center; }
     .empty-s { color: var(--muted); font-size: 12px; padding: 18px 8px; text-align: center; line-height: 1.6; }
-    .selbar { display: flex; align-items: center; gap: 6px; margin: 8px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: color-mix(in srgb, var(--text) 4%, transparent); }
+    .selbar { display: flex; align-items: center; gap: 8px; margin: 8px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: color-mix(in srgb, var(--text) 4%, transparent); }
+    .selbar.col { flex-direction: column; align-items: stretch; } .selbar .full { justify-content: center; width: 100%; } .selbar b { font-weight: 600; font-size: 12.5px; }
     .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
     .head { padding: 12px 20px 0; border-bottom: 1px solid var(--border); } .crumb { color: var(--muted); font-size: 12px; }
-    .title { display: flex; align-items: center; gap: 8px; margin: 3px 0 10px; } .title h1 { font-size: 18px; margin: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 120px; } .title button { white-space: nowrap; flex: none; } .title .mut.fl { flex: 1 1 0; }
+    .title { display: flex; align-items: center; gap: 8px; margin: 3px 0 10px; } .title h1 { font-size: 17px; margin: 0; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 120px; } .title button { white-space: nowrap; flex: none; } .title .mut.fl { flex: 1 1 0; }
     .pill { font-size: 11.5px; padding: 2px 9px; border-radius: 10px; white-space: nowrap; background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--muted); }
     .pill.f { background: color-mix(in srgb, var(--danger, #ef6161) 18%, transparent); color: var(--danger, #ef6161); } .pill.p { background: color-mix(in srgb, var(--ok, #3fbf75) 18%, transparent); color: var(--ok, #3fbf75); } .pill.s { background: color-mix(in srgb, var(--warn, #e0a030) 18%, transparent); color: var(--warn, #e0a030); } .pill.sm { font-size: 10.5px; padding: 0 6px; margin-left: 6px; }
     .tabs { display: flex; align-items: center; gap: 18px; } .tabs > button { border: 0; background: none; color: var(--muted); padding: 8px 0; border-bottom: 2px solid transparent; cursor: pointer; } .tabs > button.on { color: var(--text); border-color: var(--accent); }
@@ -439,8 +443,8 @@ export class TestsView implements OnInit, OnDestroy {
   readonly picked = signal<string[]>([]);
   readonly section = signal<Section>('tests');
   readonly rails: { k: Section; l: string; i: string; t: string }[] = [
-    { k: 'tests', l: 'Tests', i: '☰', t: 'Tests: record, edit and run' }, { k: 'runs', l: 'Runs', i: '▶', t: 'Past runs and their results' },
-    { k: 'schedules', l: 'Sched.', i: '⏱', t: 'Scheduled runs' }, { k: 'testbeds', l: 'Testbeds', i: '⌗', t: 'Which devices a run uses' }, { k: 'library', l: 'Library', i: '{ }', t: 'Templates and code helpers' }];
+    { k: 'tests', l: 'Tests', i: 'checklist', t: 'Tests: record, edit and run' }, { k: 'runs', l: 'Runs', i: 'play', t: 'Past runs and their results' },
+    { k: 'schedules', l: 'Schedules', i: 'clock', t: 'Scheduled runs' }, { k: 'testbeds', l: 'Testbeds', i: 'hosts', t: 'Which devices a run uses' }, { k: 'library', l: 'Library', i: 'file', t: 'Templates and code helpers' }];
   readonly q = signal('');
   readonly tag = signal('all');
   readonly folded = signal<string[]>([]);
@@ -748,11 +752,18 @@ export class TestsView implements OnInit, OnDestroy {
     ]);
   }
   splitTags(v: string) { const l = v.split(',').map(x => x.trim()).filter(Boolean); return l.length ? l : undefined; }
+  /** A test's name in the list; the file name joins it when the name is missing or used twice. */
+  caseName(c: TestCaseInfo) {
+    const n = (c.name || '').trim(), f = this.base(c.file);
+    if (!n) return f;
+    const dup = (this.tree()?.cases ?? []).filter(x => (x.name || '').trim() === n).length > 1;
+    return dup || n === 'New test' ? n + ' · ' + f : n;
+  }
   filtering() { return !!this.q().trim() || this.tag() !== 'all'; }
   shownFiles() { return this.filtered().map(c => c.file); }
   editSuite(f: string) { this.section.set('library'); void this.openFile(f); }
   async saveSuite() {
-    const name = await this.ui.input(tr('Save as Suite'), tr('Suite name (suites/<name>.yaml)'), '');
+    const name = await this.ui.input(tr('Save as Plan'), tr('Plan name (suites/<name>.yaml)'), '');
     if (!name?.trim()) return;
     try { const rel = await this.backend.testSaveSuite(name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-'), { name: name.trim(), tests: this.picked() }); this.ui.toast(tr('Wrote {0}', rel), 'success'); await this.load(); }
     catch (e) { this.ui.toast(errText(e), 'error'); }

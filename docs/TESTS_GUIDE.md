@@ -14,7 +14,7 @@ This guide takes you from a manual check on a switch to a suite that runs by its
 - **requests** you send in the **API Client** (the status code becomes a first check),
 - **gets, walks and sets** in the **SNMP Browser** (a get's values become checks; a query on several devices gives one step per device).
 
-Commands that may hold a password, secret, community or key are not recorded.
+Commands that may hold a password, secret, community or key are not recorded. Drag the recorder's left edge to make it wider or narrower.
 
 ![Recording: three commands, the recorder on the right](screenshots/tests-guide/20-recording.png)
 
@@ -22,7 +22,7 @@ Commands that may hold a password, secret, community or key are not recorded.
 
 A step passes when the device accepted the command **and every check holds**. Termwright writes most checks for you:
 
-- **From what you configured**: after `create vlan v42 tag 42` and `configure v42 ipaddress 10.42.0.1/24`, the next `show vlan 42` gets *contains "v42"*, *contains "Tag 42"* and *Primary IP = 10.42.0.1/24* by itself - only checks that hold for the output you saw, so a fresh test passes. In the cleanup, a show after the delete gets *does not contain "v42"*. The card says how many were added; × removes one; *Options → Add checks for what was configured* turns it off.
+- **From what you configured** (also for API requests: the values a POST, PUT or PATCH sent must come back in its answer and in a later GET of the resource or its list): after `create vlan v42 tag 42` and `configure v42 ipaddress 10.42.0.1/24`, the next `show vlan 42` gets *contains "v42"*, *contains "Tag 42"* and *Primary IP = 10.42.0.1/24* by itself - only checks that hold for the output you saw, so a fresh test passes. In the cleanup, a show after the delete gets *does not contain "v42"*. The card says how many were added; × removes one; *Options → Add checks for what was configured* turns it off.
 - **Suggested**: further values from the configuration show as dashed **+ suggestions**.
 - **Expect this**: select a value in the output, right-click → *Expect this: Admin State = "Enabled"* (a field - its label is found so it still works when spacing changes), *contains*, *matches a pattern*, *does not contain*, or *Save as variable* for later steps. This works also when *Right-click pastes* is on (Paste stays in the menu).
 - **+ Check** adds one by hand - for REST a status, a JSON path or a time limit; for SNMP a value by name or OID.
@@ -40,13 +40,13 @@ A step **without checks** only proves that the device accepted the command - als
 
 ## 3. Clean up
 
-For every change the recorder suggests its undo (**↩ cleanup: delete vlan v42 + add**) - from the device type's **Undo rules**, the DELETE of a POST, or the old value of an SNMP set. *Add all to Cleanup* adds them all, the last change first; **✦ Cleanup with AI** asks the assistant. Record more in **Cleanup**, ideally a show with *does not contain* at the end.
+For every change the recorder puts its undo into the **Cleanup** as you record - from the device type's **Undo rules** (`create vlan v42` → `delete vlan v42`), the DELETE of a POST, or the old value of an SNMP set - the last change first (*Options → Add the undo of each change to the cleanup* turns it off; then **↩ cleanup: … + add** suggests it instead). A change without an undo rule shows no undo: add the rule in Global Options → Device Types, or record the undo in **Cleanup**; **✦ Cleanup with AI** asks the assistant. Record more in **Cleanup**, ideally a show with *does not contain* at the end.
 
 Whether a run cleans up is chosen **per run** (section 6): with *No cleanup*, tests build on what earlier ones configured. *Options → Afterwards put back* adds a safety net: the **configuration** (the device type's *Test save / restore* commands, built in for NX-OS, Cisco IOS and EXOS) or a **lab snapshot** of emulated lab switches.
 
 ## 4. Save, and the Tests tab
 
-**Save…** asks for the file (`cases/…`; sub-folders group tests). The test is saved as YAML and as **Go**, **Python** and **TCL** code.
+**Save…** asks for the **suite** (a folder of tests, such as `vlan` or `l2/vlan`; it is remembered for the next test) and the test's **name** - the list shows tests by suite and name. The test is saved as YAML (`cases/<suite>/<name>.yaml`) and as **Go**, **Python** and **TCL** code.
 
 **Tests → Tests** opens the workspace. The rail on the left switches between **Tests**, **Runs**, **Schedules**, **Testbeds** and **Library**; the Git branch at the bottom has Pull, Commit and Push. The test list has search, **tag** chips (and *failed*), check boxes and folders with ▶.
 
@@ -96,7 +96,7 @@ Every run is kept in `reports/history.jsonl`. A test's **History** tab shows its
 
 A **testbed** maps the roles to sessions: the recorder saves sessions as roles (`access-sw7` → `{{access_sw7}}`), and a testbed points them at other devices. **Testbeds → + New** writes one from a session folder (the emulated lab's, another site's); testbeds open and save in place and show their lock with *Release*.
 
-**Tags** (⋯ → Tags…) group tests; the tag chips filter the list and *Run shown…* runs what is shown. A **suite** (`suites/<name>.yaml`: tests as files, folders or other suites, narrowed by tags) is a named set; select tests and **Save as suite…**, then run it from the top of the list. `params: [{vlan: "42"}, {vlan: "100"}]` runs a test once per entry.
+**Tags** (⋯ → Tags…) group tests across suites; the tag chips filter the list and *Run shown…* runs what is shown. A **plan** (`suites/<name>.yaml`: tests as files, suite folders or other plans, narrowed by tags) is a named set to run together; select tests and **Save as plan…**, then run it from **Plans** at the top of the list. `params: [{vlan: "42"}, {vlan: "100"}]` runs a test once per entry.
 
 ## 10. Tables from command output
 

@@ -5011,6 +5011,14 @@ const ru: Record<string, string> = {
   'Opened {0}': 'Открыт {0}',
   'qTest Test Case': 'Тестовый случай qTest',
   'The id or PID of the qTest test case this test reports to, e.g. TC-12': 'Id или PID тестового случая qTest, в который отправляется этот тест, напр. TC-12',
+  'Save Test: Suite': 'Сохранить тест: набор',
+  'The suite (a folder of tests, e.g. vlan or l2/vlan) - empty: no suite': 'Набор (папка тестов, напр. vlan или l2/vlan) - пусто: без набора',
+  'Save Test: Name': 'Сохранить тест: имя',
+  "The test's name, as the test list shows it": 'Имя теста, как его показывает список тестов',
+  'Replace the Test?': 'Заменить тест?',
+  '{0} is already there.': '{0} уже существует.',
+  'Save as Plan': 'Сохранить как план',
+  'Plan name (suites/<name>.yaml)': 'Имя плана (suites/<имя>.yaml)',
 };
 
 export default ru;

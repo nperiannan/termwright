@@ -11,8 +11,9 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
 @Component({
   selector: 'app-recorder-panel',
   imports: [FormsModule],
-  host: { class: 'recp', role: 'complementary', '[attr.aria-label]': "'Test Recorder'" },
+  host: { class: 'recp', role: 'complementary', '[attr.aria-label]': "'Test Recorder'", '[style.width.px]': 'width()' },
   template: `
+    <div class="grip" (mousedown)="drag($event)" title="Drag to change the width" role="separator" aria-orientation="vertical"></div>
     <div class="bar" [class.pz]="rec.paused()">
       <span class="dot" [class.pz]="rec.paused()"></span><b>{{ rec.paused() ? 'Paused' : 'Recording' }}</b>
       <span class="sp"></span>
@@ -53,8 +54,8 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
               @for (e of s.step.expect ?? []; track $index; let j = $index) { <span class="chip">✓ {{ label(e) }}<button type="button" (click)="rec.removeCheck(i, j)" title="Remove the check">×</button></span> }
               @for (v of s.step.save ?? []; track $index; let j = $index) { <span class="chip var">{{ '{{' + v.var + '}}' }} ← {{ v.field || v.json || v.oid || v.column }}<button type="button" (click)="rec.removeSave(i, j)" title="Remove">×</button></span> }
             </div>
-            @if (s.auto) { <div class="mut">✦ {{ s.auto }} {{ s.auto === 1 ? 'check' : 'checks' }} added from the configuration before it</div> }
-          } @else if (isReadStep(s.step)) { <div class="mut warn">○ no checks yet - it passes whenever the device answers</div> }
+            @if (s.auto) { <div class="mut">✦ {{ s.auto }} {{ s.auto === 1 ? 'check' : 'checks' }} added from what was configured before it</div> }
+          } @else if (isReadStep(s.step)) { <div class="mut warn">○ no checks yet - it passes whenever the device answers.@if (s.auto === 0) { None of the values configured before it is in its output: select a value and right-click → Expect this. }</div> }
           @if (rec.suggest(i).length) {
             <div class="chips"><span class="mut">Suggested:</span>@for (x of rec.suggest(i); track $index) { <button type="button" class="sug" (click)="rec.addSuggested(i, x)" [title]="s.phase === 'cleanup' ? 'The cleanup removed it: check that it is gone' : 'A configuration command before this step set it: check that it is there'">+ {{ label(x) }}</button> }</div>
           }
@@ -79,7 +80,8 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
         <button type="button" class="lnk" (click)="opts.set(!opts())">{{ opts() ? 'Hide options' : 'Options' }}</button></div>
       @if (opts()) {
         <div class="opts">
-          <label title="Add the checks a show command most likely needs from the configuration recorded before it"><input type="checkbox" [ngModel]="rec.autoChecks()" (ngModelChange)="rec.autoChecks.set($event)" /> Add checks for what was configured</label>
+          <label title="Add the checks a show command (or an API request) most likely needs from what was configured before it"><input type="checkbox" [ngModel]="rec.autoChecks()" (ngModelChange)="rec.autoChecks.set($event)" /> Add checks for what was configured</label>
+          <label title="Put the undo of each change (device type undo rules, the DELETE of a POST, the old value of an SNMP set) into the cleanup as it is recorded"><input type="checkbox" [ngModel]="rec.autoCleanup()" (ngModelChange)="rec.autoCleanup.set($event)" /> Add the undo of each change to the cleanup</label>
           <label title="Sessions are saved as {{ '{{' }}role{{ '}}' }} variables with these sessions as defaults, so a testbed can point the test at other devices"><input type="checkbox" [ngModel]="rec.roles()" (ngModelChange)="rec.roles.set($event)" /> Sessions as roles</label>
           <span class="mut">Afterwards put back:</span>
           <label title="Save the configuration before the test and restore it afterwards (the device type's save and restore commands)"><input type="checkbox" [ngModel]="rec.restore().includes('config')" (ngModelChange)="rec.toggleRestore('config', $event)" /> configuration</label>
@@ -88,7 +90,8 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
       }
     </div>`,
   styles: [`
-    :host { flex: none; width: 360px; display: flex; flex-direction: column; min-height: 0; background: var(--panel); border-left: 1px solid var(--border); color: var(--text); font-size: calc(13px * var(--ui-scale, 1)); }
+    :host { position: relative; flex: none; width: 640px; min-width: 320px; max-width: 70vw; display: flex; flex-direction: column; min-height: 0; background: var(--panel); border-left: 1px solid var(--border); color: var(--text); font-size: calc(13px * var(--ui-scale, 1)); }
+    .grip { position: absolute; left: -3px; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 3; } .grip:hover { background: color-mix(in srgb, var(--accent) 45%, transparent); }
     .top, .row { display: flex; align-items: center; gap: 6px; } .sp, .grow { flex: 1; }
     .bar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: color-mix(in srgb, #ef5b5b 16%, var(--panel)); border-bottom: 1px solid color-mix(in srgb, #ef5b5b 40%, var(--border)); }
     .bar.pz { background: color-mix(in srgb, var(--text) 6%, var(--panel)); border-bottom-color: var(--border); } .bb { font-size: 12px; padding: 2px 9px; }
@@ -136,6 +139,15 @@ export class RecorderPanel {
   }
   readonly adding = signal(-1);
   readonly opts = signal(false);
+  readonly width = signal((() => { try { return Number(localStorage.getItem('tw.rec.width')) || 640; } catch { return 640; } })());
+  /** Drag the left edge to change the width (kept for next time). */
+  drag(ev: MouseEvent) {
+    ev.preventDefault();
+    const x0 = ev.clientX, w0 = this.width();
+    const move = (e: MouseEvent) => this.width.set(Math.max(320, Math.min(window.innerWidth * 0.7, w0 + x0 - e.clientX)));
+    const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); try { localStorage.setItem('tw.rec.width', String(this.width())); } catch { /* not kept */ } };
+    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+  }
   isReadStep = isRead;
   kind: AddKind = 'contains';
   subject = '';

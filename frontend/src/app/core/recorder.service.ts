@@ -5,7 +5,7 @@ import { Ui } from './ui.service';
 import { tr } from './i18n';
 import { SECRET } from './history.service';
 import { TestCase, TestExpect, TestStep, TestTable } from './models';
-import { predictChecks } from './predict';
+import { predictApiChecks, predictChecks } from './predict';
 
 /** A recorded step; for a terminal step the marker on its command line finds its output later. */
 export type RecPhase = 'setup' | 'steps' | 'cleanup';
@@ -27,6 +27,8 @@ export class Recorder {
   readonly roles = signal(true);
   /** Add the checks a read step most likely needs, from the configuration recorded before it (on by default). */
   readonly autoChecks = signal(true);
+  /** Put the undo of each change into the cleanup as it is recorded (on by default). */
+  readonly autoCleanup = signal(true);
   /** Where new steps go: setup, the test's own steps or the cleanup. */
   readonly phase = signal<RecPhase>('steps');
   /** What Termwright saves before the test and puts back after it. */
@@ -80,6 +82,15 @@ export class Recorder {
         }
       } catch { /* not JSON */ }
     }
+    // what was sent before must come back: in this answer, or in a later GET of the resource or its list
+    if (this.autoChecks() && status >= 200 && status < 300) {
+      const writes = this.steps().filter(x => x.step.http && /^(POST|PUT|PATCH)$/i.test(x.step.http.method || '') && (x.status ?? 0) < 300).map(x => ({ url: x.step.http!.url, body: x.step.http!.body }));
+      if (/^(POST|PUT|PATCH)$/i.test(h.method || '')) writes.push({ url: h.url, body: h.body });
+      const add = predictApiChecks(writes, h.url, body, expect);
+      if (add.length) { step.expect = [...expect, ...add]; }
+      this.push({ step, phase: this.phase(), undo, output: body, status, ms, auto: add.length });
+      return;
+    }
     this.push({ step, phase: this.phase(), undo, output: body, status, ms });
   }
 
@@ -116,6 +127,7 @@ export class Recorder {
   private push(s: RecStep) {
     const order: RecPhase[] = ['setup', 'steps', 'cleanup'];
     this.steps.update(l => { const at = l.findIndex(x => order.indexOf(x.phase) > order.indexOf(s.phase)); const c = [...l]; if (at < 0) c.push(s); else c.splice(at, 0, s); return c; });
+    if (s.undo && this.autoCleanup() && s.phase === 'steps') this.addUndo(this.steps().indexOf(s));
   }
 
   /** The output of a tab's last step: the lines after its command up to the prompt line. */
@@ -217,7 +229,7 @@ export class Recorder {
   /** Adds the predicted checks to a recorded read step whose output is complete (see predictChecks). */
   autoCheck(i: number) {
     const l = this.steps(), s = l[i];
-    if (!this.autoChecks() || i < 0 || !s?.step.run || s.auto !== undefined || !isRead(s.step)) return;
+    if (!this.autoChecks() || i < 0 || !s?.step.run || (s.auto ?? 0) > 0 || !isRead(s.step)) return;
     const out = this.output(s);
     const configs = l.slice(0, i).filter(x => x.step.run && x.step.run.session === s.step.run!.session && !isRead(x.step) && x.phase !== 'cleanup').map(x => x.step.run!.command);
     const add = predictChecks(configs, s.step.run.command, out, s.phase === 'cleanup', s.step.expect ?? []);
@@ -230,7 +242,7 @@ export class Recorder {
   suggest(i: number): TestExpect[] {
     const l = this.steps(), s = l[i], cmd = s?.step.run?.command ?? '';
     if (!s?.step.run || !isRead(s.step) || s.output == null) return [];
-    const out = s.output, have = new Set((s.step.expect ?? []).map(e => e.contains ?? e.notContains));
+    const out = s.output, have = new Set((s.step.expect ?? []).flatMap(e => [e.contains, e.notContains, e.equals, e.table?.equals].filter((x): x is string => !!x)));
     const toks = new Set<string>();
     for (const x of l.slice(0, i)) {
       if (!x.step.run || x.step.run.session !== s.step.run.session || isRead(x.step) || x.phase !== 'steps') continue;
@@ -267,11 +279,23 @@ export class Recorder {
 
   async save(): Promise<boolean> {
     if (!this.steps().length) { this.ui.toast(tr('Nothing recorded yet'), 'info'); return false; }
-    for (const tab of new Set(this.steps().map(s => s.tab).filter(Boolean))) this.autoCheck(this.lastOf(tab!));
+    for (const tab of new Set(this.steps().map(s => s.tab).filter(Boolean))) this.output(this.steps()[this.lastOf(tab!)]);
+    this.steps().forEach((_, i) => this.autoCheck(i));
     const bare = this.steps().filter(s => isRead(s.step) && !s.step.expect?.length).length;
     if (bare && !(await this.ui.confirm(tr('Save Without Checks?'), tr('{0} steps read the device but check nothing, so they pass whenever they run. Add a check: select the value and choose Expect this, or use a suggested check.', bare), tr('Save Anyway')))) return false;
-    const file = await this.ui.input(tr('Save Test'), tr('File in the tests folder (cases/…)'), 'cases/' + slugFile(this.name()) + '.yaml');
-    if (!file) return false;
+    let last = '';
+    try { last = localStorage.getItem('tw.rec.suite') ?? ''; } catch { /* none */ }
+    const suite = await this.ui.input(tr('Save Test: Suite'), tr('The suite (a folder of tests, e.g. vlan or l2/vlan) - empty: no suite'), last);
+    if (suite === null) return false;
+    const cur = this.name().trim();
+    const name = (await this.ui.input(tr('Save Test: Name'), tr('The test\'s name, as the test list shows it'), cur && cur !== tr('New test') ? cur : ''))?.trim();
+    if (!name) return false;
+    this.name.set(name);
+    const dir = suite.trim().split('/').filter(Boolean).map(slugFile).join('/');
+    try { localStorage.setItem('tw.rec.suite', suite.trim()); } catch { /* not kept */ }
+    const file = 'cases/' + (dir ? dir + '/' : '') + slugFile(name) + '.yaml';
+    if (await this.backend.testFile(file).then(() => true).catch(() => false)
+      && !(await this.ui.confirm(tr('Replace the Test?'), tr('{0} is already there.', file), tr('Replace'), true))) return false;
     try {
       const rel = await this.backend.testSave(file, this.testCase());
       this.ui.toast(tr('Saved {0}', rel), 'success');
