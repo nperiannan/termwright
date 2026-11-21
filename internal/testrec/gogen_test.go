@@ -144,6 +144,16 @@ steps:
 		t.Fatal(err)
 	}
 	f.Save("logic/l", lg)
+	// samples over time and a procedure call go through the generated code too
+	f.SaveProc("ver", Proc{Params: []string{"s"}, Steps: []Step{{Run: &RunStep{Session: "{{s}}", Command: "show version"}, Expect: []Expect{{Contains: "ExtremeXOS"}}}}})
+	smp, _ := Parse([]byte(`name: sampled
+steps:
+  - call: {proc: ver, with: {s: Lab/sw1}}
+  - run: {session: Lab/sw1, command: show version}
+    sample: {count: 2}
+    expect: [{field: 'Uptime: (\d+)', agg: avg, greater: 1}, {contains: ExtremeXOS}]
+`))
+	f.Save("logic/sample", smp)
 	if r := Run(context.Background(), lg, fk, nil); !r.Passed {
 		t.Fatalf("logic run: %+v", r)
 	}

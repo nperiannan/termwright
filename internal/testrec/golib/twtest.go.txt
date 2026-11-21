@@ -339,6 +339,32 @@ func (s *Step) ok(what, found string) {
 	s.c.log(fmt.Sprintf("  ✓ pass  %-50s  %s", what, found))
 }
 
+// Raw sends a step as JSON (NETCONF, samples over time) that Termwright runs and checks itself;
+// a failed check fails the step.
+func (s *Step) Raw(stepJSON string) *Answer {
+	s.Helper()
+	filled := varRe.ReplaceAllStringFunc(stepJSON, func(m string) string {
+		if x, ok := s.c.Vars[varRe.FindStringSubmatch(m)[1]]; ok {
+			b, _ := json.Marshal(x)
+			return strings.Trim(string(b), `"`)
+		}
+		return m
+	})
+	var step map[string]any
+	if err := json.Unmarshal([]byte(filled), &step); err != nil {
+		s.Fatalf("step: %v", err)
+	}
+	a := s.send(step)
+	for _, c := range a.Checks {
+		if c.Passed {
+			s.ok(c.What, c.Got)
+		} else {
+			s.Errorf("%s: got %q", c.What, c.Got)
+		}
+	}
+	return a
+}
+
 // Log writes a line to the run log and the test output.
 func (s *Step) Log(text string) { s.Helper(); s.c.Log(text) }
 
@@ -398,6 +424,11 @@ type Answer struct {
 	Rows   []snmpRow `json:"rows"`
 	Target string    `json:"target"`
 	Sent   string    `json:"sent"`
+	Checks []struct {
+		What   string `json:"what"`
+		Passed bool   `json:"passed"`
+		Got    string `json:"got"`
+	} `json:"checks"`
 	s      *Step
 	Output string `json:"output"`
 	Status int    `json:"status"`

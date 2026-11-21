@@ -4,6 +4,18 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Procedures**: shared steps with parameters (`procs/<name>.yaml`) that tests call with **+ More → Call a Procedure** - choose it, fill its parameters (values or `{{variables}}`); change the procedure once and every test follows. The **Procedures** view lists them with their parameters, steps and how many tests use them; ⋯ on a test → **Make a Procedure from This Test** turns its steps into one (its variables become the parameters). Calls are expanded in Termwright's runs and in the generated Go, Python and TCL.
+
+- **Test data from a file**: a test's **Test data** (Edit) is a CSV or Excel file - one run per row, the column names are the variables. A file outside the tests folder is copied into `data/`.
+
+- **NETCONF steps**: **+ More → NETCONF Request** - get, get-config (running, candidate, startup), edit-config (a candidate edit is committed) or any RPC over the session's SSH login on port 830, with a subtree filter. The reply is shown indented; checks use **XML path =** (`data.vlans.vlan[0].name = v200`) or contains, and an `<rpc-error>` fails the step with its message. Also in the generated code and the tools.
+
+- **Breakpoints and stepping**: click a step's number to set a breakpoint (red); a run stops before it with **Run Step**, **Continue**, **Skip** or **Stop Test**, the device can be opened, and the **variables** can be changed before going on. **Step through** in the Run panel stops before every step.
+
+- **Checks over time**: **Sample over time** runs a step several times (every N seconds) and checks the **average, maximum, minimum, change or rate** of a value - CPU below 80 on average, CRC errors that do not grow, a counter's rate - in Termwright and in the generated code.
+
+- **Make a Table without TextFSM**: **▦ Make a Table…** on a step's output: click the header line (columns are found from it; rename them and say which may contain spaces) or tick `label: value` lines, see the parsed rows at once, and save. It is written as a TextFSM template (with its index line for the device type), so `parse` and table checks work in the runs, the generated code and anywhere TextFSM runs.
+
 - **Export an automation suite**: ⋯ → **Export Automation Suite** packs the chosen tests, a plan or every test as a zip that runs on its own - the YAML and its Go, Python or TCL code, the library, the testbeds, the templates, `plan.txt` and a run script for Linux, macOS (`run.sh`) or Windows (`run.ps1`, `run.cmd`). A run writes `reports/<date-time>/` with JUnit XML and each test's run log. The steps still go through Termwright (the app or `termwright tests serve`), so no passwords are in the zip.
 
 - **A fuller library for your own framework**: the Go, Python and TCL helpers write each test's **run log** (`TW_LOG_DIR`: what was sent, what came back, each check with expected and found, the result) and add `configure` (several commands, stops at a device error), `wait_for` (until the output matches), `log`, and testbed roles (`session(role)`, `testbed()`). The Python and TCL runners take `--testbed`, `--list plan.txt` and `--reports`.

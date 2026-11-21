@@ -2160,6 +2160,8 @@ paths:
                                         - request_approval
                                         - approve
                                         - reject
+                                        - procs
+                                        - save_file
                                     type: string
                                 at:
                                     description: 'schedule: time of day HH:MM (daily, weekdays, weekly)'

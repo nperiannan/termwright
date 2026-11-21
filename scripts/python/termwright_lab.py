@@ -879,6 +879,14 @@ class Tests:
         """Sends a run's results (default: the last run) to qTest - the tests that name a qTest test case."""
         return self._run(action="send_qtest", dir=dir or None, files=files or None)
 
+    def procs(self) -> str:
+        """The procedures (procs/<name>.yaml): shared steps with parameters that tests call with call: {proc, with}."""
+        return self._run(action="procs")
+
+    def save_file(self, file: str, yaml: str) -> str:
+        """Writes a procs/, testbeds/, suites/, data/ or templates/ file of the tests folder."""
+        return self._run(action="save_file", file=file, yaml=yaml)
+
     def approvals(self) -> str:
         """Run approval requests (roles.yaml approval: production|always), newest first."""
         return self._run(action="approvals")

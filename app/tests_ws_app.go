@@ -1,9 +1,12 @@
 package app
 
 import (
+	"regexp"
+
 	"context"
 	"errors"
 	"fmt"
+	"github.com/termwright/termwright/internal/textfsm"
 	"net/url"
 	"os"
 	"os/exec"
@@ -271,7 +274,7 @@ func (a *App) TestsGitCommit(message string) (string, error) {
 		return "", err
 	}
 	var paths []string
-	for _, p := range []string{"cases", "testbeds", "lib", "templates", "suites", "roles.yaml", "approvals", "go.mod", ".gitignore", "README.md"} {
+	for _, p := range []string{"cases", "testbeds", "lib", "templates", "suites", "procs", "data", "roles.yaml", "approvals", "go.mod", ".gitignore", "README.md"} {
 		if _, err := os.Stat(filepath.Join(f.Root, p)); err == nil {
 			paths = append(paths, p)
 		}
@@ -424,4 +427,120 @@ func (a *App) TestsExport(o testrec.ExportOptions) (string, error) {
 	}
 	f.Audit("export", fmt.Sprintf("%s (%s, %s, %d tests or plans)", filepath.Base(p), o.Lang, o.OS, len(o.Files)))
 	return p, nil
+}
+
+// TestProcs lists the procedures (procs/*.yaml): shared steps with parameters that tests call.
+func (a *App) TestProcs() ([]testrec.ProcInfo, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return nil, err
+	}
+	return f.Procs(), nil
+}
+
+// TestProc reads one procedure.
+func (a *App) TestProc(name string) (testrec.Proc, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return testrec.Proc{}, err
+	}
+	return f.LoadProc(name)
+}
+
+// TestSaveProc writes a procedure; it returns its file.
+func (a *App) TestSaveProc(name string, p testrec.Proc) (string, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return "", err
+	}
+	if err := mayEdit(f); err != nil {
+		return "", err
+	}
+	f.Audit("save procedure", name)
+	return f.SaveProc(name, p)
+}
+
+// TestMakeTemplate writes a TextFSM template made with the table maker (templates/<name>.textfsm) and, when
+// the session has a device type, its index line so "parse: auto" finds it for that command; it returns
+// the file name to put in the step's parse.
+func (a *App) TestMakeTemplate(name, session, command string, spec testrec.TemplateSpec) (string, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return "", err
+	}
+	src, err := testrec.MakeTemplate(spec)
+	if err != nil {
+		return "", err
+	}
+	file := strings.Trim(regexp.MustCompile(`[^a-z0-9_]+`).ReplaceAllString(strings.ToLower(name), "_"), "_")
+	if file == "" {
+		return "", errors.New("give the table a name")
+	}
+	file += ".textfsm"
+	dir := f.TemplatesDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(filepath.Join(dir, file), []byte(src), 0o644); err != nil {
+		return "", err
+	}
+	if s, err := a.store.Get(session); err == nil && strings.TrimSpace(command) != "" {
+		if platform := textfsm.Platform(s.DeviceType); platform != "" {
+			idx := filepath.Join(dir, "index")
+			b, _ := os.ReadFile(idx)
+			line := fmt.Sprintf("%s, .*, %s, %s", file, platform, regexp.QuoteMeta(strings.Join(strings.Fields(command), " ")))
+			if !strings.Contains(string(b), file+",") {
+				// own templates go before the community ones
+				txt := string(b)
+				if i := strings.Index(txt, "# --- ntc-templates"); i >= 0 {
+					txt = txt[:i] + line + "\n" + txt[i:]
+				} else {
+					txt = strings.TrimRight(txt, "\n") + "\n" + line + "\n"
+				}
+				_ = os.WriteFile(idx, []byte(txt), 0o644)
+			}
+		}
+	}
+	f.Audit("make table", file)
+	return file, nil
+}
+
+// TestPreviewTemplate parses output with the template a table spec makes (the table maker's preview).
+func (a *App) TestPreviewTemplate(spec testrec.TemplateSpec, output string) (*textfsm.Table, error) {
+	src, err := testrec.MakeTemplate(spec)
+	if err != nil {
+		return nil, err
+	}
+	t, err := textfsm.Parse(src)
+	if err != nil {
+		return nil, err
+	}
+	tab, err := t.Run(output)
+	return &tab, err
+}
+
+// TestPickData lets the person choose a CSV or Excel file for a test's data; a file outside the tests
+// folder is copied into data/. It returns the path to put in the test's data.
+func (a *App) TestPickData() (string, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return "", err
+	}
+	p, err := wruntime.OpenFileDialog(a.ctx, wruntime.OpenDialogOptions{Title: "Test Data (one run per row)",
+		Filters: []wruntime.FileFilter{{DisplayName: "CSV or Excel (*.csv, *.xlsx)", Pattern: "*.csv;*.xlsx"}}})
+	if err != nil || p == "" {
+		return "", err
+	}
+	if rel, err := filepath.Rel(f.Root, p); err == nil && !strings.HasPrefix(rel, "..") {
+		return filepath.ToSlash(rel), nil
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return "", err
+	}
+	rel := "data/" + filepath.Base(p)
+	if err := os.MkdirAll(filepath.Join(f.Root, "data"), 0o755); err != nil {
+		return "", err
+	}
+	return rel, os.WriteFile(filepath.Join(f.Root, filepath.FromSlash(rel)), b, 0o644)
 }

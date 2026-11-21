@@ -28,6 +28,9 @@ type Case struct {
 	// Params: the test runs once per entry, with its values as {{variables}} (data-driven tests);
 	// a testbed's and a run's own values still win.
 	Params []map[string]string `yaml:"params,omitempty" json:"params,omitempty"`
+	// Data: a CSV (header line = names) or Excel file in the tests folder; each row runs the test once
+	// more with those variables (added to params).
+	Data string `yaml:"data,omitempty" json:"data,omitempty"`
 	// Restore: what Termwright saves before the test and puts back after its cleanup, for every
 	// device the test uses: "config" (the device type's save and restore commands) and "lab" (a
 	// checkpoint of an emulated lab switch).
@@ -81,6 +84,13 @@ type Step struct {
 	Traffic *TrafficStep `yaml:"traffic,omitempty" json:"traffic,omitempty"`
 	// Loop: run its steps once per value, with the value in {{var}}.
 	Loop *Loop `yaml:"loop,omitempty" json:"loop,omitempty"`
+	// Call runs a procedure (procs/<name>.yaml) with parameters in place of this step.
+	Call *CallStep `yaml:"call,omitempty" json:"call,omitempty"`
+	// Netconf: a NETCONF operation over SSH (get, get-config, edit-config or any rpc).
+	Netconf *NetconfStep `yaml:"netconf,omitempty" json:"netconf,omitempty"`
+	// Sample: run the step several times; checks with agg (min, max, avg, delta, rate) look at all the
+	// values, the others at the last answer.
+	Sample *Sample `yaml:"sample,omitempty" json:"sample,omitempty"`
 }
 
 // RunStep is a command sent on a saved session (logged in with its saved login, in the background).
@@ -186,6 +196,9 @@ type Expect struct {
 	Less *float64 `yaml:"less,omitempty" json:"less,omitempty"`
 	// Exists: the field / JSON value is there (false: is not there).
 	Exists *bool `yaml:"exists,omitempty" json:"exists,omitempty"`
+	// Agg: with sample, compare the min, max, avg, delta (last - first) or rate (delta per second) of the
+	// field / JSON / OID values of all samples.
+	Agg string `yaml:"agg,omitempty" json:"agg,omitempty"`
 	// Table: a check on the parsed output (the step needs parse).
 	Table *TableExpect `yaml:"table,omitempty" json:"table,omitempty"`
 }
@@ -254,4 +267,29 @@ type QTestLink struct {
 type ManualStep struct {
 	// Instruction: what to do or check, e.g. "Pull the cable on port 1:2 and check the LED is off".
 	Instruction string `yaml:"instruction" json:"instruction"`
+}
+
+// NetconfStep is a NETCONF operation on a saved SSH session (the device's NETCONF subsystem, port 830 or 22).
+type NetconfStep struct {
+	Session string `yaml:"session" json:"session"`
+	// Op: get, get-config, edit-config or rpc.
+	Op string `yaml:"op,omitempty" json:"op,omitempty"`
+	// Source (get-config) or Target (edit-config): running (default), candidate or startup; a candidate
+	// edit is committed.
+	Source string `yaml:"source,omitempty" json:"source,omitempty"`
+	Target string `yaml:"target,omitempty" json:"target,omitempty"`
+	// Filter: a subtree filter (XML) for get and get-config.
+	Filter string `yaml:"filter,omitempty" json:"filter,omitempty"`
+	// Config: the <config> content of edit-config (XML).
+	Config string `yaml:"config,omitempty" json:"config,omitempty"`
+	// RPC: the operation's XML for op rpc (inside <rpc>).
+	RPC string `yaml:"rpc,omitempty" json:"rpc,omitempty"`
+	// Port: the NETCONF port (default 830).
+	Port int `yaml:"port,omitempty" json:"port,omitempty"`
+}
+
+// Sample runs a step Count times, Interval seconds apart.
+type Sample struct {
+	Count    int     `yaml:"count" json:"count"`
+	Interval float64 `yaml:"interval,omitempty" json:"interval,omitempty"`
 }

@@ -32,7 +32,7 @@ var builtinTemplates embed.FS
 func (f Folder) TemplatesDir() string { return filepath.Join(f.Root, "templates") }
 
 // Dirs of a tests folder.
-var Dirs = []string{"cases", "lib", "testbeds", "reports", "templates", "suites"}
+var Dirs = []string{"cases", "lib", "testbeds", "reports", "templates", "suites", "procs"}
 
 // MaxCaseSize is the largest case file read (1 MB).
 const MaxCaseSize = 1 << 20
@@ -87,6 +87,8 @@ type CaseInfo struct {
 	Tags []string `json:"tags,omitempty"`
 	// Steps: how many.
 	Steps int `json:"steps"`
+	// Calls: the procedures it calls.
+	Calls []string `json:"calls,omitempty"`
 	// Error: why the file could not be read.
 	Error string `json:"error,omitempty"`
 }
@@ -115,6 +117,13 @@ func (f Folder) List() []CaseInfo {
 			ci.Name, ci.Error = strings.TrimSuffix(d.Name(), filepath.Ext(d.Name())), err.Error()
 		} else {
 			ci.Name, ci.Description, ci.Tags, ci.Steps = c.Name, c.Description, c.Tags, len(c.Steps)
+			for _, l := range [][]Step{c.Setup, c.Steps, c.Cleanup} {
+				for _, st := range l {
+					if st.Call != nil && !slices.Contains(ci.Calls, st.Call.Proc) {
+						ci.Calls = append(ci.Calls, st.Call.Proc)
+					}
+				}
+			}
 		}
 		out = append(out, ci)
 		return nil
@@ -320,10 +329,15 @@ type RunOptions struct {
 	From int `json:"from,omitempty"`
 	// Only: run only this step of the steps (no setup).
 	Only int `json:"only,omitempty"`
-	// Pause is called when a setup or test step fails (debugging): "retry" runs the step again,
-	// "continue" goes on as if it passed, anything else stops (the cleanup still runs). The devices'
-	// connections stay open while it waits.
-	Pause func(ctx context.Context, file, caseName string, sr StepResult) string `json:"-"`
+	// Pause is called when a setup or test step fails, and before a step with a breakpoint (debugging).
+	// After a failure: "retry" runs the step again, "continue" goes on, anything else stops. At a breakpoint:
+	// "step" runs the step and stops before the next, "continue" runs on to the next breakpoint, "skip" leaves
+	// the step out, anything else stops. The variables it returns are set first. The cleanup still runs and
+	// the devices' connections stay open while it waits.
+	Pause func(ctx context.Context, file, caseName string, sr StepResult) (string, map[string]string) `json:"-"`
+	// Breaks: steps (1-based, of the steps) to stop before; StepMode stops before every step.
+	Breaks   []int `json:"breaks,omitempty"`
+	StepMode bool  `json:"stepMode,omitempty"`
 	file   string
 	// Testbed: shown in the report.
 	Testbed string `json:"testbed,omitempty"`
@@ -363,8 +377,13 @@ func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars
 	rc, canRecover := d.(Recoverer)
 	cases := map[string]Case{}
 	var all []string // every device the run uses, for the configuration saved before it
+	prepErr := map[string]error{}
 	for _, file := range files {
 		if c, err := f.Load(file); err == nil {
+			if c, err = f.Prepare(c); err != nil {
+				prepErr[file] = err
+				continue
+			}
 			cases[file] = c
 			v := map[string]string{}
 			for k, x := range c.Vars {
@@ -409,6 +428,9 @@ func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars
 			rs = []Result{{Case: name, File: file, Start: time.Now(), Skipped: true, Error: stopped}}
 		case !loaded:
 			_, err := f.Load(file)
+			if err == nil {
+				err = prepErr[file]
+			}
 			rs = []Result{{Case: file, File: file, Start: time.Now(), Error: err.Error()}}
 		case f.blockedBy(c, status) != "":
 			name := c.Name
@@ -730,7 +752,7 @@ func (f Folder) Remove(rel string) (string, error) {
 	r = filepath.ToSlash(r)
 	files := []string{r, GoFile(r), PyFile(r), TclFile(r)}
 	switch {
-	case (strings.HasPrefix(r, "testbeds/") || strings.HasPrefix(r, "suites/")) && isCaseFile(r):
+	case (strings.HasPrefix(r, "testbeds/") || strings.HasPrefix(r, "suites/") || strings.HasPrefix(r, "procs/")) && isCaseFile(r):
 		files = []string{r} // a testbed or a plan
 	case !strings.HasPrefix(r, "cases/") || !isCaseFile(r):
 		return "", fmt.Errorf("%s is not a test, testbed or plan", rel)
@@ -838,11 +860,11 @@ func (f Folder) dirFiles(dir string) []string {
 func (f Folder) SaveText(rel, text string) error {
 	rel = filepath.ToSlash(strings.TrimSpace(rel))
 	ok := false
-	for _, d := range []string{"testbeds/", "templates/", "suites/", "lib/"} {
+	for _, d := range []string{"testbeds/", "templates/", "suites/", "lib/", "procs/", "data/"} {
 		ok = ok || strings.HasPrefix(rel, d)
 	}
 	if !ok {
-		return fmt.Errorf("%s: only testbeds, templates, suites and lib files are saved this way", rel)
+		return fmt.Errorf("%s: only testbeds, templates, suites, procs, data and lib files are saved this way", rel)
 	}
 	p, err := f.path(rel)
 	if err != nil {

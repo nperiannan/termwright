@@ -233,6 +233,10 @@ func tclStep(b *bytes.Buffer, st Step, i int, phase, ind, suffix string) {
 		fmt.Fprintf(b, "%sif {[tw::cond %s]} {\n", in, tclStr(st.If))
 		in += "    "
 	}
+	if raw, ok := rawStep(st); ok { // Termwright runs it and makes its checks
+		fmt.Fprintf(b, "%stw::raw %s\n", in, tclStr(raw))
+		st.Expect, st.Save, st.Run, st.HTTP, st.SNMP, st.Netconf = nil, nil, nil, nil, nil, nil
+	}
 	switch {
 	case st.Run != nil:
 		args := []string{tclStr(st.Run.Session), tclStr(st.Run.Command)}

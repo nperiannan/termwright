@@ -305,6 +305,17 @@ class Step:
             time.sleep(interval)
         return a
 
+    def raw(self, step_json):
+        """A step Termwright runs and checks itself (NETCONF, samples over time): fails on a failed check."""
+        filled = _VAR.sub(lambda m: json.dumps(self.r.vars[m.group(1)])[1:-1] if m.group(1) in self.r.vars else m.group(0), step_json)
+        a = self._send(json.loads(filled))
+        for c in a.checks:
+            if c.get("passed"):
+                self.ok(c.get("what", ""), c.get("got", ""))
+            else:
+                self.fail("%s: got %r" % (c.get("what", ""), c.get("got", "")))
+        return a
+
     def ok(self, what, found=""):
         """A check that passed, for the run log."""
         if not self.skip:
@@ -346,6 +357,7 @@ class Step:
         if ans.get("error"):
             raise _Fatal(ans["error"])
         a.output, a.status, a.ms, a.rows = ans.get("output", ""), ans.get("status", 0), ans.get("ms", 0), ans.get("rows") or []
+        a.checks = ans.get("checks") or []
         lg = self.r.logf
         if ans.get("target"):
             lg.w("Device:   %s" % ans["target"])
@@ -369,7 +381,7 @@ class Answer:
     """What a step got: output (or HTTP body), status, ms, rows (SNMP)."""
 
     def __init__(self, s):
-        self.s, self.output, self.status, self.ms, self.rows, self.table = s, "", 0, 0, [], []
+        self.s, self.output, self.status, self.ms, self.rows, self.table, self.checks = s, "", 0, 0, [], [], []
 
     def _where(self, where):
         out = []

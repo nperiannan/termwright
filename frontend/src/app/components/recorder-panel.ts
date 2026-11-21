@@ -210,6 +210,12 @@ export function parseTableCheck(text: string): TestTableExpect | null {
 }
 export function expectLabel(e: TestExpect): string {
   if (e.table) return tableLabel(e.table);
+  if (e.schema) return e.schema.trim().startsWith('{') ? 'fits the JSON schema' : `fits ${e.schema}`;
+  if (e.agg) {
+    const cmp = [e.equals !== undefined ? `= ${e.equals}` : '', e.greater !== undefined ? `> ${e.greater}` : '', e.less !== undefined ? `< ${e.less}` : ''].filter(Boolean).join(' ');
+    const subj = e.field ? fieldName(e.field) : e.json ?? e.oid ?? '';
+    return `${({ min: 'minimum', max: 'maximum', avg: 'average', delta: 'change', rate: 'rate/s' } as Record<string, string>)[e.agg] ?? e.agg} of ${subj} ${cmp}`;
+  }
   if (e.field && e.equals !== undefined && fieldName(e.field) !== e.field) return `${fieldName(e.field)} = ${e.equals}`;
   const cmp = [e.equals !== undefined ? `= ${e.equals}` : '', e.notEquals !== undefined ? `≠ ${e.notEquals}` : '', e.greater !== undefined ? `> ${e.greater}` : '', e.less !== undefined ? `< ${e.less}` : '', e.exists === false ? 'missing' : ''].filter(Boolean).join(' ');
   if (e.contains) return `contains "${e.contains}"`;
@@ -224,11 +230,14 @@ export function expectLabel(e: TestExpect): string {
 }
 /** What a step sends, for lists: the command, "GET /path" or "walk IF-MIB::ifTable". */
 export function stepText(s: TestStep): string {
+  if (s.call) return `${s.call.proc}(${Object.entries(s.call.with ?? {}).map(([k, v]) => `${k}=${v}`).join(', ')})`;
+  if (s.netconf) return `netconf ${s.netconf.op || 'get'}${s.netconf.op === 'edit-config' ? ' ' + (s.netconf.target || 'running') : s.netconf.op === 'get-config' ? ' ' + (s.netconf.source || 'running') : ''}`;
   if (s.loop) return `for each {{${s.loop.var}}} in ${s.loop.values?.join(', ') ?? s.loop.range ?? s.loop.from ?? ''}: ${s.loop.steps.map(stepText).join('; ')}`;
   if (s.manual) return s.manual.instruction;
   if (s.traffic) return `traffic test ${s.traffic.test}`;
   if (s.upgrade) return `upgrade ${s.upgrade.session} to ${s.upgrade.image}`;
   if (!s.run && !s.http && !s.snmp) return s.wait ? `wait ${s.wait} s` : '';
+  if (s.sample && s.sample.count > 1) return stepText({ ...s, sample: undefined }) + ` × ${s.sample.count}`;
   if (s.run) return s.run.command;
   if (s.snmp) return s.snmp.op === 'set' ? 'set ' + (s.snmp.values ?? []).map(v => `${v.oid} = ${v.value}`).join(', ') : `${s.snmp.op || 'get'} ${(s.snmp.oids ?? []).join(' ')}`;
   return `${s.http?.method || 'GET'} ${s.http?.url ?? ''}`;

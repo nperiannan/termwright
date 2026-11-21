@@ -233,6 +233,10 @@ func pyStep(b *bytes.Buffer, st Step, i int, phase, ind, suffix string) {
 	if st.Timeout > 0 {
 		to = ", timeout=" + strconv.Itoa(st.Timeout)
 	}
+	if raw, ok := rawStep(st); ok { // Termwright runs it and makes its checks
+		fmt.Fprintf(b, "%sa = s.raw(%s)\n", in, pyStr(raw))
+		st.Expect, st.Save, st.Run, st.HTTP, st.SNMP, st.Netconf = nil, nil, nil, nil, nil, nil
+	}
 	switch {
 	case st.Run != nil:
 		p := ""

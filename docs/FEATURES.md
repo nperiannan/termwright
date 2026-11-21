@@ -113,6 +113,11 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **Workspace**: Tests, Runs, Schedules, Testbeds and Library; tests as tables with expected vs got; a Run panel for every run setting.
 - **Edit and select**: edit steps and checks in the Tests tab, rename, duplicate and delete tests (to `.removed/`), run only the ticked tests or a folder; the `lib/` helpers are listed apart from the tests.
 - **Tests for AI and automation**: the `tests` tool for the AI assistant and MCP apps, `POST /api/v1/tools/tests`, and `lab.tests` in Python.
+- **Procedures and data**: shared steps with parameters (`procs/`, call: {proc, with}), made from a test in one click; CSV or Excel test data, one run per row.
+- **NETCONF**: get, get-config, edit-config (candidate + commit) and RPCs over SSH, XML replies checked by path, rpc-errors reported.
+- **Breakpoints and stepping**: stop before chosen steps or every step; run, skip, continue, change variables.
+- **Checks over time**: sample a step N times and check average, max, min, change or rate.
+- **Table maker**: click a header line (or label: value lines) to turn output into a table with live preview; saved as TextFSM.
 - **Standalone suites**: export tests, a plan or all as a zip for Linux, macOS or Windows - code (Go, Python, TCL), library, testbeds, plan and run script writing JUnit XML and run logs; the library adds run logs, configure, wait_for, log and testbed roles.
 - **Debugging**: pause on a failed step (retry, continue, stop, open the device), run one step or from a step, variables per step.
 - **Import from Postman and OpenAPI**: one test per request or operation, folders and tags as suites, status checks from the scripts, examples or 2xx answers; Excel and CSV manual test cases too.

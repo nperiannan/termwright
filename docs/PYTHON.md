@@ -118,6 +118,7 @@ print(lab.tests.history("cases/smoke/version.yaml"))   # pass rate, flips, per s
 print(lab.tests.send_qtest())                          # the last run to qTest
 print(lab.tests.defect("cases/smoke/version.yaml"))    # a Jira defect for a failed test
 lab.tests.request_approval(["cases/prod/check.yaml"], "testbeds/prod.yaml", "change window 42")  # roles.yaml approval: production
+print(lab.tests.procs())                                # procedures; lab.tests.save_file("procs/x.yaml", yaml)
 print(lab.tests.approvals())                            # requests and decisions; lab.tests.approve(id) / reject(id, note)
 print(lab.tests.run(on_cleanup_fail="restore"))  # after a failed cleanup put back the saved configuration (or "factory"; default "stop")
 print(lab.tests.run(testbed="lab-a.yaml"))   # the same tests on other devices

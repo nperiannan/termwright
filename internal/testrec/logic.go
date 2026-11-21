@@ -183,6 +183,9 @@ func execStep(ctx context.Context, st Step, i int, d Driver, v map[string]string
 		}
 		return out
 	}
+	if st.Sample != nil && st.Sample.Count > 1 {
+		return []StepResult{sampleStep(ctx, st, i, d, v)}
+	}
 	if st.Retry == nil {
 		return []StepResult{runStep(ctx, st, i, d, v)}
 	}

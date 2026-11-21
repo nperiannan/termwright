@@ -149,7 +149,34 @@ A run that needs an approval offers **Ask for an Approval** (with a reason). The
 
 API steps can also check the answer against a **JSON Schema**: `schema: schemas/vlan.json` (a file in the tests folder) or the schema itself.
 
-## 14. Export a standalone suite
+## 14. Procedures, data, NETCONF, debugging and tables
+
+**Procedures** are steps several tests share, with parameters - *create a VLAN on a switch*, *check the uplinks*:
+
+```yaml
+# procs/create-vlan.yaml
+name: create-vlan
+params: [switch, vlan, port=1:2]
+steps:
+  - run: {session: "{{switch}}", command: "create vlan v{{vlan}} tag {{vlan}}"}
+  - run: {session: "{{switch}}", command: "configure vlan v{{vlan}} add ports {{port}} tagged"}
+  - run: {session: "{{switch}}", command: "show vlan v{{vlan}}"}
+    expect: [{contains: "v{{vlan}}"}]
+```
+
+In a test: **+ More → Call a Procedure**, choose it and fill the parameters (`call: {proc: create-vlan, with: {switch: "{{core}}", vlan: "200"}}`). **Procedures** in the left bar lists them; ⋯ on a test → **Make a Procedure from This Test** makes one from its steps.
+
+**Test data**: Edit → **Test data → Choose a File…** - a CSV or Excel file; the test runs once per row and the column names are variables (`data: data/vlans.csv`).
+
+**NETCONF**: **+ More → NETCONF Request** - get, get-config, edit-config (a candidate edit is committed) or an RPC, over the session's SSH login on port 830. Check the reply with **XML path =** (`data.vlans.vlan[0].name = v200`) or contains.
+
+**Breakpoints**: click a step's number - it turns red, and the run stops before that step: **Run Step**, **Continue** (to the next breakpoint), **Skip**, **Stop Test**, **Open Device**; the variables can be changed first. **Step through** (Run panel) stops before every step; **Pause when a step fails** stops at failures.
+
+**Checks over time**: tick **Sample over time** (count and interval) and add **average of / maximum of / minimum of / change of / rate/s of** checks, e.g. `CPU:\s+(\d+) < 80`.
+
+**Tables without TextFSM**: open a step's result → **▦ Make a Table…**: click the header line (or tick `label: value` lines), rename the columns, tick *spaces* for columns whose values have spaces, watch the preview, **Save Table**. Then add **table value** checks (`NAME=v200: VID = 200`).
+
+## 15. Export a standalone suite
 
 ⋯ → **Export Automation Suite** asks which tests (the selected ones, this test, a plan or all), the language (Python, Go or TCL), the operating system it will run on (Linux, macOS or Windows), the default testbed and a name, and saves a zip:
 
@@ -167,7 +194,7 @@ network-tests/
 
 The library is also what you build on: besides run, http, snmp and the checks, it has `configure(session, commands)`, `wait_for(session, command, pattern, timeout, interval)`, `log(text)` and `session(role)` (Go: `Configure`, `WaitFor`, `Log`, `Session`; TCL: `tw::configure`, `tw::wait_for`, `tw::log`, `tw::session`).
 
-## 15. Code, CI and the AI assistant
+## 16. Code, CI and the AI assistant
 
 The generated tests run outside the window while Termwright is open - they send each step to Termwright, which logs in with the saved logins:
 

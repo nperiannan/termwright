@@ -208,6 +208,9 @@ func (f Folder) WriteGo(caseFile string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if c, err = f.Prepare(c); err != nil { // procedures inlined, data rows as params
+		return "", err
+	}
 	p, _ := f.find(caseFile)
 	rel, _ := filepath.Rel(f.Root, p)
 	rel = filepath.ToSlash(rel)
@@ -376,6 +379,10 @@ func orF(x, d float64) float64 {
 // goAction writes a step's action, checks and saves (indented two tabs).
 func goAction(b *bytes.Buffer, st Step) {
 	q := strconv.Quote
+	if raw, ok := rawStep(st); ok {
+		fmt.Fprintf(b, "\t\ta := s.Raw(%s)\n\t\t_ = a\n", goStr(raw))
+		return
+	}
 	switch {
 	case st.Run != nil:
 		if st.Run.Parse != "" {

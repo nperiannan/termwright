@@ -6,7 +6,7 @@ import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { Recorder, escapeRe, fieldPattern, isRead } from '../core/recorder.service';
 import { Tabs } from '../core/tabs.service';
-import { SessionNode, TestApproval, CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestHistory, TestStepResult, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
+import { TestTable, TestProc, TestProcInfo, TemplateSpec, SessionNode, TestApproval, CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestHistory, TestStepResult, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
 import { expectLabel, parseTableCheck, stepText } from './recorder-panel';
 import { AIChat } from '../core/ai-chat.service';
 import { Icon } from './icon';
@@ -14,7 +14,7 @@ import { highlight, Lang } from '../core/highlight';
 
 type View = 'steps' | 'yaml' | 'go' | 'py' | 'tcl' | 'history';
 type Phase = 'setup' | 'steps' | 'cleanup';
-type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
+type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'procs' | 'library';
 
 /** The Tests tab: the tests folder's tree, the selected test (steps, YAML, generated Go) and the last run. */
 type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestStepResult };
@@ -120,6 +120,15 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
               @for (b of tree()?.testbeds ?? []; track b) { <div class="case" [class.sel]="fileSel() === b" (click)="openFile(b)" (keydown.enter)="openFile(b)" (contextmenu)="fileMenu($event, b)" tabindex="0" role="button"><span class="cn">{{ base(b) }}</span>@if (lockOf(b); as l) { <span class="n" [title]="'Locked by ' + l.user + ' on ' + l.host + ' since ' + l.since.slice(11, 16)">🔒 {{ l.mine ? 'running' : l.user }}</span> }</div> } @empty { <div class="empty-s">No testbeds.</div> }
             </div>
           }
+          @case ('procs') {
+            <div class="stop"><div class="row"><b class="grow">Procedures</b><button type="button" (click)="newProc()" title="Shared steps with parameters, e.g. create a VLAN on a switch">+ New</button></div><span class="mut">steps several tests share - change once, every test follows</span></div>
+            <div class="list">
+              @for (p of procs(); track p.file) {
+                <div class="case" [class.sel]="procSel() === p.file" (click)="openProc(p.file)" (keydown.enter)="openProc(p.file)" (contextmenu)="fileMenu($event, p.file)" tabindex="0" role="button" [title]="p.error || p.description || p.file">
+                  <span class="cn">{{ p.name }}<span class="mut">({{ (p.params ?? []).join(', ') }})</span></span><span class="n">{{ p.steps }}</span></div>
+              } @empty { <div class="empty-s">No procedures yet. <b>+ New</b>, or ⋯ on a test → <b>Make a Procedure from This Test</b>.</div> }
+            </div>
+          }
           @case ('library') {
             <div class="stop"><b>Library</b><span class="mut">helpers of the generated code, and output templates</span>
               <button type="button" (click)="fetchTemplates()" [disabled]="fetching()" title="Download the community ntc-templates: TextFSM templates for hundreds of commands of many vendors">{{ fetching() ? 'Downloading…' : 'Get Community Templates' }}</button>
@@ -146,14 +155,27 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
             <button type="button" (click)="stopRun()" title="Stop after the step that runs now (cleanups still run)">■ Stop</button>
           </div>
           @if (paused(); as pz) {
-            <div class="pausebar" role="alert">
-              <span class="pzi">❚❚</span><div class="pzt"><b>Paused at a failed step</b> <span class="mut">{{ pz.case }} · {{ pz.step.name }}</span>
-                <div class="bad">{{ pz.step.error || failedCheck(pz.step) || 'a check failed' }}</div></div>
-              <span class="sp"></span>
-              @if (pz.step.target) { <button type="button" (click)="openDevice(pz.step.target)" title="Open the device in a terminal tab to look around (a new login)">Open Device</button> }
-              <button type="button" class="go" (click)="resume('retry')" title="Run the step again - after you fixed the device or the test">↻ Retry Step</button>
-              <button type="button" (click)="resume('continue')" title="Go on with the next step (the test still fails)">Continue</button>
-              <button type="button" class="badbtn" (click)="resume('stop')" title="End the test; its cleanup runs">Stop Test</button>
+            <div class="pausebar" [class.bp]="pz.breakpoint" role="alert">
+              <div class="pzrow">
+                <span class="pzi">{{ pz.breakpoint ? '●' : '❚❚' }}</span><div class="pzt"><b>{{ pz.breakpoint ? 'Stopped at a breakpoint' : 'Paused at a failed step' }}</b><span class="mut">{{ pz.case }} · {{ pz.step.name }}</span>
+                  @if (!pz.breakpoint) { <div class="bad">{{ pz.step.error || failedCheck(pz.step) || 'a check failed' }}</div> } @else { <div class="mut">The step has not run yet. Change a variable below if you like, then run it.</div> }</div>
+                <span class="sp"></span>
+                @if (pz.step.target) { <button type="button" (click)="openDevice(pz.step.target)" title="Open the device in a terminal tab to look around (a new login)">Open Device</button> }
+                @if (pz.breakpoint) {
+                  <button type="button" class="go" (click)="resume('step')" title="Run this step, then stop before the next one">▶ Run Step</button>
+                  <button type="button" (click)="resume('continue')" title="Run on to the next breakpoint">Continue</button>
+                  <button type="button" (click)="resume('skip')" title="Leave this step out and stop before the next one">Skip</button>
+                } @else {
+                  <button type="button" class="go" (click)="resume('retry')" title="Run the step again - after you fixed the device or the test">↻ Retry Step</button>
+                  <button type="button" (click)="resume('continue')" title="Go on with the next step (the test still fails)">Continue</button>
+                }
+                <button type="button" class="badbtn" (click)="resume('stop')" title="End the test; its cleanup runs">Stop Test</button>
+              </div>
+              @if (pauseVars().length) {
+                <details class="pzvars" [open]="pz.breakpoint"><summary>Variables ({{ pauseVars().length }})</summary>
+                  <div class="vars">@for (x of pauseVars(); track x.k) { <span class="vk">{{ '{{' + x.k + '}}' }}</span><input class="vin" [(ngModel)]="x.v" [attr.aria-label]="x.k" /> }</div>
+                </details>
+              }
             </div>
           }
         }
@@ -240,6 +262,28 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
             } @else { <div class="empty mut">Select a schedule, or + New.</div> }
           }
           @case ('testbeds') { <ng-container *ngTemplateOutlet="fileView" /> }
+          @case ('procs') {
+            @if (proc(); as p) {
+              <div class="head"><div class="crumb">{{ procSel() }}</div><div class="title"><h1>{{ p.name }}</h1><span class="pill">procedure</span><span class="sp"></span>
+                <button type="button" (click)="copyText(callSnippet(p))" title="Copy the YAML of a step that calls it"><app-icon name="copy" [size]="13" /> Copy Call</button>
+                <button type="button" (click)="editProcYaml()">✎ Edit YAML</button>
+                <button type="button" class="badbtn" (click)="removeFile(procSel())"><app-icon name="trash" [size]="13" /> Delete</button></div></div>
+              <div class="body">
+                @if (p.description) { <p class="mut">{{ p.description }}</p> }
+                <div class="meta"><span>Parameters <b>@for (x of p.params ?? []; track x) { <span class="tag">{{ '{{' }}{{ x.split('=')[0] }}{{ '}}' }}{{ x.includes('=') ? ' = ' + x.split('=')[1] : '' }}</span> } @empty { none }</b></span>
+                  <span>Used by <b>{{ procUsers(p.name ?? '').length }} {{ procUsers(p.name ?? '').length === 1 ? 'test' : 'tests' }}</b></span></div>
+                <div class="sec">
+                  <div class="sh">Steps<span class="sp"></span><span class="norm">{{ p.steps.length }} steps</span></div>
+                  <div class="srow hd"><span>#</span><span>Device</span><span>Command</span><span>Checks</span><span></span><span></span></div>
+                  @for (st of p.steps; track $index; let i = $index) {
+                    <div class="srow"><span class="mut">{{ i + 1 }}</span><span class="dev">{{ shortDev(target(st)) }}</span><span class="cmd">{{ text(st) }}</span>
+                      <span class="chips">@for (e of st.expect ?? []; track $index) { <span class="chip">{{ label(e) }}</span> } @empty { @if (!isReadStep(st)) { <span class="chip n">✓ device errors</span> } @else { <span class="chip w">○ not checked</span> } }</span><span></span><span></span></div>
+                  }
+                </div>
+                <p class="mut">In a test: <b>+ More ▾ → Call a Procedure</b>. Its steps run in place of the call with the parameters filled in, in Termwright and in the generated Go, Python and TCL.</p>
+              </div>
+            } @else { <ng-container *ngTemplateOutlet="fileView" /> }
+          }
           @case ('library') { <ng-container *ngTemplateOutlet="fileView" /> }
           @default {
             @if (sel() && test(); as t) {
@@ -267,6 +311,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                   <div class="meta">
                     @if (varsText()) { <span>Defaults <b>{{ varsText() }}</b></span> }
                     @if (t.params?.length) { <span>Runs {{ t.params?.length }}× <b>{{ paramsText() }}</b></span> }
+                    @if (t.data) { <span>Data <b>{{ t.data }}</b> <span class="mut">- one run per row</span></span> }
                     @if (t.restore?.length) { <span>Afterwards <b>{{ restoreText() }} put back</b></span> }
                     @if (t.qtest?.testCase) { <span>qTest <b>{{ t.qtest?.testCase }}</b></span> }
                     @if (t.dependsOn?.length) { <span>Depends on <b>{{ t.dependsOn.join(', ') }}</b></span> }
@@ -276,6 +321,10 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                   </div>
                   @for (r of restoreRes(); track $index) { <div class="trow" [class.bad]="!r.passed"><span>{{ r.passed ? '✓' : '✗' }}</span><span>{{ r.name }}</span><span class="mut">{{ r.target }} {{ r.error }}</span></div> }
                   @if (draft(); as d) {
+                    <div class="sec"><div class="sh">Test data</div>
+                      <div class="ed"><div class="row opts"><span class="mut">Run the test once per row of a CSV or Excel file - its column names are variables ({{ '{{' }}vlan{{ '}}' }}).</span><span class="sp"></span>
+                        @if (d.data) { <span class="tag">{{ d.data }}</span><button type="button" class="lnk" (click)="d.data = undefined; touch()">Remove</button> }
+                        <button type="button" (click)="pickData(d)">{{ d.data ? 'Change…' : 'Choose a File…' }}</button></div></div></div>
                     <div class="sec"><div class="sh">While the test runs</div>
                       <div class="ed">
                         <div class="row opts"><label class="wide" title="Words, or /regex/; one per line or comma-separated. The syslog server must be on.">Fail on syslog <input class="cmdi" [ngModel]="(d.watch?.syslog ?? []).join(', ')" (ngModelChange)="setWatch(d, 'syslog', $event)" placeholder="e.g. LINK-3-UPDOWN, /%.*-[0-2]-/" /></label></div>
@@ -293,10 +342,23 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                               @else if (s.http) { <input class="ses" [(ngModel)]="s.http.session" placeholder="API session (or a full URL)" aria-label="API session" /><select [(ngModel)]="s.http.method" aria-label="Method">@for (m of methods; track m) { <option [value]="m">{{ m }}</option> }</select><input class="cmdi" [(ngModel)]="s.http.url" placeholder="URL or /path" aria-label="URL" /> }
                               @else if (s.manual) { <span class="mut">manual</span><input class="cmdi" [(ngModel)]="s.manual.instruction" placeholder="what the person does or checks" aria-label="Instruction" /> }
                               @else if (s.upgrade) { <span class="mut">upgrade</span><input class="ses" [(ngModel)]="s.upgrade.session" placeholder="session" aria-label="Session" /><input class="cmdi" [(ngModel)]="s.upgrade.image" placeholder="image file or URL" aria-label="Image" /> }
+                              @else if (s.call) { <span class="mut">call</span><select class="ses" [ngModel]="s.call.proc" (ngModelChange)="setCallProc(s, $event)" aria-label="Procedure"><option value="">choose a procedure</option>@for (p of procs(); track p.file) { <option [value]="p.name">{{ p.name }}</option> }</select><span class="cmd fl">{{ procParamsText(s.call.proc) }}</span> }
+                              @else if (s.netconf) { <span class="mut">netconf</span><input class="ses" [(ngModel)]="s.netconf.session" placeholder="SSH session" aria-label="Session" /><select [(ngModel)]="s.netconf.op" aria-label="Operation"><option value="get">get</option><option value="get-config">get-config</option><option value="edit-config">edit-config</option><option value="rpc">rpc</option></select>
+                                @if (s.netconf.op === 'get-config') { <select [(ngModel)]="s.netconf.source" aria-label="Source"><option [ngValue]="undefined">running</option><option value="candidate">candidate</option><option value="startup">startup</option></select> }
+                                @if (s.netconf.op === 'edit-config') { <select [(ngModel)]="s.netconf.target" aria-label="Target"><option [ngValue]="undefined">running</option><option value="candidate">candidate (then commit)</option></select> }<span class="sp"></span> }
                               @else if (s.traffic) { <span class="mut">traffic test</span><input class="cmdi" [(ngModel)]="s.traffic.test" placeholder="saved lab traffic test" aria-label="Traffic test" /> }
                               @else { <span class="cmd fl">{{ s.loop ? 'loop' : text(s) }}</span><span class="sp"></span> }
                               <button type="button" class="lnk" (click)="moveStep(ph.k, i, -1)" [disabled]="i === 0" title="Move up">↑</button><button type="button" class="lnk" (click)="moveStep(ph.k, i, 1)" [disabled]="lastI" title="Move down">↓</button><button type="button" class="lnk" (click)="removeStep(ph.k, i)" title="Remove the step">✕</button>
                             </div>
+                            @if (s.call) {
+                              <div class="row opts">@for (pn of procParams(s.call.proc); track pn.k) { <label>{{ pn.k }} <input class="pin" [ngModel]="s.call.with?.[pn.k] ?? ''" (ngModelChange)="setCallArg(s, pn.k, $event)" [placeholder]="pn.d || varHint" /></label> } @empty { <span class="mut">{{ s.call.proc ? 'no parameters' : 'Choose a procedure (Procedures in the left bar).' }}</span> }</div>
+                            }
+                            @if (s.netconf; as nc) {
+                              @if (nc.op === 'get' || nc.op === 'get-config' || !nc.op) { <div class="row opts"><label class="wide" title="A subtree filter: only these parts of the data come back">Filter <textarea class="cmdi body" [(ngModel)]="nc.filter" rows="2" placeholder="<vlans xmlns=&quot;http://openconfig.net/yang/vlan&quot;/>"></textarea></label></div> }
+                              @if (nc.op === 'edit-config') { <div class="row opts"><label class="wide">Config <textarea class="cmdi body" [(ngModel)]="nc.config" rows="4" placeholder="<vlans xmlns=&quot;...&quot;><vlan><vlan-id>200</vlan-id>…</vlan></vlans>"></textarea></label></div> }
+                              @if (nc.op === 'rpc') { <div class="row opts"><label class="wide">RPC <textarea class="cmdi body" [(ngModel)]="nc.rpc" rows="3" placeholder="<get-schema xmlns=&quot;…&quot;>…</get-schema>"></textarea></label></div> }
+                              <div class="row opts"><span class="mut">Check the answer with <b>XML path =</b> (data.vlans.vlan[0].name = v200) or contains. Port <input type="number" class="num2" [(ngModel)]="nc.port" placeholder="830" /></span></div>
+                            }
                             @if (s.http && s.http.method !== 'GET' && s.http.method !== 'DELETE') { <div class="row opts"><label class="wide">Body <textarea class="cmdi body" [(ngModel)]="s.http.body" rows="2" placeholder='{"name": "v200", "vid": 200}'></textarea></label></div> }
                             @if (s.loop; as lp) {
                               <div class="row opts"><label>For each <input class="pin" [(ngModel)]="lp.var" placeholder="port" /></label>
@@ -308,6 +370,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                               }
                               <div class="row opts inner"><button type="button" class="lnk" (click)="lp.steps.push({ run: { session: lastSession(), command: '' } }); touch()">+ Step in the loop</button></div>
                             }
+                            @if (!s.call) {
                             <div class="row opts"><label class="wide" title="What should happen, in words - shown with the step and in the reports">Expected <input class="cmdi" [(ngModel)]="s.expected" placeholder="e.g. VLAN 200 lists port 1:2 tagged" /></label></div>
                             <div class="row opts"><label>Timeout <input type="number" min="0" class="num2" [(ngModel)]="s.timeout" /> s</label>
                               <label><input type="checkbox" [(ngModel)]="s.continueOnFail" /> Go on when it fails</label>
@@ -315,6 +378,8 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                               <label title="Run the step only when this holds, e.g. {{ '{{' }}vlan{{ '}}' }} != 1 (==, !=, contains, ~, >, <)">If <input class="pin" [(ngModel)]="s.if" placeholder="always" /></label>
                               <label title="Run the step again until its checks pass, for at most this many seconds"><input type="checkbox" [ngModel]="!!s.retry" (ngModelChange)="s.retry = $event ? { timeout: 60, interval: 5 } : undefined" /> Retry until it passes</label>
                               @if (s.retry) { <label>for <input type="number" min="1" class="num2" [(ngModel)]="s.retry.timeout" /> s</label> }
+                              @if (s.run || s.http || s.snmp || s.netconf) { <label title="Run the step several times and check the minimum, maximum, average, change or rate of a value (CPU, counters, errors)"><input type="checkbox" [ngModel]="!!s.sample" (ngModelChange)="s.sample = $event ? { count: 5, interval: 10 } : undefined; touch()" /> Sample over time</label>
+                                @if (s.sample) { <label><input type="number" min="2" class="num2" [(ngModel)]="s.sample.count" /> times, every <input type="number" min="0" class="num2" [(ngModel)]="s.sample.interval" /> s</label> } }
                               @if (s.run) { <label title="Do not fail the step when the device answers with an error message"><input type="checkbox" [(ngModel)]="s.ignoreErrors" /> Ignore device errors</label>
                                 <label title="Turn the output into a table with a TextFSM template: auto (templates/index) or a file in templates/">Parse <input class="pin" [(ngModel)]="s.run.parse" placeholder="off" list="tw-parse" /></label> }</div>
                             <div class="chips">@for (e of s.expect ?? []; track $index; let j = $index) { <span class="chip">{{ label(e) }} <button type="button" class="x" (click)="removeCheck(s, j)" title="Remove the check">×</button></span> }
@@ -322,6 +387,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                                 <span class="addck"><select [(ngModel)]="c.k" aria-label="Check">@for (k of checkKinds(s); track k.k) { <option [value]="k.k">{{ k.l }}</option> }</select>
                                   <input [(ngModel)]="c.v" [placeholder]="checkHint(c.k)" aria-label="Value" (keydown.enter)="addCheck(s, c)" /><button type="button" (click)="addCheck(s, c)" [disabled]="!c.v.trim()">+ Check</button></span>
                               }</div>
+                            } @else { <div class="row opts"><label><input type="checkbox" [(ngModel)]="s.continueOnFail" /> Go on when it fails</label><label title="Run the procedure only when this holds">If <input class="pin" [(ngModel)]="s.if" placeholder="always" /></label><span class="mut">The procedure's own steps have their checks.</span></div> }
                           </div>
                         } @empty { <div class="none">no {{ ph.l.toLowerCase() }} steps</div> }
                       </div>
@@ -337,7 +403,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                           @for (s of listOf(t, ph.k); track $index; let i = $index) {
                             @let r = resOf(ph.k, i);
                             <div class="srow" [attr.aria-expanded]="isOpen(ph.k, i)" [class.f]="r && !r.passed && !r.skipped" [class.open]="isOpen(ph.k, i)" (click)="toggleRow(ph.k, i)" (keydown.enter)="toggleRow(ph.k, i)" (contextmenu)="stepMenu($event, ph.k, i)" tabindex="0" role="button">
-                              <span class="mut">{{ i + 1 }}</span><span class="dev" [title]="target(s)">{{ s.loop ? 'loop' : s.manual ? 'you' : shortDev(target(s)) }}</span><span class="cmd" [class.manual]="!!s.manual">{{ text(s) }}@if (logicText(s)) { <span class="logic">{{ logicText(s) }}</span> }@if (s.expected) { <span class="expd">Expected: {{ s.expected }}</span> }</span>
+                              @if (ph.k === 'steps') { <span class="bpn" [class.on]="hasBreak(i)" (click)="toggleBreak(i); $event.stopPropagation()" [title]="hasBreak(i) ? 'Breakpoint: the run stops before this step - click to remove' : 'Click to stop before this step (breakpoint)'">{{ i + 1 }}</span> } @else { <span class="mut">{{ i + 1 }}</span> }<span class="dev" [title]="target(s)">{{ s.loop ? 'loop' : s.manual ? 'you' : shortDev(target(s)) }}</span><span class="cmd" [class.manual]="!!s.manual">{{ text(s) }}@if (logicText(s)) { <span class="logic">{{ logicText(s) }}</span> }@if (s.expected) { <span class="expd">Expected: {{ s.expected }}</span> }</span>
                               <span class="chips">@for (e of s.expect ?? []; track $index; let j = $index) { <span class="chip" [class.b]="r?.checks?.[j]?.passed === false">{{ r?.checks?.[j]?.passed === false ? '✗' : r ? '✓' : '' }} {{ label(e) }}</span> }
                                 @if (!(s.expect?.length) && !s.manual) { @if (isReadStep(s)) { <span class="chip w" title="A read step without checks passes whatever it shows: select text in its output and right-click to add one">○ not checked</span> } @else { <span class="chip n" title="Fails when the device answers with an error message (the device type's error patterns)">✓ device errors</span> } }@if (s.manual) { <span class="chip m">you decide</span> }</span>
                               <span [class]="r ? (r.skipped ? 'mut' : r.passed ? 'ok' : 'bad') : 'mut'">{{ r ? (r.skipped ? '– skipped' : r.passed ? '✓ passed' : '✗ failed') : '' }}</span>
@@ -367,7 +433,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                                     @if (df.lines.length) { <pre class="diff">@for (l of df.lines; track $index) { <span [class]="l[0] === '+' ? 'da' : 'dr'">{{ l }}</span>
 } </pre> } @else { <p class="mut">The output is the same as in that run.</p> }
                                   } @else if (r && !r.skipped && r.output) { <button type="button" class="lnk cmp" (click)="compare(ph.k, i)" title="Show which lines of the output differ from the last run where this test passed">Compare with the last pass</button> }
-                                  <h4>Output · select text, right-click to check it</h4>
+                                  <h4 class="oh">Output · select text, right-click to check it<span class="sp"></span>@if (s.run && r?.output) { <button type="button" class="sbtn" (click)="openTable(ph.k, i, s, r!.output!)" title="Turn this output into a table (or fields) by clicking - no template to write">▦ Make a Table…</button> }</h4>
                                   @if (r?.output) { <pre (contextmenu)="outMenu($event, { i: i, phase: ph.k === 'steps' ? '' : ph.k })">{{ r?.output }}</pre> } @else { <p class="mut">{{ r ? 'no output' : 'not run yet' }}</p> }
                                 </div>
                               </div>
@@ -467,6 +533,44 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
           <div class="row"><span class="sp"></span><button type="button" (click)="exp.set(null)">Cancel</button><button type="button" class="savb" (click)="doExport()">Export…</button></div>
         </div>
       }
+      @if (tm(); as m) {
+        <div class="scrim fixed" (click)="tm.set(null)" aria-hidden="true"></div>
+        <div class="mdlg tmk" role="dialog" aria-label="Make a table">
+          <div class="row"><h3>Make a Table</h3><span class="mut">{{ m.command }}</span><span class="sp"></span>
+            <div class="segs"><button type="button" [class.on]="m.kind === 'table'" (click)="m.kind = 'table'; previewTable()">Rows and columns</button><button type="button" [class.on]="m.kind === 'fields'" (click)="m.kind = 'fields'; detectFields(); previewTable()">Label: value fields</button></div></div>
+          <span class="mut">{{ m.kind === 'table' ? 'Click the header line of the table. Its columns are found from the header; rename them and say which may have spaces in their values.' : 'Tick the lines whose value you want; each becomes a named value.' }}</span>
+          <div class="tmgrid">
+            <div class="tmout">
+              @for (l of m.lines; track $index; let li = $index) {
+                <div class="tl" [class.hd]="m.kind === 'table' && m.header === li" [class.pick]="m.kind === 'fields' && fieldOn(li)" (click)="m.kind === 'table' ? pickHeader(li) : toggleField(li)">@if (m.kind === 'fields' && isField(l)) { <input type="checkbox" [checked]="fieldOn(li)" tabindex="-1" /> }<span>{{ l || ' ' }}</span></div>
+              }
+            </div>
+            <div class="tmside">
+              @if (m.kind === 'table') {
+                <h4>Columns</h4>
+                @for (c of m.cols; track $index; let ci = $index) {
+                  <div class="tc"><input [(ngModel)]="c.name" (ngModelChange)="previewTable()" aria-label="Column name" /><label title="Values in this column may contain spaces (the next column then starts after two spaces or more)"><input type="checkbox" [(ngModel)]="c.spaces" (ngModelChange)="previewTable()" /> spaces</label><button type="button" class="lnk" (click)="m.cols.splice(ci, 1); previewTable()" title="Leave this column out">✕</button></div>
+                } @empty { <p class="mut">Click the header line on the left.</p> }
+              } @else {
+                <h4>Fields</h4>
+                @for (fl of m.fields; track $index; let fi = $index) {
+                  <div class="tc"><input [(ngModel)]="fl.name" (ngModelChange)="previewTable()" aria-label="Field name" /><span class="mut ell">{{ fl.label }}</span><button type="button" class="lnk" (click)="m.fields.splice(fi, 1); previewTable()">✕</button></div>
+                } @empty { <p class="mut">Tick lines on the left.</p> }
+              }
+              <h4>Preview</h4>
+              @if (m.err) { <p class="bad">{{ m.err }}</p> }
+              @if (m.preview?.header?.length) {
+                <div class="tprev"><table><tr>@for (h of m.preview!.header; track h) { <th>{{ h }}</th> }</tr>
+                  @for (r of m.preview!.rows.slice(0, 50); track $index) { <tr>@for (c of r; track $index) { <td>{{ c }}</td> }</tr> }</table></div>
+                <span class="mut">{{ m.preview!.rows.length }} rows</span>
+              } @else if (!m.err) { <p class="mut">Nothing yet.</p> }
+            </div>
+          </div>
+          <div class="row"><label class="fld nm"><span>Table name</span><input [(ngModel)]="m.name" /></label><span class="sp"></span>
+            <span class="mut">Saved as a TextFSM template - it works in the runs, the generated code and anywhere TextFSM runs.</span>
+            <button type="button" (click)="tm.set(null)">Cancel</button><button type="button" class="savb" (click)="saveTable()" [disabled]="!m.preview?.rows?.length || !m.name.trim()">Save Table</button></div>
+        </div>
+      }
       @if (manual(); as m) {
         <div class="scrim fixed" aria-hidden="true"></div>
         <div class="mdlg" role="dialog" aria-label="Manual step">
@@ -500,6 +604,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
           @if (cleanupMode !== 'off') {
             <label class="fld"><span>If a cleanup fails</span><select [(ngModel)]="onCleanupFail" (ngModelChange)="keepOcf()"><option value="stop">Stop the run - skip the rest</option><option value="restore">Restore the configuration saved before the run</option><option value="factory">Factory default, then go on</option></select></label>
           }
+          @if (!multi()) { <label class="chk" title="Stop before every step: run the test one step at a time"><input type="checkbox" [(ngModel)]="stepMode" /> <span><b>Step through</b><small class="mut"> - stop before every step{{ breakCount() ? '; ' + breakCount() + ' breakpoints set' : '' }}</small></span></label> }
           @if (!multi()) { <label class="chk" title="When a step fails, the run waits with the devices' connections open: look at the device, then run the step again, go on or stop"><input type="checkbox" [(ngModel)]="pauseOnFail" /> <span><b>Pause when a step fails</b><small class="mut"> - debug: retry the step, go on or stop</small></span></label> }
           <span class="sp"></span>
           <div class="row"><button type="button" class="grow" (click)="runFiles.set(null)">Cancel</button><button type="button" class="go grow2" (click)="startRun()" [disabled]="multi() && multiPick.length < 1"><app-icon name="play" [size]="12" /> Run {{ rf.length ? rf.length + (rf.length === 1 ? ' test' : ' tests') : 'all' }}{{ multi() ? ' on ' + multiPick.length + ' testbeds' : '' }}</button></div>
@@ -545,8 +650,21 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
     :host-context(.light) .recb:hover { background: #f3f4f6 !important; border-color: #b9bdc5 !important; }
     .go { display: inline-flex; align-items: center; gap: 6px; justify-content: center; height: 28px !important; padding: 0 12px !important; border-radius: 6px !important; background: #1f9d55 !important; color: #fff !important; border: 1px solid #188a4a !important; font-size: 12.5px; font-weight: 600; box-shadow: none !important; }
     .go:hover:not(:disabled) { background: #188a4a !important; } .go:disabled { opacity: .55; }
-    .pausebar { display: flex; align-items: center; gap: 10px; padding: 10px 20px; background: color-mix(in srgb, var(--warn, #e0a030) 14%, var(--panel)); border-bottom: 1px solid color-mix(in srgb, var(--warn, #e0a030) 45%, var(--border)); }
-    .pausebar .pzi { color: var(--warn, #e0a030); font-weight: 700; } .pausebar .pzt { min-width: 0; } .pausebar .pzt > .mut { margin-left: 8px; } .pausebar .pzt .bad { font-size: 12px; margin-top: 2px; } .pausebar button { height: 28px; }
+    .pausebar { display: flex; flex-direction: column; gap: 8px; padding: 10px 20px; background: color-mix(in srgb, var(--warn, #e0a030) 14%, var(--panel)); border-bottom: 1px solid color-mix(in srgb, var(--warn, #e0a030) 45%, var(--border)); }
+    .pausebar .pzi { color: var(--warn, #e0a030); font-weight: 700; } .pausebar .pzt { flex: 1; min-width: 0; } .pausebar .pzt > .mut { margin-left: 8px; } .pausebar .pzt .bad { font-size: 12px; margin-top: 2px; } .pausebar button { height: 28px; }
+    .pzrow { display: flex; align-items: center; gap: 10px; } .pausebar.bp { background: color-mix(in srgb, var(--danger, #ef6161) 10%, var(--panel)); border-bottom-color: color-mix(in srgb, var(--danger, #ef6161) 40%, var(--border)); } .pausebar.bp .pzi { color: var(--danger, #ef6161); }
+    .pzvars summary { cursor: pointer; color: var(--muted); font-size: 12px; } .pzvars .vars { margin-top: 6px; align-items: center; } .vin { height: 26px; font: 12px var(--mono, monospace); }
+    .bpn { cursor: pointer; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; color: var(--muted); } .bpn:hover { background: color-mix(in srgb, var(--danger, #ef6161) 15%, transparent); } .bpn.on { background: var(--danger, #ef6161); color: #fff; font-weight: 600; }
+    .oh { display: flex; align-items: center; gap: 8px; } .oh .sbtn { text-transform: none; letter-spacing: 0; }
+    .tmk { width: min(1200px, 96vw) !important; height: min(86vh, 900px); max-height: none !important; } .tmk h3 { margin: 0; }
+    .tmgrid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr); gap: 14px; }
+    .tmout { overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--cbg); padding: 6px 0; font: 12px/1.5 var(--mono, monospace); }
+    .tmout .tl { display: flex; gap: 6px; align-items: center; padding: 0 10px; white-space: pre; cursor: pointer; min-height: 18px; } .tmout .tl:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+    .tmout .tl.hd { background: var(--accent-soft); box-shadow: inset 3px 0 var(--accent); font-weight: 600; } .tmout .tl.pick { background: color-mix(in srgb, var(--ok, #3fbf75) 14%, transparent); } .tmout .tl input { margin: 0; }
+    .tmside { overflow: auto; display: flex; flex-direction: column; gap: 6px; } .tmside h4 { margin: 6px 0 2px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+    .tc { display: flex; align-items: center; gap: 8px; } .tc input:not([type]) { flex: 1; height: 26px; font: 12px var(--mono, monospace); } .tc label { font-size: 12px; display: flex; gap: 4px; align-items: center; }
+    .tprev { overflow: auto; max-height: 300px; border: 1px solid var(--border); border-radius: 8px; } .tprev table { border-collapse: collapse; font: 11.5px var(--mono, monospace); width: 100%; } .tprev th, .tprev td { border-bottom: 1px solid var(--border); padding: 3px 8px; text-align: left; white-space: nowrap; } .tprev th { background: var(--panel); position: sticky; top: 0; }
+    .fld.nm { flex-direction: row; align-items: center; gap: 8px; } .fld.nm input { width: 240px; }
     .chip.n { background: color-mix(in srgb, var(--text) 7%, transparent); color: var(--muted); }
     .pill.run { display: inline-flex; align-items: center; gap: 6px; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); } .spin.sm { width: 10px; height: 10px; border-width: 2px; }
     .vars { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; font: 12px/1.45 var(--mono, monospace); margin-bottom: 8px; } .vars .vk { color: var(--accent); } .vars .vv { word-break: break-all; }
@@ -696,7 +814,7 @@ export class TestsView implements OnInit, OnDestroy {
   }
   readonly rails: { k: Section; l: string; i: string; t: string }[] = [
     { k: 'tests', l: 'Tests', i: 'checklist', t: 'Tests: record, edit and run' }, { k: 'runs', l: 'Runs', i: 'play', t: 'Past runs and their results' },
-    { k: 'schedules', l: 'Schedules', i: 'clock', t: 'Scheduled runs' }, { k: 'testbeds', l: 'Testbeds', i: 'hosts', t: 'Which devices a run uses' }, { k: 'library', l: 'Library', i: 'file', t: 'Templates and code helpers' }];
+    { k: 'schedules', l: 'Schedules', i: 'clock', t: 'Scheduled runs' }, { k: 'testbeds', l: 'Testbeds', i: 'hosts', t: 'Which devices a run uses' }, { k: 'procs', l: 'Procedures', i: 'layers', t: 'Shared steps with parameters that tests call' }, { k: 'library', l: 'Library', i: 'file', t: 'Templates and code helpers' }];
   readonly q = signal('');
   readonly tag = signal('all');
   readonly folded = signal<string[]>([]);
@@ -752,7 +870,7 @@ export class TestsView implements OnInit, OnDestroy {
       this.liveStep.set(e); this.liveCount.update(n => n + 1);
       this.pushLive({ k: 'res', s: e.step });
     }));
-    this.offs.push(this.backend.on('tests:paused', (e: { case: string; step: TestStepResult }) => { this.paused.set(e); this.showLive.set(true); }));
+    this.offs.push(this.backend.on('tests:paused', (e: { case: string; step: TestStepResult; breakpoint?: boolean }) => { this.paused.set(e); this.pauseVars.set(Object.entries(e.step.vars ?? {}).sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => ({ k, v }))); this.showLive.set(true); }));
     this.offs.push(this.backend.on('tests:resumed', () => this.paused.set(null)));
     this.offs.push(this.backend.on('tests:step-start', (e: { case: string; step: string }) => this.pushLive({ k: 'head', c: e.case, t: e.step })));
     this.offs.push(this.backend.on('tests:out', (e: { session: string; text: string }) => this.addLive(e.text)));
@@ -822,7 +940,8 @@ export class TestsView implements OnInit, OnDestroy {
     this.busy.set(true);
     try {
       const cleanup = extra.only ? 'off' : this.cleanupMode || undefined;
-      this.took(await this.backend.runTests({ files, testbed: this.testbed || undefined, confirmed, forceLock, onCleanupFail: cleanup === 'off' ? undefined : this.onCleanupFail, cleanup, from: extra.from, only: extra.only, pauseOnFail: this.pauseOnFail }));
+      this.took(await this.backend.runTests({ files, testbed: this.testbed || undefined, confirmed, forceLock, onCleanupFail: cleanup === 'off' ? undefined : this.onCleanupFail, cleanup, from: extra.from, only: extra.only, pauseOnFail: this.pauseOnFail, breaks: files.length === 1 ? this.breaksFor(files[0]) : undefined, stepMode: this.stepMode || undefined }));
+      this.stepMode = false;
       await this.load();
     } catch (e) {
       const t = errText(e);
@@ -999,6 +1118,7 @@ export class TestsView implements OnInit, OnDestroy {
   go(k: Section) {
     this.section.set(k);
     if (k === 'runs') void this.loadApprovals();
+    if (k === 'procs') { void this.loadProcs(); this.proc.set(null); }
     if (k === 'runs' && !this.runRep()) { const r = this.report() ?? null; if (r) { this.runRep.set(r); this.runSel.set(r.dir); } else { const d = this.tree()?.reports?.[0]?.dir; if (d) void this.openRunReport(d); } }
   }
   /** The tests shown: search and tag filter. */
@@ -1080,6 +1200,7 @@ export class TestsView implements OnInit, OnDestroy {
     this.ui.showMenu(ev, [
       { label: 'Rename…', action: () => void this.rename(false) },
       { label: 'Duplicate…', action: () => void this.rename(true) },
+      { label: 'Make a Procedure from This Test…', action: () => void this.procFromTest() },
       { label: 'Tags…', action: () => void this.editTags() },
       { label: 'Depends On…', action: () => void this.editDeps() },
       { label: 'qTest Test Case…', action: () => void this.editQTest() },
@@ -1169,8 +1290,24 @@ export class TestsView implements OnInit, OnDestroy {
     return out;
   }
   pauseOnFail = (() => { try { return localStorage.getItem('tw.tests.pause') === '1'; } catch { return false; } })();
-  readonly paused = signal<{ case: string; step: TestStepResult } | null>(null);
-  async resume(act: 'retry' | 'continue' | 'stop') { this.paused.set(null); await this.backend.testResume(act).catch(e => this.ui.toast(errText(e), 'error')); }
+  readonly paused = signal<{ case: string; step: TestStepResult; breakpoint?: boolean } | null>(null);
+  async resume(act: 'retry' | 'continue' | 'stop' | 'step' | 'skip') {
+    const orig = this.paused()?.step.vars ?? {}, set: Record<string, string> = {};
+    for (const x of this.pauseVars()) if (orig[x.k] !== x.v) set[x.k] = x.v;
+    this.paused.set(null);
+    await this.backend.testResume(act, set).catch(e => this.ui.toast(errText(e), 'error'));
+  }
+  readonly pauseVars = signal<{ k: string; v: string }[]>([]);
+  stepMode = false;
+  private readonly breaks = signal<Record<string, number[]>>((() => { try { return JSON.parse(localStorage.getItem('tw.tests.breaks') || '{}'); } catch { return {}; } })());
+  breaksFor(file: string) { return this.breaks()[file] ?? []; }
+  hasBreak(i: number) { return this.breaksFor(this.sel()).includes(i + 1); }
+  breakCount() { return this.breaksFor(this.sel()).length; }
+  toggleBreak(i: number) {
+    const f = this.sel(), l = this.breaksFor(f), n = i + 1;
+    this.breaks.update(m => ({ ...m, [f]: l.includes(n) ? l.filter(x => x !== n) : [...l, n].sort((a, b) => a - b) }));
+    try { localStorage.setItem('tw.tests.breaks', JSON.stringify(this.breaks())); } catch { /* not kept */ }
+  }
   openDevice(path: string) { void this.tabsSvc.openSession(path); }
   runningNow(file: string) { const f = this.runningFiles; return !f.length || f.includes(file); }
   private runningFiles: string[] = [];
@@ -1306,6 +1443,9 @@ export class TestsView implements OnInit, OnDestroy {
   }
   addMenu(ev: MouseEvent, p: Phase) {
     this.ui.showMenu(ev, [
+      { label: 'Call a Procedure', action: () => this.addCall(p) },
+      { label: 'NETCONF Request', action: () => this.addNetconf(p) },
+      { separator: true },
       { label: 'API Request', action: () => this.addApi(p) },
       { label: 'From a curl Command…', action: () => void this.addCurl(p) },
       { label: 'Manual Step (a person answers)', action: () => this.addManual(p) },
@@ -1314,6 +1454,109 @@ export class TestsView implements OnInit, OnDestroy {
       { label: 'Software Upgrade', action: () => this.addUpgrade(p) },
       { label: 'Lab Traffic Test', action: () => this.addTraffic(p) },
     ]);
+  }
+  addCall(p: Phase) { const d = this.draft(); if (!d) return; void this.loadProcs(); this.listOf(d, p).push({ call: { proc: '', with: {} } }); this.touch(); }
+  addNetconf(p: Phase) { const d = this.draft(); if (!d) return; this.listOf(d, p).push({ netconf: { session: this.lastSession(), op: 'get-config' } }); this.touch(); }
+  setCallProc(s: TestStep, name: string) { if (!s.call) return; s.call.proc = name; const keep: Record<string, string> = {}; for (const p of this.procParams(name)) keep[p.k] = s.call.with?.[p.k] ?? ''; s.call.with = keep; this.touch(); }
+  setCallArg(s: TestStep, k: string, v: string) { if (!s.call) return; s.call.with = { ...(s.call.with ?? {}), [k]: v }; this.touch(); }
+  readonly varHint = 'value or {{var}}';
+  procParams(name: string) { return (this.procs().find(p => p.name === name)?.params ?? []).map(x => ({ k: x.split('=')[0].trim(), d: x.includes('=') ? x.split('=').slice(1).join('=').trim() : '' })); }
+  procParamsText(name: string) { const p = this.procs().find(x => x.name === name); return p ? `${p.steps} steps${p.description ? ' - ' + p.description : ''}` : ''; }
+  async pickData(d: TestCase) { try { const rel = await this.backend.testPickData(); if (rel) { d.data = rel; this.touch(); } } catch (e) { this.ui.toast(errText(e), 'error'); } }
+  // ---- procedures ----
+  readonly procs = signal<TestProcInfo[]>([]);
+  readonly procSel = signal('');
+  readonly proc = signal<TestProc | null>(null);
+  async loadProcs() { this.procs.set((await this.backend.testProcs().catch(() => [])) ?? []); }
+  async openProc(file: string) {
+    this.procSel.set(file); this.fileSel.set('');
+    const name = this.procs().find(p => p.file === file)?.name ?? file;
+    try { this.proc.set(await this.backend.testProc(file.replace(/^procs\//, '').replace(/\.yaml$/, ''))); } catch (e) { this.proc.set(null); this.ui.toast(errText(e), 'error'); void name; }
+  }
+  editProcYaml() { const f = this.procSel(); this.proc.set(null); void this.openFile(f); }
+  callSnippet(p: TestProc) { return `- call:\n    proc: ${p.name}\n    with:\n` + (p.params ?? []).map(x => `      ${x.split('=')[0].trim()}: "${x.includes('=') ? x.split('=')[1].trim() : ''}"`).join('\n'); }
+  procUsers(name: string) { return (this.tree()?.cases ?? []).filter(c => (c as TestCaseInfo & { calls?: string[] }).calls?.includes(name)); }
+  async newProc() {
+    const name = await this.ui.input(tr('New Procedure'), tr('Name, e.g. create-vlan'), ''); if (!name) return;
+    try {
+      const rel = await this.backend.testSaveProc(name, { name, description: '', params: ['switch', 'vlan'], steps: [{ run: { session: '{{switch}}', command: 'create vlan v{{vlan}} tag {{vlan}}' } }, { run: { session: '{{switch}}', command: 'show vlan v{{vlan}}' }, expect: [{ contains: 'v{{vlan}}' }] }] });
+      await this.loadProcs(); this.section.set('procs'); this.proc.set(null); this.procSel.set(rel); void this.openFile(rel);
+      this.ui.toast(tr('An example is in the file - change the steps and parameters, then Save'), 'info');
+    } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  async procFromTest() {
+    const t = this.test(); if (!t) return;
+    const name = await this.ui.input(tr('Make a Procedure'), tr('Its steps become a procedure; the variables they use ({{x}}) become its parameters. Name:'), (t.name || 'procedure').toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+    if (!name) return;
+    const steps = structuredClone(t.steps), used = new Set<string>();
+    JSON.stringify(steps).replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_, v) => { used.add(v); return ''; });
+    const params = [...used].map(v => t.vars?.[v] !== undefined ? `${v}=${t.vars[v]}` : v);
+    try { const rel = await this.backend.testSaveProc(name, { name, description: t.description ?? '', params, steps }); await this.loadProcs(); this.section.set('procs'); await this.openProc(rel); this.ui.toast(tr('Procedure {0} made - call it from other tests with + More → Call a Procedure', name), 'success'); }
+    catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  // ---- table maker: a table (or fields) from output by clicking; saved as a TextFSM template ----
+  readonly tm = signal<{ phase: Phase; i: number; session: string; command: string; lines: string[]; kind: 'table' | 'fields'; header: number; cols: { name: string; spaces: boolean }[]; fields: { line: number; name: string; label: string }[]; preview: TestTable | null; err: string; name: string } | null>(null);
+  private tmTimer: ReturnType<typeof setTimeout> | undefined;
+  openTable(p: Phase, i: number, s: TestStep, out: string) {
+    const lines = out.replace(/\r/g, '').split('\n').slice(0, 400);
+    const sess = s.run?.session ?? '', cmd = s.run?.command ?? '';
+    const name = (this.shortDev(sess) + ' ' + this.fill(cmd)).toLowerCase().replace(/\{\{|\}\}/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 60);
+    // the header: a line of three or more columns without "label:" whose next row (after a ---- line) has as many
+    const segs = (l: string) => l.trim() ? l.trim().split(/\s{2,}/).length : 0, sepLine = (l: string) => /^[-=+|\s]{4,}$/.test(l);
+    let header = -1;
+    for (let k = 0; k < lines.length - 1 && header < 0; k++) {
+      const n = segs(lines[k]);
+      if (n < 3 || lines[k].includes(':') || sepLine(lines[k])) continue;
+      let j = k + 1; while (j < lines.length && sepLine(lines[j])) j++;
+      if (j < lines.length && segs(lines[j]) >= n - 1) header = k;
+    }
+    const labelled = lines.filter(l => /^\s*[A-Za-z][\w ./()-]{1,40}?:\s*\S/.test(l)).length;
+    const kind: 'table' | 'fields' = header < 0 && labelled >= 1 ? 'fields' : 'table';
+    this.tm.set({ phase: p, i, session: this.fill(sess), command: this.fill(cmd), lines, kind, header: -1, cols: [], fields: [], preview: null, err: '', name });
+    if (kind === 'table' && header >= 0) this.pickHeader(header); else { this.detectFields(); this.previewTable(); }
+  }
+  private fill(s: string) { const v = this.test()?.vars ?? {}; return s.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (m, k) => v[k] ?? m); }
+  pickHeader(li: number) {
+    const m = this.tm(); if (!m) return;
+    const segs = (m.lines[li].match(/\S+(?: \S+)*/g) ?? []);
+    this.tm.set({ ...m, header: li, cols: segs.map(w => ({ name: w.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '') || 'COL', spaces: w.includes(' ') })) });
+    this.previewTable();
+  }
+  isField(l: string) { return /^\s*[A-Za-z][\w ./()-]{1,40}?(:\s*|\s{2,})\S/.test(l) && !/^[-=\s]+$/.test(l); }
+  fieldOn(li: number) { return !!this.tm()?.fields.some(f => f.line === li); }
+  detectFields() {
+    const m = this.tm(); if (!m || m.fields.length) return;
+    const fields: { line: number; name: string; label: string }[] = [];
+    m.lines.forEach((l, li) => { if (fields.length < 8 && /^\s*[A-Za-z][\w ./()-]{1,40}?:\s*\S/.test(l)) { const lab = l.split(':')[0].trim(); fields.push({ line: li, name: lab.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, ''), label: lab }); } });
+    m.fields = fields;
+  }
+  toggleField(li: number) {
+    const m = this.tm(); if (!m || !this.isField(m.lines[li])) return;
+    if (this.fieldOn(li)) m.fields = m.fields.filter(f => f.line !== li);
+    else { const lab = m.lines[li].split(/:|\s{2,}/)[0].trim(); m.fields = [...m.fields, { line: li, name: lab.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, ''), label: lab }].sort((a, b) => a.line - b.line); }
+    this.tm.set({ ...m }); this.previewTable();
+  }
+  private spec(): TemplateSpec | null {
+    const m = this.tm(); if (!m) return null;
+    return m.kind === 'table' ? { kind: 'table', header: m.header >= 0 ? m.lines[m.header] : '', columns: m.cols.map(c => ({ name: c.name, spaces: c.spaces })) } : { kind: 'fields', fields: m.fields.map(f => ({ name: f.name, label: f.label })) };
+  }
+  previewTable() {
+    clearTimeout(this.tmTimer);
+    this.tmTimer = setTimeout(async () => {
+      const m = this.tm(), sp = this.spec(); if (!m || !sp) return;
+      try { const t = await this.backend.testPreviewTemplate(sp, m.lines.join('\n')); this.tm.set({ ...m, preview: t, err: t?.rows?.length ? '' : 'No rows match yet - check the header line and the columns with spaces.' }); }
+      catch (e) { this.tm.set({ ...m, preview: null, err: errText(e) }); }
+    }, 250);
+  }
+  async saveTable() {
+    const m = this.tm(), sp = this.spec(), t = this.test(); if (!m || !sp || !t) return;
+    try {
+      const file = await this.backend.testMakeTemplate(m.name, m.session, m.command, sp);
+      const c = structuredClone(t), list = m.phase === 'setup' ? c.setup : m.phase === 'cleanup' ? c.cleanup : c.steps, st = list?.[m.i];
+      if (st?.run) { st.run.parse = file; await this.backend.testSave(this.sel(), c); }
+      this.tm.set(null); await this.load();
+      this.ui.toast(tr('Table saved ({0}). Add checks on its values: Edit → + Check → table value, e.g. NAME=v200: VID = 200', file), 'success');
+    } catch (e) { this.ui.toast(errText(e), 'error'); }
   }
   addManual(p: Phase) { const d = this.draft(); if (!d) return; this.listOf(d, p).push({ manual: { instruction: '' } }); this.touch(); }
   readonly manual = signal<{ id: string; name: string; instruction: string; expected: string } | null>(null);
@@ -1395,9 +1638,12 @@ export class TestsView implements OnInit, OnDestroy {
   ck(p: Phase, i: number) { const k = p + i; let c = this.cks.get(k); if (!c) { c = { k: 'contains', v: '' }; this.cks.set(k, c); } return c; }
   checkKinds(s: TestStep) {
     const k = [{ k: 'contains', l: 'contains' }, { k: 'notContains', l: 'does not contain' }, { k: 'matches', l: 'matches' }];
+    const agg = s.sample ? [{ k: 'avg', l: 'average of' }, { k: 'max', l: 'maximum of' }, { k: 'min', l: 'minimum of' }, { k: 'delta', l: 'change of' }, { k: 'rate', l: 'rate/s of' }] : [];
+    if (s.netconf) return [...agg, { k: 'json', l: 'XML path =' }, ...k];
+    if (agg.length) return [...agg, ...(s.http ? [{ k: 'status', l: 'status' }, { k: 'json', l: 'JSON path =' }] : s.snmp ? [{ k: 'oid', l: 'OID =' }] : []), ...k];
     return s.http ? [{ k: 'status', l: 'status' }, { k: 'json', l: 'JSON path =' }, ...k, { k: 'maxMs', l: 'within ms' }] : s.snmp ? [{ k: 'oid', l: 'OID =' }, ...k] : [...k, { k: 'table', l: 'table value' }];
   }
-  checkHint(k: string) { return k === 'json' ? 'data.items[0].name = v42' : k === 'oid' ? 'ifOperStatus.4 = up' : k === 'status' ? '200' : k === 'maxMs' ? '500' : k === 'matches' ? 'v42\\s+42' : k === 'table' ? 'VLAN_ID=200: STATUS = active' : 'text'; }
+  checkHint(k: string) { if (['avg', 'max', 'min', 'delta', 'rate'].includes(k)) return 'CPU:\\s+(\\d+) < 80   (a field pattern, JSON path or OID, then < > or =)'; return k === 'json' ? 'data.items[0].name = v42' : k === 'oid' ? 'ifOperStatus.4 = up' : k === 'status' ? '200' : k === 'maxMs' ? '500' : k === 'matches' ? 'v42\\s+42' : k === 'table' ? 'VLAN_ID=200: STATUS = active' : 'text'; }
   addCheck(s: TestStep, c: { k: string; v: string }) {
     const v = c.v.trim(); if (!v) return;
     let e: TestExpect;
@@ -1407,6 +1653,14 @@ export class TestsView implements OnInit, OnDestroy {
       if (!t) return this.ui.toast(tr('Write it as COLUMN=value: COLUMN = value (or rows N, missing, ~ pattern)'), 'error');
       e = { table: t };
       if (s.run && !s.run.parse) s.run.parse = 'auto';
+    }
+    else if (['avg', 'max', 'min', 'delta', 'rate'].includes(c.k)) {
+      const m = v.match(/^(.+?)\s*(<|>|=)\s*(-?[\d.]+)$/);
+      if (!m) return this.ui.toast(tr('Write the value, then < > or = and a number, e.g. CPU:\\s+(\\d+) < 80'), 'error');
+      const subj = m[1].trim(), n = Number(m[3]);
+      e = { agg: c.k as TestExpect['agg'] };
+      if (s.snmp) e.oid = subj; else if (s.http || (s.netconf && !subj.includes('('))) e.json = subj; else e.field = subj.includes('(') ? subj : escapeRe(subj) + '\\s*:?\\s*([\\d.]+)';
+      if (m[2] === '<') e.less = n; else if (m[2] === '>') e.greater = n; else e.equals = String(n);
     }
     else if (c.k === 'json' || c.k === 'oid') { const i = v.indexOf('='); e = i > 0 ? { [c.k]: v.slice(0, i).trim(), equals: v.slice(i + 1).trim() } : { [c.k]: v, exists: true }; }
     else e = { [c.k]: v };

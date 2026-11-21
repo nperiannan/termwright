@@ -300,6 +300,19 @@ proc tw::wait_for {session command pattern {timeout 60} {interval 5} {prompt ""}
     }
 }
 
+# tw::raw json: a step Termwright runs and checks itself (NETCONF, samples over time); a failed check fails the step.
+proc tw::raw {json} {
+    variable ans
+    tw::_send [tw::fill $json]
+    if {![dict exists $ans checks]} { return }
+    foreach c [lindex [dict get $ans checks] 1] {
+        set o [lindex $c 1]
+        set what [expr {[dict exists $o what] ? [lindex [dict get $o what] 1] : ""}]
+        set got [expr {[dict exists $o got] ? [lindex [dict get $o got] 1] : ""}]
+        if {[dict exists $o passed] && [lindex [dict get $o passed] 1] eq "true"} { tw::ok $what $got } else { tw::fail "$what: got \"$got\"" }
+    }
+}
+
 # tw::testbed: the testbed's variables (role -> session, …) as a dict; tw::session role: a role's session.
 proc tw::testbed {} { variable vars; return $vars }
 proc tw::session {role} { variable vars; if {[dict exists $vars $role]} { return [dict get $vars $role] }; return $role }

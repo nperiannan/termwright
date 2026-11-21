@@ -587,17 +587,20 @@ export interface SyslogQuery { after?: number; text?: string; host?: string; max
 export interface SyslogSendIn { target: string; proto?: string; format?: string; facility?: string; severity?: string; host?: string; app?: string; text: string; count?: number; insecure?: boolean; }
 
 /** Tests (internal/testrec): a YAML test case, its list entry and a run's report. */
-export interface TestExpect { oid?: string; contains?: string; notContains?: string; matches?: string; field?: string; json?: string; status?: number; maxMs?: number; equals?: string; notEquals?: string; greater?: number; less?: number; exists?: boolean; table?: TestTableExpect; }
+export interface TestExpect { agg?: 'min' | 'max' | 'avg' | 'delta' | 'rate'; schema?: string; oid?: string; contains?: string; notContains?: string; matches?: string; field?: string; json?: string; status?: number; maxMs?: number; equals?: string; notEquals?: string; greater?: number; less?: number; exists?: boolean; table?: TestTableExpect; }
 export interface TestTableExpect { where?: Record<string, string>; column?: string; rows?: number; equals?: string; notEquals?: string; matches?: string; greater?: number; less?: number; exists?: boolean; }
 export interface TestTable { header: string[]; rows: string[][]; }
 export interface TestStep {
+  call?: { proc: string; with?: Record<string, string> };
+  netconf?: { session: string; op?: string; source?: string; target?: string; filter?: string; config?: string; rpc?: string; port?: number };
+  sample?: { count: number; interval?: number };
   name?: string; run?: { session: string; command: string; prompt?: string; parse?: string };
   http?: { session?: string; environment?: string; collection?: string; method?: string; url: string; headers?: Record<string, string>; body?: string };
   snmp?: { session: string; op?: string; oids?: string[]; values?: { oid: string; type?: string; value: string }[] };
   expect?: TestExpect[]; save?: { var: string; field?: string; json?: string; oid?: string; where?: Record<string, string>; column?: string }[]; timeout?: number; continueOnFail?: boolean; ignoreErrors?: boolean;
   expected?: string; manual?: { instruction: string }; traffic?: { test: string }; upgrade?: { session: string; image: string }; wait?: number; if?: string; retry?: { timeout?: number; interval?: number }; loop?: { var: string; values?: string[]; range?: string; from?: string; steps: TestStep[] };
 }
-export interface TestCase { qtest?: { testCase: string }; name?: string; description?: string; tags?: string[]; dependsOn?: string[]; watch?: { syslog?: string[]; traps?: string[]; devices?: string[] }; configDiff?: boolean; configIgnore?: string[]; vars?: Record<string, string>; params?: Record<string, string>[]; restore?: ('config' | 'lab')[]; setup?: TestStep[]; steps: TestStep[]; cleanup?: TestStep[]; }
+export interface TestCase { data?: string; qtest?: { testCase: string }; name?: string; description?: string; tags?: string[]; dependsOn?: string[]; watch?: { syslog?: string[]; traps?: string[]; devices?: string[] }; configDiff?: boolean; configIgnore?: string[]; vars?: Record<string, string>; params?: Record<string, string>[]; restore?: ('config' | 'lab')[]; setup?: TestStep[]; steps: TestStep[]; cleanup?: TestStep[]; }
 export interface TestCaseInfo { file: string; name: string; description?: string; tags?: string[]; steps: number; error?: string; }
 export interface TestCheckResult { what: string; passed: boolean; got?: string; }
 export interface TestStepResult { vars?: Record<string, string>; name: string; kind: string; phase?: '' | 'setup' | 'cleanup' | 'restore'; target?: string; sent?: string; status?: number; output?: string; ms: number; passed: boolean; skipped?: boolean; unchecked?: boolean; error?: string; checks?: TestCheckResult[]; table?: TestTable; expected?: string; }
@@ -627,3 +630,8 @@ export interface SNMPDashboard { id: string; name: string; every: number; items:
 export interface SNMPDashValue { display: string; value?: number; alarm?: string; error?: string; }
 export interface SNMPDashPoll { at: string; values: SNMPDashValue[]; }
 export interface SNMPSimState { running: boolean; address?: string; community?: string; values?: number; source?: string; since?: string; }
+
+/** A procedure: shared steps with parameters (procs/<name>.yaml). */
+export interface TestProc { name?: string; description?: string; params?: string[]; steps: TestStep[]; }
+export interface TestProcInfo { file: string; name: string; description?: string; params?: string[]; steps: number; error?: string; }
+export interface TemplateSpec { kind: 'table' | 'fields'; header?: string; columns?: { name: string; spaces?: boolean; match?: string }[]; fields?: { name: string; label: string }[]; }

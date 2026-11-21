@@ -104,6 +104,9 @@ type TestRunRequest struct {
 	Only int `json:"only,omitempty"`
 	// PauseOnFail: when a step fails, wait (connections open) for TestResume: retry, continue or stop.
 	PauseOnFail bool `json:"pauseOnFail,omitempty"`
+	// Breaks: steps to stop before (1-based); StepMode: stop before every step.
+	Breaks   []int `json:"breaks,omitempty"`
+	StepMode bool  `json:"stepMode,omitempty"`
 	// Files: tests relative to the tests folder (none: all of them).
 	Files []string `json:"files,omitempty"`
 	// Tags: only tests with one of these tags ("!tag" leaves its tests out).
@@ -276,20 +279,24 @@ func (a *App) runTests(ctx context.Context, r TestRunRequest, ask netAsker) (tes
 		OnStep: func(file, name string, sr testrec.StepResult) {
 			emitter{a}.Emit("tests:step", map[string]any{"file": file, "case": name, "testbed": r.Testbed, "step": sr})
 		}, From: r.From, Only: r.Only}
-	if r.PauseOnFail && r.interactive {
-		opt.Pause = func(ctx context.Context, file, name string, sr testrec.StepResult) string {
-			ch := make(chan string, 1)
+	if (r.PauseOnFail || len(r.Breaks) > 0 || r.StepMode) && r.interactive {
+		opt.Breaks, opt.StepMode = r.Breaks, r.StepMode
+		opt.Pause = func(ctx context.Context, file, name string, sr testrec.StepResult) (string, map[string]string) {
+			if !r.PauseOnFail && !sr.Skipped { // a failed step, but only breakpoints were asked for
+				return "stop", nil
+			}
+			ch := make(chan testResume, 1)
 			testsPauseMu.Lock()
 			testsPause = ch
 			testsPauseMu.Unlock()
 			defer func() { testsPauseMu.Lock(); testsPause = nil; testsPauseMu.Unlock() }()
-			emitter{a}.Emit("tests:paused", map[string]any{"file": file, "case": name, "testbed": r.Testbed, "step": sr})
+			emitter{a}.Emit("tests:paused", map[string]any{"file": file, "case": name, "testbed": r.Testbed, "step": sr, "breakpoint": sr.Skipped})
 			select {
-			case act := <-ch:
-				emitter{a}.Emit("tests:resumed", act)
-				return act
+			case res := <-ch:
+				emitter{a}.Emit("tests:resumed", res.Action)
+				return res.Action, res.Vars
 			case <-ctx.Done():
-				return "stop"
+				return "stop", nil
 			}
 		}
 	}
@@ -551,6 +558,27 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 			return "", err
 		}
 		return testsReportText(f, rep), nil
+	case "procs":
+		var b strings.Builder
+		for _, p := range a.mustProcs() {
+			fmt.Fprintf(&b, "%s  %s(%s)  %d steps  %s %s\n", p.File, p.Name, strings.Join(p.Params, ", "), p.Steps, p.Description, p.Error)
+		}
+		if b.Len() == 0 {
+			return "No procedures yet: save procs/<name>.yaml (name, params, steps) with save_file, then use call: {proc, with} in a step.", nil
+		}
+		return b.String(), nil
+	case "save_file":
+		f, err := a.testsFolder()
+		if err != nil {
+			return "", err
+		}
+		if err := mayEdit(f); err != nil {
+			return "", err
+		}
+		if err := f.SaveText(argStr(args, "file"), argStr(args, "yaml")); err != nil {
+			return "", err
+		}
+		return "Saved " + argStr(args, "file"), nil
 	case "approvals":
 		l, err := a.TestApprovals()
 		if err != nil {
@@ -863,22 +891,29 @@ func (a *App) TestDecide(id string, approve bool, note string) (testrec.Approval
 	return f.Decide(id, approve, note)
 }
 
+type testResume struct {
+	Action string
+	Vars   map[string]string
+}
+
 var (
 	testsPauseMu sync.Mutex
-	testsPause   chan string
+	testsPause   chan testResume
 )
 
 // TestResume answers a run paused at a failed step: "retry" runs the step again, "continue" goes on,
 // "stop" ends the test (its cleanup still runs).
-func (a *App) TestResume(action string) error {
+func (a *App) TestResume(action string, vars map[string]string) error {
 	testsPauseMu.Lock()
 	defer testsPauseMu.Unlock()
 	if testsPause == nil {
 		return errors.New("no run is paused")
 	}
 	select {
-	case testsPause <- action:
+	case testsPause <- testResume{action, vars}:
 	default:
 	}
 	return nil
 }
+
+func (a *App) mustProcs() []testrec.ProcInfo { l, _ := a.TestProcs(); return l }
