@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Live log you can size and expand**: drag the bar under the live log to make it taller or shorter (remembered), or **Expand** it over the whole test page and **Minimise** it back; the Running bar with Stop stays visible. The Run panel's buttons stay readable in the light theme and when the pointer is over them.
+
+- **No cleanup for what a test already removed**: when a recorded step undoes an earlier change itself (`delete vlan v2000` in the steps), its suggested cleanup and the cleanup of what depended on it (`configure vlan v2000 delete ports 1:2`, `unconfigure vlan v2000 ipaddress`) are taken out, so the cleanup no longer fails on a VLAN that is gone.
+
 - **SNMP dashboards and alarms**: SNMP Browser → **Dashboards** keeps values from several devices on one page, polled together, each as a card with its value, a sparkline and its limits; counters can show the rate per second. A value can raise an alarm (above, below, or not a given value such as `up`), shown on the card and as a notification when it starts and clears; **Alarms in the background** keeps polling while the view is closed.
 
 - **SNMP files and a simulator**: **File ▾** exports a walk or the table view to Excel, saves a walk file in the `snmpwalk -On` format, opens one (from Termwright or net-snmp) to browse it offline, and **Simulate This Device** answers SNMP v1/v2c with those values on a UDP port, like the device they came from - for demos, tests and tools without the device.

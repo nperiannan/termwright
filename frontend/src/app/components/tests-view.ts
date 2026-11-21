@@ -134,7 +134,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
           }
         }
       </aside>
-      <section class="main">
+      <section class="main" [class.conmax]="conMax() && showLive() && liveLog().length > 0">
         @if (busy()) {
           <div class="live" role="status">
             <span class="spin"></span><b>Running</b>
@@ -145,10 +145,13 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
           </div>
         }
         @if (showLive() && liveLog().length) {
-          <div class="console">
+          <div class="console" [class.max]="conMax()">
             <div class="ch"><b>{{ busy() ? 'Live log' : 'Log of the last run' }}</b><span class="mut">what is sent to the devices and what comes back</span><span class="sp"></span>
-              <button type="button" class="lnk" (click)="copyLive()">Copy</button>@if (!busy()) { <button type="button" class="lnk" (click)="showLive.set(false)">Close</button> }</div>
-            <pre #con>{{ liveLog().join('\n') }}</pre>
+              <button type="button" class="lnk" (click)="copyLive()">Copy</button>
+              <button type="button" class="lnk" (click)="conMax.set(!conMax())" [title]="conMax() ? 'Back to the log above the test' : 'Show the log over the whole page'"><app-icon [name]="conMax() ? 'minimize' : 'maximize'" [size]="12" /> {{ conMax() ? 'Minimise' : 'Expand' }}</button>
+              @if (!busy()) { <button type="button" class="lnk" (click)="showLive.set(false); conMax.set(false)">Close</button> }</div>
+            <pre #con [style.height.px]="conMax() ? null : conH()">{{ liveLog().join('\n') }}</pre>
+            @if (!conMax()) { <div class="cgrip" (mousedown)="dragCon($event)" (dblclick)="conH.set(240); keepCon()" title="Drag to change the height (double-click: default)" role="separator" aria-orientation="horizontal"></div> }
           </div>
         }
         @switch (section()) {
@@ -438,7 +441,8 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .tv { display: grid; grid-template-columns: 64px 360px minmax(0, 1fr); height: 100%; min-height: 0; position: relative; }
     button { font: inherit; } .sp { flex: 1; } .grow { flex: 1; } .grow2 { flex: 2; } .mut { color: var(--muted); font-size: 12px; } .ok { color: var(--ok, #3fbf75); } .bad { color: var(--danger, #ef6161); } .warn { color: var(--warn, #e0a030); }
     .row { display: flex; align-items: center; gap: 6px; } .r { text-align: right; } .fl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .pri { background: var(--accent); color: #fff; border-color: transparent; } .ghost { background: none; border-color: transparent; color: var(--muted); }
+    .pri { background: var(--accent) !important; color: #fff !important; border-color: transparent !important; } .pri:hover:not(:disabled) { filter: brightness(1.1); } .pri:disabled { opacity: .55; }
+    .drawer .row button:not(.pri) { background: var(--surface, var(--panel)) !important; color: var(--text) !important; border: 1px solid var(--border) !important; } .drawer .row button:not(.pri):hover { background: var(--hover) !important; } .ghost { background: none; border-color: transparent; color: var(--muted); }
     .lnk { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0 4px; }
     .rail { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 8px 6px; background: var(--chrome); border-right: 1px solid var(--border); }
     .rail button { display: flex !important; flex-direction: column; align-items: center; justify-content: center; gap: 4px; height: auto !important; min-height: 52px; line-height: 1.15; padding: 6px 2px !important; font-size: 10.5px !important; border: 0; border-radius: 9px; background: none; color: var(--muted); font-size: 10.5px; cursor: pointer; }
@@ -463,7 +467,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .empty-s { color: var(--muted); font-size: 12px; padding: 18px 8px; text-align: center; line-height: 1.6; }
     .selbar { display: flex; align-items: center; gap: 8px; margin: 8px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: color-mix(in srgb, var(--text) 4%, transparent); }
     .selbar.col { flex-direction: column; align-items: stretch; } .selbar .full { justify-content: center; width: 100%; } .selbar b { font-weight: 600; font-size: 12.5px; }
-    .main { background: var(--bg); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .main { position: relative; background: var(--bg); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
     .head { padding: 12px 20px 0; border-bottom: 1px solid var(--border); } .crumb { color: var(--muted); font-size: 12px; }
     .title { display: flex; align-items: center; gap: 8px; margin: 3px 0 10px; } .title h1 { font-size: 17px; margin: 0; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 120px; } .title button { white-space: nowrap; flex: none; } .title .mut.fl { flex: 1 1 0; }
     .pill { font-size: 11.5px; padding: 2px 9px; border-radius: 10px; white-space: nowrap; background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--muted); }
@@ -496,9 +500,14 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .da { color: var(--ok, #3fbf75); } .dr { color: var(--danger, #ef6161); } .cmp { display: block; margin-bottom: 8px; }
     .inner { padding-left: 46px !important; } .body.cmdi, textarea.body { height: auto !important; min-height: 44px; resize: vertical; }
     .srow:focus-visible, .case:focus-visible, .rrow:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-    .console { display: flex; flex-direction: column; border-bottom: 1px solid var(--border); background: #111317; }
+    .console { position: relative; display: flex; flex-direction: column; border-bottom: 1px solid var(--border); background: #111317; flex: none; }
+    .main.conmax > :not(.live):not(.console) { display: none !important; } .console.max { flex: 1; min-height: 0; border: 0; } .console.max pre { flex: 1; height: auto; }
+    .console .ch .lnk { display: inline-flex; align-items: center; gap: 4px; }
+    .cgrip { position: absolute; left: 0; right: 0; bottom: -5px; height: 10px; cursor: row-resize; z-index: 9; display: flex; justify-content: center; align-items: center; }
+    .cgrip::after { content: ''; width: 44px; height: 4px; border-radius: 3px; background: color-mix(in srgb, var(--text) 30%, transparent); }
+    .cgrip:hover::after, .cgrip:active::after { background: var(--accent); width: 100%; height: 3px; border-radius: 0; }
     .console .ch { display: flex; align-items: center; gap: 10px; padding: 5px 20px; font-size: 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
-    .console pre { margin: 0; height: 240px; min-height: 80px; resize: vertical; overflow: auto; padding: 8px 20px; font: 12px/1.45 var(--mono, monospace); color: #cfd3da; white-space: pre-wrap; }
+    .console pre { margin: 0; min-height: 60px; overflow: auto; padding: 8px 20px; font: 12px/1.45 var(--mono, monospace); color: #cfd3da; white-space: pre-wrap; }
     .logdlg { width: min(1000px, 94vw); height: min(80vh, 900px); } .logpre { flex: 1; margin: 0; overflow: auto; padding: 10px 12px; border-radius: 8px; background: #111317; color: #cfd3da; font: 12px/1.5 var(--mono, monospace); white-space: pre-wrap; }
     .live { display: flex; align-items: center; gap: 10px; padding: 7px 20px; background: color-mix(in srgb, var(--accent) 12%, var(--panel)); border-bottom: 1px solid var(--border); font-size: 12.5px; }
     .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); border-top-color: var(--accent); animation: sp 0.9s linear infinite; } @keyframes sp { to { transform: rotate(360deg); } }
@@ -563,6 +572,16 @@ export class TestsView implements OnInit, OnDestroy {
   /** The test list's width (drag its right edge; kept for next time). */
   readonly sideW = signal((() => { try { return Number(localStorage.getItem('tw.tests.side')) || 360; } catch { return 360; } })());
   keepSide() { try { localStorage.setItem('tw.tests.side', String(this.sideW())); } catch { /* not kept */ } }
+  readonly conMax = signal(false);
+  readonly conH = signal((() => { try { return Number(localStorage.getItem('tw.tests.conh')) || 240; } catch { return 240; } })());
+  keepCon() { try { localStorage.setItem('tw.tests.conh', String(this.conH())); } catch { /* not kept */ } }
+  dragCon(ev: MouseEvent) {
+    ev.preventDefault();
+    const y0 = ev.clientY, h0 = this.conH();
+    const move = (e: MouseEvent) => this.conH.set(Math.max(80, Math.min(window.innerHeight - 260, h0 + e.clientY - y0)));
+    const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); this.keepCon(); };
+    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+  }
   dragSide(ev: MouseEvent) {
     ev.preventDefault();
     const x0 = ev.clientX, w0 = this.sideW();

@@ -107,6 +107,8 @@ const PATHS: Record<string, string> = {
   appliance: 'M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5',
   hosts: 'M4 4h16v5H4zM4 10.5h16v5H4zM4 17h16v3H4zM7 6.5h.01M7 13h.01M10.5 6.5h6M10.5 13h6',
   bulk: 'M4 6h10M4 12h10M4 18h10M16 8l2 2 3-3M16 16l2 2 3-3',
+  maximize: 'M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7',
+  minimize: 'M4 14h6v6M20 10h-6V4M10 14l-7 7M14 10l7-7',
   compare: 'M4 4h7v16H4zM13 4h7v16h-7zM6.5 9h2M15.5 9h2M6.5 13h2M15.5 13h2',
   play: 'M7 5v14l11-7z',
   mic: 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7',

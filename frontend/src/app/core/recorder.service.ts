@@ -11,7 +11,7 @@ import { configValues, predictApiChecks, predictChecks, predictSnmpChecks } from
 export type RecPhase = 'setup' | 'steps' | 'cleanup';
 /** A recorded step; for a terminal step the marker on its command line finds its output later. undo: the
  *  suggested cleanup step (from the device type's undo rules, a POST's DELETE or an SNMP set's old value). */
-export interface RecStep { autoWhy?: string; auto?: number; table?: TestTable; step: TestStep; phase: RecPhase; undo?: TestStep; undone?: boolean; tab?: string; term?: Terminal; marker?: IMarker; output?: string; status?: number; ms?: number; }
+export interface RecStep { fromUndo?: boolean; autoWhy?: string; auto?: number; table?: TestTable; step: TestStep; phase: RecPhase; undo?: TestStep; undone?: boolean; tab?: string; term?: Terminal; marker?: IMarker; output?: string; status?: number; ms?: number; }
 
 export type ExpectKind = 'contains' | 'field' | 'matches' | 'notContains' | 'save';
 
@@ -117,7 +117,7 @@ export class Recorder {
     this.steps.update(l => {
       const c = l.map((x, k) => k === i ? { ...x, undone: true } : x);
       const firstClean = c.findIndex(x => x.phase === 'cleanup');
-      const item: RecStep = { step: structuredClone(s.undo!), phase: 'cleanup' };
+      const item: RecStep = { step: structuredClone(s.undo!), phase: 'cleanup', fromUndo: true };
       if (firstClean < 0) c.push(item); else c.splice(firstClean, 0, item); // newest change undone first
       return c;
     });
@@ -131,9 +131,25 @@ export class Recorder {
 
   /** New steps go to the end of their phase: setup first, then the steps, then the cleanup. */
   private push(s: RecStep) {
+    if (s.phase === 'steps' && s.step.run) this.alreadyUndone(s.step.run.session, s.step.run.command);
     const order: RecPhase[] = ['setup', 'steps', 'cleanup'];
     this.steps.update(l => { const at = l.findIndex(x => order.indexOf(x.phase) > order.indexOf(s.phase)); const c = [...l]; if (at < 0) c.push(s); else c.splice(at, 0, s); return c; });
     if (s.undo && this.autoCleanup() && s.phase === 'steps') this.addUndo(this.steps().indexOf(s));
+  }
+
+  /** A recorded command that undoes an earlier change itself ("delete vlan v2000" in the steps): the suggested
+   *  cleanup for it - and for what depended on the removed object (its ports, its address) - would fail on a
+   *  device that no longer has it, so it is taken out of the cleanup. */
+  private alreadyUndone(session: string, command: string) {
+    const norm = (c: string) => c.trim().replace(/\s+/g, ' ').toLowerCase();
+    const cmd = norm(command);
+    const l = this.steps();
+    const hit = l.findIndex(x => x.phase === 'cleanup' && x.fromUndo && x.step.run?.session === session && norm(x.step.run.command) === cmd);
+    if (hit < 0) return;
+    const removes = /^(delete|no|undo|remove|unconfigure|destroy)\b/.test(cmd);
+    const names = removes ? configValues(command).map(v => v.value.toLowerCase()).filter(v => /[a-z]/.test(v)) : [];
+    const word = (c: string, w: string) => new RegExp('(^|\\s)' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\s|$)').test(c);
+    this.steps.update(m => m.filter((x, k) => !(k === hit || (x.phase === 'cleanup' && x.fromUndo && x.step.run?.session === session && names.some(n => word(norm(x.step.run!.command), n))))));
   }
 
   /** The output of a tab's last step: the lines after its command up to the prompt line. */
