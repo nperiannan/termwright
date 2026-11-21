@@ -67,6 +67,11 @@ func Run(bind func(*App) any) {
 		attachConsole()
 		os.Exit(labCLIMain(os.Args[2:]))
 	}
+	// "Termwright tests …": run tests, or serve the local API for generated tests, without the window
+	if len(os.Args) > 1 && os.Args[1] == "tests" {
+		attachConsole()
+		os.Exit(testsCLIMain(os.Args[2:]))
+	}
 	discover.RaiseFileLimit()
 	app := NewApp()
 	width, height, start := 1280, 820, options.Normal

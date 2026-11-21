@@ -43,6 +43,7 @@ var Version = "dev"
 // from TypeScript as window.go.main.App.<Method>.
 type App struct {
 	ctx      context.Context
+	testsDir string // "termwright tests --folder": the tests folder for this run only
 	mu       sync.Mutex
 	cfg      *config.Manager
 	store    *session.Store

@@ -29,6 +29,9 @@ func (a *App) testsFolder() (testrec.Folder, error) {
 		return testrec.Folder{}, err
 	}
 	d := a.cfg.Get().TestsDir
+	if a.testsDir != "" {
+		d = a.testsDir // termwright tests --folder
+	}
 	if d == "" {
 		d = filepath.Join(a.cfg.DataDir(), "tests")
 	}
