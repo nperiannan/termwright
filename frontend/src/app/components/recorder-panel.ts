@@ -30,12 +30,13 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
       @for (s of rec.steps(); track $index; let i = $index) {
         @if (i === 0 || rec.steps()[i - 1].phase !== s.phase) { <div class="ph">{{ phaseName(s.phase) }}</div> }
         <div class="st" [class.cl]="s.phase === 'cleanup'" [class.su]="s.phase === 'setup'">
-          <div class="top"><b>{{ i + 1 }}</b>
-            <span class="tg" [title]="target(s.step)">{{ short(target(s.step)) }} ›</span><span class="cmd">{{ sent(s.step) }}</span>
+          <div class="top"><b>{{ numIn(i) }}</b>
+            <span class="tg" [title]="target(s.step)">{{ short(target(s.step)) }}</span>
             <span class="sp"></span>
             <button type="button" class="ic" (click)="rec.moveStep(i, -1)" [disabled]="i === 0" title="Move up">↑</button>
             <button type="button" class="ic" (click)="rec.removeStep(i)" title="Remove the step">✕</button>
           </div>
+          <div class="cmd">{{ sent(s.step) }}</div>
           @for (e of s.step.expect ?? []; track $index; let j = $index) {
             <span class="chip">✓ {{ label(e) }}<button type="button" (click)="rec.removeCheck(i, j)" title="Remove the check">×</button></span>
           }
@@ -78,7 +79,7 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
     .nm { height: 30px; } .hint, .mut { color: var(--muted); font-size: 12px; line-height: 1.45; }
     .list { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
     .st { border: 1px solid var(--border); border-radius: 8px; padding: 7px 8px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
-    .top { width: 100%; } .top b { margin-right: 2px; } .tg { color: var(--muted); white-space: nowrap; flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; } .cmd { font-family: var(--mono, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .top { width: 100%; } .top .ic { flex: none; } .top b { margin-right: 2px; } .tg { color: var(--muted); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; } .cmd { font-family: var(--mono, monospace); white-space: pre-wrap; overflow-wrap: anywhere; width: 100%; }
     .ic { padding: 0 6px; height: 22px; } .chip { font-size: 11.5px; padding: 1px 4px 1px 8px; border-radius: 10px; background: color-mix(in srgb, var(--ok, #4ec07a) 15%, transparent); color: var(--ok, #4ec07a); display: inline-flex; gap: 4px; align-items: center; max-width: 100%; overflow: hidden; }
     .chip.var { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); } .chip button { border: 0; background: none; color: inherit; padding: 0 3px; cursor: pointer; }
     .lnk { border: 0; background: none; color: var(--accent); padding: 0; cursor: pointer; font-size: 12px; }
@@ -97,6 +98,8 @@ export class RecorderPanel {
     { k: 'setup', l: 'Setup', t: 'Record steps that run before the test' },
     { k: 'steps', l: 'Steps', t: 'Record the test itself' },
     { k: 'cleanup', l: 'Cleanup', t: 'Record steps that undo the test - they always run' }];
+  /** A step's number within its section (setup, steps, cleanup each start at 1). */
+  numIn(i: number) { const l = this.rec.steps(), p = l[i].phase; return l.slice(0, i + 1).filter(s => s.phase === p).length; }
   count(p: RecPhase) { return this.rec.steps().filter(s => s.phase === p).length; }
   phaseName(p: RecPhase) { return p === 'setup' ? 'Setup' : p === 'cleanup' ? 'Cleanup - always runs' : 'Steps'; }
   /** The AI assistant writes the cleanup: the recorded steps with their sessions' device types. */

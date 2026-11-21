@@ -1484,6 +1484,7 @@ Termwright can turn manual testing into repeatable tests, the way record-and-rep
   - **Save as Test Variable…** keeps the value for later steps as `{{name}}`.
 - Every get, walk or set you run in the **SNMP Browser** becomes an `snmp` step (run on several devices at once: one step per device that answered); a get's values are added as checks (`ifOperStatus.5` = `up`).
 - **Sessions as roles** (on by default) saves each session as a role - `Lab/core-sw1` becomes `{{core_sw1}}` with `Lab/core-sw1` as the test's default - so a testbed can point the same test at other devices.
+- The panel records into **Setup**, **Steps** or **Cleanup**. For every recorded change it suggests the undo - from the device type's **Undo rules** (Global Options → Device Types; `regular expression => undo` per line, built in for EXOS, VOSS, Cisco IOS, NX-OS, Huawei VRP, Eltex MES, Ruckus ICX), the DELETE of a POST (with the id from its answer) or the old value of an SNMP set; **+ Cleanup** adds one, **Undo All in Cleanup** all of them (the last change first), **✦ Cleanup with AI** asks the assistant. *Afterwards put back* ticks `restore: config` and `lab`.
 - **+ Check** on a step adds status, JSON path (`data.items[0].name`, `[-1]`, `length`), *takes at most (ms)*, contains, matches or field checks by hand.
 - ↑ and ✕ reorder or remove steps; ⏸ pauses recording. **Save Test…** writes the test into the tests folder (`cases/…yaml`).
 
@@ -1541,6 +1542,8 @@ steps:
 - `expect` checks: `contains`, `notContains`, `matches`, `status`, `maxMs`, and `field` (a regular expression whose first group is the value), `json` (a path) or `oid` (an SNMP value) with `equals`, `notEquals`, `greater`, `less` or `exists`.
 - `oid` finds a value by name (`ifOperStatus.5`, `IF-MIB::ifOperStatus.5`, `ifOperStatus` for the first one a walk got) or numeric OID; `equals` matches its readable value (`up`) or its raw value (`1`); `greater` and `less` use the raw number. An SNMP step's output is one `name = value` line per value, so `contains` and `field` work on it too.
 - `save` keeps a `field`, `json` or `oid` value as a variable for later steps. `{{name}}` works in every text. To check that a value **changed**, save it in one step and use `notEquals: "{{name}}"` in a later one.
+- `setup:` steps run first (a known state; when one fails the test's steps are skipped); `cleanup:` steps run last and **always** - also after a failed step or a stopped run - and each cleanup step runs even when an earlier one failed; a failed cleanup is reported as *the device may not be clean*. Both take any step (`run`, `http`, `snmp`) and checks.
+- `restore: [config]` saves each device's configuration before the test and puts it back after the cleanup (the device type's **Test save / restore** commands, `{file}` a name for the copy; built in for NX-OS); `restore: [lab]` takes a checkpoint of each emulated lab switch and goes back to it.
 - `params: [{vlan: "42"}, {vlan: "7"}]` runs the test once per entry, named *test [vlan=42]* in the results; the entry's values fill the variables (a testbed's and a run's own values still win).
 - After a failed step the rest are skipped, unless the step has `continueOnFail: true`. `timeout` is in seconds (default 60).
 - Put JSON paths with `[ ]` in quotes inside `{ … }`, as above.
