@@ -1502,6 +1502,86 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /ai/skills:
+        get:
+            operationId: listSkills
+            tags:
+                - AI
+            summary: The AI skills
+            description: 'The user''s AI skills: procedures saved as SKILL.md files (the open Agent Skills format) that the AI assistant loads when a request matches; on: offered to the AI.'
+            responses:
+                200:
+                    description: The skills (without their text).
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/AISkill'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+        post:
+            operationId: saveSkill
+            tags:
+                - AI
+            summary: Save a skill
+            description: 'Adds or replaces a skill from the text of its SKILL.md (front matter with name and description, then Markdown). replace: the skill''s name before, to rename it. A skill holding a password, key or community is refused.'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AISkillSaveIn'
+            responses:
+                200:
+                    description: The skill.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AISkill'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /ai/skills/{skill}:
+        get:
+            operationId: getSkill
+            tags:
+                - AI
+            summary: A skill
+            description: One skill with the whole text of its SKILL.md.
+            parameters:
+                - name: skill
+                  in: path
+                  required: true
+                  description: The skill's name.
+                  schema:
+                    type: string
+            responses:
+                200:
+                    description: The skill.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AISkill'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /http/environments:
         get:
             operationId: listEnvironments
@@ -2043,6 +2123,171 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /tools/tests:
+        post:
+            operationId: net_tests
+            tags:
+                - Network tools
+            summary: The tests tool
+            description: 'Termwright tests: YAML files in the tests folder (cases/), each a list of steps - a command on a saved session (run), an HTTP request (http) or an SNMP get / walk / set (snmp) - with checks on what came back (contains, matches, a field, JSON or SNMP value equals / greater / less, status, time). list lists the tests; show gives one as YAML; run runs tests (files, or none for all) and returns pass/fail per step, writing a JUnit XML file and an HTML report under reports/; save writes a test from YAML (and its Go test); generate writes the Go, Python and TCL tests again (go test ./cases/..., python lib/python/run_tests.py or tclsh lib/tcl/run_tests.tcl in the tests folder runs them through Termwright); step runs one step without its checks and returns its answer as JSON (used by the generated Go tests); new_testbed writes testbeds/<name>.yaml with a role per saved session of a session folder (core-sw1 → {{core_sw1}}); a test with params runs once per entry; schedules lists the scheduled runs, schedule adds or (with id) changes one (repeat daily|weekdays|weekly|hours, at HH:MM, day 0-6, hours, files, testbed, production=true to allow production sessions), unschedule removes one; save_state (kinds config|lab, sessions) and restore_state (token) save and put back the devices'' state for the generated tests; a test''s setup and cleanup sections run before and after its steps (cleanup always), and restore: [config, lab] saves and puts back the devices; results gives the last run''s report. Runs log in with the sessions'' saved logins in the background; a run touching production sessions is asked first. Through the API it runs without asking.'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    description: what to do
+                                    enum:
+                                        - list
+                                        - show
+                                        - run
+                                        - save
+                                        - generate
+                                        - step
+                                        - new_testbed
+                                        - schedules
+                                        - schedule
+                                        - unschedule
+                                        - save_state
+                                        - restore_state
+                                        - results
+                                        - history
+                                        - send_qtest
+                                        - defect
+                                        - approvals
+                                        - request_approval
+                                        - approve
+                                        - reject
+                                    type: string
+                                at:
+                                    description: 'schedule: time of day HH:MM (daily, weekdays, weekly)'
+                                    type: string
+                                cleanup:
+                                    description: 'run: steps (default: each test''s cleanup steps), off (no cleanup - tests build on each other) or auto (the cleanup steps, else the undo of the configuration commands that ran)'
+                                    enum:
+                                        - steps
+                                        - "off"
+                                        - auto
+                                    type: string
+                                day:
+                                    description: 'schedule: weekday for weekly, 0 Sunday … 6 Saturday'
+                                    type: integer
+                                dir:
+                                    description: 'send_qtest/defect: a run''s folder (reports/…); default the last run'
+                                    type: string
+                                file:
+                                    description: 'show/save/run: a test file relative to the tests folder, e.g. cases/vlan/add-vlan.yaml (cases/ and .yaml may be left out)'
+                                    type: string
+                                files:
+                                    description: 'run: the tests to run - files, folders of cases/ or suites/… files (none: all)'
+                                    items:
+                                        type: string
+                                    type: array
+                                folder:
+                                    description: 'new_testbed: a session folder, e.g. Lab'
+                                    type: string
+                                force_lock:
+                                    description: 'run: take over the testbed when someone else''s run has it locked'
+                                    type: boolean
+                                hours:
+                                    description: 'schedule: every N hours (repeat hours)'
+                                    type: integer
+                                id:
+                                    description: 'schedule/unschedule: the schedule''s id (schedules lists them); approve/reject: the request''s id'
+                                    type: string
+                                kinds:
+                                    description: 'save_state: what to save'
+                                    items:
+                                        enum:
+                                            - config
+                                            - lab
+                                        type: string
+                                    type: array
+                                name:
+                                    description: 'new_testbed: the testbed''s name'
+                                    type: string
+                                note:
+                                    description: 'approve/reject: a note'
+                                    type: string
+                                on_cleanup_fail:
+                                    description: 'run: when a test''s cleanup fails - stop (skip the rest), restore (the configuration saved before the run) or factory (factory default)'
+                                    enum:
+                                        - stop
+                                        - restore
+                                        - factory
+                                    type: string
+                                production:
+                                    description: 'schedule: allow production sessions (asked)'
+                                    enum:
+                                        - "true"
+                                        - "false"
+                                    type: string
+                                reason:
+                                    description: 'request_approval: why the run should go ahead'
+                                    type: string
+                                repeat:
+                                    description: 'schedule: how often'
+                                    enum:
+                                        - daily
+                                        - weekdays
+                                        - weekly
+                                        - hours
+                                    type: string
+                                sessions:
+                                    description: 'save_state: the saved sessions'
+                                    items:
+                                        type: string
+                                    type: array
+                                step:
+                                    description: 'step: one step {run: {session, command, prompt}}, {http: {session, method, url, headers, body}} or {snmp: {session, op, oids, values}}, timeout'
+                                    type: object
+                                tags:
+                                    description: 'run: only tests with one of these tags; !tag leaves its tests out'
+                                    items:
+                                        type: string
+                                    type: array
+                                testbed:
+                                    description: 'run: a file in testbeds/ whose values are used as {{variables}}'
+                                    type: string
+                                testbeds:
+                                    description: 'run: several testbeds - the tests run on each at the same time'
+                                    items:
+                                        type: string
+                                    type: array
+                                token:
+                                    description: 'restore_state: the token save_state returned'
+                                    type: string
+                                vars:
+                                    additionalProperties:
+                                        type: string
+                                    description: 'run: values for {{variables}} that win over the tests'' own'
+                                    type: object
+                                yaml:
+                                    description: 'save: the test as YAML'
+                                    type: string
+                            required:
+                                - action
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /tools/device:
         post:
             operationId: net_device
@@ -2119,12 +2364,24 @@ paths:
                                         - mib_info
                                         - traps
                                         - send_trap
+                                        - dashboards
+                                        - poll_dashboard
+                                        - simulate
+                                        - stop_simulator
+                                        - simulator
+                                        - load_walk
                                     type: string
                                 address:
                                     description: 'instead of session: host or host:port'
                                     type: string
                                 community:
                                     description: with address, v1/v2c (default public)
+                                    type: string
+                                dashboard:
+                                    description: 'poll_dashboard: the saved dashboard''s name or id'
+                                    type: string
+                                file:
+                                    description: 'simulate / load_walk: a walk file (snmpwalk -On format)'
                                     type: string
                                 max:
                                     description: 'walk: at most this many values (default 2000 here)'
@@ -2134,6 +2391,9 @@ paths:
                                     items:
                                         type: string
                                     type: array
+                                port:
+                                    description: 'simulate: UDP port (default 1161)'
+                                    type: integer
                                 query:
                                     description: 'mib_search: a name, module or OID; mib_info: one object'
                                     type: string
@@ -2209,6 +2469,11 @@ paths:
                                         - history
                                         - environments
                                         - variables
+                                        - mock
+                                        - stop_mock
+                                        - mocks
+                                        - monitors
+                                        - run_monitor
                                     type: string
                                 body:
                                     description: 'send: a JSON value (sent as JSON) or text'
@@ -2345,6 +2610,48 @@ paths:
                                 udp:
                                     description: 'start: UDP port (default the saved one, 514)'
                                     type: integer
+                            required:
+                                - action
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /tools/keep_awake:
+        post:
+            operationId: net_keep_awake
+            tags:
+                - Network tools
+            summary: The keep_awake tool
+            description: Whether Termwright keeps the computer from going to sleep on its own while it is open (for long test runs, captures and labs). status says whether it is kept awake; on / off changes the setting (saved). Through the API it runs without asking.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    description: what to do
+                                    enum:
+                                        - status
+                                        - "on"
+                                        - "off"
+                                    type: string
                             required:
                                 - action
             responses:
@@ -4388,6 +4695,54 @@ components:
                 result:
                     type: string
                     description: What the tool did or found, as text.
+        AISkill:
+            type: object
+            description: 'An AI skill: a procedure saved as a SKILL.md that the AI assistant loads when a request matches.'
+            properties:
+                name:
+                    type: string
+                description:
+                    type: string
+                deviceTypes:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                text:
+                    type: string
+                files:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                path:
+                    type: string
+                modified:
+                    type: string
+                    format: date-time
+                on:
+                    description: 'On: offered to the AI (Settings → AI Assistant → Instructions & Skills).'
+                    type: boolean
+            required:
+                - name
+                - description
+                - path
+                - modified
+                - "on"
+        AISkillSaveIn:
+            type: object
+            description: 'A skill to save: the whole SKILL.md, and the name before to rename it.'
+            properties:
+                text:
+                    description: 'Text: the whole SKILL.md (front matter with name and description, then Markdown).'
+                    type: string
+                replace:
+                    description: 'Replace: the skill''s name before, to rename it ("" for a new skill).'
+                    type: string
+            required:
+                - text
         CPUStats:
             type: object
             properties:
@@ -5800,6 +6155,24 @@ components:
                 - name
                 - level
                 - text
+        Example:
+            type: object
+            properties:
+                name:
+                    type: string
+                status:
+                    type: integer
+                headers:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HTTPKeyValue'
+                body:
+                    type: string
+            required:
+                - name
+                - status
         FieldChange:
             type: object
             description: 'A field of a stream''s frames that changes from frame to frame: its value plus 0, step, 2·step… (count values, then again), or one of them at random.'
@@ -6179,6 +6552,16 @@ components:
                     type: string
                 description:
                     description: 'Description: what it does.'
+                    type: string
+                examples:
+                    description: 'Examples: saved answers, shown as documentation and served by the collection''s mock server.'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/Example'
+                schema:
+                    description: 'Schema: a JSON Schema the answer''s body must fit (checked after each send and in runs).'
                     type: string
             required:
                 - method
@@ -7652,6 +8035,9 @@ components:
                     type: boolean
                 suggest:
                     description: 'Suggest: the MIB module that most likely describes it (load it to see names and meanings).'
+                    type: string
+                raw:
+                    description: 'Raw: the bytes in hex, for an OctetString that is not text (to save the walk exactly).'
                     type: string
             required:
                 - oid

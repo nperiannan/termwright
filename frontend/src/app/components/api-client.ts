@@ -1,7 +1,7 @@
 import { Component, OnDestroy, OnInit, computed, effect, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend, errText } from '../core/backend';
-import { HCollection, HEnv, HHistoryItem, HHostCookies, HKV, HRequest, HResponse, HRunResult, HRunStep, HSendRequest, HSettings, HVar, Session, SessionNode } from '../core/models';
+import { APIMonitorState, HMockInfo, HCollection, HEnv, HHistoryItem, HHostCookies, HKV, HRequest, HResponse, HRunResult, HRunStep, HSendRequest, HSettings, HVar, Session, SessionNode } from '../core/models';
 import { TabView } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
@@ -10,6 +10,7 @@ import { Combo, ComboOption } from './combo';
 import { HTTP_HEADERS, headerValues } from '../core/http-headers';
 import { CodeArea } from './code-area';
 import { VarInput } from './var-input';
+import { Recorder } from '../core/recorder.service';
 import { ApiAuth, AUTH_TYPES } from './api-auth';
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
@@ -81,6 +82,23 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
           } @empty { <div class="mut pad">No collections yet. Import a Postman collection or an OpenAPI document, or send a request and Save it.</div> }
         </div>
       </div>
+      @if (monitors().length || mocks().length) {
+        <div class="card mons">
+          <div class="ch"><b>Mocks &amp; Monitors</b><span class="sp"></span><a class="lk" (click)="loadExtras()">Refresh</a></div>
+          <div class="tl">
+            @for (m of mocks(); track m.collection) {
+              <div class="rn" [title]="'Answers with the saved examples of ' + m.name"><span class="m MOCK">MOCK</span><span class="nm">{{ m.name }}<span class="mut"> :{{ m.port }} · {{ m.hits }} answered</span></span><a class="more" (click)="mockMenu($event, m); $event.stopPropagation()">⋯</a></div>
+            }
+            @for (m of monitors(); track m.id) {
+              <div class="rn" (contextmenu)="monMenu($event, m)" [title]="m.error || (m.lastRun ? 'Last run ' + m.lastRun.slice(11, 16) + ': ' + m.passed + ' passed, ' + m.failed + ' failed' : 'Not run yet')">
+                <span class="mdot" [class.ok]="m.lastRun && !m.failed && !m.error" [class.bad]="m.failed || m.error" [class.off]="!m.enabled"></span>
+                <span class="nm">{{ m.name }} <span class="mut">every {{ m.every }} min</span></span>
+                <span class="hist">@for (h of (m.history ?? []).slice(-12); track $index) { <i [class.bad]="!h"></i> }</span>
+                <a class="more" (click)="monMenu($event, m); $event.stopPropagation()">⋯</a></div>
+            }
+          </div>
+        </div>
+      }
       <div class="card hist">
         <div class="ch"><b>History</b><span class="sp"></span>@if (history().length) { <a class="lk" (click)="clearHistory()">Clear</a> }</div>
         <div class="tl">
@@ -147,7 +165,13 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
             @switch (reqTab()) {
               @case ('docs') {
                 <div class="docs"><div class="sh"><b>Documentation</b><span class="mut">what this request does, its parameters, examples (kept with the request; exported to Postman)</span></div>
-                  <app-code-area class="ce" [value]="draft().req.description ?? ''" (valueChange)="setReq({ description: $event })" placeholder="Describe the request…" [minHeight]="140" /></div>
+                  <app-code-area class="ce" [value]="draft().req.description ?? ''" (valueChange)="setReq({ description: $event })" placeholder="Describe the request…" [minHeight]="140" />
+                  <div class="sh"><b>Examples</b><span class="mut">saved answers - documentation, and what the collection's mock server answers (Response ⋯ → Save as Example)</span></div>
+                  @for (e of draft().req.examples ?? []; track $index) {
+                    <div class="exr"><span class="st" [class.bad]="e.status >= 400">{{ e.status }}</span><b>{{ e.name }}</b><span class="mut ell">{{ (e.body ?? '').slice(0, 90) }}</span><span class="sp"></span><a class="lk" (click)="delExample($index)">Remove</a></div>
+                  } @empty { <div class="mut">No examples yet.</div> }
+                  <div class="sh"><b>Response schema</b><span class="mut">a JSON Schema the answer's body must fit - checked after every send and in runs (Tests tab)</span></div>
+                  <app-code-area class="ce" [value]="draft().req.schema ?? ''" (valueChange)="setReq({ schema: $event })" placeholder='{"type": "object", "required": ["id"], "properties": {"id": {"type": "integer"}}}' [minHeight]="90" /></div>
               }
               @case ('params') {
                 <div class="sh"><b>Query Params</b><span class="sp"></span><a class="lk" (click)="toggleBulk('params')">{{ bulk() === 'params' ? 'Key-Value Edit' : 'Bulk Edit' }}</a></div>
@@ -590,6 +614,9 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
     .dlg label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; } .dlg label.chk, .dlg .row label.mut { flex-direction: row; align-items: center; }
     .dlg .row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; } .dlg .row > input { flex: 1; }
     .btns { display: flex; gap: 8px; }
+    .mons .rn { display: flex; align-items: center; gap: 6px; } .mons .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .mons .m.MOCK { color: var(--accent); } .mdot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; } .mdot.ok { background: var(--ok); } .mdot.bad { background: var(--danger); } .mdot.off { opacity: .4; }
+    .mons .hist { display: flex; gap: 2px; } .mons .hist i { width: 4px; height: 12px; border-radius: 1px; background: var(--ok); } .mons .hist i.bad { background: var(--danger); }
+    .exr { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 4px; min-width: 0; } .exr .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; } .exr .st { font-weight: 600; color: var(--ok); } .exr .st.bad { color: var(--danger); }
     .rtabs { display: flex; align-items: stretch; gap: 2px; border-bottom: 1px solid var(--border); min-height: 32px; overflow-x: auto; }
     .rt { display: flex; align-items: center; gap: 6px; padding: 0 8px 0 10px; max-width: 220px; cursor: pointer; border-bottom: 2px solid transparent; color: var(--muted); font-size: 12.5px; white-space: nowrap; }
     .rt.on { color: var(--text); border-bottom-color: var(--accent); background: var(--panel); } .rt .nm { overflow: hidden; text-overflow: ellipsis; }
@@ -661,6 +688,7 @@ export class ApiClient implements OnInit, OnDestroy {
   readonly visible = input(true);
   private readonly backend = inject(Backend);
   readonly ui = inject(Ui);
+  private readonly rec = inject(Recorder);
 
   readonly methods = METHODS; readonly modes = MODES; readonly langs = LANGS; readonly snippets = SNIPPETS;
   readonly reqTabs = [{ k: 'docs', l: 'Docs' }, { k: 'params', l: 'Params' }, { k: 'auth', l: 'Authorization' }, { k: 'headers', l: 'Headers' }, { k: 'body', l: 'Body' }, { k: 'scripts', l: 'Scripts' }, { k: 'settings', l: 'Settings' }, { k: 'code', l: 'Code' }];
@@ -778,12 +806,14 @@ export class ApiClient implements OnInit, OnDestroy {
   readonly failed = computed(() => (this.res()?.tests ?? []).filter(t => !t.pass).length);
   readonly jsonHtml = computed(() => { const r = this.res(); return r ? jsonHtml(r.body) : ''; });
   private offRun: (() => void) | null = null;
+  private offMon: (() => void) | null = null;
 
   constructor() {
     effect(() => { if (this.ui.apiImportAsked() && this.visible()) { this.importOpen.set(true); this.ui.apiImportAsked.set(0); } });
   }
 
   async ngOnInit() {
+    void this.loadExtras();
     if (!this.ui.tree()) this.ui.tree.set(await this.backend.getSessionTree().catch(() => null));
     const p = this.tab().apiSession || '';
     if (p) await this.choose(p);
@@ -792,9 +822,10 @@ export class ApiClient implements OnInit, OnDestroy {
     await this.loadEnvs();
     this.history.set(await this.backend.httpHistory().catch(() => []));
     void this.refreshVars();
+    this.offMon = this.backend.on('api:monitor', () => void this.loadExtras());
     this.offRun = this.backend.on('http:run', (st: HRunStep) => { if (this.running()) this.runSteps.update(l => [...l, st]); });
   }
-  ngOnDestroy() { this.offRun?.(); }
+  ngOnDestroy() { this.offRun?.(); this.offMon?.(); }
 
   async choose(p: string) {
     this.path.set(p);
@@ -1036,6 +1067,7 @@ export class ApiClient implements OnInit, OnDestroy {
   resMenu(ev: MouseEvent) {
     const r = this.res(); if (!r) return;
     this.ui.showMenu(ev, [
+      { label: 'Save as Example…', icon: 'save', disabled: !!r.base64, action: () => void this.saveExample(r) },
       { label: 'Save Response to File…', icon: 'save', action: () => void this.saveRes(r) },
       { label: 'Copy Body', icon: 'copy', disabled: !!r.base64, action: () => this.copy(r.body) },
       { label: 'Copy as cURL', icon: 'copy', action: () => void this.backend.httpCode(this.sendReq(), 'curl').then(c => this.copy(c)).catch(() => {}) },
@@ -1146,6 +1178,11 @@ export class ApiClient implements OnInit, OnDestroy {
       }
       this.res.set(res);
       this.log(res);
+      if (this.rec.recording()) {
+        const q = r.request, h: Record<string, string> = {};
+        for (const x of q.headers ?? []) if (!x.off && x.key) h[x.key] = x.value;
+        this.rec.http({ session: r.session || undefined, environment: this.envName() || undefined, collection: r.collection, method: q.method, url: q.url, headers: Object.keys(h).length ? h : undefined, body: q.body?.raw || undefined }, res.status, res.ms, res.body);
+      }
       Object.assign(this.vars, res.vars ?? {});
       if (res.envSet || res.globalSet || res.vars) { void this.loadEnvs(); void this.refreshVars(); }
       if (download && res.status) void this.saveRes(res);
@@ -1224,10 +1261,56 @@ export class ApiClient implements OnInit, OnDestroy {
     }
   }
 
+  readonly mocks = signal<HMockInfo[]>([]);
+  readonly monitors = signal<APIMonitorState[]>([]);
+  async loadExtras() {
+    this.mocks.set((await this.backend.httpMocks().catch(() => [])) ?? []);
+    this.monitors.set((await this.backend.apiMonitors().catch(() => [])) ?? []);
+  }
+  async saveExample(r: HResponse) {
+    const name = await this.ui.input(tr('Save as Example'), tr('A name for this answer (the mock server answers with the first example, or the one named in the x-mock-example header)'), r.status >= 400 ? 'Error ' + r.status : 'OK');
+    if (!name) return;
+    const headers = (r.headers ?? []).filter(h => /^content-type$/i.test(h.key)).map(h => ({ key: h.key, value: h.value }));
+    this.setReq({ examples: [...(this.draft().req.examples ?? []), { name, status: r.status, headers, body: r.body }] });
+    this.ui.toast(tr('Example added - Save the request to keep it'), 'success');
+  }
+  delExample(i: number) { this.setReq({ examples: (this.draft().req.examples ?? []).filter((_, j) => j !== i) }); }
+  async toggleMock(c: HCollection) {
+    try {
+      if (this.mocks().some(m => m.collection === c.id)) await this.backend.httpMockStop(c.id);
+      else { const m = await this.backend.httpMockStart(c.id, 0); this.copy('http://127.0.0.1:' + m.port); this.ui.toast(tr('Mock server on http://127.0.0.1:{0} - address copied', m.port), 'success'); }
+    } catch (e) { this.ui.toast(errText(e), 'error'); }
+    await this.loadExtras();
+  }
+  mockMenu(ev: MouseEvent, m: HMockInfo) {
+    this.ui.showMenu(ev, [
+      { label: 'Copy Address (http://127.0.0.1:' + m.port + ')', icon: 'copy', action: () => this.copy('http://127.0.0.1:' + m.port) },
+      { label: 'Stop the Mock Server', action: () => void this.stopMock(m.collection) },
+    ]);
+  }
+  async stopMock(id: string) { await this.backend.httpMockStop(id).catch(() => {}); await this.loadExtras(); }
+  async addMonitor(c: HCollection) {
+    const every = await this.ui.input(tr('Monitor {0}', c.name), tr('Run the collection every how many minutes while Termwright is open? You get a notification when it starts failing and when it passes again. Changing requests are refused on production sessions.'), '5');
+    if (!every) return;
+    try { await this.backend.apiSaveMonitor({ name: c.name, collection: c.id, session: this.path() || c.session, every: Math.max(1, parseInt(every, 10) || 5), enabled: true }); this.ui.toast(tr('Monitor added'), 'success'); } catch (e) { this.ui.toast(errText(e), 'error'); }
+    await this.loadExtras();
+  }
+  monMenu(ev: MouseEvent, m: APIMonitorState) {
+    ev.preventDefault();
+    this.ui.showMenu(ev, [
+      { label: 'Run Now', icon: 'play', action: () => void this.backend.apiRunMonitor(m.id).then(() => setTimeout(() => void this.loadExtras(), 3000)) },
+      { label: m.enabled ? 'Pause' : 'Resume', action: () => void this.backend.apiSaveMonitor({ ...m, enabled: !m.enabled }).then(() => this.loadExtras()) },
+      { label: 'Every…', action: async () => { const v = await this.ui.input(tr('Run Every'), tr('Minutes between runs'), String(m.every)); if (v) { await this.backend.apiSaveMonitor({ ...m, every: Math.max(1, parseInt(v, 10) || m.every) }); await this.loadExtras(); } } },
+      { separator: true },
+      { label: 'Delete Monitor', action: () => void this.backend.apiDeleteMonitor(m.id).then(() => this.loadExtras()) },
+    ]);
+  }
   collMenu(ev: MouseEvent, c: HCollection) {
     ev.preventDefault();
     this.ui.showMenu(ev, [
       { label: 'Run Collection...', icon: 'play', action: () => this.openRun(c) },
+      { label: this.mocks().some(m => m.collection === c.id) ? 'Stop the Mock Server' : 'Start a Mock Server', action: () => void this.toggleMock(c) },
+      { label: 'Monitor (Run Every Few Minutes)...', action: () => void this.addMonitor(c) },
       { label: 'Edit Collection...', icon: 'edit', action: () => this.editColl(c) },
       { label: 'Authorization...', icon: 'lock', action: () => this.editColl(c, 'auth') },
       { label: 'Variables...', icon: 'variables', action: () => this.editColl(c, 'vars') },

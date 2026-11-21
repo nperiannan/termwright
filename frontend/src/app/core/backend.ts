@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
-import type { TopoRequest, TopoResult, LayoutRequest, LayoutResult } from './models';
+import type { SNMPRow, HMockInfo, APIMonitor, APIMonitorState, SNMPDashboard, SNMPDashPoll, SNMPSimState, TestApproval, TopoPlan, TopoRequest, TopoResult, LayoutRequest, LayoutResult, TestCase, TestCaseInfo, TestRunReport, TestsTree, TestsGitInfo, TestSchedule, TestScheduleView, IntegrationsConfig, TestTable, TestHistory } from './models';
 import { EmuEngines, EmuHostNIC, EmuTrex,
   EmuServer, EmuServerView,
-  AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange, SNMPRequest, SNMPResult, SNMPMibNode, SNMPModule, SNMPSecretState, SNMPTrapState, SNMPTrapsView, HSendRequest, HResponse, HCollection, HCollectionInfo, HRunRequest, HRunResult, HHistoryItem, HRequest, HEnv, HVar, HHostCookies, SyslogSettings, SyslogState, SyslogMsg, SyslogRule, SyslogQuery, SyslogSendIn } from './models';
+  AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange, SNMPRequest, SNMPResult, SNMPMibNode, SNMPModule, SNMPSecretState, SNMPTrapState, SNMPTrapsView, HSendRequest, HResponse, HCollection, HCollectionInfo, HRunRequest, HRunResult, HHistoryItem, HRequest, AISkill, HEnv, HVar, HHostCookies, SyslogSettings, SyslogState, SyslogMsg, SyslogRule, SyslogQuery, SyslogSendIn } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -287,6 +287,77 @@ export class Backend {
   httpRun(r: HRunRequest) { return this.call<HRunResult>('HTTPRun', r); }
   httpHistory() { return this.call<HHistoryItem[]>('HTTPHistory'); }
   httpClearHistory() { return this.call<void>('HTTPClearHistory'); }
+  testsFolder() { return this.call<string>('TestsFolder'); }
+  testCases() { return this.call<TestCaseInfo[]>('TestCases'); }
+  testCase(file: string) { return this.call<TestCase>('TestCase', file); }
+  testSave(file: string, c: TestCase) { return this.call<string>('TestSave', file, c); }
+  testsTree() { return this.call<TestsTree>('TestsTree'); }
+  testsSignature() { return this.call<string>('TestsSignature'); }
+  testFile(rel: string) { return this.call<string>('TestFile', rel); }
+  testSaveYAML(rel: string, text: string) { return this.call<string>('TestSaveYAML', rel, text); }
+  testsOpenFolder() { return this.call<string>('TestsOpenFolder'); }
+  testsClone(repo: string) { return this.call<string>('TestsClone', repo); }
+  testsNewTestbed(name: string, folder: string) { return this.call<string>('TestsNewTestbed', name, folder); }
+  testsGitInit() { return this.call<string>('TestsGitInit'); }
+  testsGitPull() { return this.call<string>('TestsGitPull'); }
+  testsGitCommit(message: string) { return this.call<string>('TestsGitCommit', message); }
+  testsGitPush() { return this.call<string>('TestsGitPush'); }
+  testSchedules() { return this.call<TestScheduleView[]>('TestSchedules'); }
+  testSaveSchedule(s: TestSchedule) { return this.call<TestSchedule>('TestSaveSchedule', s); }
+  testRemoveSchedule(id: string) { return this.call<void>('TestRemoveSchedule', id); }
+  testRunScheduleNow(id: string) { return this.call<void>('TestRunScheduleNow', id); }
+  testsGit() { return this.call<TestsGitInfo>('TestsGit'); }
+  testsOpen(rel: string) { return this.call<void>('TestsOpen', rel); }
+  testsOpenInEditor(rel: string) { return this.call<void>('TestsOpenInEditor', rel); }
+  runTests(r: { files?: string[]; vars?: Record<string, string>; testbed?: string; confirmed?: boolean; onCleanupFail?: string; cleanup?: string; tags?: string[]; forceLock?: boolean }) { return this.call<TestRunReport>('RunTests', r); }
+  runTestsParallel(r: { files?: string[]; testbeds: string[]; confirmed?: boolean; onCleanupFail?: string; cleanup?: string; forceLock?: boolean }) { return this.call<TestRunReport[]>('RunTestsParallel', r); }
+  httpMockStart(collection: string, port = 0) { return this.call<HMockInfo>('HTTPMockStart', collection, port); }
+  httpMockStop(collection: string) { return this.call<void>('HTTPMockStop', collection); }
+  httpMocks() { return this.call<HMockInfo[]>('HTTPMocks'); }
+  apiMonitors() { return this.call<APIMonitorState[]>('APIMonitors'); }
+  apiSaveMonitor(m: Partial<APIMonitor>) { return this.call<APIMonitor>('APISaveMonitor', m); }
+  apiDeleteMonitor(id: string) { return this.call<void>('APIDeleteMonitor', id); }
+  apiRunMonitor(id: string) { return this.call<void>('APIRunMonitor', id); }
+  snmpExportXLSX(title: string, headers: string[], rows: string[][]) { return this.call<string>('SNMPExportXLSX', title, headers, rows); }
+  snmpSaveWalk(name: string, rows: SNMPRow[]) { return this.call<string>('SNMPSaveWalk', name, rows); }
+  snmpOpenWalk() { return this.call<{ file: string; rows: SNMPRow[] } | null>('SNMPOpenWalk'); }
+  snmpSimStart(i: { file?: string; rows?: SNMPRow[]; port?: number; community?: string; all?: boolean; writable?: boolean }) { return this.call<SNMPSimState>('SNMPSimStart', i); }
+  snmpSimStop() { return this.call<void>('SNMPSimStop'); }
+  snmpSim() { return this.call<SNMPSimState>('SNMPSim'); }
+  snmpDashboards() { return this.call<SNMPDashboard[]>('SNMPDashboards'); }
+  snmpSaveDashboard(d: SNMPDashboard) { return this.call<SNMPDashboard>('SNMPSaveDashboard', d); }
+  snmpDeleteDashboard(id: string) { return this.call<void>('SNMPDeleteDashboard', id); }
+  snmpPollDashboard(id: string) { return this.call<SNMPDashPoll>('SNMPPollDashboard', id); }
+  testApprovals() { return this.call<TestApproval[]>('TestApprovals'); }
+  testRequestApproval(files: string[], testbed: string, reason: string) { return this.call<TestApproval>('TestRequestApproval', files, testbed, reason); }
+  testDecide(id: string, approve: boolean, note: string) { return this.call<TestApproval>('TestDecide', id, approve, note); }
+  testReleaseLock(testbed: string) { return this.call<void>('TestReleaseLock', testbed); }
+  testParse(session: string, command: string, template: string, output: string) { return this.call<TestTable>('TestParse', session, command, template, output); }
+  testSaveFile(rel: string, text: string) { return this.call<void>('TestSaveFile', rel, text); }
+  testSaveSuite(rel: string, s: { name?: string; description?: string; tests?: string[]; tags?: string[] }) { return this.call<string>('TestSaveSuite', rel, s); }
+  testHistory(file: string, limit = 50) { return this.call<TestHistory[]>('TestHistory', file, limit); }
+  testSendQTest(dir: string, files: string[] = []) { return this.call<string>('TestSendQTest', dir, files); }
+  testCreateDefect(dir: string, file: string) { return this.call<string[]>('TestCreateDefect', dir, file); }
+  testStop() { return this.call<void>('TestStop'); }
+  testManualAnswer(id: string, result: string, note: string) { return this.call<void>('TestManualAnswer', id, result, note); }
+  testImportManual(device: string) { return this.call<string[]>('TestImportManual', device); }
+  testsFetchTemplates() { return this.call<string>('TestsFetchTemplates'); }
+  testRemove(file: string) { return this.call<string>('TestRemove', file); }
+  testRename(file: string, to: string, copy: boolean) { return this.call<string>('TestRename', file, to, copy); }
+  testGenerateGo(file: string) { return this.call<string>('TestGenerateGo', file); }
+  testLastRun() { return this.call<TestRunReport | null>('TestLastRun'); }
+  keepAwakeStatus() { return this.call<{ active: boolean; error?: string }>('KeepAwakeStatus'); }
+  aiImportInstructions() { return this.call<string>('AIImportInstructions'); }
+  aiExportInstructions(text: string) { return this.call<string>('AIExportInstructions', text); }
+  aiSkills() { return this.call<AISkill[]>('AISkills'); }
+  aiSkill(name: string) { return this.call<AISkill>('AISkill', name); }
+  aiSaveSkill(old: string, text: string) { return this.call<AISkill>('AISaveSkill', old, text); }
+  aiRemoveSkill(name: string) { return this.call<void>('AIRemoveSkill', name); }
+  aiImportSkill(replace: boolean) { return this.call<AISkill>('AIImportSkill', replace); }
+  aiExportSkill(name: string) { return this.call<string>('AIExportSkill', name); }
+  aiSkillsFolder() { return this.call<string>('AISkillsFolder'); }
+  aiAddExampleSkills() { return this.call<string[]>('AIAddExampleSkills'); }
+  aiSkillForChat(name: string) { return this.call<string>('AISkillForChat', name); }
   identifyDeviceType(path: string) { return this.call<{ type: string; current: string; command?: string; matched?: string; tried: string[] }>('IdentifyDeviceType', path); }
   httpParseCurl(text: string) { return this.call<HRequest>('HTTPParseCurl', text); }
   httpEnvironments() { return this.call<HEnv[]>('HTTPEnvironments'); }
@@ -452,13 +523,18 @@ export class Backend {
   mcpAddToDesktop() { return this.call<void>('MCPAddToDesktop'); }
   mcpAddToClaudeCode() { return this.call<string>('MCPAddToClaudeCode'); }
   aiState() { return this.call<AIStatus>('AIState'); }
+  integrationTokens() { return this.call<Record<string, boolean>>('IntegrationTokens'); }
+  integrationSetToken(kind: string, token: string) { return this.call<void>('IntegrationSetToken', kind, token); }
+  topoTestMap(template: string, output: string) { return this.call<Record<string, string>[] | null>('TopoTestMap', template, output); }
+  topoBuiltinMap(deviceType: string) { return this.call<TopoPlan | null>('TopoBuiltinMap', deviceType); }
+  integrationTest(kind: string, cfg?: IntegrationsConfig) { return this.call<string>('IntegrationTest', kind, cfg ?? null); }
   aiSetKey(provider: string, key: string) { return this.call<void>('AISetKey', provider, key); }
   aiModels(s: AISettings) { return this.call<string[]>('AIModels', s); }
   /** The sections of this version's guides that match (for the AI assistant). */
   aiHelp(query: string) { return this.call<string>('AIHelp', query); }
   /** Termwright's own state now: version, KVM hosts and their VMs, labs, teams, file servers, tabs. */
   aiStatus() { return this.call<string>('AIStatus'); }
-  aiChat(r: { messages: { role: string; text: string; images?: { name: string; mediaType: string; data: string }[] }[]; deviceType: string; protocol: string; agent: boolean; tabs: string[]; tools: string[]; folders: string[]; perm: string; plan?: string }) { return this.call<AIAnswer>('AIChat', r); }
+  aiChat(r: { messages: { role: string; text: string; images?: { name: string; mediaType: string; data: string }[] }[]; deviceType: string; protocol: string; agent: boolean; tabs: string[]; tools: string[]; folders: string[]; perm: string; plan?: string; session?: string }) { return this.call<AIAnswer>('AIChat', r); }
   aiAsk(r: { kind: string; text: string; deviceType: string; protocol: string; question?: string }) { return this.call<AIAnswer>('AIAsk', r); }
   syncNow() { return this.call<SyncStatus>('SyncNow'); }
   syncState() { return this.call<SyncStatus>('SyncState'); }

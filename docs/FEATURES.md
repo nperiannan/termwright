@@ -11,6 +11,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Updates**: Help → Check for Updates shows the installed version, the latest stable release with its changes and newer nightly builds; downloads and opens the installer.
 - **Update channels**: be told about stable releases, stable and nightly, or nothing; optional check at start-up.
 - **Release notes**: every release and nightly build lists its changes (CHANGELOG) and commits.
+- **Keeps the computer awake**: while Termwright is open the computer does not go to sleep on its own (macOS, Windows, Linux; the display can still turn off) - a Global Option, on by default; also from the AI assistant, MCP, the local API and Python (`keep_awake`).
 - **Free and open source**: Apache-2.0.
 
 ## Main window
@@ -83,6 +84,38 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **The Lab menu**: *Emulated Lab*, *Simulated Lab*, *Overview*, *Traffic Generator*, *Appliances* and *KVM Hosts*.
 - **Local API, command line and Python**: a REST API on this computer (OpenAPI), `termwright lab …` and a Python client drive the same lab tools - no approval asked, for your own automation.
 - **Simulated lab**: switches simulated on this computer (an SSH server each, no VM) from a device pack (.vm) loaded with consent: models with their port layout, command line with abbreviations, `?` help and Tab, VLANs, ports, IP interfaces, save / reset, ping and LLDP over drawn cables; New Lab wizard with leaf-spine, chain or ring cabling; Lab window with list, topology and cables; sessions in a Simulated Lab folder with live state.
+
+## Tests (record and replay)
+
+- **Test recorder**: Tests → Record a Test; commands typed in terminal tabs and requests sent in the API Client become steps; right-click selected output → *Expect this* (contains, field = value with the regular expression made from its label, matches, does not contain) or *Save as Test Variable*; **+ Check** for status, JSON path, time.
+- **Tests tab**: tests by folder with their last result, testbeds, reports; a test as steps, YAML (edit and save) or generated Go; run one or all with a testbed; results with the first failure; HTML report and JUnit XML per run.
+- **Test format**: YAML - `run` (session, command), `http` (session, method, url, headers, body) and `snmp` (session, get / walk / set) steps; checks `contains`, `notContains`, `matches`, `status`, `maxMs`, `field` / `json` / `oid` with `equals`, `notEquals`, `greater`, `less`, `exists`; `save` for `{{variables}}` (a value that changed: save, then `notEquals`); `params` to run a test once per set of values; `continueOnFail`, `timeout`.
+- **Setup, cleanup, restore**: `setup` and `cleanup` sections (cleanup always runs, its failure reported as a dirty device); undo suggestions while recording from device type undo rules (built in for the standard types), a POST's DELETE or an SNMP set's old value, or the AI assistant; `restore: [config]` (device type save/restore commands) and `restore: [lab]` (emulated lab checkpoints).
+- **SNMP in tests**: gets, walks and sets in the SNMP Browser are recorded; SNMP values checked by name or OID, readable (`up`) or raw (`1`).
+- **Roles and testbeds**: recorded sessions become roles (`{{core_sw1}}`); a testbed written from a session folder (the emulated lab's, a site) points the same tests at other devices.
+- **Git**: Pull (fast-forward only), Commit… and Push in the Tests tab, with ↑ / ↓ counts; reports stay out of Git.
+- **Python and TCL tests**: each test is also written as a Python `unittest` test (pytest runs it too; `lib/python/run_tests.py` with JUnit) and a TCL script (Tcl 8.6, TAP output, `lib/tcl/run_tests.tcl` with JUnit); standard libraries only.
+- **Scheduled runs**: daily, weekdays, weekly or every N hours, with a testbed; last result and next run in the Tests tab; a notification when a run fails; production only when allowed.
+- **AI**: *Write a Test with AI* (the assistant writes, saves and runs a test from a description) and *Explain* on a failed test (device, network or test - with a corrected test); *Tests* is one of the assistant's tools.
+- **Headless runs for CI**: `termwright tests run` (JUnit, exit code, `--production` to allow production sessions), `termwright tests serve` (only the local API, for the generated code), `termwright tests secrets`; `TERMWRIGHT_SECRET_<KEY>` environment variables where there is no credential store.
+- **Go tests**: each test is also written as a Go test with a small standard-library helper; `go test ./cases/...` runs them through Termwright (saved logins, no passwords in code); `go run ./lib/junit` makes JUnit XML for CI.
+- **Tests folder**: any folder, a Git repository too (Clone…; branch and changes shown); testbeds fill the variables; production sessions are asked first; tests with passwords are refused.
+- **Honest results**: device error messages (`% Invalid input`, `Error:` … built in for seven device types, your own per device type) fail a step; steps without checks are marked *ran, nothing checked* with their output; the recorder suggests checks from the configuration you recorded (`contains v200`, in the cleanup `does not contain v200`) and asks before saving read steps without checks.
+- **Failed cleanups**: a test whose cleanup fails is reported as *failed (cleanup)*; the run then stops (remaining tests skipped, with the reason), restores the configuration saved before the run, or resets the devices to factory default (never production), waits for them and goes on.
+- **Checks from the configuration**: while recording, show commands get the checks for what was configured before them (field, word + value, or text; *does not contain* in the cleanup), only ones that hold for the recorded output.
+- **Tables**: TextFSM templates (ntc-templates format, built-ins for EXOS, VOSS and Cisco) turn output into tables; table checks and saves by row and column, in runs and generated code.
+- **Suites, tags, dependencies**: suites/*.yaml, tag filters, dependsOn with skipping and ordering; run by suite or tag in the GUI, CLI, schedules and API.
+- **Logic**: wait, if, retry until the checks pass, loops over values, ranges or variables - in Termwright's runs and the generated Go, Python and TCL.
+- **Testbeds at scale**: locks in the tests folder (shared, stale after 12 h, take-over and release) and the same tests on several testbeds at once.
+- **Watching and comparing**: syslog and SNMP notifications that fail a test while it runs, configuration compared before and after, lab traffic test steps, software upgrade steps.
+- **History**: pass rate, flips (flaky), durations and results per software version; versions recorded in each run and report.
+- **Integrations**: qTest (send results with the report), Jira (defects with steps and output), Git host token - addresses in the settings, tokens in the OS keychain; automatic sending and defects.
+- **Workspace**: Tests, Runs, Schedules, Testbeds and Library; tests as tables with expected vs got; a Run panel for every run setting.
+- **Edit and select**: edit steps and checks in the Tests tab, rename, duplicate and delete tests (to `.removed/`), run only the ticked tests or a folder; the `lib/` helpers are listed apart from the tests.
+- **Tests for AI and automation**: the `tests` tool for the AI assistant and MCP apps, `POST /api/v1/tools/tests`, and `lab.tests` in Python.
+- **Import from Postman and OpenAPI**: one test per request or operation, folders and tags as suites, status checks from the scripts, examples or 2xx answers; Excel and CSV manual test cases too.
+- **Team roles and approvals**: `roles.yaml` (editors, runners, approvers) and approved runs on production sessions (or always), requested and decided in the Tests tab, valid 24 hours, in the audit log.
+- **JSON Schema checks**: `schema` on API steps (inline or a file); SNMP gets and walks recorded with checks that hold (set values, configured names; no counters).
 
 ## AI assistant and connector
 
@@ -347,16 +380,20 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **Syslog client**: test messages (RFC 5424 or 3164, any facility and severity, UDP / TCP / TLS, many at once).
 - **Syslog for automation**: the in-app AI agent, MCP apps, the local REST API (`/api/v1/syslog…`) and the Python client (`wait_for` a message in tests).
 - **API scripts by the AI**: Write with AI in the Scripts tab; the agent writes and runs `pm.*` tests. **Monochrome body** button for plain black / white answers.
+- **AI instructions and skills**: rules the AI follows in every chat (global, per folder, per device type) and skills - SKILL.md procedures in the open Agent Skills format that the agent loads when a request matches; add, edit, import, export, Write with AI, examples; for MCP apps, the local API and Python too.
 - **API client** (API menu; double-click an API session): requests with any method, parameters, headers and bodies (JSON, text, XML, forms, multipart with files, GraphQL); answers as coloured JSON, headers, cookies, tests and a timing timeline; history; code as cURL, Python, JavaScript or PowerShell.
 - **API sessions** (protocol REST API): base URL, API key, bearer token, login request (token found in the answer, renewed by itself), basic, OAuth 2.0; `{{variables}}` with Production values; secret variables; any-certificate and own-CA TLS. Secrets in the OS credential store, masked everywhere.
 - **Collections and runner**: plain JSON files with folders; Postman-style `pm.*` tests and pre-request scripts (`postman.setNextRequest`, `pm.sendRequest`, `pm.execution.skipRequest`); collection authorization, scripts and variables; Run Collection with an environment, iterations, CSV / JSON data, delay, stop on failure.
 - **Like Postman**: request tabs; Docs, Params with path variables and bulk edit, Authorization (inherit, none, bearer, basic, API key) per request and per collection, Headers with hidden auto headers and presets, Body (form-data with files, URL-encoded, raw JSON / Text / JavaScript / HTML / XML, binary, GraphQL), Scripts before and after, request Settings (HTTP version, certificates, redirects, URL encoding, cookies, timeout); environments and globals with secret values in the credential store; coloured `{{variables}}` and a variables panel; console; cookie manager; Send and Download; paste cURL into the URL.
 - **Import and export**: Postman v2.0 / v2.1 collections and environments, OpenAPI 3 and Swagger 2 (YAML or JSON), cURL; export for Postman v2.1.
 - **API client for automation**: the in-app AI agent, MCP apps, the local REST API (`/api/v1/http…`) and the Python client; changes on production sessions always ask.
+- **API mocks, monitors and schemas**: saved examples per request, a mock server per collection (path variables, `x-mock-example`), monitors that run a collection every few minutes and notify on failure and recovery, and JSON Schema checks of answers (`pm.response.to.have.jsonSchema`).
 - **SNMP Browser** (SNMP menu, or right-click a session → Open SNMP Browser): Get, Get Next, Get Bulk, Walk, Table and Set; SNMP v1, v2c, v3 (MD5, SHA-1, SHA-2; DES, AES-128/192/256); MIB tree with search and object details; 24 IETF/IANA MIBs built in, vendor MIBs from files; readable values (enum names, speeds, MAC addresses); Table view, History, Favourites, Export CSV.
 - **SNMP Browser extras**: several devices at once, Compare two walks, Poll with a live chart (counter rates), Send Trap (v1/v2c/v3), MIBs window (modules, problems, open folder, remove).
+- **SNMP dashboards and alarms**: saved pages of values from several devices with sparklines, rates per second and alarms (above, below, not a value) as notifications, also in the background.
+- **SNMP files and simulator**: export to Excel, save and open walk files (`snmpwalk -On` format), and a v1/v2c agent that answers from a walk like the device.
 - **SNMP sessions** and a separate write community; Open SNMP Browser from a terminal tab.
 - **SNMP credentials in the session**: session properties → SNMP (version, address, port, community or v3 user and protocols, context, Allow Set, Test); the community and v3 passwords are in the OS credential store.
 - **Trap receiver**: v1, v2c and v3 traps and informs on any UDP port, named from the MIBs, matched to sessions.
 - **SNMP for automation**: the in-app AI agent, MCP apps, the local REST API (`/api/v1/snmp…`, `/api/v1/tools`) and the Python client; a Set needs Allow Set, and production sessions always ask.
-- **Network Map**: live topology from your sessions (LLDP, CDP, EDP, STP, LAG; EXOS, VOSS, Cisco, Arista, Junos; CLI or SNMP), auto-arranged, zoom, export to JPEG, PDF or HTML. The labs have the same Arrange styles.
+- **Network Map**: live topology from your sessions (LLDP, CDP, EDP, STP, LAG; EXOS, VOSS, Cisco, Arista, Junos, Huawei VRP, Ruckus ICX, Eltex MES and any device type with TextFSM templates in its Network map; CLI or SNMP), auto-arranged, zoom, export to JPEG, PDF or HTML. The labs have the same Arrange styles.

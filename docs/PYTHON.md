@@ -47,6 +47,14 @@ lab.snmp.mib("IF-MIB::ifOperStatus")["description"]; lab.snmp.traps()["traps"]
 
 `get`, `bulk`, `walk`, `set` and `run(op, ...)` return the rows with `name`, `type`, `value` and `display`.
 
+## AI skills
+
+```python
+for s in lab.skills():
+    print(s["name"], "-", s["description"])
+lab.save_skill(open("upgrade-voss/SKILL.md").read())   # add or replace a skill
+```
+
 ## Device facts and type
 
 ```python
@@ -69,6 +77,11 @@ lab.http.import_(open("openapi.yaml").read(), session="APIs/Lab switches REST")
 lab.http.save_environment("dl2r1", {"ep1-environment": "10.127.34.200", "Bearer": token}, secret=["Bearer"])
 lab.http.run("RADIUS-BluePrint", environment="dl2r1")             # postman.setNextRequest loops work
 print(lab.http.variables(collection="RADIUS-BluePrint", environment="dl2r1"))
+print(lab.http.mock("RADIUS-BluePrint"))            # serve its saved examples on 127.0.0.1
+print(lab.http.monitors())                          # monitors and their last results; run_monitor(id)
+print(lab.snmp.poll_dashboard("Core uplinks"))      # values and ALARM lines of a saved dashboard
+print(lab.snmp.simulate("core-sw1.snmpwalk", port=1161))  # answer SNMP from a walk file
+print(lab.keep_awake())                             # keep_awake(True) / keep_awake(False) changes it
 ```
 
 ## Syslog
@@ -83,6 +96,38 @@ print(m["from"], m.get("session"), m["text"])
 errors = lab.syslog.messages(severity="err", minutes=30)
 lab.syslog.send("10.0.0.5", "test from CI", severity="err", facility="local7")
 ```
+
+## Tests
+
+`lab.tests` runs Termwright tests (YAML files in the tests folder, see USER_GUIDE "Tests"):
+
+```python
+print(lab.tests.list())
+lab.tests.save("cases/smoke/version.yaml", """
+name: version
+steps:
+  - run: {session: Lab/core-sw1, command: show version}
+    expect: [{contains: "32.6"}]
+""")
+print(lab.tests.run("cases/smoke/version.yaml", vars={"vlan": "42"}))  # pass/fail per step, report path
+print(lab.tests.run())          # all tests
+print(lab.tests.run("suites/nightly.yaml", tags=["smoke", "!slow"], cleanup="off"))
+print(lab.tests.run(testbeds=["testbeds/lab-a.yaml", "testbeds/lab-b.yaml"]))  # at the same time
+print(lab.tests.history("cases/smoke/version.yaml"))   # pass rate, flips, per software version
+print(lab.tests.send_qtest())                          # the last run to qTest
+print(lab.tests.defect("cases/smoke/version.yaml"))    # a Jira defect for a failed test
+lab.tests.request_approval(["cases/prod/check.yaml"], "testbeds/prod.yaml", "change window 42")  # roles.yaml approval: production
+print(lab.tests.approvals())                            # requests and decisions; lab.tests.approve(id) / reject(id, note)
+print(lab.tests.run(on_cleanup_fail="restore"))  # after a failed cleanup put back the saved configuration (or "factory"; default "stop")
+print(lab.tests.run(testbed="lab-a.yaml"))   # the same tests on other devices
+lab.tests.new_testbed("lab-a", "Lab")        # a role per saved session of the Lab folder
+lab.tests.schedule("nightly", repeat="daily", at="02:15", testbed="lab-a.yaml")   # runs while Termwright is open
+print(lab.tests.schedules())
+print(lab.tests.results())      # the last run
+lab.tests.generate()            # write the Go, Python and TCL tests again
+```
+
+Each saved test is also written as a standalone Python test (`cases/…/test_*.py` with `lib/python/twtest.py`) that runs with `python lib/python/run_tests.py` or `pytest cases` - see USER_GUIDE "Python and TCL tests". `lab.tests` drives Termwright's own runner; the generated files are for CI and for reading the steps as code.
 
 ## Traffic
 

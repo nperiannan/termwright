@@ -4,7 +4,7 @@
 
 <p align="center">
   <b>AI-powered network access, automation, monitoring, emulation and reservation platform.</b><br/>
-  SSH · Telnet · Serial · SFTP · RDP · VNC · WoL · SNMP · Syslog · REST API · Discover · Collaborate - on Windows, macOS and Linux.
+  SSH · Telnet · Serial · SFTP · RDP · VNC · WoL · SNMP · Syslog · REST API · Tests · Discover · Collaborate - on Windows, macOS and Linux.
 </p>
 
 <p align="center">
@@ -111,11 +111,31 @@ Termwright began as a terminal and session manager for network engineers. Today 
 
 And much more - see the [feature list](docs/FEATURES.md).
 
+## Tests: record, run, generate code
+
+- **Record a test** while you work: commands in terminal tabs and REST requests become steps; right-click output → *Expect this* to add a check
+- **Tests tab**: run one or all tests on a testbed, see which check failed and what came back, open the HTML report or JUnit XML
+- **Setup and cleanup** that always runs: the recorder suggests each change's undo (`create vlan` → `delete vlan`, a POST → its DELETE, an SNMP set → the old value), and a test can put back the configuration or a lab snapshot afterwards
+- **SNMP, CLI and REST** steps in one test; **roles and testbeds** run the same test on other devices, **params** run it once per set of values
+- **Edit, select and recover**: edit steps and checks in the Tests tab, run only selected tests, and choose what a failed cleanup does - stop, restore the saved configuration, or factory default; device error messages fail a step, and steps without checks are flagged
+- **Checks written for you**: a show command gets checks for what was configured before it (`create vlan v200 tag 200` → *contains v200*, *Tag 200*); command output as tables with TextFSM / ntc-templates
+- **Suites that scale**: tags, suites and dependencies; loops, conditions, retry-until and waits; testbed locks and parallel runs on several testbeds; watch syslog and SNMP notifications, compare configurations before and after, lab traffic and software-upgrade steps
+- **History and reporting**: pass rate, flaky tests and results per software version; send results to **qTest** and open **Jira** defects with the steps and output attached
+- **Plain files**: tests are YAML in a folder that can be a Git repository (Pull, Commit, Push in the Tests tab), and each is also written as **Go**, **Python** and **TCL** test code (`go test ./cases/...`, `python lib/python/run_tests.py`, `tclsh lib/tcl/run_tests.tcl`) - no passwords in any of them, Termwright logs in with the saved logins
+- **Scheduled runs** with a notification when one fails, and the AI assistant to **write a test** from a description or **explain why one failed**
+- **Import and teams**: Excel/CSV manual test cases, Postman collections and OpenAPI descriptions become tests; `roles.yaml` says who edits, runs and approves, and runs on production can wait for an approval
+- **CI without the window**: `termwright tests run --junit junit.xml`, or `termwright tests serve` for the generated code; secrets from the credential store or `TERMWRIGHT_SECRET_…` variables
+- Usable from the AI assistant, MCP apps, the local REST API and Python
+
+![Tests tab](docs/screenshots/tests.png)
+
+Step by step with pictures: [Testing with Termwright](docs/TESTS_GUIDE.md).
+
 ## SNMP, syslog and REST API
 
-- **SNMP Browser**: v1, v2c and v3 against saved sessions, a MIB tree with the standard MIBs built in and vendor MIBs loaded from files, Walk, Table, Compare, Poll with a live chart, Set, Send Trap, and a trap receiver
+- **SNMP Browser**: v1, v2c and v3 against saved sessions, a MIB tree with the standard MIBs built in and vendor MIBs loaded from files, Walk, Table, Compare, Poll with a live chart, saved dashboards with alarms, Excel export, walk files and a simulator that answers like the device, Set, Send Trap, and a trap receiver
 - **Syslog server**: UDP, TCP and TLS, senders matched to saved sessions, search, severity filters, colour / notify / hide rules, files per sender, and a test sender
-- **REST API client** in the spirit of Postman: API sessions with their login in the credential store, request tabs, collections, environments and globals (Postman import and export), per-request authorization, `pm.*` scripts and tests with `setNextRequest`, a collection runner, OpenAPI and cURL import, code export
+- **REST API client** in the spirit of Postman: API sessions with their login in the credential store, request tabs, collections, environments and globals (Postman import and export), per-request authorization, `pm.*` scripts and tests with `setNextRequest`, a collection runner, saved examples with a mock server, monitors, JSON Schema checks, OpenAPI and cURL import, code export
 - All three are tools for the AI assistant, MCP apps, the local REST API and Python
 
 | | |
@@ -131,6 +151,7 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
 
 ## Recent releases
 
+- **0.43** - **Tests**: record, run and generate Go, Python and TCL code, with checks written from what you configured, suites, conditions and loops, parallel testbeds, history, qTest and Jira, Postman and OpenAPI import, team roles and approvals; SNMP **dashboards with alarms**, walk files and a **simulator**; API **mocks, monitors** and JSON Schema checks; the Network Map for **any vendor** with TextFSM templates.
 - **0.42** - the **SNMP Browser** (v1, v2c, v3, MIBs, walk, tables, polling, traps), a **REST API client** like Postman (collections, environments, scripts, tests, Postman and OpenAPI import) and a **syslog server**, all usable by the AI assistant; device types for **Huawei VRP**, **Eltex MES**, **Ruckus ICX** and **Cisco NX-OS**, and a **Detect** pattern per device type so Discover Devices recognises any vendor; a new 2-minute demo.
 - **0.41** - the **Network Map**: the real network drawn from your sessions (LLDP, CDP, EDP, STP, LAG, VLAN) in eight styles, live reading progress, cable and device details; the AI agent's fully autonomous mode asks only on production sessions.
 - **0.40.1** - downloads you can **verify** (`SHA256SUMS` and build provenance), a security policy, contributor guide and issue forms, a [FAQ](docs/FAQ.md), a demo, and the Android build no longer fails when Maven Central rate-limits.
@@ -155,6 +176,7 @@ Every change is in the [changelog](CHANGELOG.md).
 | Device facts | Model, version, serial number, MAC address, uptime and custom values, read in a background login. Built-in rules for VOSS, EXOS, Cisco IOS and NX-OS, Huawei VRP, Eltex MES, Ruckus ICX and Linux. |
 | Session management | Wake-on-LAN (also through a jump host); folders with defaults; favourites and recents; environments, with confirmation before multi-tab sends to production; reachability checks; bulk edit; workspaces; Quick Open; drag and drop. |
 | Syslog | A syslog server (UDP, TCP, TLS; RFC 3164 and 5424) with live view, senders matched to saved sessions, search, severity filters, colour / notify / hide rules and daily files, plus a test message sender; usable from the AI assistant, MCP apps, the local API and Python. |
+| Tests | Record tests while you work (terminal commands and REST requests, *Expect this* checks on selected output), run them on testbeds from the Tests tab with HTML and JUnit reports, edit them as YAML, and run them as generated Go tests (`go test`) in CI; usable from the AI assistant, MCP apps, the local API and Python. |
 | API client | A free REST client in the spirit of Postman: API sessions with API key, bearer, login-request, basic and OAuth 2.0 authentication (secrets in the credential store), `{{variables}}` with Postman-style environments and globals (import Postman environments), request tabs, per-request and per-collection authorization, request settings, collections as plain JSON files, `pm.*` tests and pre-request scripts with `setNextRequest` and `sendRequest`, a collection runner with data files, a console, import of Postman collections, OpenAPI / Swagger (YAML or JSON) and cURL, code export; usable from the AI assistant, MCP apps, the local API and Python. |
 | SNMP | SNMP Browser for v1, v2c and v3 (Get, Walk, Table, Set) with a MIB tree, the standard MIBs built in and vendor MIBs loaded from files, a trap receiver, credentials kept in the computer's credential store; usable from the AI assistant, MCP apps, the local API and Python. |
 | Discovery | Scans a network or range (up to /22): open ports, SSH and Telnet banners, web servers and certificates, SIP, SNMP v2c, DNS, MAC vendor. Each result shows its evidence, a guessed kind, a device type and *Connect ▾*; selected devices are added as sessions. Discovery never logs in. |

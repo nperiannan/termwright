@@ -67,6 +67,11 @@ func Run(bind func(*App) any) {
 		attachConsole()
 		os.Exit(labCLIMain(os.Args[2:]))
 	}
+	// "Termwright tests …": run tests, or serve the local API for generated tests, without the window
+	if len(os.Args) > 1 && os.Args[1] == "tests" {
+		attachConsole()
+		os.Exit(testsCLIMain(os.Args[2:]))
+	}
 	discover.RaiseFileLimit()
 	app := NewApp()
 	width, height, start := 1280, 820, options.Normal
@@ -302,6 +307,10 @@ func buildMenu(app *App, lang string) *menu.Menu {
 	add(apiM, "New API Session...", "api-new-session")
 	apiM.AddSeparator()
 	add(apiM, "Import Postman, OpenAPI or cURL...", "api-import")
+
+	tsM := m.AddSubmenu(t("Tests"))
+	add(tsM, "Tests", "tests-open")
+	add(tsM, "Record a Test", "test-record")
 
 	slM := m.AddSubmenu(t("Syslog"))
 	add(slM, "Syslog Server", "syslog-server")

@@ -1353,6 +1353,8 @@ The Emulated and Simulated Labs have the same styles under **More → Arrange** 
 
 **While it reads.** Up to 16 devices are read at the same time; each shows how many of its 5 steps (connect, identify, neighbours, ports/STP/LAG, build map) are done.
 
+**Other vendors.** Huawei VRP, Ruckus ICX and Eltex MES are read with TextFSM templates that come with Termwright. For any other device type, **Options → Device Types → Network map** says how to read it: a command that turns paging off, and show or display commands for the neighbours (required), the device's identity and its ports, each with a TextFSM template. Neighbour templates give `LOCAL_PORT`, `NEIGHBOR`, `NEIGHBOR_PORT`, `CHASSIS_ID` and `MGMT_IP` (the ntc-templates names `LOCAL_INTERFACE`, `NEIGHBOR_NAME`, `NEIGHBOR_INTERFACE` and `MGMT_ADDRESS` work too, so a community template can be pasted in); identity templates `HOSTNAME`, `CHASSIS_ID` and `MODEL`; port templates `PORT`, `ADMIN`, `OPER` and `SPEED`. **Start From Built-in** fills in a shipped plan to change, and **Test a template on pasted output** shows the rows a template finds. Only show/display commands and the known paging commands ever run. Devices without a plan are still read by SNMP (LLDP-MIB).
+
 ## 9c. SNMP Browser
 
 **Open it.** **SNMP → SNMP Browser**, or right-click a session → **Open SNMP Browser**. Choose the session at the top: the address and credentials come from the session's SNMP settings, shown next to it (for example *v3 authPriv · user netops · SHA-256 / AES-128*).
@@ -1389,6 +1391,22 @@ The community and passwords are kept in the computer's credential store (Keychai
 **Traps.** **SNMP → Trap Receiver** (or the *Traps* tab) listens on UDP 162. **Send Trap…** there sends a notification (v1, v2c or v3) with values to any receiver, to test it (on macOS and Linux a port below 1024 may need permission; use for example 1162 and point the devices there). Traps and informs of v1, v2c and v3 are shown newest first with their name from the MIBs and the session they came from; informs are answered. v3 traps use the users and passwords of your SNMP sessions.
 
 **AI assistant, MCP and scripts.** Turn on the **SNMP** tool in the agent's tool list and ask, for example, *"which ports of core-sw1 are down?"*: the agent walks `IF-MIB::ifOperStatus` with the session's credentials. Reads always run; a Set follows the agent's permission and always asks on production sessions. The same `snmp` tool is offered to MCP apps (Claude Desktop, Cursor, VS Code…), and the local API has `POST /api/v1/snmp` and `GET /api/v1/snmp/mib`, `/snmp/mib/{object}`, `/snmp/traps` (see the [API guide](API.md)); in Python, `Lab().snmp.walk("IF-MIB::ifOperStatus", session="Lab/core-sw1")`.
+
+## 9c2. AI instructions and skills
+
+**Instructions** are rules the AI assistant follows in every chat: *VLAN names are <site>-<purpose>*, *save the configuration after every change*, *never change ports 1:49-1:52*, *production changes only 22:00-02:00*. Write them in **Settings → Instructions & Skills**. A folder can add its own (right-click the folder → **Folder Defaults** → *AI*), and so can a device type (Settings → Device Types → *AI instructions*); the AI gets those of the session it works on. Instructions never lift Termwright's own checks: changes on production sessions are still asked, read-only mode stays read-only and secrets are still kept out.
+
+The instructions can come from an **AGENTS.md** or **CLAUDE.md** other AI tools already use: **Import AGENTS.md…** reads one (replacing the instructions or adding after them) and **Export…** saves them as an AGENTS.md. A file with a password, key or community in it is not imported.
+
+**Skills** are procedures the agent follows when a request matches one - *upgrade EXOS firmware*, *add a VLAN across the fabric*, *troubleshoot a port*, *onboard a new switch*. Each is a folder with a **SKILL.md** in Termwright's data folder (`skills/`), in the open Agent Skills format: front matter with a `name` (lower case and dashes), a `description` (what it does and when to use it - the words a user would say) and optionally `device-types`, then the steps in Markdown. The AI sees only the names and descriptions; when a request matches, it loads the skill (a purple **Skill** line in the chat) and follows its steps as its plan, still asking before changes.
+
+In **Settings → Instructions & Skills**: **+ New Skill** starts from a template; **Write with AI** writes one from a description; **Add Examples** adds three to start from; **Import…** takes a SKILL.md, a .md with its front matter or a .zip of a skill folder (skills written for other AI tools work as they are); **Export…** saves a .zip to share; **On** turns a skill off without removing it; **Remove** moves it to the folder's *.removed* folder. A folder's Folder Defaults can list the only skills offered for its sessions. In the chat, the **✦ Skills** chip under the message box asks for a skill by name. A skill that contains a password, key or SNMP community is refused: name the session or account instead - Termwright logs in with the saved ones.
+
+MCP apps get the `termwright_skills` tool (list the skills and instructions, get a skill's steps), the local API has `/api/v1/ai/skills`, and Python has `lab.skills()`, `lab.skill(name)` and `lab.save_skill(text)`.
+
+**Dashboards and alarms.** The **Dashboards** tab keeps values from several devices on one page, polled together every few seconds: type an OID above (ifHCInOctets.3, sysUpTime.0, ifOperStatus.5), choose the device and press **+ Add**. Each value is a card with its value, a sparkline and its limits; counters (octets, packets, errors) show the rate per second. A card's ⋯ sets an alarm - **above**, **below**, or **when not** a value such as `up` - shown in red on the card and as a notification when it starts and when it clears. **Alarms in the background** keeps polling and notifying while the tab is closed (while Termwright runs). Dashboards are saved.
+
+**Files and the simulator.** **File ▾** exports what the browser shows to **Excel** (the Table view as rows and columns, otherwise every value with its type, raw value and OID) or CSV, **saves a walk file** in the `snmpwalk -On` format and **opens one** - saved by Termwright or by net-snmp's `snmpwalk -On` - to browse it offline with the MIBs' names. **Simulate This Device** answers SNMP v1/v2c with the values shown (community `public`) on a UDP port of 127.0.0.1, like the device they came from: walk a switch once and run tools, tests and demos against the copy. One simulator runs at a time; the toolbar shows it and stops it.
 
 ## 9d. API client
 
@@ -1438,6 +1456,12 @@ The password, key, token, client secret and the values of secret variables are k
 
 **AI assistant, MCP and scripts.** Turn on the **API client** tool in the agent's tool list and ask, for example, *"list the interfaces of the lab switches through RESTCONF"*: the agent sends with the session's login (it never asks you for tokens). Changes follow the agent's permission and always ask on production sessions. MCP apps get the same `http` tool, the local API has `POST /api/v1/http/send` and the `/http/collections…` routes (see the [API guide](API.md)), and Python has `Lab().http` ([Python guide](PYTHON.md)).
 
+**Examples, mocks and schemas.** Response ⋯ → **Save as Example** keeps an answer with its request (listed under **Docs**; save the request to keep it). Collection ⋯ → **Start a Mock Server** answers with the saved examples on 127.0.0.1 (a free port; the address is copied): a request is matched by method and path, `:id`, `{id}` and `{{var}}` parts match any value, the first example answers and the `x-mock-example` header picks one by name; anything else gets 404. Under **Docs**, a **Response schema** (JSON Schema: type, required, properties, items, enum, minimum/maximum, lengths, pattern, formats, allOf/anyOf/oneOf, local `$ref`) is checked after every send and in runs, as the test *body fits the schema*; scripts can call `pm.response.to.have.jsonSchema(schema)` too.
+
+**Monitors.** Collection ⋯ → **Monitor** runs the collection every few minutes while Termwright is open, with the chosen session, and notifies when it starts failing and when it passes again; changing requests are refused on production sessions. **Mocks & Monitors** in the sidebar shows the running mock servers and each monitor's last runs (green and red bars); ⋯ runs one now, pauses it, changes how often or deletes it.
+
+**Flows.** Requests that depend on each other (log in, create, read back, delete), with conditions and loops, are tests: import the collection into **Tests** (Import Test Cases takes Postman and OpenAPI files) or record the requests, then use saved variables, *if*, *retry* and loops in the steps.
+
 ## 9e. Syslog server
 
 Termwright receives syslog from your devices while it runs, so you do not need a separate syslog server such as Kiwi.
@@ -1451,6 +1475,198 @@ Termwright receives syslog from your devices while it runs, so you do not need a
 **Send Test Message.** To a syslog server (this one at 127.0.0.1, or another): UDP, TCP or TLS, RFC 5424 or 3164, facility, severity, host name, program, text, and how many times.
 
 **AI assistant, MCP and scripts.** Turn on the **Syslog** tool in the agent's tool list and ask, for example, *"what errors did the switches log in the last 30 minutes?"*. MCP apps get the same `syslog` tool, the local API has `/api/v1/syslog…` (see the [API guide](API.md)), and in Python `Lab().syslog.wait_for("link down", timeout=60)` waits for a message in a test.
+
+## 9f. Tests: record, run and generate code
+
+> A step-by-step walk-through with pictures - record, run, report, schedule, AI - is in [TESTS_GUIDE.md](TESTS_GUIDE.md).
+
+Termwright can turn manual testing into repeatable tests, the way record-and-replay test tools do: you work as usual, mark what must be true, and Termwright saves a test you can run again on any testbed - from Termwright, from the AI assistant, from CI, or as plain Go code.
+
+### Recording a test
+
+**Tests → Record a Test** opens the **Steps** panel on the right. While it records:
+
+- Every command you type in a terminal tab (or send from its Send bar) becomes a step: *session › command*. Commands that may hold a password, secret, community or key are not recorded.
+- Every request you send in the **API Client** becomes a step with its session, environment, collection, method, URL, headers and body; its status code is added as the first check.
+- Select output in a terminal, right-click → **Expect this**:
+  - *contains "…"* - the output must contain the text;
+  - *field = "…"* - Termwright builds a regular expression from the label in front of the value (`Admin State:   Enabled` → `Admin\s+State:\s*(\S+)` = `Enabled`), so the check still works when spacing or other lines change;
+  - *matches a pattern* - the text with its numbers turned into `\d+`;
+  - *does not contain*;
+  - **Save as Test Variable…** keeps the value for later steps as `{{name}}`.
+- Every get, walk or set you run in the **SNMP Browser** becomes an `snmp` step (run on several devices at once: one step per device that answered); a get's values are added as checks (`ifOperStatus.5` = `up`).
+- **Sessions as roles** (on by default) saves each session as a role - `Lab/core-sw1` becomes `{{core_sw1}}` with `Lab/core-sw1` as the test's default - so a testbed can point the same test at other devices.
+- The panel records into **Setup**, **Steps** or **Cleanup**. For every recorded change it suggests the undo - from the device type's **Undo rules** (Global Options → Device Types; `regular expression => undo` per line, built in for EXOS, VOSS, Cisco IOS, NX-OS, Huawei VRP, Eltex MES, Ruckus ICX), the DELETE of a POST (with the id from its answer) or the old value of an SNMP set; **+ Cleanup** adds one, **Undo All in Cleanup** all of them (the last change first), **✦ Cleanup with AI** asks the assistant. *Afterwards put back* ticks `restore: config` and `lab`.
+- **+ Check** on a step adds status, JSON path (`data.items[0].name`, `[-1]`, `length`), *takes at most (ms)*, contains, matches or field checks by hand.
+- ↑ and ✕ reorder or remove steps; ⏸ pauses recording. **Save Test…** writes the test into the tests folder (`cases/…yaml`).
+
+**How a step passes:** the command ran, the answer has no line matching the device type's **Error patterns** (Global Options → Device Types; built in for EXOS, VOSS, Cisco IOS, NX-OS, Huawei VRP, Eltex MES, Ruckus ICX - a step with `ignoreErrors: true` skips this), and every check is true. A step **without checks** - in the steps or in the cleanup - therefore only proves that the device accepted the command: a `show vlan` without a check passes also when the VLAN is missing. Runs mark such steps *○ ran, nothing checked* and keep their output. Give read steps checks (`contains: v200` after creating it, `notContains: v200` in the cleanup after deleting it); the recorder suggests them from the configuration commands recorded before, and saving a test whose read steps check nothing asks first. See the [testing guide](TESTS_GUIDE.md#how-a-step-passes-or-fails) for a worked example.
+
+When a test runs, its commands go over **one background login per session** (the device type's after-login steps run once), so later steps see what earlier ones left - configure mode, a directory - just as when you recorded them; the login ends with the test.
+
+### The Tests tab
+
+**Tests → Tests** opens the tests folder. A rail switches between **Tests**, **Runs** (past runs with their counts, first problems, qTest and Jira), **Schedules**, **Testbeds** (with their locks) and **Library** (templates and the code helpers); the Git branch at its foot has Pull, Commit and Push. Each test shows its setup, steps and cleanup as a table; a click on a step shows expected vs got, its output (select and right-click to add a check) and its table; **History** shows its pass rate, flips (flaky) and results per software version; **▶ Run…** opens the Run panel (testbed or several at once, after each test, if a cleanup fails). The testing guide ([TESTS_GUIDE.md](TESTS_GUIDE.md)) walks through it with pictures. In short:
+
+- **Cases** by folder, with a dot for the last result (green passed, red failed, amber unreadable file); **Testbeds**; **Reports** (past runs - click one to open its HTML report).
+- The selected test as **Steps** (the last run's checks marked ✓ or ✗ with what came back), as **YAML** (edit and **Save** - the file is checked first) or as its generated **Go** test (read-only; *Open in VS Code*).
+- **▶ Run** runs the test, **▶▶** runs all of them, **▶** on a folder its tests, and the check boxes with **▶ Run Selected (N)** only the ticked ones; the testbed menu fills the `{{variables}}` from a file in `testbeds/`. A run that uses production sessions is asked first.
+- **✎ Edit Steps** edits the steps without YAML: session and command (method and URL for REST), timeout, *Go on when it fails*, *Ignore device errors*, move / add / remove steps in the setup, steps and cleanup, add / remove checks; **Save** writes the YAML and the code again. **Rename…**, **Duplicate…** and **Delete** (moves the test and its Go, Python and TCL code to `.removed/<time>/` in the tests folder - nothing is erased).
+- **LIB** lists the files in `lib/` (the generated tests' helpers and your own); click one to read it, *Open in VS Code* to change it.
+- **On a failed cleanup** (above the tree) decides what a run does when a test's cleanup fails. The test is reported as *failed (cleanup)*, then: **Stop the run** (default - the remaining tests are reported as skipped, with the reason), **Restore the saved configuration** (each device's configuration is saved before the run with the device type's *Test save / restore* commands and put back) or **Factory default** (the device type's *Factory reset* commands; built in for EXOS, Cisco IOS and NX-OS; never on production sessions, and it may remove the management address - use console sessions). Both may reboot: Termwright answers the confirmations and waits up to 15 minutes for each device, then goes on; if that fails too, the run stops. The schedule form has the same option, the CLI `--on-cleanup-failure stop|restore|factory`, the `tests` tool and the API `on_cleanup_fail`.
+- The last run lists each test with its first failure; **Open Report** opens the HTML report and **JUnit XML** the file CI systems read.
+- **Open…** makes another folder the tests folder; **Clone…** clones a Git repository of tests with this computer's `git` and its saved login (an address with a password in it is refused). When the folder is a Git repository its branch, number of changed files and ↑ / ↓ (commits not pushed / not pulled) are shown, with **Pull** (fast-forward only - it never merges), **Commit…** (the tests, testbeds and library, with your own git name and e-mail; `reports/` stays out through the folder's `.gitignore`) and **Push** (the first push sets the branch's upstream on `origin`; never forced). **Make it a Git repository** starts one. Git uses this computer's saved login and never asks in a terminal. Files changed outside Termwright (an editor, `git pull`) show up within a few seconds.
+
+### The tests folder
+
+By default `tests` in Termwright's data folder; it can be any folder, for example a Git repository shared by a team:
+
+| Folder | Holds |
+|---|---|
+| `cases/` | The tests (`.yaml`) and their generated Go tests (`_test.go`), in sub-folders as you like |
+| `testbeds/` | Which devices and values a run uses (`.yaml`) |
+| `lib/` | The helper library of the Go tests (`lib/twtest`) and the JUnit converter (`lib/junit`) |
+| `reports/` | One folder per run: `report.html`, `junit.xml`, `result.json` |
+
+Tests never hold passwords: steps name saved sessions, whose logins stay in the computer's credential store. A test with a password, key or community in it is refused.
+
+### The test format
+
+```yaml
+name: VLAN 42 is up
+description: the VLAN exists, is enabled and the REST API shows it
+tags: [smoke, vlan]
+vars: {vlan: "42"}
+steps:
+  - run: {session: "{{sw1}}", command: "show vlan {{vlan}}"}
+    expect:
+      - contains: "created by user"
+      - field: 'Admin\s+State:\s*(\S+)'
+        equals: Enabled
+    save:
+      - {var: ip, field: 'Primary IP:\s*(\S+)'}
+  - http: {session: APIs/Lab REST, method: GET, url: "/rest/vlans/{{vlan}}"}
+    expect:
+      - status: 200
+      - {json: "data.ip", equals: "{{ip}}"}
+      - {json: "data.ports.length", greater: 0}
+      - {maxMs: 2000}
+    timeout: 30
+    continueOnFail: true
+```
+
+- A step has `run` (`session`, `command`, optional `prompt` regular expression), `http` (`session`, `environment`, `collection`, `method`, `url` - a path after the session's base URL or a full URL - `headers`, `body`) or `snmp` (`session` - its SNMP settings and saved community or v3 passwords are used - `op`: `get`, `getnext`, `bulk`, `walk` or `set`, `oids`, or `values` for a set).
+- `expect` checks: `contains`, `notContains`, `matches`, `status`, `maxMs`, and `field` (a regular expression whose first group is the value), `json` (a path) or `oid` (an SNMP value) with `equals`, `notEquals`, `greater`, `less` or `exists`.
+- `oid` finds a value by name (`ifOperStatus.5`, `IF-MIB::ifOperStatus.5`, `ifOperStatus` for the first one a walk got) or numeric OID; `equals` matches its readable value (`up`) or its raw value (`1`); `greater` and `less` use the raw number. An SNMP step's output is one `name = value` line per value, so `contains` and `field` work on it too.
+- `save` keeps a `field`, `json` or `oid` value as a variable for later steps. `{{name}}` works in every text. To check that a value **changed**, save it in one step and use `notEquals: "{{name}}"` in a later one.
+- `setup:` steps run first (a known state; when one fails the test's steps are skipped); `cleanup:` steps run last and **always** - also after a failed step or a stopped run - and each cleanup step runs even when an earlier one failed; a failed cleanup is reported as *the device may not be clean*. Both take any step (`run`, `http`, `snmp`) and checks.
+- `restore: [config]` saves each device's configuration before the test and puts it back after the cleanup (the device type's **Test save / restore** commands, `{file}` a name for the copy; built in for NX-OS); `restore: [lab]` takes a checkpoint of each emulated lab switch and goes back to it.
+- `params: [{vlan: "42"}, {vlan: "7"}]` runs the test once per entry, named *test [vlan=42]* in the results; the entry's values fill the variables (a testbed's and a run's own values still win).
+- After a failed step the rest are skipped, unless the step has `continueOnFail: true`. `timeout` is in seconds (default 60).
+- Put JSON paths with `[ ]` in quotes inside `{ … }`, as above.
+
+### Testbeds
+
+A testbed is a YAML file in `testbeds/` whose values fill the variables, so the same test runs against the lab or another site:
+
+```yaml
+sw1: Lab/core-sw1
+vlan: "42"
+site:
+  api: APIs/Lab REST     # used as {{site.api}}
+```
+
+**+** next to **Testbeds** in the Tests tab writes one for you: give a session folder (for example the emulated lab's folder, or a site) and a name, and it gets a role for each saved session in it (`core-sw1` → `core_sw1: Lab/core-sw1`). A test recorded with *Sessions as roles* then runs on those devices when you pick the testbed. An existing testbed is never replaced.
+
+### Go tests
+
+Saving a test also writes it as a Go test next to it (`cases/vlan/vlan-42_test.go`): one subtest per step, checks as plain calls, for example ``a.Field(`Admin\s+State:\s*(\S+)`).Equals("Enabled")``. Termwright also writes `go.mod` (module `termwright-tests`) and `lib/twtest`, a small helper that uses only Go's standard library. Edit the YAML, not the Go file - it is written again on every save; files you add to `lib/` yourself are never replaced.
+
+In the tests folder, with Termwright running (its local API on - the Go tests send each step to it, and Termwright logs in with the saved logins):
+
+```sh
+go test ./cases/...                                        # all tests
+go test ./cases/vlan/ -run TestVlan42Up -v                 # one test
+go test ./cases/... -args -tw.testbed=testbeds/lab.yaml -tw.var=vlan=7
+go test -json ./cases/... | go run ./lib/junit > junit.xml # JUnit XML for CI
+```
+
+A test with `params` becomes one subtest per entry. `-tw.testbed` reads nested testbeds like Termwright (`{{site.api}}`) and finds a relative file from the tests folder.
+
+`TERMWRIGHT_API` and `TERMWRIGHT_KEY` point the tests at Termwright on another computer (otherwise they read `mcp.json` in the data folder).
+
+### Python and TCL tests
+
+Every saved test is also written in Python and TCL next to its YAML (the Tests tab shows them under **Python** and **TCL**). Like the Go tests they send each step to Termwright and check the answer themselves, so they hold no passwords; edit the YAML, not these files.
+
+| | Python | TCL |
+|---|---|---|
+| File | `cases/vlan/test_vlan_vlan_42_up.py` | `cases/vlan/vlan-42-up.test.tcl` |
+| Helper | `lib/python/twtest.py` (standard library only) | `lib/tcl/twtest.tcl` (Tcl 8.6, no extra packages) |
+| Style | a `unittest.TestCase`, one subTest per step (and per `params` entry) | `tw::test`, `tw::step`, `tw::run`, `tw::contains`, `tw::check field … equals …` |
+| Run all | `python lib/python/run_tests.py` (or `pytest cases`) | `tclsh lib/tcl/run_tests.tcl` |
+| JUnit | `python lib/python/run_tests.py --junit junit.xml` | `tclsh lib/tcl/run_tests.tcl -junit junit.xml` |
+| Variables | `TW_TESTBED=testbeds/lab.yaml`, `TW_VAR_vlan=7` | the same |
+
+The TCL scripts print TAP (`ok 1 - show version`, `not ok 2 - …` with the reason on `#` lines) and exit with 1 when a step failed, so any TAP or exit-code based runner can use them.
+
+### Scheduled runs
+
+**+** next to **Schedules** in the Tests tab runs tests by themselves while Termwright is open: all tests or the selected one, with a testbed, **daily**, on **weekdays**, **weekly** (a weekday and time) or **every N hours**. Each schedule shows its last result (green or red, with a link to its report) and its next run; **Run Now** starts it at once. A failed run shows a toast and a system notification. A schedule may use production sessions only when *May use production sessions* is ticked (asked when you save it); otherwise such a run is refused. Runs need Termwright to be open - for a server that runs tests around the clock use `termwright tests run` from the system's own scheduler (cron, Task Scheduler).
+
+### Bigger suites
+
+| In the test file | What it does |
+|---|---|
+| `tags: [smoke, l2]` | groups tests; filter and run by tag (`--tag smoke,!slow`) |
+| `dependsOn: [cases/vlan/create.yaml]` | skipped when that test failed or was skipped in the run; run first |
+| `wait: 5` | pause before the step (alone: a pause step) |
+| `if: "{{model}} contains 5520"` | run the step only when it holds (`==`, `!=`, `contains`, `!contains`, `~`, `>`, `<`, `>=`, `<=`) |
+| `retry: {timeout: 120, interval: 5}` | run the step again until its checks pass |
+| `loop: {var: port, range: "1:1-1:8", steps: [...]}` | its steps once per value (`values: [...]`, `from: "{{list}}"`) |
+| `run: {…, parse: auto}` + `table: {where: {VLAN_ID: "200"}, column: STATUS, equals: active}` | the output as a table (TextFSM / ntc-templates in `templates/`) and a check on one value; `rows: N`, `exists: false`, `matches` |
+| `traffic: {test: rfc2544-1g}` | a saved traffic test of the emulated lab; checks on its JSON (`json: rows[0].loss, less: 0.01`) |
+| `upgrade: {session: "{{sw}}", image: summitX-32.7.xos}` | install software with the device type's **Upgrade** commands and wait for the device |
+| `watch: {syslog: [LINK-3-UPDOWN], traps: [linkDown]}` | fail when these arrive from the test's devices while it runs |
+| `configDiff: true` (+ `configIgnore: [...]`) | compare each device's configuration before the test and after its cleanup |
+| `qtest: {testCase: TC-12}` | the qTest test case its results go to |
+| `http: {…}` + `schema: schemas/vlan.json` | the JSON body fits a JSON Schema (a file in the tests folder, or the schema itself) |
+
+**Suites** (`suites/<name>.yaml`: `name`, `tests` - files, folders or suites - and `tags`) are named sets; *Save as suite…* keeps a selection. A run **locks** its testbed (`locks/` in the tests folder, stale after 12 hours; *Release* frees it) and can run on several testbeds at once. Every run records the software version of each device (its device facts) and adds its results to `reports/history.jsonl`. While recording, show commands get checks for what was configured before them (*Options* in the recorder turns it off).
+
+**Import.** **Import Test Cases** (⋯ menu) takes Excel or CSV manual test cases, a **Postman collection** (one test per request; folders become suites; the status check comes from the test script or the saved example) or an **OpenAPI 3 / Swagger 2** description (one test per operation; tags become suites; the first 2xx answer is the status check). Name the API session the requests go to.
+
+**Team roles and approvals.** `roles.yaml` in the tests folder (Library → **Team roles**) lists who may edit (`editors`), run (`runners`) and approve (`approvers`) tests - user names as in *Run by*; an empty list lets everyone. `approval: production` makes runs that touch production sessions wait for an approved request (`always`: every run). A blocked run offers **Ask for an Approval**; an approver (someone else than the requester) approves or rejects it under **Runs → Approvals**, and the approval allows that run - the same tests on the same testbed - for 24 hours. Requests and decisions are files in `approvals/`, shared through Git with the tests, and the audit log records them. It keeps an honest team in step; it is not a security boundary.
+
+**Integrations** (Global Options): qTest (address, user, project id, test cycle id, token; *Send every run*), Jira / Atlassian (address, e-mail - empty for a Data Center personal access token -, project, issue type, token; *Defect for failures* for scheduled runs) and the Git host (host, user, token - used for Clone, Pull and Push of the tests folder). Tokens stay in the OS keychain. **Send to qTest** in a run and **+ defect** on a failed test do it by hand.
+
+### Tests and the AI assistant
+
+- **✦ Write a Test with AI**: describe what to check (*VLAN 42 is up on core-sw1 and the REST API lists it*); the assistant finds the saved sessions, writes the YAML with roles and checks, saves it with the `tests` tool and offers to run it.
+- **✦ Explain** (next to a failed test in the last run, or *Explain the Failure* under its steps): the test's YAML and the run - each step, the checks with what came back, the output of the failed step - go to the assistant, which says whether the device, the network or the test is wrong and shows a corrected test if the test needs one.
+- **Tests** is one of the assistant's tools (Settings → AI Assistant → tools), so a chat can also list, run and schedule tests; saving, running and scheduling are asked like other changes, and production always asks.
+
+### Without the window: CI machines
+
+The `termwright` program runs tests without opening its window:
+
+```sh
+termwright tests run                                   # all tests in the tests folder
+termwright tests run cases/vlan --testbed lab-a.yaml --var vlan=7 --junit junit.xml
+termwright tests run --folder ~/network-tests          # another tests folder (a Git checkout)
+termwright tests run --on-cleanup-failure restore      # after a failed cleanup: stop (default), restore or factory
+termwright tests serve                                 # only the local API, for the Go/Python/TCL tests
+termwright tests secrets                               # which environment variables the tests may need
+```
+
+- `run` uses Termwright's sessions, saved logins and device types, prints pass/fail per step and exits with 1 when a test failed or was skipped. Tests that use production sessions are refused unless you add `--production`.
+- `serve` starts only the local API (its address and key go to `mcp.json` in the data folder, where the generated tests find them) until Ctrl+C - then `go test ./cases/...`, `python lib/python/run_tests.py` or `tclsh lib/tcl/run_tests.tcl` work on that machine.
+- On a machine without a credential store, passwords, communities and keys can come from environment variables named `TERMWRIGHT_SECRET_` plus the key in capitals (a session's password: its path - `Lab/core-sw1` → `TERMWRIGHT_SECRET_LAB_CORE_SW1`; its SNMP community: `TERMWRIGHT_SECRET_SNMP_COMMUNITY_LAB_CORE_SW1`; an API session: `TERMWRIGHT_SECRET_API_SECRET_…`). `termwright tests secrets` lists the names for the tests' sessions and whether each is set - never the values. The credential store always wins when it has the key.
+- The sessions themselves come from the data folder (`TERMWRIGHT_HOME` can point at one prepared for CI, for example from Settings → Backup).
+
+### From the AI assistant, the API and Python
+
+The `tests` tool (AI assistant, Claude connector, `POST /api/v1/tools/tests`) lists, shows, saves, runs (with a `testbed`) and generates (Go, Python and TCL) tests and writes testbeds from a session folder (*new_testbed*); Git stays in your hands (the Tests tab) - *"write a test that checks VLAN 42 is up on core-sw1 and run it"*. In Python: `lab.tests.run("cases/vlan/vlan42.yaml")` (see PYTHON.md).
 
 ## 10. Automation: logon actions, triggers, scripts
 
@@ -1675,6 +1891,10 @@ Notes:
 ## 13. Global Options reference
 
 Global Options is called **Settings** (⚙ in the title bar). The General page starts with **Appearance** - theme previews, Icons (Tiles / Glyphs), **Folder colours** (*Soft* - the default, *Vivid* or *Steel blue*: the folders by level and the PROD / LAB tags), Start page buttons, interface font and text size - then **Behaviour** (each switch with a short explanation: confirm before closing, confirm multi-line paste, remember typed commands, **save Quick Connect sessions**, reopen the tabs that were open, show the Session Manager, Button Bar and Command Window) and **Folders and files**. Changes apply when you press *Save*.
+
+### Keep the computer awake
+
+**Keep the computer awake while Termwright is open** (General → Behaviour, on by default) stops macOS, Windows and Linux from going to sleep on their own while Termwright runs, so sessions, transfers, captures, the syslog server and the emulated lab are not cut off. Only idle sleep is stopped: the display can still turn off, you can still choose Sleep yourself, and a closed laptop lid still sleeps. It ends when Termwright quits (also after a crash). macOS uses `caffeinate`, Windows the system's execution state, Linux the desktop's inhibit (GNOME, KDE, Xfce) and systemd-logind - when a Linux system has neither, the option says so. The AI assistant, MCP apps, the local API (`POST /api/v1/tools/keep_awake` with `action` status, on or off) and Python (`lab.keep_awake()`, `lab.keep_awake(True)`) read and change it too.
 
 ### Interface language
 

@@ -1,3 +1,4 @@
+import { builtinUndo } from '../core/recorder.service';
 import { LOOKS } from '../core/map-svg';
 import { ChangeDetectorRef, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -6,7 +7,7 @@ import { LANGUAGES, previewLanguages, tr } from '../core/i18n';
 import { EFFORTS, modelChoices, readOnlyList } from '../core/ai-chat.service';
 import { Combo, ComboOption } from '../components/combo';
 import { Backend, errText } from '../core/backend';
-import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, SyncStatus, AISettings, AIStatus, MCPInfo, comboOf, FACT_NAMES, dtTunnels } from '../core/models';
+import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, SyncStatus, AISettings, AIStatus, AISkill, MCPInfo, comboOf, FACT_NAMES, dtTunnels } from '../core/models';
 import { COLOR_KEYS, SCHEME_NAMES, fullScheme } from '../core/themes';
 import { Ui } from '../core/ui.service';
 import { Icon } from '../components/icon';
@@ -15,7 +16,7 @@ import { UI_FONTS, UI_SIZES, uiFontStack } from '../core/ui-fonts';
 import { DEVICE_KINDS } from '../components/device-icon';
 
 interface DtPw { orig: string; pw: string; empty: boolean; state: string; forget: boolean; }
-type Page = 'general' | 'terminal' | 'schemes' | 'envs' | 'keywords' | 'keymap' | 'buttons' | 'updates' | 'devices' | 'alerts' | 'cards' | 'ai';
+type Page = 'general' | 'terminal' | 'schemes' | 'envs' | 'keywords' | 'keymap' | 'buttons' | 'updates' | 'devices' | 'alerts' | 'cards' | 'ai' | 'skills' | 'integrations';
 
 /** What Global Options can find: page, the text shown on the page, extra words people search for. */
 const SEARCH: [Page, string, string][] = [
@@ -40,7 +41,7 @@ const SEARCH: [Page, string, string][] = [
   ['updates', 'Notify me about', 'update stable nightly'], ['updates', 'Check at start-up', 'update automatic'], ['updates', 'Repository', 'github'],
 ];
 const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Terminal & Appearance', schemes: 'Color Schemes', envs: 'Environments', keywords: 'Keyword Highlighting',
-  keymap: 'Key Map', buttons: 'Button Bar', devices: 'Device Types', alerts: 'Alerts', cards: 'Smart Cards', updates: 'Updates', ai: 'AI Assistant' };
+  keymap: 'Key Map', buttons: 'Button Bar', devices: 'Device Types', alerts: 'Alerts', cards: 'Smart Cards', updates: 'Updates', ai: 'AI Assistant', integrations: 'Integrations', skills: 'Instructions & Skills' };
 
 /** Global Options dialog. */
 @Component({
@@ -71,6 +72,8 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
           <a [class.on]="page() === 'devices'" (click)="page.set('devices')"><app-icon name="device" [size]="15" />Device Types</a>
           <a [class.on]="page() === 'alerts'" (click)="page.set('alerts')"><app-icon name="bell" [size]="15" />Alerts</a>
           <a [class.on]="page() === 'ai'" (click)="page.set('ai'); loadAI()"><app-icon name="sparkles" [size]="15" />AI Assistant</a>
+          <a class="sub" [class.on]="page() === 'skills'" (click)="page.set('skills'); loadSkills()"><app-icon name="checklist" [size]="15" />Instructions &amp; Skills</a>
+          <a [class.on]="page() === 'integrations'" (click)="page.set('integrations'); loadInteg()"><app-icon name="connect" [size]="15" />Integrations</a>
           <div class="cat-g">System</div>
           <a [class.on]="page() === 'cards'" (click)="page.set('cards'); loadCards()"><app-icon name="card" [size]="15" />Smart Cards</a>
           <a [class.on]="page() === 'updates'" (click)="page.set('updates')"><app-icon name="down" [size]="15" />Updates</a>
@@ -152,6 +155,8 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 <div class="checks">
                   <label><input type="checkbox" name="cc" [(ngModel)]="s.confirmClose" />  <span class="tx">Confirm before closing connected tabs<small>and before quitting</small></span> </label>
                   <label><input type="checkbox" name="cpaste" [(ngModel)]="s.confirmPaste" />  <span class="tx">Confirm pasting more than one line<small>shows the lines first - production tabs always ask</small></span> </label>
+                  <label><input type="checkbox" name="kawake" [ngModel]="s.keepAwake !== false" (ngModelChange)="s.keepAwake = $event" />
+                     <span class="tx">Keep the computer awake while Termwright is open<small>it does not go to sleep on its own, so sessions, transfers and the lab keep running; the display can still turn off{{ keepAwakeErr ? ' - not possible here: ' + keepAwakeErr : '' }}</small></span> </label>
                   <label><input type="checkbox" name="rhist" [ngModel]="s.recordHistory !== false" (ngModelChange)="s.recordHistory = $event" />
                      <span class="tx">Remember typed commands<small>for Command History and suggestions - never commands with passwords, secrets or keys</small></span> </label>
                   <label><input type="checkbox" name="qcs" [ngModel]="!!s.quickConnectSave" (ngModelChange)="s.quickConnectSave = $event" />  <span class="tx">Save Quick Connect sessions<small>every connection made with Quick Connect is kept in the Session Manager (in the selected folder)</small></span> </label>
@@ -437,6 +442,42 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <label>Backup commands</label>
                   <textarea name="dtbk" class="mono" rows="2" [(ngModel)]="d.backupCommands"
                     [placeholder]="backupDefault(d.name) || 'Commands that print the configuration, one per line, e.g. show running-config'"></textarea>
+                  <label>Undo rules</label>
+                  <textarea name="dtun" class="mono" rows="3" [(ngModel)]="d.undoRules" [placeholder]="undoDefault(d.name) || 'How the test recorder suggests the cleanup of a command, one rule per line: regular expression => undo, e.g. ^create vlan (\\S+).* => delete vlan $1'"></textarea>
+                  <label></label><div class="hint">The test recorder suggests each recorded command's undo for the cleanup. <code>$1</code>… are the groups, <code>$0</code> the whole command; an empty undo means the command needs none; the first matching rule wins. Empty: the built-in rules for {{ d.name || 'this type' }}{{ undoDefault(d.name) ? '' : ' (none)' }}.</div>
+                  <label>Test save / restore</label>
+                  <div class="row2"><textarea name="dtts" class="mono" rows="2" [(ngModel)]="d.testSave" [placeholder]="testStateDefault(d.name, 0) || 'Save the configuration, e.g. checkpoint {file}'"></textarea>
+                    <textarea name="dttr" class="mono" rows="2" [(ngModel)]="d.testRestore" [placeholder]="testStateDefault(d.name, 1) || 'Put it back, e.g. rollback running-config checkpoint {file}'"></textarea></div>
+                  <label></label><div class="hint">For tests with <b>Afterwards put back: configuration</b>: run before the test and after its cleanup, one command per line; <code>{{ '{file}' }}</code> is a name for the saved copy.</div>
+                  <label>Error patterns</label>
+                  <textarea name="dter" class="mono" rows="2" [(ngModel)]="d.errorPatterns" [placeholder]="errorsDefault(d.name) || 'Error messages of the device, one regular expression per line, e.g. ^ *% *Invalid'"></textarea>
+                  <label></label><div class="hint">A test step fails when the device answers a command with a line that matches (unless the step has <b>Ignore device errors</b>). Empty: the built-in patterns{{ errorsDefault(d.name) ? '' : ' (none for this type)' }}.</div>
+                  <label>Upgrade</label>
+                  <textarea name="dtup" class="mono" rows="2" [(ngModel)]="d.upgrade" placeholder="Commands that install a software image for a test's upgrade step; {{ '{image}' }} is the image, e.g. download image {{ '{image}' }} / reboot"></textarea>
+                  <label></label><div class="hint">Termwright answers the confirmations and waits up to 25 minutes until the device logs in again. Never run on production sessions.</div>
+                  <label>Factory reset</label>
+                  <textarea name="dtfr" class="mono" rows="2" [(ngModel)]="d.factoryReset" [placeholder]="factoryDefault(d.name) || 'Commands that reset to factory default and reboot, e.g. write erase / reload'"></textarea>
+                  <label></label><div class="hint">For test runs with <b>On a failed cleanup: Factory default</b>; Termwright answers the confirmations and waits up to 15 minutes for the device. Never run on production sessions.</div>
+                  <label>Network map</label>
+                  <div class="mapd">
+                    <div class="hint">How the network map reads a device of this type with TextFSM templates - for any vendor. Neighbour templates give <code>LOCAL_PORT</code>, <code>NEIGHBOR</code>, <code>NEIGHBOR_PORT</code>, <code>CHASSIS_ID</code>, <code>MGMT_IP</code> (ntc-templates names work too); identity <code>HOSTNAME</code>, <code>CHASSIS_ID</code>, <code>MODEL</code>; ports <code>PORT</code>, <code>ADMIN</code>, <code>OPER</code>, <code>SPEED</code>. Only show/display commands run. {{ mapNote(d) }}</div>
+                    <div class="row2"><input name="dtmp" class="mono" [ngModel]="d.map?.paging" (ngModelChange)="setMap(d, 'paging', $event)" placeholder="Paging off, e.g. screen-length 0 temporary" />
+                      <button type="button" (click)="mapFromBuiltin(d)" [disabled]="!hasBuiltinMap(d.name)" title="Fill in the plan Termwright ships for this type, to change it">Start From Built-in</button></div>
+                    @for (k of mapKinds; track k.key) {
+                      <div class="mapk"><b>{{ k.label }}</b>
+                        <input [name]="'dtmc' + k.key" class="mono" [ngModel]="mapGet(d, k.key)" (ngModelChange)="setMap(d, k.key, $event)" [placeholder]="k.ph" />
+                        <textarea [name]="'dtmt' + k.key" class="mono" rows="4" [ngModel]="mapGet(d, k.key + 'Template')" (ngModelChange)="setMap(d, k.key + 'Template', $event)" placeholder="TextFSM template: Value LOCAL_PORT (\\S+) … Start …"></textarea>
+                      </div>
+                    }
+                    <details class="maptest"><summary>Test a template on pasted output</summary>
+                      <div class="row2"><select name="dtmts" [(ngModel)]="mapTestKind">@for (k of mapKinds; track k.key) {<option [value]="k.key">{{ k.label }}</option>}</select>
+                        <button type="button" (click)="mapTest(d)">Test</button></div>
+                      <textarea name="dtmto" class="mono" rows="5" [(ngModel)]="mapTestOut" placeholder="Paste what the device printed for the command"></textarea>
+                      @if (mapTestMsg()) { <div class="hint">{{ mapTestMsg() }}</div> }
+                      @if (mapTestRows().length) { <table class="maprows"><tr>@for (h of mapTestHead(); track h) {<th>{{ h }}</th>}</tr>
+                        @for (r of mapTestRows(); track $index) {<tr>@for (h of mapTestHead(); track h) {<td>{{ r[h] }}</td>}</tr>}</table> }
+                    </details>
+                  </div>
                   <label>Web server</label>
                   <div class="webd">
                     <textarea name="dtwc" class="mono" rows="1" [(ngModel)]="d.webCheck" [placeholder]="webDefault(d.name, 'check') || 'A command that shows the web server, e.g. show web-server'" title="Open Web Interface runs it in the background to see whether HTTP and HTTPS are on"></textarea>
@@ -447,6 +488,9 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <label>Tunnel</label>
                   <select name="dttn" [(ngModel)]="d.tunnel" title="Open Web Page Through This Session needs its SSH server to pass connections on (TCP forwarding); EXOS, VOSS and Cisco IOS do not">
                     <option [ngValue]="undefined">{{ tunnelDefault(d.name) }}</option><option value="on">Its SSH server forwards connections</option><option value="off">No forwarding (Open Web Page Through This Session is off)</option></select>
+                  <label>AI instructions</label>
+                  <textarea name="dtai" rows="2" [(ngModel)]="d.aiInstructions" placeholder="Followed by the AI on sessions of this type, e.g. save configuration after every change"
+                    title="Added to the global instructions (Instructions &amp; Skills) when the AI works on a session of this device type"></textarea>
                   <label>AI agent: read-only</label>
                   <textarea name="dtro" class="mono" rows="2" [(ngModel)]="d.aiReadOnly" [placeholder]="readOnlyDefault(d.name)"
                     title="The AI agent runs commands that begin with these without asking (except on production); everything else asks first. One per line."></textarea>
@@ -622,6 +666,87 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 <div class="gf">For test frameworks and CI on this computer: a new random key each time Termwright starts, kept with the address in {{ mcp()?.keyFile || 'mcp.json in the data folder' }}. Changes made through it are not asked first and show as API in the Events.</div>
               </div>
             }
+            @case ('integrations') {
+              @if (integ(); as g) {
+                @for (k of integKinds; track k.k) {
+                  <div class="glist">
+                    <div class="gt">{{ k.t }}</div>
+                    <div class="list">
+                      @switch (k.k) {
+                        @case ('qtest') {
+                          <div class="li"><span class="l">Address<small>qTest Manager site</small></span><input name="qtu" class="v" [(ngModel)]="g.qtest.baseUrl" placeholder="https://yourcompany.qtestnet.com" /></div>
+                          <div class="li"><span class="l">User name</span><input name="qtn" class="v" [(ngModel)]="g.qtest.user" autocomplete="off" /></div>
+                          <div class="li"><span class="l">Project id<small>a number, see Test connection</small></span><input name="qtp" class="v" type="number" min="0" [(ngModel)]="g.qtest.project" /></div>
+                          <div class="li"><span class="l">Test cycle id<small>where test runs are made; empty: the project</small></span><input name="qtc" class="v" type="number" min="0" [(ngModel)]="g.qtest.cycle" /></div>
+                          <div class="li"><span class="l">Send every run<small>without asking, also scheduled runs</small></span><input name="qta" type="checkbox" [(ngModel)]="g.qtest.auto" /></div>
+                        }
+                        @case ('jira') {
+                          <div class="li"><span class="l">Address<small>Jira Cloud or Data Center</small></span><input name="jiu" class="v" [(ngModel)]="g.jira.baseUrl" placeholder="https://yourcompany.atlassian.net" /></div>
+                          <div class="li"><span class="l">E-mail / user<small>Cloud: your e-mail; Data Center with a personal access token: empty</small></span><input name="jin" class="v" [(ngModel)]="g.jira.user" autocomplete="off" /></div>
+                          <div class="li"><span class="l">Project key</span><input name="jip" class="v" [(ngModel)]="g.jira.project" placeholder="NET" /></div>
+                          <div class="li"><span class="l">Issue type</span><input name="jit" class="v" [(ngModel)]="g.jira.issueType" placeholder="Bug" /></div>
+                          <div class="li"><span class="l">Defect for failures<small>open a defect for each failed test of a scheduled run</small></span><input name="jia" type="checkbox" [(ngModel)]="g.jira.auto" /></div>
+                        }
+                        @case ('git') {
+                          <div class="li"><span class="l">Host<small>the tests folder's remote, over HTTPS</small></span><input name="gih" class="v" [(ngModel)]="g.git.host" placeholder="github.com" /></div>
+                          <div class="li"><span class="l">User name</span><input name="giu" class="v" [(ngModel)]="g.git.user" autocomplete="off" /></div>
+                        }
+                      }
+                      <div class="li"><span class="l">Token<small>{{ integHas()[k.k] ? 'Saved in the OS keychain' : 'Kept in the OS keychain, never in the settings' }}</small></span>
+                        <input [name]="'tok' + k.k" class="v" type="password" autocomplete="off" [(ngModel)]="integTok[k.k]" [placeholder]="integHas()[k.k] ? '•••••••• (type to change)' : 'paste the token'" />
+                        <button type="button" (click)="saveIntegTok(k.k)" [disabled]="!integTok[k.k].trim()">Save Token</button>
+                        @if (integHas()[k.k]) { <button type="button" (click)="forgetIntegTok(k.k)">Forget</button> }</div>
+                      <div class="li"><span class="l"></span><button type="button" (click)="testInteg(k.k)">Test Connection</button><span class="hint">{{ integMsg()[k.k] }}</span></div>
+                    </div>
+                  </div>
+                }
+                <div class="hint">Addresses and user names are saved with the options; tokens only in the OS keychain - they are never shown, logged or put in a command line.</div>
+              }
+            }
+            @case ('skills') {
+              <div class="skp">
+                <div class="skh"><b>Instructions</b><span class="mut">followed in every AI chat - your team's rules, naming, change windows. Folders (Folder Defaults) and device types (Device Types) can add their own.</span>
+                  <span class="sp"></span><button type="button" (click)="importInstructions()" title="Read an AGENTS.md or CLAUDE.md">Import AGENTS.md…</button><button type="button" (click)="exportInstructions()" [disabled]="!(s.ai?.instructions ?? '').trim()" title="Save them as an AGENTS.md, the file other AI tools read">Export…</button></div>
+                <textarea name="aiins" class="mono" rows="4" [ngModel]="s.ai?.instructions ?? ''" (ngModelChange)="setAI({ instructions: $event })"
+                  placeholder="e.g. VLAN names are <site>-<purpose>. Save the configuration after every change. Never change ports 1:49-1:52 (uplinks)."></textarea>
+                <div class="skh"><b>Skills</b><span class="mut">{{ skills().length }} skill{{ skills().length === 1 ? '' : 's' }} · procedures the AI loads when a request matches; it sees only their names and descriptions until then. SKILL.md files - the open format other AI tools use too.</span></div>
+                <div class="skbar"><span class="sp"></span>
+                  <button type="button" (click)="importSkill()">Import…</button><button type="button" (click)="skillsFolder()">Open Folder</button>
+                  @if (!skills().length) { <button type="button" (click)="addExampleSkills()">Add Examples</button> }
+                  <button type="button" (click)="aiSkillOpen.set(!aiSkillOpen())">✦ Write with AI</button>
+                  <button type="button" class="primary" (click)="newSkill()">+ New Skill</button></div>
+                @if (aiSkillOpen()) {
+                  <div class="skai"><input name="skai" [(ngModel)]="aiSkillText" (keydown.enter)="writeSkill()" [disabled]="aiSkillBusy()" placeholder="Describe the procedure, e.g. upgrade a VOSS switch: check the image, copy it from the file server, activate, reboot, verify" />
+                    <button type="button" class="primary" (click)="writeSkill()" [disabled]="aiSkillBusy() || !aiSkillText.trim()">{{ aiSkillBusy() ? 'Writing…' : 'Write' }}</button></div>
+                }
+                <div class="skg">
+                  <div class="skl">
+                    <input name="skq" [(ngModel)]="skillQ" placeholder="Filter skills" />
+                    <div class="skls">
+                      @for (k of shownSkills(); track k.name) {
+                        <div class="ski" [class.on]="skillEdit()?.name === k.name && !skillNew()" (click)="openSkill(k.name)" [class.off]="!skillOn(k.name)">
+                          <b>{{ k.name }}@for (t of k.deviceTypes ?? []; track t) { <span class="tg">{{ t }}</span> }@if (!k.deviceTypes?.length) { <span class="tg any">any</span> }@if (!skillOn(k.name)) { <span class="tg offt">off</span> }</b>
+                          <div class="d">{{ k.description }}</div>
+                        </div>
+                      } @empty { <div class="mut pad">No skills yet. <b>Add Examples</b> adds three to start from, or write your own with <b>+ New Skill</b>.</div> }
+                    </div>
+                  </div>
+                  <div class="ske">
+                    @if (skillEdit(); as k) {
+                      <div class="skeh"><b>{{ skillNew() ? 'New skill' : k.name }}</b>
+                        <span class="sp"></span>
+                        @if (!skillNew()) { <label class="inl"><input type="checkbox" name="skon" [ngModel]="skillOn(k.name)" (ngModelChange)="setSkillOn(k.name, $event)" /> On</label> }</div>
+                      <textarea name="sktext" class="mono sktext" [(ngModel)]="skillText" (ngModelChange)="skillDirty.set(true)" spellcheck="false"></textarea>
+                      @if (skillErr()) { <div class="bad small">{{ skillErr() }}</div> }
+                      @if (k.files?.length) { <div class="mut small">Other files: {{ k.files!.join(', ') }}</div> }
+                      <div class="skbar"><span class="mut small ell" [title]="k.path">{{ skillNew() ? 'name, description (when to use it) and device-types, then the steps' : k.path }}</span><span class="sp"></span>
+                        @if (!skillNew()) { <button type="button" (click)="exportSkill(k.name)">Export…</button><button type="button" (click)="removeSkill(k.name)">Remove</button> }
+                        <button type="button" class="primary" (click)="saveSkill()" [disabled]="!skillDirty()">Save</button></div>
+                    } @else { <div class="mut pad">Choose a skill, or make a new one.</div> }
+                  </div>
+                </div>
+              </div>
+            }
             @case ('cards') {
               <p class="hint">SSH keys on smart cards and tokens - PIV and CAC cards, YubiKey (PIV), SafeNet eToken, HSMs - through the card's PKCS#11 library.
                 The private key never leaves the card. Choose the key in Session Options → SSH2 Authentication → Smart card.</p>
@@ -720,6 +845,24 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
   </div>
   }`,
   styles: [`
+    .skp { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+    .skh { display: flex; gap: 10px; align-items: baseline; margin-top: 6px; } .skh .sp { flex: 1; } .skh button { flex: none; } .skh .mut { font-size: 12px; }
+    .skp textarea[name=aiins] { width: 100%; box-sizing: border-box; font-size: 12px; }
+    .skbar { display: flex; gap: 8px; align-items: center; } .skbar .sp, .skeh .sp { flex: 1; }
+    .skai { display: flex; gap: 8px; } .skai input { flex: 1; }
+    .skg { display: grid; grid-template-columns: 250px 1fr; gap: 12px; height: 330px; }
+    .skl, .ske { border: 1px solid var(--border); border-radius: 9px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+    .skl > input { margin: 8px; } .skls { overflow: auto; flex: 1; }
+    .ski { padding: 8px 11px; border-top: 1px solid var(--line); cursor: pointer; } .ski:hover { background: var(--hover); } .ski.on { background: var(--selected); } .ski.off { opacity: .6; }
+    .ski b { font-size: 12.5px; } .ski .d { color: var(--muted); font-size: 11.5px; margin-top: 2px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .tg { font-size: 10px; border-radius: 4px; padding: 0 5px; margin-left: 6px; background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); font-weight: 600; }
+    .tg.any { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); } .tg.offt { background: var(--surface-2); color: var(--muted); }
+    .ske { padding: 0 10px 10px; } .skeh { display: flex; gap: 10px; align-items: center; padding: 9px 2px; }
+    .sktext { flex: 1; width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.55; resize: none; min-height: 0; margin-bottom: 8px; }
+    .ske .small, .skp .small { font-size: 11.5px; } .ske .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; } .ske .bad { color: var(--danger); margin-bottom: 6px; }
+
+    .mapd { display: flex; flex-direction: column; gap: 6px; min-width: 0; .row2 { display: grid; grid-template-columns: 1fr auto; gap: 6px; } .mapk { display: grid; grid-template-columns: 90px 1fr; gap: 4px 8px; align-items: start; b { font-weight: 500; padding-top: 6px; } textarea { grid-column: 2; } }
+      .maptest summary { cursor: pointer; color: var(--muted); } .maptest { display: flex; flex-direction: column; gap: 6px; } .maprows { border-collapse: collapse; font: 11.5px var(--mono); th, td { border: 1px solid var(--border); padding: 2px 6px; text-align: left; } } }
     .webd { display: flex; flex-direction: column; gap: 6px; min-width: 0; .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } }
     .glist { max-width: 760px;
       .gt { font-size: calc(11px * var(--ui-scale, 1)); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 4px 0 6px 4px; }
@@ -804,6 +947,52 @@ export class OptionsDialog implements OnInit {
       const m = new RegExp(ci ? p.slice(4) : p, ci ? 'im' : 'm').exec(t);
       return m ? m[0] : '';
     } catch { return 'bad'; }
+  }
+  undoDefault(name: string) { const r = builtinUndo(name); return r ? r + '\n(built-in rules)' : ''; }
+  testStateDefault(name: string, i: 0 | 1) {
+    const d: Record<string, [string, string]> = { 'cisco nx-os': ['checkpoint {file}', 'rollback running-config checkpoint {file}\nno checkpoint {file}'],
+      'cisco ios': ['copy running-config flash:{file}.cfg', 'configure replace flash:{file}.cfg force'], exos: ['save configuration {file}', 'use configuration {file}\nreboot'] };
+    const c = d[name.toLowerCase()]?.[i];
+    return c ? c + '  (built-in)' : '';
+  }
+  /** Copies of the built-ins in internal/session/devicetype.go. */
+  errorsDefault(name: string) {
+    const d: Record<string, string> = { exos: '^\\s*Error:\n%% (Invalid|Incomplete|Ambiguous|Unrecognized)', voss: '^\\s*% *(Invalid|Unrecognized|Incomplete|Ambiguous|Error|Cannot)',
+      'cisco ios': '^\\s*% *(Invalid|Incomplete|Ambiguous|Unknown|Error|Bad)', 'cisco nx-os': '^\\s*% *(Invalid|Incomplete|Ambiguous)\n^\\s*ERROR:', 'huawei vrp': '^\\s*Error:',
+      'eltex mes': '^\\s*% *(Unrecognized|Invalid|Incomplete|Ambiguous|Error)', 'ruckus icx': 'Invalid input\n^\\s*Error' };
+    const c = d[name.toLowerCase()];
+    return c ? c + '\n(built-in)' : '';
+  }
+  readonly mapKinds = [
+    { key: 'neighbors', label: 'Neighbours', ph: 'e.g. display lldp neighbor' },
+    { key: 'identity', label: 'Identity', ph: 'e.g. display lldp local (optional)' },
+    { key: 'ports', label: 'Ports', ph: 'e.g. display interface brief (optional)' },
+  ] as const;
+  mapTestKind = 'neighbors'; mapTestOut = '';
+  readonly mapTestMsg = signal(''); readonly mapTestRows = signal<Record<string, string>[]>([]);
+  mapTestHead() { return Object.keys(this.mapTestRows()[0] ?? {}); }
+  mapGet(d: DeviceType, k: string) { return (d.map as Record<string, string> | null | undefined)?.[k] ?? ''; }
+  setMap(d: DeviceType, k: string, v: string) { d.map = { ...(d.map ?? {}), [k]: v }; }
+  hasBuiltinMap(name: string) { return /huawei|vrp|icx|ruckus|fastiron|eltex|^mes/i.test(name || ''); }
+  mapNote(d: DeviceType) {
+    if (d.map?.neighbors?.trim() && d.map?.neighborsTemplate?.trim()) return 'This plan is used for the type.';
+    if (this.hasBuiltinMap(d.name)) return 'Empty: the built-in templates for ' + d.name + '.';
+    return /exos|voss|fabric|switch engine|ios|nx-os|nexus|arista|eos|junos|juniper/i.test(d.name || '') ? 'Empty: the built-in reading for ' + d.name + '.' : 'Empty: the map reads this type by SNMP only.';
+  }
+  async mapFromBuiltin(d: DeviceType) {
+    try { const m = await this.backend.topoBuiltinMap(d.name); if (m) d.map = { ...m }; } catch (e) { this.mapTestMsg.set(String(e)); }
+  }
+  async mapTest(d: DeviceType) {
+    this.mapTestRows.set([]);
+    const tpl = this.mapGet(d, this.mapTestKind + 'Template');
+    if (!tpl.trim()) { this.mapTestMsg.set('Write the template first.'); return; }
+    try { const r = (await this.backend.topoTestMap(tpl, this.mapTestOut)) ?? []; this.mapTestRows.set(r); this.mapTestMsg.set(r.length ? `${r.length} rows` : 'No rows - check the patterns against the output.'); }
+    catch (e) { this.mapTestMsg.set(String(e)); }
+  }
+  factoryDefault(name: string) {
+    const d: Record<string, string> = { exos: 'unconfigure switch all', 'cisco ios': 'write erase\nreload', 'cisco nx-os': 'write erase\nreload' };
+    const c = d[name.toLowerCase()];
+    return c ? c + '\n(built-in)' : '';
   }
   backupDefault(name: string) {
     const d: Record<string, string> = { exos: 'show configuration', voss: 'show running-config', 'cisco ios': 'show running-config' };
@@ -1019,9 +1208,12 @@ export class OptionsDialog implements OnInit {
     this.kwIndex.set(0);
   }
 
+  keepAwakeErr = '';
   ngOnInit() {
     void this.backend.syncState().then(x => this.syncSt.set(x)).catch(() => {});
+    void this.backend.keepAwakeStatus().then(x => this.keepAwakeErr = x.error ?? '').catch(() => {});
     if (this.page() === 'ai') this.loadAI();
+    if (this.page() === 'skills') void this.loadSkills();
     this.ui.optionsPage.set('');
     const focus = this.ui.optionsFocus(); // Help → Connect an AI App…: the connector's part of the page
     if (focus) { this.ui.optionsFocus.set(''); setTimeout(() => document.getElementById('opt-' + focus)?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 150); }
@@ -1064,6 +1256,28 @@ export class OptionsDialog implements OnInit {
   }
   readonly aiMsg = signal('');
   aiKey = '';
+  readonly integKinds = [{ k: 'qtest', t: 'qTest - test results' }, { k: 'jira', t: 'Jira / Atlassian - defects' }, { k: 'git', t: 'Git host - the tests folder' }];
+  readonly integHas = signal<Record<string, boolean>>({});
+  readonly integMsg = signal<Record<string, string>>({});
+  integTok: Record<string, string> = { qtest: '', jira: '', git: '' };
+  /** The settings' integrations (created when missing, so the fields can bind). */
+  integ() {
+    if (!this.s) return null;
+    const g = (this.s.integrations ??= { qtest: {}, jira: {}, git: {} });
+    g.qtest ??= {}; g.jira ??= {}; g.git ??= {};
+    return g;
+  }
+  loadInteg() { void this.backend.integrationTokens().then(m => this.integHas.set(m ?? {})).catch(() => {}); }
+  async saveIntegTok(k: string) {
+    try { await this.backend.integrationSetToken(k, this.integTok[k]); this.integTok[k] = ''; this.integMsg.update(m => ({ ...m, [k]: tr('The token is saved in the OS keychain.') })); this.loadInteg(); }
+    catch (e) { this.integMsg.update(m => ({ ...m, [k]: errText(e) })); }
+  }
+  async forgetIntegTok(k: string) { await this.backend.integrationSetToken(k, '').catch(() => {}); this.loadInteg(); }
+  async testInteg(k: string) {
+    this.integMsg.update(m => ({ ...m, [k]: tr('Checking…') }));
+    try { const r = await this.backend.integrationTest(k, this.integ() ?? undefined); this.integMsg.update(m => ({ ...m, [k]: '✓ ' + r })); }
+    catch (e) { this.integMsg.update(m => ({ ...m, [k]: '✗ ' + errText(e) })); }
+  }
   loadAI() {
     void this.backend.aiState().then(x => this.aiSt.set(x)).catch(() => {});
     void this.backend.mcpState().then(x => this.mcp.set(x)).catch(() => {});
@@ -1114,6 +1328,81 @@ export class OptionsDialog implements OnInit {
     catch (e) { this.mcpMsg.set(errText(e)); }
   }
   async copyText(t: string) { if (t) { await this.backend.clipboardSet(t); this.ui.toast(tr('Copied'), 'success'); } }
+  // ---- AI instructions and skills ----
+  readonly skills = signal<AISkill[]>([]);
+  readonly skillEdit = signal<AISkill | null>(null);
+  readonly skillNew = signal(false);
+  readonly skillDirty = signal(false);
+  readonly skillErr = signal('');
+  readonly aiSkillOpen = signal(false);
+  readonly aiSkillBusy = signal(false);
+  skillText = ''; skillQ = ''; aiSkillText = '';
+  async loadSkills() { this.skills.set(await this.backend.aiSkills().catch(() => [])); if (!this.skillEdit() && this.skills().length) void this.openSkill(this.skills()[0].name); this.cdr.markForCheck(); }
+  shownSkills() { const q = this.skillQ.trim().toLowerCase(); return this.skills().filter(k => !q || (k.name + ' ' + k.description + ' ' + (k.deviceTypes ?? []).join(' ')).toLowerCase().includes(q)); }
+  skillOn(n: string) { return !(this.s?.ai?.skillsOff ?? []).includes(n); }
+  setSkillOn(n: string, on: boolean) { const off = (this.s?.ai?.skillsOff ?? []).filter(x => x !== n); if (!on) off.push(n); this.setAI({ skillsOff: off }); }
+  private async keepEdits(): Promise<boolean> {
+    return !this.skillDirty() || await this.ui.confirm('Unsaved Skill', 'The skill has changes that are not saved. Leave them?', 'Leave');
+  }
+  async openSkill(name: string) {
+    if (!(await this.keepEdits())) return;
+    try { const k = await this.backend.aiSkill(name); this.skillEdit.set(k); this.skillText = k.text ?? ''; this.skillNew.set(false); this.skillDirty.set(false); this.skillErr.set(''); }
+    catch (e) { this.skillErr.set(errText(e)); }
+    this.cdr.markForCheck();
+  }
+  async importInstructions() {
+    try {
+      const t = await this.backend.aiImportInstructions(); if (!t) return;
+      const cur = (this.s?.ai?.instructions ?? '').trim();
+      const replace = !cur || await this.ui.confirm('Import Instructions', 'Replace the instructions with the file\'s? Cancel adds the file\'s after them.', 'Replace');
+      this.setAI({ instructions: replace ? t.trim() : cur + '\n\n' + t.trim() });
+      this.ui.toast('Imported - press Save to keep them', 'info');
+    } catch (e) { this.ui.error(e); }
+  }
+  async exportInstructions() { try { const p = await this.backend.aiExportInstructions(this.s?.ai?.instructions ?? ''); if (p) this.ui.toast('Saved ' + p, 'success'); } catch (e) { this.ui.error(e); } }
+  async newSkill(text?: string) {
+    if (!(await this.keepEdits())) return;
+    this.skillEdit.set({ name: '', description: '', path: '', modified: '', on: true });
+    this.skillText = text ?? '---\nname: my-procedure\ndescription: What it does and when to use it, e.g. "use for upgrade or new firmware".\ndevice-types: EXOS\n---\n# My procedure\n\n1. First step - the command to run and what to check.\n2. Ask before anything that changes the device or interrupts traffic.\n3. Check the result and say what was done.\n';
+    this.skillNew.set(true); this.skillDirty.set(true); this.skillErr.set(''); this.cdr.markForCheck();
+  }
+  async saveSkill() {
+    const k = this.skillEdit(); if (!k) return;
+    try {
+      const saved = await this.backend.aiSaveSkill(this.skillNew() ? '' : k.name, this.skillText);
+      this.skillDirty.set(false); this.skillNew.set(false); this.skillErr.set('');
+      await this.loadSkills(); this.skillEdit.set(saved); this.skillText = saved.text ?? this.skillText;
+      this.ui.toast('Saved the skill ' + saved.name, 'success');
+    } catch (e) { this.skillErr.set(errText(e)); }
+    this.cdr.markForCheck();
+  }
+  async removeSkill(n: string) {
+    if (!(await this.ui.confirm('Remove Skill', 'Remove the skill ' + n + '? Its folder is moved to .removed in the skills folder, so it can be put back.', 'Remove', true))) return;
+    try { await this.backend.aiRemoveSkill(n); this.skillEdit.set(null); this.skillDirty.set(false); await this.loadSkills(); } catch (e) { this.ui.error(e); }
+  }
+  async importSkill() {
+    try { const k = await this.backend.aiImportSkill(false); if (k?.name) { this.skillDirty.set(false); await this.loadSkills(); await this.openSkill(k.name); this.ui.toast('Imported the skill ' + k.name, 'success'); } }
+    catch (e) {
+      if (/already exists/.test(errText(e)) && await this.ui.confirm('Replace Skill', errText(e) + '. Replace it? The old one is moved to .removed.', 'Replace')) {
+        try { const k = await this.backend.aiImportSkill(true); if (k?.name) { await this.loadSkills(); await this.openSkill(k.name); } } catch (e2) { this.ui.error(e2); }
+      } else this.ui.error(e);
+    }
+  }
+  async exportSkill(n: string) { try { const p = await this.backend.aiExportSkill(n); if (p) this.ui.toast('Saved ' + p, 'success'); } catch (e) { this.ui.error(e); } }
+  async skillsFolder() { try { await this.backend.showInFolder(await this.backend.aiSkillsFolder()); } catch (e) { this.ui.error(e); } }
+  async addExampleSkills() { try { const l = await this.backend.aiAddExampleSkills(); await this.loadSkills(); this.ui.toast('Added ' + (l.join(', ') || 'nothing new'), 'success'); } catch (e) { this.ui.error(e); } }
+  async writeSkill() {
+    const q = this.aiSkillText.trim(); if (!q || this.aiSkillBusy()) return;
+    this.aiSkillBusy.set(true); this.cdr.markForCheck();
+    try {
+      const a = await this.backend.aiAsk({ kind: 'skill', text: '', question: q, deviceType: '', protocol: '' });
+      const m = /```(?:markdown|md)?\s*\n([\s\S]*?)```/.exec(a.text);
+      await this.newSkill((m ? m[1] : a.text).trim() + '\n');
+      this.aiSkillText = ''; this.aiSkillOpen.set(false);
+      this.ui.toast('Written by the AI assistant - check it, then Save', 'info');
+    } catch (e) { this.ui.error(e); }
+    this.aiSkillBusy.set(false); this.cdr.markForCheck();
+  }
   setAI(p: Partial<AISettings>) { if (this.s) this.s.ai = { ...(this.s.ai ?? {}), ...p }; this.cdr.markForCheck(); }
   async saveAIKey() {
     const p = this.s?.ai?.provider ?? '';

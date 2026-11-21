@@ -54,6 +54,10 @@ class Fake(BaseHTTPRequestHandler):
                 return self.reply(200, {"on": False, "settings": {"udp": 514, "saveFiles": True}})
             if self.path == "/api/v1/syslog/start":
                 return self.reply(200, {"on": True})
+        if self.path == "/api/v1/ai/skills":
+            return self.reply(200, [{"name": "troubleshoot-port", "description": "Port down or flapping", "on": True}] if self.command == "GET" else {"name": "add-vlan"})
+        if self.path == "/api/v1/tools/tests":
+            return self.reply(200, {"result": "1 passed, 0 failed in 0.4 s"})
         if self.path == "/api/v1/tools/device":
             return self.reply(200, {"result": "Lab/edge-sw3 looks like Huawei VRP"})
         if self.path.startswith("/api/v1/http"):
@@ -274,11 +278,28 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(calls["/api/v1/http/environments"]["vars"][1], {"key": "Bearer", "value": "t", "secret": True})
         self.assertEqual(calls["/api/v1/http/collections/Lab%20checks/run"], {"environment": "dl2r1"})
 
+    def test_skills(self):
+        self.assertEqual(self.lab.skills()[0]["name"], "troubleshoot-port")
+        self.assertEqual(self.lab.save_skill("---\nname: add-vlan\ndescription: x\n---\n")["name"], "add-vlan")
+
     def test_devices(self):
         self.assertIn("Huawei VRP", self.lab.devices.identify("Lab/edge-sw3"))
         self.lab.devices.set_type("Lab/edge-sw3", "Huawei VRP")
         calls = {p: b for _, p, b in Fake.state["calls"]}
         self.assertEqual(calls["/api/v1/tools/device"], {"action": "set_type", "session": "Lab/edge-sw3", "type": "Huawei VRP"})
+
+    def test_tests(self):
+        self.assertTrue(self.lab.tests.run("cases/smoke.yaml", vars={"vlan": "42"}).startswith("1 passed"))
+        calls = {p: b for _, p, b in Fake.state["calls"]}
+        self.assertEqual(calls["/api/v1/tools/tests"], {"action": "run", "files": ["cases/smoke.yaml"], "vars": {"vlan": "42"}})
+        self.lab.tests.run(testbed="lab-a.yaml", on_cleanup_fail="restore")
+        self.lab.tests.new_testbed("lab-a", "Lab")
+        bodies = [b for _, p, b in Fake.state["calls"] if p == "/api/v1/tools/tests"]
+        self.assertEqual(bodies[-2], {"action": "run", "testbed": "lab-a.yaml", "on_cleanup_fail": "restore"})
+        self.assertEqual(bodies[-1], {"action": "new_testbed", "name": "lab-a", "folder": "Lab"})
+        self.lab.tests.schedule("nightly", at="02:15", testbed="lab-a.yaml")
+        bodies = [b for _, p, b in Fake.state["calls"] if p == "/api/v1/tools/tests"]
+        self.assertEqual(bodies[-1], {"action": "schedule", "name": "nightly", "repeat": "daily", "at": "02:15", "testbed": "lab-a.yaml"})
 
     def test_syslog(self):
         self.assertEqual(self.lab.syslog.messages("link down", severity="err")[0]["id"], 7)

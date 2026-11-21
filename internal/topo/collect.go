@@ -46,6 +46,9 @@ var plans = map[string][]Step{
 // command that is running now ("" when all are done). The steps are: connect, identify, neighbours, ports.
 func StepsDone(os string, k int) (done int, now string) {
 	steps := plans[os]
+	if c, ok := builtinCustom[os]; ok && len(steps) == 0 {
+		steps = c.steps()
+	}
 	stage := func(role string) int {
 		switch role {
 		case "paging", "name", "mac":
@@ -82,6 +85,12 @@ func Plan(os string) []Step { return plans[os] }
 func OSFor(name string) string {
 	n := strings.ToLower(name)
 	switch {
+	case strings.Contains(n, "huawei") || strings.Contains(n, "vrp"):
+		return "huawei"
+	case strings.Contains(n, "icx") || strings.Contains(n, "ruckus") || strings.Contains(n, "fastiron"):
+		return "icx"
+	case strings.Contains(n, "eltex") || strings.HasPrefix(n, "mes"):
+		return "eltex"
 	case strings.Contains(n, "exos") || strings.Contains(n, "switch engine"):
 		return "exos"
 	case strings.Contains(n, "voss") || strings.Contains(n, "fabric engine") || strings.Contains(n, "fabricengine"):

@@ -17,7 +17,7 @@ export type CtxKind = 'selection' | 'clipboard' | 'terminal' | 'tab' | 'file';
 export interface Ctx { id: number; kind: CtxKind; tabId?: string; label: string; detail: string; text: string; }
 export interface Img { name: string; mediaType: string; data: string; url: string; }
 export type StepState = 'ask' | 'running' | 'done' | 'skipped' | 'error' | 'refused';
-export type StepKind = 'run' | 'open' | 'find' | 'log' | 'record' | 'lab' | 'help' | 'status' | 'snmp' | 'http' | 'syslog' | 'device';
+export type StepKind = 'run' | 'open' | 'find' | 'log' | 'record' | 'lab' | 'help' | 'status' | 'snmp' | 'http' | 'syslog' | 'device' | 'tests' | 'skill';
 /** A step of the agent's plan: to do, being done, done. */
 export interface PlanItem { t: string; s: ' ' | '~' | 'x'; }
 export type AiMode = 'ask' | 'agent' | 'plan';
@@ -42,6 +42,7 @@ export const AGENT_TOOLS = [
   { k: 'snmp', name: 'SNMP', what: 'Reads devices with SNMP (get, walk, tables, MIB lookups, received traps) with the credentials of their saved sessions; a Set follows the permission above and always asks on production sessions' },
   { k: 'http', name: 'API client', what: 'Sends REST API requests with the saved API sessions (their login and secrets stay in Termwright), runs, saves and imports collections; POST, PUT, PATCH and DELETE follow the permission above and always ask on production sessions' },
   { k: 'device', name: 'Device facts and type', what: 'Reads the facts of saved sessions (model, version, serial number, uptime), identifies a session\'s device type with the Detect patterns and sets it after asking - logging in in the background with the saved login' },
+  { k: 'tests', name: 'Tests', what: 'Lists, writes, runs and schedules Termwright tests (YAML steps with checks on commands, REST requests and SNMP values) and reads their results' },
   { k: 'syslog', name: 'Syslog', what: 'Reads the messages the syslog server received (by sender, severity, words, time), starts or stops it and sends test messages' },
 ] as const;
 const MAX_CHATS = 40, MAX_OUT = 12000, MAX_STEPS = 25;
@@ -302,13 +303,14 @@ export class AIChat {
           deviceType: t?.session?.deviceType ?? '', protocol: t?.session?.protocol ?? '', agent,
           tabs: agent ? this.tabs.tabs().filter(x => x.kind === 'terminal').map(x => `${x.title} (${x.session.deviceType || 'unknown'}, ${x.state})`) : [],
           tools: Object.entries(this.tools()).filter(([, on]) => on).map(([k]) => k).concat(['none']),
+          session: t?.session?.path ?? '',
           folders: agent ? folders(this.ui.tree()) : [], perm: planOnly ? 'readonly' : this.perm(), plan: planOnly ? 'only' : agent ? 'list' : '',
         });
         const { text, actions, plan } = parseActions(ans.text);
         const msg: ChatMsg = { id: ++nid, role: 'assistant', text, time: now(), wire: ans.text, model: ans.model, secs: Math.round((Date.now() - started) / 1000), steps: [], usage: ans.usage ?? null, ...(plan.length ? { plan } : {}) };
         this.push(chatId, msg);
         // looking up Termwright's guides and its own state is read-only: done in every mode, with no tool to turn on
-        const lookups = (k: StepKind) => k === 'help' || k === 'status';
+        const lookups = (k: StepKind) => k === 'help' || k === 'status' || k === 'skill';
         const todo = agent ? actions : actions.filter(a => lookups(a.kind));
         if (!todo.length || this.stopping) break;
         const results: string[] = [];
@@ -334,6 +336,13 @@ export class AIChat {
   /** One agent step: open a session or run a command, asking when the rules say so. */
   private async act(s: Step, chatId: string): Promise<string> {
     const perm = this.mode() === 'plan' ? 'readonly' : this.perm();
+    if (s.kind === 'skill') {
+      try {
+        const out = await this.backend.aiSkillForChat(s.command);
+        s.state = 'done'; s.auto = true; s.output = out; s.note = tr('skill loaded - following its steps');
+        return `skill ${s.command}:\n${out}`;
+      } catch (e) { s.state = 'error'; s.note = errText(e).slice(0, 160); return `skill ${s.command}: ${errText(e)}`; }
+    }
     if (s.kind === 'help' || s.kind === 'status') {
       const out = s.kind === 'help' ? await this.backend.aiHelp(s.command) : await this.backend.aiStatus();
       s.state = 'done'; s.auto = true; s.output = out; s.note = s.kind === 'help' ? tr('looked up the guides') : tr('read Termwright’s state');
@@ -371,7 +380,7 @@ export class AIChat {
     }
     if (s.kind === 'log' || s.kind === 'record') return this.evidence(s);
     if (s.kind === 'lab') return this.labStep(s, chatId);
-    if (s.kind === 'snmp' || s.kind === 'http' || s.kind === 'syslog' || s.kind === 'device') return this.netStep(s, chatId, perm);
+    if (s.kind === 'snmp' || s.kind === 'http' || s.kind === 'syslog' || s.kind === 'device' || s.kind === 'tests') return this.netStep(s, chatId, perm);
     const t = findTab(this.tabs.tabs(), s.tab);
     if (!t) { s.state = 'error'; s.note = tr('No open tab is called {0}', s.tab); return `run ${s.tab}: no open tab has that name - open it first.`; }
     s.tab = t.title;
@@ -604,10 +613,12 @@ export function parseActions(text: string): { text: string; actions: { kind: Ste
       if (m) { actions.push({ kind: 'run', tab: m[1].trim(), command: m[2].trim() }); continue; }
       m = /^(log|record)\s+(.+?)\s*:\s*(.+)$/i.exec(l);
       if (m) { actions.push({ kind: m[1].toLowerCase() as StepKind, tab: m[2].trim(), command: m[3].trim() }); continue; }
+      m = /^skill\s+([a-z0-9][a-z0-9-]*)\s*$/i.exec(l);
+      if (m) { actions.push({ kind: 'skill', tab: 'skill', command: m[1].toLowerCase() }); continue; }
       m = /^help\s+(.+)$/i.exec(l);
       if (m) { actions.push({ kind: 'help', tab: 'help', command: m[1].trim() }); continue; }
       if (/^status\s*$/i.test(l)) { actions.push({ kind: 'status', tab: 'status', command: '' }); continue; }
-      m = /^(snmp|http|syslog|device)\s+(\{.*\})\s*$/i.exec(l);
+      m = /^(snmp|http|syslog|device|tests)\s+(\{.*\})\s*$/i.exec(l);
       if (m) { const k = m[1].toLowerCase() as StepKind; actions.push({ kind: k, tab: k, command: m[2] }); continue; }
       m = /^lab(?:\s+(.*))?$/i.exec(l);
       if (m) { actions.push({ kind: 'lab', tab: 'lab', command: (m[1] ?? 'show').trim() }); continue; }

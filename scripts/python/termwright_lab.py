@@ -102,6 +102,13 @@ class Lab:
         self.http = HTTP(self)
         self.syslog = Syslog(self)
         self.devices = Devices(self)
+        self.tests = Tests(self)
+
+    def keep_awake(self, on: Optional[bool] = None) -> str:
+        """Whether Termwright keeps the computer awake while it is open; on=True/False changes it."""
+        act = "status" if on is None else ("on" if on else "off")
+        r = self.request("POST", "/tools/keep_awake", {"action": act}, root=True)
+        return r.get("result", "") if isinstance(r, dict) else str(r)
 
     # ---- plain requests ----
     def request(self, method: str, path: str, body: Any = None, timeout: Optional[float] = None, raw: bool = False, binary: bool = False,
@@ -142,6 +149,18 @@ class Lab:
 
     def tools(self) -> list:
         return self.request("GET", "/tools")
+
+    def skills(self) -> list:
+        """The AI skills (SKILL.md procedures the AI assistant follows), without their text."""
+        return self.request("GET", "/ai/skills", root=True) or []
+
+    def skill(self, name: str) -> dict:
+        """One skill with the whole text of its SKILL.md."""
+        return self.request("GET", "/ai/skills/" + urllib.parse.quote(name, safe=""), root=True)
+
+    def save_skill(self, text: str, replace: str = "") -> dict:
+        """Add or replace a skill from the text of a SKILL.md (replace: its name before, to rename it)."""
+        return self.request("POST", "/ai/skills", {k: v for k, v in {"text": text, "replace": replace}.items() if v}, root=True)
 
     def tool(self, name: str, /, **args) -> str:
         """Run a lab tool (power, cable, console, wait, capture, address, cpu, computer, debug, ...). Its
@@ -662,6 +681,29 @@ class SNMP:
         """The trap receiver's state and the traps it has received, newest first."""
         return self.lab.request("GET", "/snmp/traps", root=True)
 
+    def _tool(self, tool: str, **args) -> str:
+        r = self.lab.request("POST", "/tools/" + tool, {k: v for k, v in args.items() if v is not None}, root=True, timeout=max(self.lab.timeout, 60))
+        return r.get("result", "") if isinstance(r, dict) else str(r)
+
+    def dashboards(self) -> str:
+        """The saved poll dashboards (SNMP Browser → Dashboards)."""
+        return self._tool("snmp", action="dashboards")
+
+    def poll_dashboard(self, dashboard: str) -> str:
+        """Polls a saved dashboard once: each value, and ALARM when it crosses its threshold."""
+        return self._tool("snmp", action="poll_dashboard", dashboard=dashboard)
+
+    def simulate(self, file: str, port: int = 1161, community: str = "public") -> str:
+        """Answers SNMP v1/v2c on 127.0.0.1:port from a walk file (snmpwalk -On format), like the device it came from."""
+        return self._tool("snmp", action="simulate", file=file, port=port, community=community)
+
+    def stop_simulator(self) -> str:
+        return self._tool("snmp", action="stop_simulator")
+
+    def load_walk(self, file: str) -> str:
+        """The values of a walk file, named with the loaded MIBs."""
+        return self._tool("snmp", action="load_walk", file=file)
+
     @staticmethod
     def table(result: dict) -> dict:
         """{oid name: display} of a result."""
@@ -673,6 +715,27 @@ class HTTP:
 
     def __init__(self, lab: Lab):
         self.lab = lab
+
+    def _tool(self, **args) -> str:
+        r = self.lab.request("POST", "/tools/http", {k: v for k, v in args.items() if v is not None}, root=True, timeout=max(self.lab.timeout, 60))
+        return r.get("result", "") if isinstance(r, dict) else str(r)
+
+    def mock(self, collection: str, port: int = 0) -> str:
+        """Serves the collection's saved examples on 127.0.0.1 (port 0: a free one); returns its address."""
+        return self._tool(action="mock", collection=collection, port=port or None)
+
+    def stop_mock(self, collection: str) -> str:
+        return self._tool(action="stop_mock", collection=collection)
+
+    def mocks(self) -> str:
+        return self._tool(action="mocks")
+
+    def monitors(self) -> str:
+        """The API monitors (a collection run every few minutes) and their last results."""
+        return self._tool(action="monitors")
+
+    def run_monitor(self, id: str) -> str:
+        return self._tool(action="run_monitor", id=id)
 
     def send(self, url: str, method: str = "GET", session: Optional[str] = None, env: str = "", headers: Optional[dict] = None,
              params: Optional[dict] = None, json_body: Any = None, text: Optional[str] = None, tests: str = "",
@@ -774,6 +837,95 @@ class Devices:
     def types(self) -> str:
         """The device types with their Detect patterns and commands."""
         return self._run(action="types")
+
+
+class Tests:
+    """Termwright tests: YAML files in the tests folder (cases/), run against saved sessions and API sessions."""
+
+    def __init__(self, lab: "Lab"):
+        self.lab = lab
+
+    def _run(self, timeout: Optional[float] = None, **args) -> str:
+        r = self.lab.request("POST", "/tools/tests", {k: v for k, v in args.items() if v is not None}, root=True, timeout=timeout or max(self.lab.timeout, 150))
+        return r["result"] if isinstance(r, dict) and "result" in r else r
+
+    def list(self) -> str:
+        """The tests: file, name, number of steps, tags."""
+        return self._run(action="list")
+
+    def show(self, file: str) -> str:
+        """One test as YAML (file relative to the tests folder; cases/ and .yaml may be left out)."""
+        return self._run(action="show", file=file)
+
+    def save(self, file: str, yaml_text: str) -> str:
+        """Write a test from YAML (never with passwords: name saved sessions)."""
+        return self._run(action="save", file=file, yaml=yaml_text)
+
+    def run(self, *files: str, vars: Optional[dict] = None, testbed: Optional[str] = None, on_cleanup_fail: str = "",
+            cleanup: str = "", tags: Optional[list] = None, testbeds: Optional[list] = None, timeout: float = 1800) -> str:
+        """Run tests (none: all), optionally on a testbed (a file in testbeds/). on_cleanup_fail: what happens
+        when a test's cleanup fails - "stop" (default: the remaining tests are skipped), "restore" (put back the
+        configuration saved before the run) or "factory" (factory default); both may reboot the devices.
+        cleanup: "steps" (default), "off" (no cleanup - tests build on each other) or "auto" (the cleanup
+        steps, else the undo of the configuration commands that ran). files may be tests, folders or suites/... files;
+        tags: only tests with one of these tags ("!slow" leaves those out). testbeds: run on several at the same time.
+        Returns pass/fail per step and the report's path (JUnit XML and HTML in reports/)."""
+        return self._run(timeout=timeout, action="run", files=list(files) or None, vars=vars, testbed=testbed,
+                         on_cleanup_fail=on_cleanup_fail or None, cleanup=cleanup or None, tags=tags or None, testbeds=testbeds or None)
+
+    def send_qtest(self, dir: str = "", files: Optional[list] = None) -> str:
+        """Sends a run's results (default: the last run) to qTest - the tests that name a qTest test case."""
+        return self._run(action="send_qtest", dir=dir or None, files=files or None)
+
+    def approvals(self) -> str:
+        """Run approval requests (roles.yaml approval: production|always), newest first."""
+        return self._run(action="approvals")
+
+    def request_approval(self, files: list, testbed: str = "", reason: str = "") -> str:
+        """Asks for a run of these tests on a testbed to be approved."""
+        return self._run(action="request_approval", files=list(files), testbed=testbed or None, reason=reason or None)
+
+    def approve(self, id: str, note: str = "") -> str:
+        """Approves a run request (approvers only, not your own); the run may start within 24 hours."""
+        return self._run(action="approve", id=id, note=note or None)
+
+    def reject(self, id: str, note: str = "") -> str:
+        """Rejects a run request."""
+        return self._run(action="reject", id=id, note=note or None)
+
+    def defect(self, file: str, dir: str = "") -> str:
+        """Opens a Jira defect for a failed test of a run (default: the last run)."""
+        return self._run(action="defect", file=file, dir=dir or None)
+
+    def history(self, file: str = "", limit: int = 30) -> str:
+        """Past results of a test (or of every test): pass rate, flips (flaky) and results per software version."""
+        return self._run(action="history", file=file or None, limit=limit)
+
+    def new_testbed(self, name: str, folder: str) -> str:
+        """Write testbeds/<name>.yaml with a role for each saved session of a session folder (core-sw1 -> {{core_sw1}})."""
+        return self._run(action="new_testbed", name=name, folder=folder)
+
+    def generate(self, *files: str) -> str:
+        """Write the Go, Python and TCL tests again (none: all); see USER_GUIDE "Tests"."""
+        return self._run(action="generate", files=list(files) or None)
+
+    def schedules(self) -> str:
+        """The scheduled runs with their last result and next run."""
+        return self._run(action="schedules")
+
+    def schedule(self, name: str, repeat: str = "daily", at: Optional[str] = None, day: Optional[int] = None, hours: Optional[int] = None,
+                 files: Optional[list] = None, testbed: Optional[str] = None, production: bool = False, id: Optional[str] = None) -> str:
+        """Add (or, with id, change) a scheduled run: repeat daily, weekdays, weekly (day 0-6) or hours; at "HH:MM"."""
+        return self._run(action="schedule", name=name, repeat=repeat, at=at, day=day, hours=hours, files=files, testbed=testbed,
+                         production="true" if production else None, id=id)
+
+    def unschedule(self, id: str) -> str:
+        """Remove a scheduled run."""
+        return self._run(action="unschedule", id=id)
+
+    def results(self) -> str:
+        """The last run's report."""
+        return self._run(action="results")
 
 
 class Syslog:

@@ -1,0 +1,13 @@
+# EXOS: show vlan (a starting point - check it against your release's output)
+Value NAME (\S+)
+Value VID (\d+)
+Value ADDRESS (\d+\.\d+\.\d+\.\d+)
+Value MASK (\d+)
+Value FLAGS (\S+)
+Value PROTOCOL (\S+)
+Value ACTIVE_PORTS (\d+)
+Value TOTAL_PORTS (\d+)
+Value VR (\S+)
+
+Start
+  ^${NAME}\s+${VID}\s+(?:${ADDRESS}\s*/${MASK}\s+)?${FLAGS}\s+${PROTOCOL}\s+${ACTIVE_PORTS}\s*/\s*${TOTAL_PORTS}\s+${VR} -> Record

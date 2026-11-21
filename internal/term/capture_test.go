@@ -240,3 +240,51 @@ func TestCaptureYes(t *testing.T) {
 		t.Fatalf("got %q", outs)
 	}
 }
+
+// OpenCapture logs in once; several commands run on that login.
+func TestCaptureConnReuse(t *testing.T) {
+	got := make(chan string, 64)
+	addr := fakeSwitchOpt(t, "secret", false, got)
+	host, port, _ := net.SplitHostPort(addr)
+	p, _ := strconv.Atoi(port)
+	m := captureManager()
+	m.DevicePassword = func(string) (string, bool) { return "secret", true }
+	s := session.Defaults()
+	s.Name, s.Protocol, s.Hostname, s.Port, s.DeviceType = "sw1", session.ProtoRaw, host, p, "VOSS"
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	c, err := m.OpenCapture(ctx, s, `:\d+[>#] ?$`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		out, err := c.Run(ctx, "show running-config")
+		if err != nil || !strings.Contains(out, "vlan create 10") {
+			t.Fatal(i, out, err)
+		}
+	}
+	if !c.Alive() {
+		t.Fatal("not alive")
+	}
+	c.Close()
+	if _, err := c.Run(ctx, "show running-config"); err == nil {
+		t.Fatal("ran after Close")
+	}
+	logins, shows := 0, 0
+	for done := false; !done; {
+		select {
+		case cmd := <-got:
+			switch cmd {
+			case "enable":
+				logins++
+			case "show running-config":
+				shows++
+			}
+		default:
+			done = true
+		}
+	}
+	if logins != 1 || shows != 3 {
+		t.Fatalf("logins %d, commands %d", logins, shows)
+	}
+}

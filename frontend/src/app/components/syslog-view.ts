@@ -7,7 +7,8 @@ import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { Combo, ComboOption } from './combo';
 
-const SEV = ['emerg', 'alert', 'crit', 'err', 'warning', 'notice', 'info', 'debug'];
+const SEV_CODE = ['emerg', 'alert', 'crit', 'err', 'warning', 'notice', 'info', 'debug'];
+const SEV = ['Emergency', 'Alert', 'Critical', 'Error', 'Warning', 'Notice', 'Informational', 'Debug'];
 const FAC = ['kern', 'user', 'mail', 'daemon', 'auth', 'syslog', 'lpr', 'news', 'uucp', 'cron', 'authpriv', 'ftp', 'ntp', 'audit', 'alert', 'clock', 'local0', 'local1', 'local2', 'local3', 'local4', 'local5', 'local6', 'local7'];
 const COLORS = ['', 'red', 'amber', 'green', 'blue', 'purple'];
 const MAX_ROWS = 20000;
@@ -34,12 +35,11 @@ const MAX_ROWS = 20000;
     </div>
     <div class="sevs">
       @for (n of sevNames; track $index) {
-        <a class="sv" [class]="'sv s' + $index" [class.on]="maxSev() >= 0 && $index <= maxSev()" (click)="setSev(maxSev() === $index ? -1 : $index)" [title]="tr2($index)">
-          {{ n }} <b>{{ st()?.counts?.[$index] ?? 0 }}</b></a>
+        <button type="button" [class]="'sv s' + $index" [class.on]="maxSev() >= 0 && $index <= maxSev()" [class.has]="(st()?.counts?.[$index] ?? 0) > 0" (click)="setSev(maxSev() === $index ? -1 : $index)" [title]="tr2($index)">
+          <span class="sn"><i></i>{{ n }}</span><b>{{ st()?.counts?.[$index] ?? 0 }}</b></button>
       }
-      <span class="sp"></span>
-      <span class="mut">{{ st()?.total ?? 0 }} messages · {{ hostCount() }} senders{{ st()?.folder ? ' · saved to ' + st()!.folder : '' }}</span>
     </div>
+    <div class="sumline mut">{{ st()?.total ?? 0 }} messages · {{ hostCount() }} senders{{ st()?.folder ? ' · saved to ' + st()!.folder : '' }}{{ maxSev() >= 0 ? ' · showing ' + sevNames[maxSev()] + (maxSev() < 7 ? ' and worse' : '') : '' }}</div>
     <div class="bar">
       <input class="q" [ngModel]="query()" (ngModelChange)="setQuery($event)" placeholder="Search: words, or /regex/" spellcheck="false" />
       <app-combo class="snd" [value]="host()" (valueChange)="setHost($event)" [options]="senderOpts()" placeholder="All senders (type to search)" emptyText="No sender yet" name="sender" />
@@ -98,7 +98,7 @@ const MAX_ROWS = 20000;
             <label>Transport<select class="fs" [(ngModel)]="out.proto"><option value="udp">UDP</option><option value="tcp">TCP</option><option value="tls">TLS</option></select></label>
             <label>Format<select class="fs" [(ngModel)]="out.format"><option value="5424">RFC 5424</option><option value="3164">RFC 3164 (BSD)</option></select></label>
             <label>Facility<select class="fs" [(ngModel)]="out.facility">@for (f of facNames; track f) { <option [value]="f">{{ f }}</option> }</select></label>
-            <label>Severity<select class="fs" [(ngModel)]="out.severity">@for (n of sevNames; track n) { <option [value]="n">{{ n }}</option> }</select></label>
+            <label>Severity<select class="fs" [(ngModel)]="out.severity">@for (n of sevNames; track n) { <option [value]="sevCodes[$index]">{{ n }}</option> }</select></label>
             <label>Host name<input [(ngModel)]="out.host" placeholder="this computer" /></label>
             <label>Program<input [(ngModel)]="out.app" placeholder="termwright" /></label>
             <label class="w3">Message<input [(ngModel)]="out.text" (keydown.enter)="send()" /></label>
@@ -119,7 +119,7 @@ const MAX_ROWS = 20000;
             <tr [class]="'c-' + (m.color || '')" [class.sel]="sel()?.id === m.id" (click)="sel.set(sel()?.id === m.id ? null : m)">
               <td class="t mono">{{ time(m.at) }}</td>
               <td translate="no">{{ m.session ? m.session.split('/').pop() : m.from }}</td>
-              <td><span [class]="'sb s' + m.severity">{{ m.severityName }}</span></td>
+              <td><span [class]="'sb s' + m.severity">{{ sevNames[m.severity] ?? m.severityName }}</span></td>
               <td class="mut">{{ m.facilityName }}</td>
               <td translate="no">{{ m.host }}</td><td translate="no">{{ m.app }}</td>
               <td class="msg" translate="no">@if (m.rule) { <span class="rl">{{ m.rule }}</span> }{{ m.text }}</td>
@@ -153,16 +153,25 @@ const MAX_ROWS = 20000;
   styles: [`
     :host { display: block; height: 100%; }
     .sl { height: 100%; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; box-sizing: border-box; background: var(--bg); color: var(--text); font-size: 13px; }
-    .head, .bar, .sevs, .btns, .checks { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .head, .bar, .btns, .checks { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     h2 { margin: 0 6px 0 0; font-size: 17px; font-weight: 600; }
     .sp { flex: 1; } .mut { color: var(--muted); font-size: 12px; } .mono { font-family: var(--mono); font-size: 12px; } .bad { color: var(--danger); }
     .chip { border: 1px solid var(--border); border-radius: 12px; padding: 2px 10px; font-size: 12px; color: var(--muted); }
     .chip.ok { border-color: color-mix(in srgb, var(--ok) 55%, transparent); color: var(--ok); } .chip.bad { border-color: color-mix(in srgb, var(--danger) 55%, transparent); color: var(--danger); }
     button.pri { background: var(--accent); color: #fff; border-color: var(--accent); } button.on { border-color: var(--accent); color: var(--accent); }
-    .sv { border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; cursor: pointer; font-size: 12px; color: var(--muted); }
-    .sv b { color: var(--text); margin-left: 4px; font-weight: 600; } .sv.on { background: var(--accent-soft); border-color: var(--accent); }
-    .sv.s0, .sv.s1, .sv.s2 { border-left: 3px solid #e11d48; } .sv.s3 { border-left: 3px solid var(--danger); } .sv.s4 { border-left: 3px solid var(--warn); }
-    .sv.s5 { border-left: 3px solid var(--accent); } .sv.s6 { border-left: 3px solid var(--ok); } .sv.s7 { border-left: 3px solid var(--faint); }
+    .sevs { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; }
+    @media (max-width: 900px) { .sevs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+    .sv { --c: var(--faint); display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; height: auto !important; padding: 8px 12px !important;
+      border: 1px solid var(--border) !important; border-radius: 8px !important; background: var(--panel) !important; color: var(--muted) !important; cursor: pointer; text-align: left; box-shadow: none !important; }
+    .sv:hover { border-color: color-mix(in srgb, var(--c) 55%, var(--border)) !important; }
+    .sv .sn { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+    .sv .sn i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
+    .sv b { font-size: 20px; line-height: 1.1; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .sv.has b { color: var(--text); } .sv.has.s0 b, .sv.has.s1 b, .sv.has.s2 b, .sv.has.s3 b { color: var(--c); }
+    .sv.on { background: color-mix(in srgb, var(--c) 10%, var(--panel)) !important; border-color: var(--c) !important; }
+    .sv.s0 { --c: #be123c; } .sv.s1 { --c: #e11d48; } .sv.s2 { --c: #f43f5e; } .sv.s3 { --c: var(--danger); } .sv.s4 { --c: var(--warn); }
+    .sv.s5 { --c: var(--accent); } .sv.s6 { --c: var(--ok); } .sv.s7 { --c: var(--faint); }
+    .sumline { font-size: 12px; }
     .snd { width: 260px; }
     .bar .q { flex: 1; min-width: 220px; font-family: var(--mono); }
     .chk { display: inline-flex; gap: 5px; align-items: center; color: var(--muted); }
@@ -203,7 +212,7 @@ export class SyslogView implements OnInit, OnDestroy {
   readonly ui = inject(Ui);
   private readonly list = viewChild<ElementRef<HTMLElement>>('list');
 
-  readonly sevNames = SEV; readonly facNames = FAC; readonly colors = COLORS;
+  readonly sevCodes = SEV_CODE; readonly sevNames = SEV; readonly facNames = FAC; readonly colors = COLORS;
   readonly st = signal<SyslogState | null>(null);
   readonly rows = signal<SyslogMsg[]>([]);
   readonly query = signal('');

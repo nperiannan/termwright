@@ -45,6 +45,8 @@ type AIChatRequest struct {
 	Folders    []string `json:"folders"`        // agent: the saved-session folders
 	Perm       string   `json:"perm"`           // agent: "" changes ask first, "every", "readonly", "auto" (fully autonomous)
 	Plan       string   `json:"plan,omitempty"` // agent: "list" (a task of several steps gets a checklist plan first), "only" (Plan mode: look, plan, run nothing that changes)
+	// Session: the saved session of the tab the chat is about (its folder's AI instructions).
+	Session string `json:"session,omitempty"`
 }
 
 const aiMaxImages = 4
@@ -130,6 +132,7 @@ func (a *App) AIChat(r AIChatRequest) (AIAnswer, error) {
 	if r.Agent {
 		sys += netAgentText(r.Tools)
 	}
+	sys += a.aiInstructionsText(r.Session, r.DeviceType)
 	out, usage, err := aiConverse(ctx, s, key, model, sys, msgs)
 	if err != nil {
 		return AIAnswer{}, err

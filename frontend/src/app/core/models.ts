@@ -35,7 +35,7 @@ export interface Session {
 /** A login profile for a kind of device (EXOS, VOSS, Cisco IOS …). */
 export interface DeviceType {
   name: string; icon?: string; protocol: string; port: number; username: string; credential: string; initialCr: boolean;
-  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string; detect?: string; detectCommand?: string; tunnel?: string; webCheck?: string; webHttp?: string; webHttps?: string; webOn?: string; webSave?: string; aiReadOnly?: string;
+  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string; undoRules?: string; testSave?: string; testRestore?: string; errorPatterns?: string; factoryReset?: string; upgrade?: string; map?: TopoPlan | null; aiInstructions?: string; detect?: string; detectCommand?: string; tunnel?: string; webCheck?: string; webHttp?: string; webHttps?: string; webOn?: string; webSave?: string; aiReadOnly?: string;
   facts?: FactRule[] | null;
 }
 /** A value read from command output after connecting: the first group of regex. every = at each connect. */
@@ -49,7 +49,7 @@ export interface Snippet { name: string; folder: string; text: string; descripti
 export interface Workspace { name: string; layout: string; tabs: { session: string; kind: string }[]; }
 export interface FolderDefault {
   folder: string; username: string; deviceType: string; jumpSession: string; identityFile: string; keywordSet: string; colorScheme: string;
-  environment?: string; record?: boolean; smartCard?: string; account?: string;
+  environment?: string; record?: boolean; smartCard?: string; account?: string; aiInstructions?: string; aiSkills?: string[];
 }
 /** Variables used in a snippet, in order: [{name, def}]. */
 export function snippetVars(text: string): { name: string; def: string }[] {
@@ -147,7 +147,13 @@ export interface DeviceName { path: string; name: string; host: string; hostname
 
 export interface Button { label: string; send: string; toAll: boolean; action: string; script: string; }
 
+export interface IntegrationsConfig {
+  qtest: { baseUrl?: string; user?: string; project?: number; cycle?: number; auto?: boolean };
+  jira: { baseUrl?: string; user?: string; project?: string; issueType?: string; auto?: boolean };
+  git: { host?: string; user?: string };
+}
 export interface Settings {
+  integrations?: IntegrationsConfig;
   vaultAddr?: string; keyPassphrases?: string[];
   sessionsDir: string; logDir: string; downloadDir: string; fontFamily: string; fontSize: number; lineHeight?: number; theme: string; uiFont?: string; uiFontSize?: number;
   terminalScheme: string; cursorStyle: 'block' | 'underline' | 'bar'; cursorBlink: boolean;
@@ -157,7 +163,7 @@ export interface Settings {
   pasteLineDelayMs: number; buttons: Button[]; recentSessions: string[];
   favorites?: string[] | null; lastConnected?: Record<string, string> | null; showReachability?: boolean; reachFolder?: string;
   backupDir?: string; backupJobs?: BackupJob[] | null;
-  checklists?: Checklist[] | null; checklistDir?: string; recordHistory?: boolean | null;
+  checklists?: Checklist[] | null; checklistDir?: string; recordHistory?: boolean | null; keepAwake?: boolean | null;
   recordSessions?: boolean; recordDir?: string; recordKeepDays?: number;
   smartCardLibraries?: string[] | null; smartCardPinEachTime?: boolean;
   collections?: Collection[] | null; collectDir?: string;
@@ -306,7 +312,7 @@ export const ACTIONS: Record<string, string> = {
   'layout-tabs': 'Tabbed View', 'layout-tile-v': 'Tile Side by Side', 'layout-tile-h': 'Tile Stacked', 'layout-grid': 'Tile Grid',
   'send-break': 'Send Break', 'send-file': 'Send Text File...', 'save-selection': 'Save Selection As...',
   'xmodem': 'Send XMODEM...', 'xmodem-receive': 'Receive XMODEM...', 'scp-upload': 'SCP Upload File...', 'scp-upload-folder': 'SCP Upload Folder...', 'scp-download': 'SCP Download...',
-  'ymodem-send': 'Send YMODEM...', 'ymodem-receive': 'Receive YMODEM', passwords: 'Passwords & Accounts...', 'check-updates': 'Check for Updates...', 'key-setup': 'Set Up Key Login...', 'remote-desktop': 'Set Up Remote Desktop...', 'quick-open': 'Quick Open...', welcome: 'Welcome...', 'new-session': 'New Session...', 'capture-screen': 'Save Screen As Image...', 'teach-fact': 'Save Selection as Device Fact...', 'toggle-icon-style': 'Tile / Glyph Icons', 'command-library': 'Command Library...', 'net-check': 'Network Check...', 'sim-lab': 'Simulated Lab...', 'lab-emu': 'Emulated Lab', 'lab-sim': 'Simulated Lab', 'lab-overview': 'Lab Overview', 'lab-traffic': 'Traffic Generator', 'lab-appliances': 'Appliances', 'lab-hosts': 'KVM Hosts', 'snmp-browser': 'SNMP Browser', 'snmp-traps': 'SNMP Trap Receiver', 'snmp-load-mib': 'Load MIB Files...', 'api-client': 'API Client', 'api-new-session': 'New API Session...', 'api-import': 'Import Postman, OpenAPI or cURL...', 'syslog-server': 'Syslog Server', 'syslog-toggle': 'Start / Stop Syslog Receiving', 'syslog-send': 'Send Syslog Test Message...', 'connect-ai': 'Connect an AI App...', 'workspaces': 'Workspaces...',
+  'ymodem-send': 'Send YMODEM...', 'ymodem-receive': 'Receive YMODEM', passwords: 'Passwords & Accounts...', 'check-updates': 'Check for Updates...', 'key-setup': 'Set Up Key Login...', 'remote-desktop': 'Set Up Remote Desktop...', 'quick-open': 'Quick Open...', welcome: 'Welcome...', 'new-session': 'New Session...', 'capture-screen': 'Save Screen As Image...', 'teach-fact': 'Save Selection as Device Fact...', 'toggle-icon-style': 'Tile / Glyph Icons', 'command-library': 'Command Library...', 'net-check': 'Network Check...', 'sim-lab': 'Simulated Lab...', 'lab-emu': 'Emulated Lab', 'lab-sim': 'Simulated Lab', 'lab-overview': 'Lab Overview', 'lab-traffic': 'Traffic Generator', 'lab-appliances': 'Appliances', 'lab-hosts': 'KVM Hosts', 'snmp-browser': 'SNMP Browser', 'snmp-traps': 'SNMP Trap Receiver', 'snmp-load-mib': 'Load MIB Files...', 'api-client': 'API Client', 'api-new-session': 'New API Session...', 'api-import': 'Import Postman, OpenAPI or cURL...', 'syslog-server': 'Syslog Server', 'test-record': 'Record a Test', 'tests-open': 'Tests', 'syslog-toggle': 'Start / Stop Syslog Receiving', 'syslog-send': 'Send Syslog Test Message...', 'connect-ai': 'Connect an AI App...', 'workspaces': 'Workspaces...',
   'save-workspace': 'Save Workspace...', 'compare': 'Compare Outputs...',
   'zoom-in': 'Zoom In', 'zoom-out': 'Zoom Out', 'global-options': 'Global Options', 'session-options': 'Session Options',
 };
@@ -395,7 +401,9 @@ export interface TeamPushResult { status: 'new' | 'added' | 'exists' | 'pending'
 export interface SyncStatus { folder: string; last: string; peers: string[] | null; took: number; error: string; }
 
 /** The AI assistant (optional): the provider and model; the API key is in the OS keychain. */
-export interface AISettings { provider?: '' | 'anthropic' | 'openai' | 'ollama' | 'claudecode'; model?: string; baseUrl?: string; hideHosts?: boolean; mcp?: boolean; mcpCommands?: '' | 'never'; api?: boolean; agentPerm?: '' | 'every' | 'readonly' | 'auto'; effort?: string; agentToolsOff?: string[]; }
+export interface AISettings { provider?: '' | 'anthropic' | 'openai' | 'ollama' | 'claudecode'; model?: string; baseUrl?: string; hideHosts?: boolean; mcp?: boolean; mcpCommands?: '' | 'never'; api?: boolean; agentPerm?: '' | 'every' | 'readonly' | 'auto'; effort?: string; agentToolsOff?: string[]; instructions?: string; skillsOff?: string[]; }
+/** An AI skill (a SKILL.md in the skills folder). */
+export interface AISkill { name: string; description: string; deviceTypes?: string[]; text?: string; files?: string[]; path: string; modified: string; on: boolean; }
 export interface MCPInfo { running: boolean; command: string; codeCmd: string; desktopCfg: string; inDesktop: boolean; inCode?: boolean; apiUrl?: string; keyFile?: string; clients?: MCPClient[]; }
 /** An AI app that used Termwright since it started. */
 export interface MCPClient { name: string; at: string; calls: number; tool?: string; }
@@ -550,7 +558,7 @@ export interface HKV { key: string; value: string; off?: boolean; desc?: string;
 export interface HBody { mode?: string; raw?: string; form?: HKV[]; graphqlVars?: string; file?: string; }
 export interface HReqAuth { token?: string; user?: string; password?: string; key?: string; value?: string; in?: string; }
 export interface HSettings { httpVersion?: string; verify?: string; noRedirects?: boolean; followMethod?: boolean; followAuth?: boolean; removeReferer?: boolean; noEncode?: boolean; noCookies?: boolean; maxRedirects?: number; timeoutMs?: number; }
-export interface HRequest { id?: string; name?: string; folder?: string; method: string; url: string; params?: HKV[]; pathVars?: HKV[]; headers?: HKV[]; body?: HBody; auth?: string; authData?: HReqAuth;
+export interface HRequest { examples?: HExample[]; schema?: string; id?: string; name?: string; folder?: string; method: string; url: string; params?: HKV[]; pathVars?: HKV[]; headers?: HKV[]; body?: HBody; auth?: string; authData?: HReqAuth;
   settings?: HSettings; preScript?: string; tests?: string; description?: string; }
 export interface HCollection { id: string; name: string; session?: string; vars?: HKV[]; requests: HRequest[]; description?: string; auth?: string; authData?: HReqAuth; preScript?: string; tests?: string; }
 export interface HEnvVar { key: string; value: string; secret?: boolean; off?: boolean; desc?: string; hasValue?: boolean; }
@@ -577,3 +585,45 @@ export interface SyslogMsg { id: number; at: string; from: string; proto: string
 export interface SyslogRule { name: string; match?: string; maxSeverity: number; host?: string; color?: string; notify?: boolean; hide?: boolean; off?: boolean; }
 export interface SyslogQuery { after?: number; text?: string; host?: string; maxSeverity?: number; limit?: number; }
 export interface SyslogSendIn { target: string; proto?: string; format?: string; facility?: string; severity?: string; host?: string; app?: string; text: string; count?: number; insecure?: boolean; }
+
+/** Tests (internal/testrec): a YAML test case, its list entry and a run's report. */
+export interface TestExpect { oid?: string; contains?: string; notContains?: string; matches?: string; field?: string; json?: string; status?: number; maxMs?: number; equals?: string; notEquals?: string; greater?: number; less?: number; exists?: boolean; table?: TestTableExpect; }
+export interface TestTableExpect { where?: Record<string, string>; column?: string; rows?: number; equals?: string; notEquals?: string; matches?: string; greater?: number; less?: number; exists?: boolean; }
+export interface TestTable { header: string[]; rows: string[][]; }
+export interface TestStep {
+  name?: string; run?: { session: string; command: string; prompt?: string; parse?: string };
+  http?: { session?: string; environment?: string; collection?: string; method?: string; url: string; headers?: Record<string, string>; body?: string };
+  snmp?: { session: string; op?: string; oids?: string[]; values?: { oid: string; type?: string; value: string }[] };
+  expect?: TestExpect[]; save?: { var: string; field?: string; json?: string; oid?: string; where?: Record<string, string>; column?: string }[]; timeout?: number; continueOnFail?: boolean; ignoreErrors?: boolean;
+  expected?: string; manual?: { instruction: string }; traffic?: { test: string }; upgrade?: { session: string; image: string }; wait?: number; if?: string; retry?: { timeout?: number; interval?: number }; loop?: { var: string; values?: string[]; range?: string; from?: string; steps: TestStep[] };
+}
+export interface TestCase { qtest?: { testCase: string }; name?: string; description?: string; tags?: string[]; dependsOn?: string[]; watch?: { syslog?: string[]; traps?: string[]; devices?: string[] }; configDiff?: boolean; configIgnore?: string[]; vars?: Record<string, string>; params?: Record<string, string>[]; restore?: ('config' | 'lab')[]; setup?: TestStep[]; steps: TestStep[]; cleanup?: TestStep[]; }
+export interface TestCaseInfo { file: string; name: string; description?: string; tags?: string[]; steps: number; error?: string; }
+export interface TestCheckResult { what: string; passed: boolean; got?: string; }
+export interface TestStepResult { name: string; kind: string; phase?: '' | 'setup' | 'cleanup' | 'restore'; target?: string; sent?: string; status?: number; output?: string; ms: number; passed: boolean; skipped?: boolean; unchecked?: boolean; error?: string; checks?: TestCheckResult[]; table?: TestTable; expected?: string; }
+export interface TestResult { case: string; file?: string; start: string; ms: number; passed: boolean; skipped?: boolean; cleanupFailed?: boolean; log?: string; qtestRun?: string; defect?: string; defectUrl?: string; versions?: Record<string, string>; error?: string; steps: TestStepResult[]; }
+export interface TestsTree { root: string; cases: TestCaseInfo[]; testbeds: string[]; reports: { dir: string; passed: number; failed: number; ms: number; skipped?: number; testbed?: string }[]; lib?: string[]; templates?: string[]; suites?: { file: string; name: string; tests: number; error?: string }[]; locks?: { testbed: string; user: string; host: string; since: string; mine?: boolean }[]; }
+export interface TestSchedule { id: string; name: string; files?: string[]; testbed?: string; repeat: 'daily' | 'weekdays' | 'weekly' | 'hours'; at?: string; day?: number; hours?: number; production?: boolean; off?: boolean; onCleanupFail?: OnCleanupFail; cleanup?: CleanupMode; tags?: string[]; }
+export interface TestScheduleView extends TestSchedule { state: { last: string; passed: number; failed: number; dir?: string; error?: string }; next?: string; when: string; }
+export interface TestsGitInfo { repo: boolean; branch?: string; changed: number; upstream?: boolean; ahead?: number; behind?: number; hasGo: boolean; hasGit: boolean; }
+export type CleanupMode = '' | 'off' | 'auto';
+export type OnCleanupFail = '' | 'stop' | 'restore' | 'factory';
+export interface TestHistory { file: string; runs: { at: string; dir: string; file: string; case: string; passed: boolean; skipped?: boolean; ms: number; testbed?: string; versions?: Record<string, string>; problem?: string }[]; passed: number; failed: number; skipped: number; flips: number; avgMs: number; byVersion: { version: string; passed: number; failed: number }[]; }
+export interface TestRunReport { runBy?: string; versions?: Record<string, string>; testbed?: string; cleanup?: CleanupMode; dir: string; passed: number; failed: number; skipped?: number; onCleanupFail?: OnCleanupFail; recovery?: TestStepResult[]; ms: number; results: TestResult[]; }
+
+/** How the network map reads a device type with TextFSM templates (any vendor). */
+export interface TopoPlan { paging?: string; identity?: string; identityTemplate?: string; neighbors?: string; neighborsTemplate?: string; ports?: string; portsTemplate?: string; }
+
+/** A request to run tests that need an approval (roles.yaml). */
+export interface TestApproval { id: string; files: string[]; testbed?: string; reason?: string; requestedBy: string; at: string; approvedBy?: string; approvedAt?: string; rejected?: boolean; note?: string; expired?: boolean; }
+
+/** A saved answer of an API request (documentation, and what its collection's mock server answers). */
+export interface HExample { name: string; status: number; headers?: HKV[]; body?: string; }
+export interface HMockInfo { collection: string; name: string; port: number; since: string; hits: number; missed: number; routes: number; }
+export interface APIMonitor { id: string; name: string; collection: string; session?: string; environment?: string; every: number; enabled: boolean; }
+export interface APIMonitorState extends APIMonitor { lastRun?: string; passed: number; failed: number; ms: number; error?: string; history?: boolean[]; running?: boolean; }
+export interface SNMPDashItem { session: string; oid: string; label?: string; rate?: boolean; above?: number | null; below?: number | null; equals?: string; }
+export interface SNMPDashboard { id: string; name: string; every: number; items: SNMPDashItem[]; alarms?: boolean; }
+export interface SNMPDashValue { display: string; value?: number; alarm?: string; error?: string; }
+export interface SNMPDashPoll { at: string; values: SNMPDashValue[]; }
+export interface SNMPSimState { running: boolean; address?: string; community?: string; values?: number; source?: string; since?: string; }

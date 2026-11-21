@@ -87,6 +87,8 @@
               @defer (on immediate) { <app-network-map [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" /> } @placeholder { <div class="lab-loading">Loading the map…</div> }
             } @else if (t.kind === 'syslog') {
               @defer (on immediate) { <app-syslog-view [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" /> } @placeholder { <div class="lab-loading">Loading…</div> }
+            } @else if (t.kind === 'tests') {
+              @defer (on immediate) { <app-tests-view [visible]="tiled() || t.id === tabs.activeId()" /> } @placeholder { <div class="lab-loading">Loading…</div> }
             } @else if (t.kind === 'api') {
               @defer (on immediate) { <app-api-client [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" /> } @placeholder { <div class="lab-loading">Loading…</div> }
             } @else if (t.kind === 'snmp') {
@@ -202,6 +204,7 @@
       }
     </div>
   </section>
+  @if (rec.on()) { <app-recorder-panel /> }
   @if (aiChat.open() && aiChat.dock() !== 'left') { <app-ai-panel /> }
   @if (ui.panel(); as p) { <app-session-panel [edit]="p" /> }
 </div>
