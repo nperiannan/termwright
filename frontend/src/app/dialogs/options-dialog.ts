@@ -1,3 +1,4 @@
+import { builtinUndo } from '../core/recorder.service';
 import { LOOKS } from '../core/map-svg';
 import { ChangeDetectorRef, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -440,6 +441,13 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <label>Backup commands</label>
                   <textarea name="dtbk" class="mono" rows="2" [(ngModel)]="d.backupCommands"
                     [placeholder]="backupDefault(d.name) || 'Commands that print the configuration, one per line, e.g. show running-config'"></textarea>
+                  <label>Undo rules</label>
+                  <textarea name="dtun" class="mono" rows="3" [(ngModel)]="d.undoRules" [placeholder]="undoDefault(d.name) || 'How the test recorder suggests the cleanup of a command, one rule per line: regular expression => undo, e.g. ^create vlan (\\S+).* => delete vlan $1'"></textarea>
+                  <label></label><div class="hint">The test recorder suggests each recorded command's undo for the cleanup. <code>$1</code>… are the groups, <code>$0</code> the whole command; an empty undo means the command needs none; the first matching rule wins. Empty: the built-in rules for {{ d.name || 'this type' }}{{ undoDefault(d.name) ? '' : ' (none)' }}.</div>
+                  <label>Test save / restore</label>
+                  <div class="row2"><textarea name="dtts" class="mono" rows="2" [(ngModel)]="d.testSave" [placeholder]="testStateDefault(d.name, 0) || 'Save the configuration, e.g. checkpoint {file}'"></textarea>
+                    <textarea name="dttr" class="mono" rows="2" [(ngModel)]="d.testRestore" [placeholder]="testStateDefault(d.name, 1) || 'Put it back, e.g. rollback running-config checkpoint {file}'"></textarea></div>
+                  <label></label><div class="hint">For tests with <b>Afterwards put back: configuration</b>: run before the test and after its cleanup, one command per line; <code>{{ '{file}' }}</code> is a name for the saved copy.</div>
                   <label>Web server</label>
                   <div class="webd">
                     <textarea name="dtwc" class="mono" rows="1" [(ngModel)]="d.webCheck" [placeholder]="webDefault(d.name, 'check') || 'A command that shows the web server, e.g. show web-server'" title="Open Web Interface runs it in the background to see whether HTTP and HTTPS are on"></textarea>
@@ -870,6 +878,12 @@ export class OptionsDialog implements OnInit {
       const m = new RegExp(ci ? p.slice(4) : p, ci ? 'im' : 'm').exec(t);
       return m ? m[0] : '';
     } catch { return 'bad'; }
+  }
+  undoDefault(name: string) { const r = builtinUndo(name); return r ? r + '\n(built-in rules)' : ''; }
+  testStateDefault(name: string, i: 0 | 1) {
+    const d: Record<string, [string, string]> = { 'cisco nx-os': ['checkpoint {file}', 'rollback running-config checkpoint {file}\nno checkpoint {file}'] };
+    const c = d[name.toLowerCase()]?.[i];
+    return c ? c + '  (built-in)' : '';
   }
   backupDefault(name: string) {
     const d: Record<string, string> = { exos: 'show configuration', voss: 'show running-config', 'cisco ios': 'show running-config' };

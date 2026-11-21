@@ -39,8 +39,10 @@ type Result struct {
 	Start time.Time `json:"start"`
 	// Ms: how long the whole case took.
 	Ms int64 `json:"ms"`
-	// Passed: every step passed.
+	// Passed: every step (setup and cleanup too) passed.
 	Passed bool `json:"passed"`
+	// CleanupFailed: a cleanup step (or the restore) failed - the device may not be clean.
+	CleanupFailed bool `json:"cleanupFailed,omitempty"`
 	// Error: why the case could not run at all (a bad file).
 	Error string `json:"error,omitempty"`
 	// Steps: one per step that ran (steps after a failure are Skipped).
@@ -51,8 +53,10 @@ type Result struct {
 type StepResult struct {
 	// Name of the step.
 	Name string `json:"name"`
-	// Kind: run or http.
+	// Kind: run, http or snmp.
 	Kind string `json:"kind"`
+	// Phase: setup, cleanup or restore ("" = the test's own steps).
+	Phase string `json:"phase,omitempty"`
 	// Target: the session or the URL.
 	Target string `json:"target,omitempty"`
 	// Sent: the command or "METHOD url" sent (variables filled in).
@@ -104,17 +108,63 @@ func Run(ctx context.Context, c Case, d Driver, vars map[string]string) Result {
 	for k, x := range vars {
 		v[k] = x
 	}
-	failed := false
-	for i, st := range c.Steps {
-		if failed || ctx.Err() != nil {
-			r.Steps = append(r.Steps, StepResult{Name: Fill(stepName(st, i), v), Kind: stepKind(st), Skipped: true})
-			continue
+	// restore: save the devices' state first; put it back after the cleanup
+	var restore func(context.Context) []StepResult
+	if len(c.Restore) > 0 {
+		rs, ok := d.(Restorer)
+		if !ok {
+			r.Passed, r.Error = false, "this runner cannot save and restore devices"
+			r.Ms = time.Since(r.Start).Milliseconds()
+			return r
 		}
-		sr := runStep(ctx, st, i, d, v)
-		r.Steps = append(r.Steps, sr)
-		if !sr.Passed {
-			r.Passed = false
-			failed = !st.ContinueOnFail
+		var save []StepResult
+		save, restore = rs.SaveState(ctx, c.Restore, Sessions(c, v))
+		for i := range save {
+			save[i].Phase = "restore"
+			r.Steps = append(r.Steps, save[i])
+			if !save[i].Passed {
+				r.Passed = false
+			}
+		}
+	}
+	failed := !r.Passed
+	run := func(list []Step, phase string, always bool) {
+		for i, st := range list {
+			if (failed && !always) || (ctx.Err() != nil && !always) {
+				r.Steps = append(r.Steps, StepResult{Name: Fill(stepName(st, i), v), Kind: stepKind(st), Phase: phase, Skipped: true})
+				continue
+			}
+			sctx := ctx
+			if always && ctx.Err() != nil { // the run was stopped: the cleanup still gets its time
+				var cancel context.CancelFunc
+				sctx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
+				defer cancel()
+			}
+			sr := runStep(sctx, st, i, d, v)
+			sr.Phase = phase
+			r.Steps = append(r.Steps, sr)
+			if !sr.Passed {
+				r.Passed = false
+				if phase == "cleanup" {
+					r.CleanupFailed = true
+				} else if !st.ContinueOnFail {
+					failed = true
+				}
+			}
+		}
+	}
+	run(c.Setup, "setup", false)
+	run(c.Steps, "", false)
+	run(c.Cleanup, "cleanup", true)
+	if restore != nil {
+		rctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		for _, sr := range restore(rctx) {
+			sr.Phase = "restore"
+			r.Steps = append(r.Steps, sr)
+			if !sr.Passed {
+				r.Passed, r.CleanupFailed = false, true
+			}
 		}
 	}
 	if len(c.Steps) == 0 {
@@ -122,6 +172,34 @@ func Run(ctx context.Context, c Case, d Driver, vars map[string]string) Result {
 	}
 	r.Ms = time.Since(r.Start).Milliseconds()
 	return r
+}
+
+// Restorer is a Driver that can save the devices' state before a test and put it back after it
+// (Case.Restore). SaveState returns its results (one per device and kind) and the function that
+// restores; that function returns the restore's results.
+type Restorer interface {
+	SaveState(ctx context.Context, kinds, sessions []string) ([]StepResult, func(context.Context) []StepResult)
+}
+
+// Sessions are the saved sessions a case's run and snmp steps use (variables filled in), in order.
+func Sessions(c Case, v map[string]string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, list := range [][]Step{c.Setup, c.Steps, c.Cleanup} {
+		for _, st := range list {
+			p := ""
+			if st.Run != nil {
+				p = st.Run.Session
+			} else if st.SNMP != nil {
+				p = st.SNMP.Session
+			}
+			if p = Fill(p, v); p != "" && !seen[p] {
+				seen[p] = true
+				out = append(out, p)
+			}
+		}
+	}
+	return out
 }
 
 // RunParams runs a case once per Params entry (once when it has none); each result is named

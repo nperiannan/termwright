@@ -476,6 +476,9 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 			return "", err
 		}
 		return "Removed.", nil
+	case "save_state", "restore_state":
+		// used by the generated tests (restore: config or lab)
+		return a.testsStateTool(ctx, act, args)
 	case "results":
 		r := a.TestLastRun()
 		if r == nil {
@@ -483,7 +486,7 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 		}
 		return testsReportText(f, *r), nil
 	default:
-		return "", fmt.Errorf("unknown action %q (list, show, run, save, generate, step, new_testbed, schedules, schedule, unschedule, results)", act)
+		return "", fmt.Errorf("unknown action %q (list, show, run, save, generate, step, new_testbed, schedules, schedule, unschedule, save_state, restore_state, results)", act)
 	}
 }
 
@@ -505,6 +508,9 @@ func testsReportText(f testrec.Folder, rep testrec.RunReport) string {
 		if r.Error != "" {
 			b.WriteString("  " + r.Error + "\n")
 		}
+		if r.CleanupFailed {
+			b.WriteString("  The cleanup failed: the device may not be clean for the next test.\n")
+		}
 		for _, st := range r.Steps {
 			m := "✓"
 			switch {
@@ -513,7 +519,7 @@ func testsReportText(f testrec.Folder, rep testrec.RunReport) string {
 			case !st.Passed:
 				m = "✗"
 			}
-			fmt.Fprintf(&b, "  %s %s", m, st.Name)
+			fmt.Fprintf(&b, "  %s %s%s", m, testrec.PhaseLabel(st.Phase), st.Name)
 			if st.Error != "" {
 				b.WriteString(": " + st.Error)
 			}

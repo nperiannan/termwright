@@ -243,3 +243,59 @@ func TestParamsAndRoles(t *testing.T) {
 		t.Fatal("replaced a testbed")
 	}
 }
+
+type restorer struct {
+	*fake
+	saved, restored []string
+}
+
+func (r *restorer) SaveState(_ context.Context, kinds, sessions []string) ([]StepResult, func(context.Context) []StepResult) {
+	r.saved = append(r.saved, sessions...)
+	return []StepResult{{Name: "save " + kinds[0], Passed: true}}, func(context.Context) []StepResult {
+		r.restored = append(r.restored, sessions...)
+		return []StepResult{{Name: "restore " + kinds[0], Passed: true}}
+	}
+}
+
+func TestSetupCleanupRestore(t *testing.T) {
+	c, err := Parse([]byte(`
+restore: [lab]
+setup: [{run: {session: s1, command: show vlan 42}}]
+steps:
+  - run: {session: s1, command: show version}
+    expect: [{contains: NOPE}]
+  - run: {session: s2, command: show version}
+cleanup:
+  - run: {session: s1, command: reload}
+  - snmp: {session: s3, op: get, oids: [sysName.0]}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rs := &restorer{fake: &fake{}}
+	r := Run(context.Background(), c, rs, nil)
+	ph := ""
+	for _, s := range r.Steps {
+		ph += s.Phase + ":" + map[bool]string{true: "ok", false: "x"}[s.Passed] + map[bool]string{true: "-", false: ""}[s.Skipped] + " "
+	}
+	// save, setup ok, step 1 fails, step 2 skipped, both cleanup steps run (the first fails), restore
+	if ph != "restore:ok setup:ok :x :x- cleanup:x cleanup:ok restore:ok " || r.Passed || !r.CleanupFailed {
+		t.Fatalf("%q %+v", ph, r)
+	}
+	if strings.Join(rs.saved, ",") != "s1,s2,s3" || len(rs.restored) != 3 {
+		t.Fatal(rs.saved, rs.restored)
+	}
+	// without a restorer a restore test cannot run; a bad restore kind is refused
+	if r := Run(context.Background(), c, &fake{}, nil); r.Passed || !strings.Contains(r.Error, "restore") {
+		t.Fatal(r.Error)
+	}
+	if _, err := Parse([]byte("restore: [disk]\nsteps: [{run: {session: a, command: b}}]")); err == nil {
+		t.Fatal("bad restore kind")
+	}
+	// a failed setup skips the steps but not the cleanup
+	c2, _ := Parse([]byte("setup: [{run: {session: s, command: nope}}]\nsteps: [{run: {session: s, command: show version}}]\ncleanup: [{run: {session: s, command: show version}}]"))
+	r2 := Run(context.Background(), c2, &fake{}, nil)
+	if !r2.Steps[1].Skipped || r2.Steps[2].Skipped || r2.Steps[2].Phase != "cleanup" || r2.CleanupFailed {
+		t.Fatalf("%+v", r2.Steps)
+	}
+}

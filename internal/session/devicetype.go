@@ -31,6 +31,16 @@ type DeviceType struct {
 	// command per line (e.g. "show running-config"); empty = the built-in
 	// default for the device type's name, if any.
 	BackupCommands string `json:"backupCommands"`
+	// UndoRules: how the test recorder suggests the cleanup of a recorded command, one rule per line
+	// "regular expression => undo" ($1… are the groups, $0 the whole command; an empty undo means
+	// the command needs none); the first rule that matches wins. Empty = the built-in rules for the
+	// type's name.
+	UndoRules string `json:"undoRules,omitempty"`
+	// TestSave and TestRestore: commands that save the configuration before a test and put it back
+	// after it (a test with restore: [config]), one per line; {file} is a name for the saved copy.
+	// Empty = the built-in ones for the type's name, if any.
+	TestSave    string `json:"testSave,omitempty"`
+	TestRestore string `json:"testRestore,omitempty"`
 	// The device's web server, for Open Web Interface (each empty = the built-in one for the type's name):
 	// WebCheck prints its state, WebHTTP and WebHTTPS match that output while each is on, WebOn turns both
 	// on and WebSave keeps it after a restart (commands one per line; {name} is the session's name).
@@ -358,3 +368,94 @@ var (
 	generalOS = regexp.MustCompile(`(?i)\b(linux|ubuntu|debian|centos|windows)\b`)
 	networkOS = regexp.MustCompile(`(?i)exos|voss|cisco|nx-os|junos|eos|huawei|vrp|eltex|icx|ruckus|brocade`)
 )
+
+// builtinUndo are the built-in undo rules by device type name (lower case).
+var builtinUndo = map[string]string{
+	"exos": `^(show|ping|traceroute|save|top|clear) =>
+^create vlan (\S+).* => delete vlan $1
+^configure vlan (\S+) add ports (\S+).* => configure vlan $1 delete ports $2
+^configure vlan (\S+) ipaddress .* => unconfigure vlan $1 ipaddress
+^configure vlan (\S+) tag .* =>
+^create (\S+) (\S+).* => delete $1 $2
+^enable (.+) => disable $1
+^disable (.+) => enable $1`,
+	"voss": ciscoUndo, "cisco ios": ciscoUndo, "cisco nx-os": ciscoUndo, "eltex mes": ciscoUndo, "ruckus icx": ciscoUndo,
+	"huawei vrp": `^(display|ping|tracert|save|quit|return|system-view|screen-length) =>
+^interface .* =>
+^undo (.+) => $1
+^(.+) => undo $1`,
+}
+
+// ciscoUndo: "no" in front, or taken away; mode changes and reading commands need no undo.
+const ciscoUndo = `^(show|ping|traceroute|exit|end|copy|write|save|terminal|enable|configure|conf t|do) =>
+^interface .* =>
+^router .* =>
+^no (.+) => $1
+^(.+) => no $1`
+
+// builtinTestState are the built-in save and restore commands for a test's restore: [config].
+var builtinTestState = map[string][2]string{
+	"cisco nx-os": {"checkpoint {file}", "rollback running-config checkpoint {file}\nno checkpoint {file}"},
+}
+
+// Undo returns the device type's undo rules (its own, else the built-in ones).
+func (d DeviceType) Undo() string {
+	if strings.TrimSpace(d.UndoRules) != "" {
+		return d.UndoRules
+	}
+	return builtinUndo[strings.ToLower(d.Name)]
+}
+
+// BuiltinUndo returns the built-in undo rules for a device type name ("" when none).
+func BuiltinUndo(name string) string { return builtinUndo[strings.ToLower(name)] }
+
+// UndoOf suggests the cleanup of a command with rules ("" when none applies or it needs none).
+func UndoOf(rules, cmd string) string {
+	cmd = strings.TrimSpace(cmd)
+	for _, l := range strings.Split(rules, "\n") {
+		pat, undo, ok := strings.Cut(l, "=>")
+		pat, undo = strings.TrimSpace(pat), strings.TrimSpace(undo)
+		if !ok || pat == "" {
+			continue
+		}
+		re, err := regexp.Compile(pat)
+		if err != nil {
+			continue
+		}
+		m := re.FindStringSubmatchIndex(cmd)
+		if m == nil {
+			continue
+		}
+		if undo == "" {
+			return ""
+		}
+		return string(re.ExpandString(nil, strings.ReplaceAll(undo, "$0", cmd), cmd, m))
+	}
+	return ""
+}
+
+// TestState returns the commands that save and restore the configuration for a test (empty when the
+// device type has none).
+func (d DeviceType) TestState() (save, restore []string) {
+	s, r := d.TestSave, d.TestRestore
+	if strings.TrimSpace(s) == "" && strings.TrimSpace(r) == "" {
+		b := builtinTestState[strings.ToLower(d.Name)]
+		s, r = b[0], b[1]
+	}
+	lines := func(t string) []string {
+		var out []string
+		for _, l := range strings.Split(t, "\n") {
+			if l = strings.TrimSpace(l); l != "" {
+				out = append(out, l)
+			}
+		}
+		return out
+	}
+	return lines(s), lines(r)
+}
+
+// BuiltinTestState returns the built-in save and restore commands for a device type name.
+func BuiltinTestState(name string) (save, restore string) {
+	b := builtinTestState[strings.ToLower(name)]
+	return b[0], b[1]
+}

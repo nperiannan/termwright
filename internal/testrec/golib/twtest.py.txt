@@ -84,6 +84,19 @@ class _Fatal(Exception):
     pass
 
 
+def _call(body):
+    """A tests tool action; returns the JSON in its result."""
+    api, key = endpoint()
+    req = urllib.request.Request(api + "/tools/tests", data=json.dumps(body).encode(),
+                                 headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=900) as res:
+            out = json.loads(res.read() or b"{}")
+    except urllib.error.HTTPError as e:
+        raise AssertionError("Termwright: %s %s" % (e.code, e.read().decode(errors="replace")))
+    return json.loads(out.get("result") or "{}")
+
+
 class TestCase(unittest.TestCase):
     """A generated test: VARS are its defaults, PARAMS runs it once per entry."""
 
@@ -113,11 +126,32 @@ class Run:
     def fill(self, s):
         return _VAR.sub(lambda m: self.vars.get(m.group(1), m.group(0)), s or "")
 
+    def restore(self, kinds, sessions):
+        """Termwright saves the devices' state ("config", "lab"); finish() puts it back after the cleanup."""
+        with self.tc.subTest(step="restore: save"):
+            out = _call({"action": "save_state", "kinds": kinds, "sessions": [self.fill(s) for s in sessions]})
+            self.token = out.get("token", "")
+            bad = ["%s: %s" % (r.get("name"), r.get("error", "")) for r in out.get("results", []) if not r.get("passed")]
+            if bad:
+                self.stopped = True
+                raise AssertionError("\n".join(bad))
+
+    def finish(self):
+        tok, self.token = getattr(self, "token", ""), ""
+        if not tok:
+            return
+        with self.tc.subTest(step="restore: put back"):
+            out = _call({"action": "restore_state", "token": tok})
+            bad = ["%s: %s" % (r.get("name"), r.get("error", "")) for r in out.get("results", []) if not r.get("passed")]
+            if bad:
+                raise AssertionError("\n".join(bad))
+
     @contextlib.contextmanager
-    def step(self, name, continue_on_fail=False):
+    def step(self, name, continue_on_fail=False, cleanup=False):
+        """A step; cleanup steps run even after a failed step and never skip the rest."""
         name = self.fill(name)
         with self.tc.subTest(step=name):
-            s = Step(self, skip=self.stopped)
+            s = Step(self, skip=self.stopped and not cleanup)
             try:
                 yield s
             except _Fatal as e:
@@ -125,7 +159,7 @@ class Run:
             if s.skip:
                 raise unittest.SkipTest("an earlier step failed")
             if s.errors:
-                if not continue_on_fail:
+                if not continue_on_fail and not cleanup:
                     self.stopped = True
                 raise AssertionError("\n".join(s.errors))
 

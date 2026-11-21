@@ -17,8 +17,18 @@ type Case struct {
 	// Params: the test runs once per entry, with its values as {{variables}} (data-driven tests);
 	// a testbed's and a run's own values still win.
 	Params []map[string]string `yaml:"params,omitempty" json:"params,omitempty"`
+	// Restore: what Termwright saves before the test and puts back after its cleanup, for every
+	// device the test uses: "config" (the device type's save and restore commands) and "lab" (a
+	// checkpoint of an emulated lab switch).
+	Restore []string `yaml:"restore,omitempty" json:"restore,omitempty"`
+	// Setup: steps before the test's own (a known state); when one fails the steps are skipped.
+	Setup []Step `yaml:"setup,omitempty" json:"setup,omitempty"`
 	// Steps run in order.
 	Steps []Step `yaml:"steps" json:"steps"`
+	// Cleanup: steps after the test's own that always run - also when a step failed or the run was
+	// stopped - so the device is clean for the next test. Each cleanup step runs even when an
+	// earlier one failed.
+	Cleanup []Step `yaml:"cleanup,omitempty" json:"cleanup,omitempty"`
 }
 
 // Step is one action and its checks. Exactly one of Run, HTTP and SNMP is set.

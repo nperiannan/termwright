@@ -2129,7 +2129,7 @@ paths:
             tags:
                 - Network tools
             summary: The tests tool
-            description: 'Termwright tests: YAML files in the tests folder (cases/), each a list of steps - a command on a saved session (run), an HTTP request (http) or an SNMP get / walk / set (snmp) - with checks on what came back (contains, matches, a field, JSON or SNMP value equals / greater / less, status, time). list lists the tests; show gives one as YAML; run runs tests (files, or none for all) and returns pass/fail per step, writing a JUnit XML file and an HTML report under reports/; save writes a test from YAML (and its Go test); generate writes the Go, Python and TCL tests again (go test ./cases/..., python lib/python/run_tests.py or tclsh lib/tcl/run_tests.tcl in the tests folder runs them through Termwright); step runs one step without its checks and returns its answer as JSON (used by the generated Go tests); new_testbed writes testbeds/<name>.yaml with a role per saved session of a session folder (core-sw1 → {{core_sw1}}); a test with params runs once per entry; schedules lists the scheduled runs, schedule adds or (with id) changes one (repeat daily|weekdays|weekly|hours, at HH:MM, day 0-6, hours, files, testbed, production=true to allow production sessions), unschedule removes one; results gives the last run''s report. Runs log in with the sessions'' saved logins in the background; a run touching production sessions is asked first. Through the API it runs without asking.'
+            description: 'Termwright tests: YAML files in the tests folder (cases/), each a list of steps - a command on a saved session (run), an HTTP request (http) or an SNMP get / walk / set (snmp) - with checks on what came back (contains, matches, a field, JSON or SNMP value equals / greater / less, status, time). list lists the tests; show gives one as YAML; run runs tests (files, or none for all) and returns pass/fail per step, writing a JUnit XML file and an HTML report under reports/; save writes a test from YAML (and its Go test); generate writes the Go, Python and TCL tests again (go test ./cases/..., python lib/python/run_tests.py or tclsh lib/tcl/run_tests.tcl in the tests folder runs them through Termwright); step runs one step without its checks and returns its answer as JSON (used by the generated Go tests); new_testbed writes testbeds/<name>.yaml with a role per saved session of a session folder (core-sw1 → {{core_sw1}}); a test with params runs once per entry; schedules lists the scheduled runs, schedule adds or (with id) changes one (repeat daily|weekdays|weekly|hours, at HH:MM, day 0-6, hours, files, testbed, production=true to allow production sessions), unschedule removes one; save_state (kinds config|lab, sessions) and restore_state (token) save and put back the devices'' state for the generated tests; a test''s setup and cleanup sections run before and after its steps (cleanup always), and restore: [config, lab] saves and puts back the devices; results gives the last run''s report. Runs log in with the sessions'' saved logins in the background; a run touching production sessions is asked first. Through the API it runs without asking.'
             requestBody:
                 required: true
                 content:
@@ -2150,6 +2150,8 @@ paths:
                                         - schedules
                                         - schedule
                                         - unschedule
+                                        - save_state
+                                        - restore_state
                                         - results
                                     type: string
                                 at:
@@ -2175,6 +2177,14 @@ paths:
                                 id:
                                     description: 'schedule/unschedule: the schedule''s id (schedules lists them)'
                                     type: string
+                                kinds:
+                                    description: 'save_state: what to save'
+                                    items:
+                                        enum:
+                                            - config
+                                            - lab
+                                        type: string
+                                    type: array
                                 name:
                                     description: 'new_testbed: the testbed''s name'
                                     type: string
@@ -2192,11 +2202,19 @@ paths:
                                         - weekly
                                         - hours
                                     type: string
+                                sessions:
+                                    description: 'save_state: the saved sessions'
+                                    items:
+                                        type: string
+                                    type: array
                                 step:
                                     description: 'step: one step {run: {session, command, prompt}}, {http: {session, method, url, headers, body}} or {snmp: {session, op, oids, values}}, timeout'
                                     type: object
                                 testbed:
                                     description: 'run: a file in testbeds/ whose values are used as {{variables}}'
+                                    type: string
+                                token:
+                                    description: 'restore_state: the token save_state returned'
                                     type: string
                                 vars:
                                     additionalProperties:

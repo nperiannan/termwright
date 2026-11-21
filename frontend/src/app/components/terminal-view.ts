@@ -289,7 +289,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     if (text.trim()) {
       this.sent = [text, ...this.sent.filter(x => x !== text)].slice(0, 100);
       this.history.add(text, { session: t.session.path, title: t.title, deviceType: t.session.deviceType });
-      if (this.term && t.kind === 'terminal') this.rec.command(t.id, t.session.path, text, this.term);
+      if (this.term && t.kind === 'terminal') this.rec.command(t.id, t.session.path, text, this.term, t.session.deviceType ?? '');
     }
     this.sentIdx = -1;
     this.sendText.set('');
@@ -347,7 +347,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     const cmd = commandOfLine(text);
     if (cmd) this.history.add(cmd, { session: t.session.path, title: t.title, deviceType: t.session.deviceType });
     if (cmd) this.tabs.afterCommand(t.id, cmd);
-    if (cmd && t.kind === 'terminal') this.rec.command(t.id, t.session.path, cmd, term);
+    if (cmd && t.kind === 'terminal') this.rec.command(t.id, t.session.path, cmd, term, t.session.deviceType ?? '');
   }
   readonly labels = FIX_LABELS;
   /** Modern layout, before the first successful connect: a card instead of an empty terminal. */

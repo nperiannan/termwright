@@ -172,7 +172,13 @@ func Parse(b []byte) (Case, error) {
 	if err := yaml.Unmarshal(b, &c); err != nil {
 		return c, err
 	}
-	for i, s := range c.Steps {
+	for _, r := range c.Restore {
+		if r != "config" && r != "lab" {
+			return c, fmt.Errorf("restore %q: use config or lab", r)
+		}
+	}
+	all := append(append(append([]Step{}, c.Setup...), c.Steps...), c.Cleanup...)
+	for i, s := range all {
 		switch {
 		case actions(s) == 0:
 			return c, fmt.Errorf("step %d has none of run, http and snmp", i+1)

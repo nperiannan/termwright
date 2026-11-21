@@ -4,7 +4,7 @@ import { Backend, errText } from '../core/backend';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { Recorder } from '../core/recorder.service';
-import { TestCase, TestCaseInfo, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestsGitInfo, TestsTree } from '../core/models';
+import { TestCase, TestCaseInfo, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
 import { expectLabel, stepText } from './recorder-panel';
 import { AIChat } from '../core/ai-chat.service';
 
@@ -89,15 +89,19 @@ type View = 'steps' | 'yaml' | 'go' | 'py' | 'tcl';
                 @if (test()?.description) { <p class="mut">{{ test()?.description }}</p> }
                 @if (test()?.params?.length) { <p class="mut">Runs {{ test()?.params?.length }} times: {{ paramsText() }}</p> }
                 @if (varsText()) { <p class="mut">Defaults: {{ varsText() }} - a testbed's values win.</p> }
-                @for (s of test()?.steps ?? []; track $index; let i = $index) {
-                  <div class="st" [class.f]="stepRes(i)?.passed === false && !stepRes(i)?.skipped">
-                    <div><b>{{ i + 1 }}</b> <span class="mut">{{ s.run?.session ?? s.http?.session ?? s.snmp?.session ?? '' }} ›</span> <span class="cmd">{{ text(s) }}</span>
-                      @if (stepRes(i); as r) { <span class="ms">{{ r.skipped ? 'skipped' : r.ms + ' ms' }}</span> }</div>
-                    @for (e of s.expect ?? []; track $index; let j = $index) {
-                      <span class="chip" [class.b]="stepRes(i)?.checks?.[j]?.passed === false">{{ stepRes(i)?.checks?.[j]?.passed === false ? '✗' : '✓' }} {{ label(e) }}@if (stepRes(i)?.checks?.[j]?.passed === false) { · got {{ stepRes(i)?.checks?.[j]?.got }} }</span>
+                @if (test()?.restore?.length) { <p class="mut">Puts back afterwards: {{ restoreText() }}</p> }
+                @for (r of restoreRes(); track $index) { <div class="rr2" [class.bad]="!r.passed"><span>{{ r.passed ? '✓' : '✗' }}</span> {{ r.name }} <span class="mut">{{ r.target }}</span>@if (r.error) { <span> - {{ r.error }}</span> }</div> }
+                @if (last()[sel()]?.cleanupFailed) { <div class="warnbox">The cleanup failed: the device may not be clean for the next test.</div> }
+                @for (row of rows(); track $index) {
+                  @if ($index === 0 || rows()[$index - 1].phase !== row.phase) { <div class="phh">{{ row.phase === 'setup' ? 'Setup' : row.phase === 'cleanup' ? 'Cleanup - always runs' : 'Steps' }}</div> }
+                  <div class="st" [class.f]="res(row)?.passed === false && !res(row)?.skipped" [class.cl]="row.phase === 'cleanup'" [class.su]="row.phase === 'setup'">
+                    <div><b>{{ row.i + 1 }}</b> <span class="mut">{{ row.s.run?.session ?? row.s.http?.session ?? row.s.snmp?.session ?? '' }} ›</span> <span class="cmd">{{ text(row.s) }}</span>
+                      @if (res(row); as r) { <span class="ms">{{ r.skipped ? 'skipped' : r.ms + ' ms' }}</span> }</div>
+                    @for (e of row.s.expect ?? []; track $index; let j = $index) {
+                      <span class="chip" [class.b]="res(row)?.checks?.[j]?.passed === false">{{ res(row)?.checks?.[j]?.passed === false ? '✗' : '✓' }} {{ label(e) }}@if (res(row)?.checks?.[j]?.passed === false) { · got {{ res(row)?.checks?.[j]?.got }} }</span>
                     }
-                    @for (v of s.save ?? []; track $index) { <span class="chip v">{{ '{{' + v.var + '}}' }}</span> }
-                    @if (stepRes(i)?.error) { <div class="bad">{{ stepRes(i)?.error }}</div> }
+                    @for (v of row.s.save ?? []; track $index) { <span class="chip v">{{ '{{' + v.var + '}}' }}</span> }
+                    @if (res(row)?.error) { <div class="bad">{{ res(row)?.error }}</div> }
                   </div>
                 }
                 <div class="row"><button type="button" (click)="recordMore()">● Record a New Test</button>
@@ -149,7 +153,7 @@ type View = 'steps' | 'yaml' | 'go' | 'py' | 'tcl';
     header { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); } .ttl { font-size: 15px; } .fl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     header select { height: 28px; max-width: 160px; }
     .seg { display: flex; gap: 2px; background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: 7px; padding: 2px; } .seg button { border: 0; background: none; padding: 3px 10px; border-radius: 5px; color: var(--text); cursor: pointer; } .seg button.on { background: color-mix(in srgb, var(--accent) 28%, transparent); }
-    .body p { margin: 0; } .body { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+    .body p { margin: 0; } .phh { font-size: 11px; letter-spacing: .06em; color: var(--muted); text-transform: uppercase; margin-top: 4px; } .st.cl { border-color: color-mix(in srgb, var(--warn, #e0a030) 45%, var(--border)); } .st.su { border-style: dashed; } .rr2 { font-size: 12px; } .warnbox { font-size: 12px; color: var(--warn, #e0a030); border: 1px solid color-mix(in srgb, var(--warn, #e0a030) 45%, transparent); border-radius: 6px; padding: 6px 9px; } .body { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
     .st { border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; } .st.f { border-color: color-mix(in srgb, var(--danger, #ef6161) 60%, transparent); } .cmd { font-family: var(--mono, monospace); margin-left: 4px; } .st > div > b { margin-right: 8px; } .ms { float: right; color: var(--muted); font-size: 11px; }
     .chip { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 10px; margin: 4px 4px 0 0; background: color-mix(in srgb, var(--ok, #4ec07a) 15%, transparent); color: var(--ok, #4ec07a); }
     .chip.b { background: color-mix(in srgb, var(--danger, #ef6161) 15%, transparent); color: var(--danger, #ef6161); } .chip.v { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
@@ -294,7 +298,7 @@ export class TestsView implements OnInit, OnDestroy {
     const yaml = r.file ? await this.backend.testFile(r.file).catch(() => '') : '';
     const cut = (s: string, n: number) => s.length > n ? s.slice(0, n) + '\n… (cut)' : s;
     const steps = r.steps.map((s, i) => {
-      const head = `${i + 1}. ${s.skipped ? 'SKIPPED' : s.passed ? 'passed' : 'FAILED'} - ${s.name} (${s.kind} ${s.target ?? ''}: ${s.sent ?? ''}, ${s.ms} ms${s.status ? ', status ' + s.status : ''})`;
+      const head = `${i + 1}. ${s.skipped ? 'SKIPPED' : s.passed ? 'passed' : 'FAILED'} - ${s.phase ? s.phase + ': ' : ''}${s.name} (${s.kind} ${s.target ?? ''}: ${s.sent ?? ''}, ${s.ms} ms${s.status ? ', status ' + s.status : ''})`;
       if (s.passed || s.skipped) return head;
       const checks = (s.checks ?? []).map(c => `   ${c.passed ? 'ok' : 'FAILED'}: ${c.what}, got "${c.got ?? ''}"`).join('\n');
       return [head, s.error ? '   error: ' + s.error : '', checks, s.output ? '   output:\n' + cut(s.output, 6000) : ''].filter(Boolean).join('\n');
@@ -358,7 +362,16 @@ export class TestsView implements OnInit, OnDestroy {
   varsText() { return Object.entries(this.test()?.vars ?? {}).map(([k, v]) => `{{${k}}} = ${v}`).join(', '); }
 
   dot(c: TestCaseInfo) { if (c.error) return 'dot e'; const r = this.last()[c.file]; return r ? (r.passed ? 'dot p' : 'dot f') : 'dot'; }
-  stepRes(i: number) { return this.last()[this.sel()]?.steps?.[i]; }
+  /** The test's setup, steps and cleanup in the order they run. */
+  readonly rows = computed(() => {
+    const t = this.test();
+    const map = (l: TestStep[] | undefined, phase: '' | 'setup' | 'cleanup') => (l ?? []).map((s, i) => ({ s, i, phase }));
+    return [...map(t?.setup, 'setup'), ...map(t?.steps, ''), ...map(t?.cleanup, 'cleanup')];
+  });
+  /** A row's result in the last run (results of the same phase, in order). */
+  res(row: { i: number; phase: string }) { return this.last()[this.sel()]?.steps?.filter(x => (x.phase ?? '') === row.phase)[row.i]; }
+  restoreRes() { return this.last()[this.sel()]?.steps?.filter(x => x.phase === 'restore') ?? []; }
+  restoreText() { return (this.test()?.restore ?? []).map(k => k === 'lab' ? 'lab snapshot' : 'configuration').join(', '); }
   label = expectLabel;
   text = stepText;
   when(dir: string) { return dir.replace(/^reports\//, '').replace(/^(\d{4}-\d\d-\d\d)_(\d\d)(\d\d)(\d\d).*/, '$1 $2:$3'); }

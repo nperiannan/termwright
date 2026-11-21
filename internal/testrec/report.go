@@ -36,7 +36,7 @@ func JUnit(rep RunReport) []byte {
 		tc := tcase{Name: r.Case, Classname: strings.TrimSuffix(strings.TrimPrefix(r.File, "cases/"), ".yaml"), Time: secs(r.Ms)}
 		var out strings.Builder
 		for _, st := range r.Steps {
-			fmt.Fprintf(&out, "%s %s\n", mark(st), st.Name)
+			fmt.Fprintf(&out, "%s %s%s\n", mark(st), PhaseLabel(st.Phase), st.Name)
 		}
 		tc.Out = out.String()
 		switch {
@@ -51,6 +51,14 @@ func JUnit(rep RunReport) []byte {
 	}
 	b, _ := xml.MarshalIndent(s, "", "  ")
 	return append([]byte(xml.Header), b...)
+}
+
+// PhaseLabel is "setup: ", "cleanup: " or "restore: " ("" for the test's own steps).
+func PhaseLabel(p string) string {
+	if p == "" {
+		return ""
+	}
+	return p + ": "
 }
 
 func secs(ms int64) string { return fmt.Sprintf("%.3f", float64(ms)/1000) }
@@ -69,11 +77,11 @@ func firstFailure(r Result) string {
 	for _, st := range r.Steps {
 		if !st.Passed && !st.Skipped {
 			if st.Error != "" {
-				return st.Name + ": " + st.Error
+				return PhaseLabel(st.Phase) + st.Name + ": " + st.Error
 			}
 			for _, c := range st.Checks {
 				if !c.Passed {
-					return fmt.Sprintf("%s: expected %s, got %q", st.Name, c.What, c.Got)
+					return fmt.Sprintf("%s%s: expected %s, got %q", PhaseLabel(st.Phase), st.Name, c.What, c.Got)
 				}
 			}
 		}
@@ -87,7 +95,7 @@ func failText(r Result) string {
 		if st.Passed || st.Skipped {
 			continue
 		}
-		fmt.Fprintf(&b, "Step: %s\nSent: %s\n", st.Name, st.Sent)
+		fmt.Fprintf(&b, "Step: %s%s\nSent: %s\n", PhaseLabel(st.Phase), st.Name, st.Sent)
 		if st.Error != "" {
 			fmt.Fprintf(&b, "Error: %s\n", st.Error)
 		}
@@ -124,13 +132,16 @@ pre{white-space:pre-wrap;background:#0b0f14;padding:8px;border-radius:6px;max-he
 		if r.Error != "" {
 			fmt.Fprintf(&b, `<p class="bad">%s</p>`, e(r.Error))
 		}
+		if r.CleanupFailed {
+			b.WriteString(`<p class="bad">The cleanup failed: the device may not be clean for the next test.</p>`)
+		}
 		b.WriteString("<table>")
 		for _, st := range r.Steps {
 			c := map[bool]string{true: "ok", false: "bad"}[st.Passed]
 			if st.Skipped {
 				c = "mut"
 			}
-			fmt.Fprintf(&b, `<tr><td class="%s">%s</td><td>%s<div class="mut">%s %s</div>`, c, mark(st), e(st.Name), e(st.Target), e(st.Sent))
+			fmt.Fprintf(&b, `<tr><td class="%s">%s</td><td><span class="mut">%s</span>%s<div class="mut">%s %s</div>`, c, mark(st), e(PhaseLabel(st.Phase)), e(st.Name), e(st.Target), e(st.Sent))
 			if st.Error != "" {
 				fmt.Fprintf(&b, `<div class="bad">%s</div>`, e(st.Error))
 			}
@@ -146,4 +157,25 @@ pre{white-space:pre-wrap;background:#0b0f14;padding:8px;border-radius:6px;max-he
 	}
 	b.WriteString("</body></html>")
 	return []byte(b.String())
+}
+
+// phStep is a step with its phase, for the code generators.
+type phStep struct {
+	st    Step
+	i     int
+	phase string
+}
+
+// phased lists a case's setup, steps and cleanup in the order they run.
+func phased(c Case) []phStep {
+	var out []phStep
+	for _, x := range []struct {
+		l []Step
+		p string
+	}{{c.Setup, "setup"}, {c.Steps, ""}, {c.Cleanup, "cleanup"}} {
+		for i, st := range x.l {
+			out = append(out, phStep{st, i, x.p})
+		}
+	}
+	return out
 }

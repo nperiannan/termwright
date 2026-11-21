@@ -1,6 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Recorder } from '../core/recorder.service';
+import { Recorder, RecPhase } from '../core/recorder.service';
+import { AIChat } from '../core/ai-chat.service';
 import { TestExpect, TestStep } from '../core/models';
 
 type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid' | 'status' | 'maxMs';
@@ -17,10 +18,18 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
       <button type="button" (click)="rec.paused.set(!rec.paused())" [title]="rec.paused() ? 'Resume recording' : 'Pause: commands typed now are not recorded'">{{ rec.paused() ? '▶' : '⏸' }}</button>
     </div>
     <input class="nm" [ngModel]="rec.name()" (ngModelChange)="rec.name.set($event)" placeholder="Test name" aria-label="Test name" />
-    <div class="hint">Type commands in terminal tabs or send requests in the API Client. Select output and right-click → <b>Expect this</b> to add a check.</div>
+    <div class="phases" role="tablist" aria-label="Record into">
+      @for (p of phases; track p.k) { <button type="button" role="tab" [class.on]="rec.phase() === p.k" (click)="rec.phase.set(p.k)" [title]="p.t">{{ p.l }} <span class="n">{{ count(p.k) }}</span></button> }
+    </div>
+    <div class="hint">@switch (rec.phase()) {
+      @case ('setup') { <b>Setup</b>: steps that put the devices in a known state before the test. }
+      @case ('cleanup') { <b>Cleanup</b>: steps that undo what the test changed - they always run, also after a failure, so the next test finds a clean device. }
+      @default { Type commands in terminal tabs, send requests in the API Client or use the SNMP Browser. Select output and right-click → <b>Expect this</b> to add a check. }
+    }</div>
     <div class="list">
       @for (s of rec.steps(); track $index; let i = $index) {
-        <div class="st">
+        @if (i === 0 || rec.steps()[i - 1].phase !== s.phase) { <div class="ph">{{ phaseName(s.phase) }}</div> }
+        <div class="st" [class.cl]="s.phase === 'cleanup'" [class.su]="s.phase === 'setup'">
           <div class="top"><b>{{ i + 1 }}</b>
             <span class="tg" [title]="target(s.step)">{{ short(target(s.step)) }} ›</span><span class="cmd">{{ sent(s.step) }}</span>
             <span class="sp"></span>
@@ -34,6 +43,7 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
             <span class="chip var">{{ '{{' + v.var + '}}' }} ← {{ v.field || v.json || v.oid }}<button type="button" (click)="rec.removeSave(i, j)" title="Remove">×</button></span>
           }
           @if (!(s.step.expect?.length)) { <div class="mut">no checks - passes when it runs without an error</div> }
+          @if (s.undo && !s.undone) { <div class="undo"><span class="mut">↩ undo:</span> <code>{{ sent(s.undo) }}</code><button type="button" class="lnk" (click)="rec.addUndo(i)" title="Add this undo to the cleanup">+ Cleanup</button></div> }
           @if (adding() === i) {
             <div class="add">
               <select [(ngModel)]="kind">
@@ -49,6 +59,11 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
         </div>
       } @empty { <div class="mut empty">No steps yet.</div> }
     </div>
+    <div class="rst"><span class="mut">Afterwards put back:</span>
+      <label title="Save the configuration before the test and restore it after the cleanup (the device type's save and restore commands)"><input type="checkbox" [ngModel]="rec.restore().includes('config')" (ngModelChange)="rec.toggleRestore('config', $event)" /> configuration</label>
+      <label title="Take a checkpoint of each emulated lab switch before the test and go back to it after the cleanup"><input type="checkbox" [ngModel]="rec.restore().includes('lab')" (ngModelChange)="rec.toggleRestore('lab', $event)" /> lab snapshot</label></div>
+    <div class="row"><button type="button" (click)="rec.addAllUndos()" [disabled]="!rec.undos()" title="Add every suggested undo to the cleanup, the last change first">↩ Undo All in Cleanup ({{ rec.undos() }})</button>
+      <button type="button" (click)="cleanupWithAI()" [disabled]="!rec.steps().length" title="Ask the AI assistant to write the cleanup for these steps">✦ Cleanup with AI</button></div>
     <label class="roles" title="Sessions are saved as {{ '{{' }}role{{ '}}' }} variables with these sessions as defaults, so a testbed can point the test at other devices"><input type="checkbox" [ngModel]="rec.roles()" (ngModelChange)="rec.roles.set($event)" /> Sessions as roles</label>
     <div class="ft">
       <span class="mut">{{ rec.steps().length }} steps · {{ rec.checks() }} checks</span><span class="sp"></span>
@@ -68,11 +83,30 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
     .chip.var { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); } .chip button { border: 0; background: none; color: inherit; padding: 0 3px; cursor: pointer; }
     .lnk { border: 0; background: none; color: var(--accent); padding: 0; cursor: pointer; font-size: 12px; }
     .add { display: flex; flex-direction: column; gap: 5px; width: 100%; } .add .row { justify-content: flex-end; }
-    .pri { background: var(--accent); color: #fff; border-color: transparent; } .empty { padding: 16px 0; text-align: center; } .roles { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+    .pri { background: var(--accent); color: #fff; border-color: transparent; } .empty { padding: 16px 0; text-align: center; }
+    .phases { display: flex; gap: 2px; background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: 7px; padding: 2px; } .phases button { flex: 1; border: 0; background: none; color: var(--text); padding: 4px 6px; border-radius: 5px; cursor: pointer; } .phases button.on { background: color-mix(in srgb, var(--accent) 28%, transparent); } .phases .n { color: var(--muted); font-size: 11px; }
+    .ph { font-size: 11px; letter-spacing: .06em; color: var(--muted); text-transform: uppercase; margin-top: 2px; } .st.cl { border-color: color-mix(in srgb, var(--warn, #e0a030) 45%, var(--border)); } .st.su { border-style: dashed; }
+    .undo { font-size: 12px; display: flex; gap: 6px; align-items: center; width: 100%; } .undo code { font-family: var(--mono, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+    .rst { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12px; } .rst label { display: flex; gap: 4px; align-items: center; } .row { display: flex; gap: 6px; } .row button { flex: 1; font-size: 12px; } .roles { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
   `],
 })
 export class RecorderPanel {
   readonly rec = inject(Recorder);
+  private readonly ai = inject(AIChat);
+  readonly phases: { k: RecPhase; l: string; t: string }[] = [
+    { k: 'setup', l: 'Setup', t: 'Record steps that run before the test' },
+    { k: 'steps', l: 'Steps', t: 'Record the test itself' },
+    { k: 'cleanup', l: 'Cleanup', t: 'Record steps that undo the test - they always run' }];
+  count(p: RecPhase) { return this.rec.steps().filter(s => s.phase === p).length; }
+  phaseName(p: RecPhase) { return p === 'setup' ? 'Setup' : p === 'cleanup' ? 'Cleanup - always runs' : 'Steps'; }
+  /** The AI assistant writes the cleanup: the recorded steps with their sessions' device types. */
+  cleanupWithAI() {
+    const l = this.rec.steps().filter(s => s.phase !== 'cleanup').map((s, i) => `${i + 1}. [${s.phase}] ${this.target(s.step)}: ${stepText(s.step)}`).join('\n');
+    this.ai.currentId.set('');
+    this.ai.start({});
+    this.ai.addFile('Recorded steps', l);
+    void this.ai.send('Write the cleanup for these recorded Termwright test steps: the commands, REST requests or SNMP sets that undo every change they make, in the right order and in the right configuration mode for each device type (find the sessions to see their device types). Answer with a YAML cleanup: list I can paste into the test, and say which changes cannot be undone.');
+  }
   readonly adding = signal(-1);
   kind: AddKind = 'contains';
   subject = '';

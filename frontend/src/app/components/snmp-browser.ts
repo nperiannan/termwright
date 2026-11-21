@@ -457,6 +457,12 @@ export class SnmpBrowser implements OnInit, OnDestroy {
     this.remember(oid);
     if (this.extra().length && op !== 'set') { await this.runMany(req, op, oid); return; }
     this.multi.set([]);
+    // recording a set: read the old value first, so the cleanup can set it back
+    let old: { value: string; type?: string } | undefined;
+    if (op === 'set' && this.rec.recording()) {
+      const o = await this.backend.snmpRun({ session: this.path(), op: 'get', oids: [oid], timeout: Number(this.timeout) || 3 }).catch(() => null);
+      if (o?.rows?.[0]) old = { value: o.rows[0].value, type: o.rows[0].type };
+    }
     try {
       let r: SNMPResult;
       try {
@@ -470,7 +476,7 @@ export class SnmpBrowser implements OnInit, OnDestroy {
       }
       this.result.set(r);
       this.lastOp.set(op);
-      if (this.rec.recording()) this.rec.snmp({ session: this.path(), op, ...(op === 'set' ? { values: [{ oid, type: this.setType || undefined, value: this.setValue }] } : { oids: [oid] }) }, r.rows);
+      if (this.rec.recording()) this.rec.snmp({ session: this.path(), op, ...(op === 'set' ? { values: [{ oid, type: this.setType || undefined, value: this.setValue }] } : { oids: [oid] }) }, r.rows, old);
       if (this.view() !== 'table' || op !== 'table') this.view.set(op === 'table' ? 'table' : 'results');
       this.addHist({ at: Date.now(), op, oid, session: this.path(), n: r.rows.length, ms: r.ms, rows: r.rows.slice(0, 5000) });
     } catch (e) {

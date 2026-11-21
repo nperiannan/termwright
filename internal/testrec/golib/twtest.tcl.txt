@@ -259,6 +259,61 @@ proc tw::step {name continue body} {
 
 proc tw::fail {msg} { variable errors; lappend errors $msg }
 
+# tw::cleanup name body: a cleanup step - it runs even after a failed step and never skips the rest.
+proc tw::cleanup {name body} {
+    variable stopped
+    set was $stopped
+    set stopped 0
+    uplevel 1 [list tw::step $name 1 $body]
+    set stopped $was
+}
+
+proc tw::_call {json} {
+    lassign [tw::endpoint] api key
+    set tok [http::geturl "$api/tools/tests" -method POST -type application/json -timeout 900000 -headers [list Authorization "Bearer $key"] -query $json]
+    set code [http::ncode $tok]
+    set body [encoding convertfrom utf-8 [http::data $tok]]
+    http::cleanup $tok
+    if {$code != 200} { error "Termwright: $code $body" }
+    return [lindex [tw::jparse [lindex [dict get [lindex [tw::jparse $body] 1] result] 1]] 1]
+}
+
+proc tw::_bad {out} {
+    set bad {}
+    if {[dict exists $out results]} {
+        foreach r [lindex [dict get $out results] 1] {
+            set d [lindex $r 1]
+            if {[lindex [dict get $d passed] 1] ne "true"} {
+                set e [expr {[dict exists $d error] ? [lindex [dict get $d error] 1] : ""}]
+                lappend bad "[lindex [dict get $d name] 1]: $e"
+            }
+        }
+    }
+    return $bad
+}
+
+# tw::restore kinds sessions: Termwright saves the devices' state (config, lab); tw::finish puts it back.
+proc tw::restore {kinds sessions} {
+    variable token ""
+    set k {}; foreach x $kinds { lappend k [tw::jstr $x] }
+    set s {}; foreach x $sessions { lappend s [tw::jstr [tw::fill $x]] }
+    tw::step "restore: save" 0 {
+        set out [tw::_call "\{\"action\":\"save_state\",\"kinds\":\[[join $k ,]\],\"sessions\":\[[join $s ,]\]\}"]
+        set tw::token [lindex [dict get $out token] 1]
+        foreach b [tw::_bad $out] { tw::fail $b }
+    }
+}
+
+proc tw::finish {} {
+    variable token
+    if {![info exists token] || $token eq ""} return
+    set t $token
+    set token ""
+    tw::cleanup "restore: put back" {
+        foreach b [tw::_bad [tw::_call "\{\"action\":\"restore_state\",\"token\":[tw::jstr $t]\}"]] { tw::fail $b }
+    }
+}
+
 proc tw::_send {stepjson} {
     variable ans
     lassign [tw::endpoint] api key

@@ -71,10 +71,22 @@ func TestGeneratedGoRuns(t *testing.T) {
 			return
 		}
 		var in struct {
-			Action string `json:"action"`
-			Step   Step   `json:"step"`
+			Action   string   `json:"action"`
+			Step     Step     `json:"step"`
+			Sessions []string `json:"sessions"`
+			Token    string   `json:"token"`
 		}
 		json.NewDecoder(r.Body).Decode(&in)
+		switch in.Action {
+		case "save_state":
+			fk.sent = append(fk.sent, "save "+strings.Join(in.Sessions, ","))
+			json.NewEncoder(w).Encode(map[string]string{"result": `{"token":"t1","results":[{"name":"save lab","passed":true}]}`})
+			return
+		case "restore_state":
+			fk.sent = append(fk.sent, "restore "+in.Token)
+			json.NewEncoder(w).Encode(map[string]string{"result": `{"results":[{"name":"restore lab","passed":true}]}`})
+			return
+		}
 		res := RunOne(context.Background(), in.Step, fk)
 		b, _ := json.Marshal(res)
 		json.NewEncoder(w).Encode(map[string]string{"result": string(b)})
@@ -94,10 +106,15 @@ func TestGeneratedGoRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.Save("snmp/ifs", sn)
+	cl, err := Parse([]byte("restore: [lab]\nsetup: [{run: {session: Lab/sw1, command: show version}}]\nsteps:\n  - run: {session: Lab/sw1, command: show version}\n    expect: [{contains: NOPE}]\ncleanup: [{run: {session: Lab/sw1, command: show vlan 42}}]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Save("clean/c", cl)
 	pc, _ := Parse([]byte("params: [{vlan: \"42\"}]\nsteps:\n  - run: {session: \"{{site.sw}}\", command: \"show vlan {{vlan}}\"}\n    expect: [{contains: created}]\n"))
 	f.Save("params/vlans", pc)
 	os.WriteFile(filepath.Join(f.Root, "testbeds", "nested.yaml"), []byte("site:\n  sw: Lab/sw1   # the core\n"), 0o644)
-	for _, file := range []string{"cases/vlan/vlan42.yaml", "cases/other/bad.yaml", "cases/snmp/ifs.yaml", "cases/params/vlans.yaml"} {
+	for _, file := range []string{"cases/vlan/vlan42.yaml", "cases/other/bad.yaml", "cases/snmp/ifs.yaml", "cases/params/vlans.yaml", "cases/clean/c.yaml"} {
 		if _, err := f.WriteGo(file); err != nil {
 			t.Fatal(err)
 		}
@@ -114,6 +131,18 @@ func TestGeneratedGoRuns(t *testing.T) {
 	}
 	if out, err := run("test", "-count=1", "-v", "./cases/params/", "-args", "-tw.testbed=testbeds/nested.yaml"); err != nil || !strings.Contains(out, "[vlan=42]") || !strings.Contains(fk.sent[len(fk.sent)-1], "Lab/sw1: show vlan 42") {
 		t.Fatalf("params: %v\n%s\n%v", err, out, fk.sent)
+	}
+	checkClean := func(lang, out string) {
+		t.Helper()
+		n := len(fk.sent)
+		if n < 2 || fk.sent[n-1] != "restore t1" || fk.sent[n-2] != "Lab/sw1: show vlan 42" {
+			t.Fatalf("%s clean: cleanup or restore did not run: %v\n%s", lang, fk.sent, out)
+		}
+	}
+	if out, err := run("test", "-count=1", "-v", "./cases/clean/"); err == nil || !strings.Contains(out, "cleanup:_show_vlan_42") {
+		t.Fatalf("go clean: %v\n%s", err, out)
+	} else {
+		checkClean("go", out)
 	}
 	out, err := run("test", "-count=1", "-v", "./cases/other/", "-args", "-tw.var=x=1")
 	if err == nil || !strings.Contains(out, `expected the output to contain "NOPE"`) || !strings.Contains(out, "an earlier step failed") {
@@ -133,6 +162,11 @@ func TestGeneratedGoRuns(t *testing.T) {
 		if x, _ := os.ReadFile(filepath.Join(f.Root, "py.xml")); !strings.Contains(string(x), "<testsuite") || !strings.Contains(string(x), "params='vlan=42'") {
 			t.Fatalf("python junit: %s", x)
 		}
+		if out, err := prun(nil, "cases/clean"); err == nil {
+			t.Fatalf("python clean passed:\n%s", out)
+		} else {
+			checkClean("python", out)
+		}
 		out, err := prun(nil, "cases/other")
 		if err == nil || !strings.Contains(out, `expected the output to contain 'NOPE'`) || !strings.Contains(out, "an earlier step failed") {
 			t.Fatalf("python bad: %v\n%s", err, out)
@@ -151,6 +185,11 @@ func TestGeneratedGoRuns(t *testing.T) {
 		}
 		if x, _ := os.ReadFile(filepath.Join(f.Root, "tcl.xml")); !strings.Contains(string(x), `failures="0"`) {
 			t.Fatalf("tcl junit: %s", x)
+		}
+		if out, err := trun(nil, "cases/clean"); err == nil || !strings.Contains(out, "ok 4 - cleanup: show vlan 42") {
+			t.Fatalf("tcl clean: %v\n%s", err, out)
+		} else {
+			checkClean("tcl", out)
 		}
 		out, err := trun(nil, "cases/other")
 		if err == nil || !strings.Contains(out, `expected the output to contain "NOPE"`) || !strings.Contains(out, "# SKIP an earlier step failed") {

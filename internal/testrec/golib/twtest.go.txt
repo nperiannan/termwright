@@ -52,6 +52,7 @@ type T struct {
 	t       *testing.T
 	Vars    map[string]string
 	stopped bool
+	restore string
 }
 
 // New starts a test case with its own variables; the testbed's and -tw.var values win.
@@ -153,6 +154,96 @@ func readTestbed(sc *bufio.Scanner, v map[string]string) {
 		}
 		v[k] = strings.Trim(x, `"'`)
 	}
+}
+
+// Cleanup runs a cleanup step: it runs even after a failed step (the device must be clean for the next
+// test), and its failure does not skip the rest of the cleanup.
+func (c *T) Cleanup(name string, fn func(s *Step)) {
+	c.t.Run(c.Fill(name), func(t *testing.T) { fn(&Step{T: t, c: c}) })
+}
+
+// Restore asks Termwright to save the devices' state ("config": the device type's save commands, "lab":
+// a checkpoint of an emulated lab switch); Finish puts it back after the cleanup.
+func (c *T) Restore(kinds []string, sessions ...string) {
+	ss := make([]string, len(sessions))
+	for i, s := range sessions {
+		ss[i] = c.Fill(s)
+	}
+	var out struct {
+		Token   string `json:"token"`
+		Results []struct {
+			Name   string `json:"name"`
+			Passed bool   `json:"passed"`
+			Error  string `json:"error"`
+		} `json:"results"`
+	}
+	c.t.Run("restore: save", func(t *testing.T) {
+		if err := call(map[string]any{"action": "save_state", "kinds": kinds, "sessions": ss}, &out); err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range out.Results {
+			if !r.Passed {
+				t.Errorf("%s: %s", r.Name, r.Error)
+			}
+		}
+		if t.Failed() {
+			c.stopped = true
+		}
+	})
+	c.restore = out.Token
+}
+
+// Finish puts back what Restore saved.
+func (c *T) Finish() {
+	if c.restore == "" {
+		return
+	}
+	tok := c.restore
+	c.restore = ""
+	c.t.Run("restore: put back", func(t *testing.T) {
+		var out struct {
+			Results []struct {
+				Name   string `json:"name"`
+				Passed bool   `json:"passed"`
+				Error  string `json:"error"`
+			} `json:"results"`
+		}
+		if err := call(map[string]any{"action": "restore_state", "token": tok}, &out); err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range out.Results {
+			if !r.Passed {
+				t.Errorf("%s: %s", r.Name, r.Error)
+			}
+		}
+	})
+}
+
+// call sends a tests tool action to Termwright and decodes the JSON in its result.
+func call(body map[string]any, out any) error {
+	api, key, err := Endpoint()
+	if err != nil {
+		return err
+	}
+	b, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", api+"/tools/tests", bytes.NewReader(b))
+	req.Header.Set("Authorization", "Bearer "+key)
+	req.Header.Set("Content-Type", "application/json")
+	res, err := (&http.Client{Timeout: 15 * time.Minute}).Do(req)
+	if err != nil {
+		return fmt.Errorf("Termwright: %v", err)
+	}
+	defer res.Body.Close()
+	rb, _ := io.ReadAll(res.Body)
+	var r struct {
+		Result string `json:"result"`
+		Detail string `json:"detail"`
+	}
+	json.Unmarshal(rb, &r)
+	if res.StatusCode != 200 {
+		return fmt.Errorf("Termwright: %s %s", res.Status, r.Detail)
+	}
+	return json.Unmarshal([]byte(r.Result), out)
 }
 
 // Step runs one step as a subtest.

@@ -76,8 +76,20 @@ func GenerateTcl(c Case, caseFile string) ([]byte, error) {
 		fmt.Fprintf(&b, "# %s\n", oneLine(c.Description))
 	}
 	fmt.Fprintf(&b, "tw::test %s %s %s {\n", tclStr(oneLine(name)), tclDict(c.Vars), params)
-	for i, st := range c.Steps {
-		fmt.Fprintf(&b, "    tw::step %s %d {\n", tclStr(stepName(st, i)), map[bool]int{true: 1, false: 0}[st.ContinueOnFail])
+	if len(c.Restore) > 0 {
+		var ss []string
+		for _, x := range Sessions(c, nil) {
+			ss = append(ss, tclStr(x))
+		}
+		fmt.Fprintf(&b, "    tw::restore [list %s] [list %s]\n", strings.Join(c.Restore, " "), strings.Join(ss, " "))
+	}
+	for _, ps := range phased(c) {
+		st, i := ps.st, ps.i
+		if ps.phase == "cleanup" {
+			fmt.Fprintf(&b, "    tw::cleanup %s {\n", tclStr(PhaseLabel(ps.phase)+stepName(st, i)))
+		} else {
+			fmt.Fprintf(&b, "    tw::step %s %d {\n", tclStr(PhaseLabel(ps.phase)+stepName(st, i)), map[bool]int{true: 1, false: 0}[st.ContinueOnFail && ps.phase == ""])
+		}
 		in := "        "
 		switch {
 		case st.Run != nil:
@@ -140,6 +152,9 @@ func GenerateTcl(c Case, caseFile string) ([]byte, error) {
 			}
 		}
 		b.WriteString("    }\n")
+	}
+	if len(c.Restore) > 0 {
+		b.WriteString("    tw::finish\n")
 	}
 	b.WriteString("}\ntw::done\n")
 	return b.Bytes(), nil

@@ -86,12 +86,25 @@ func GeneratePython(c Case, caseFile string) ([]byte, error) {
 	}
 	b.WriteString("\n    def test_steps(self):\n        for tw in self.cases():\n")
 	ind := "            "
-	for i, st := range c.Steps {
+	if len(c.Restore) > 0 {
+		var ks, ss []string
+		for _, k := range c.Restore {
+			ks = append(ks, pyStr(k))
+		}
+		for _, x := range Sessions(c, nil) {
+			ss = append(ss, pyStr(x))
+		}
+		fmt.Fprintf(&b, "%stw.restore([%s], [%s])\n", ind, strings.Join(ks, ", "), strings.Join(ss, ", "))
+	}
+	for _, ps := range phased(c) {
+		st, i := ps.st, ps.i
 		cont := ""
-		if st.ContinueOnFail {
+		if ps.phase == "cleanup" {
+			cont = ", cleanup=True"
+		} else if st.ContinueOnFail && ps.phase == "" {
 			cont = ", continue_on_fail=True"
 		}
-		fmt.Fprintf(&b, "%swith tw.step(%s%s) as s:\n", ind, pyStr(stepName(st, i)), cont)
+		fmt.Fprintf(&b, "%swith tw.step(%s%s) as s:\n", ind, pyStr(PhaseLabel(ps.phase)+stepName(st, i)), cont)
 		in := ind + "    "
 		to := ""
 		if st.Timeout > 0 {
@@ -159,6 +172,9 @@ func GeneratePython(c Case, caseFile string) ([]byte, error) {
 				fmt.Fprintf(&b, "%sa.json(%s).save(%s)\n", in, pyStr(s.JSON), pyStr(s.Var))
 			}
 		}
+	}
+	if len(c.Restore) > 0 {
+		b.WriteString(ind + "tw.finish()\n")
 	}
 	if len(c.Steps) == 0 {
 		b.WriteString(ind + "self.fail(\"the test has no steps\")\n")

@@ -7,7 +7,10 @@ import { SECRET } from './history.service';
 import { TestCase, TestExpect, TestStep } from './models';
 
 /** A recorded step; for a terminal step the marker on its command line finds its output later. */
-export interface RecStep { step: TestStep; tab?: string; term?: Terminal; marker?: IMarker; output?: string; status?: number; ms?: number; }
+export type RecPhase = 'setup' | 'steps' | 'cleanup';
+/** A recorded step; for a terminal step the marker on its command line finds its output later. undo: the
+ *  suggested cleanup step (from the device type's undo rules, a POST's DELETE or an SNMP set's old value). */
+export interface RecStep { step: TestStep; phase: RecPhase; undo?: TestStep; undone?: boolean; tab?: string; term?: Terminal; marker?: IMarker; output?: string; status?: number; ms?: number; }
 
 export type ExpectKind = 'contains' | 'field' | 'matches' | 'notContains' | 'save';
 
@@ -21,6 +24,11 @@ export class Recorder {
   readonly paused = signal(false);
   /** Saved sessions become {{roles}} (their paths kept as the test's defaults), so a testbed can point the test at other devices. */
   readonly roles = signal(true);
+  /** Where new steps go: setup, the test's own steps or the cleanup. */
+  readonly phase = signal<RecPhase>('steps');
+  /** What Termwright saves before the test and puts back after it. */
+  readonly restore = signal<('config' | 'lab')[]>([]);
+  readonly undos = computed(() => this.steps().filter(s => s.undo && !s.undone).length);
   readonly name = signal('');
   readonly steps = signal<RecStep[]>([]);
   readonly checks = computed(() => this.steps().reduce((n, s) => n + (s.step.expect?.length ?? 0), 0));
@@ -35,30 +43,76 @@ export class Recorder {
   }
 
   /** A command typed on a terminal tab (Enter on its line). */
-  command(tab: string, session: string, cmd: string, term: Terminal) {
+  command(tab: string, session: string, cmd: string, term: Terminal, deviceType = '') {
     if (!this.recording() || !session || !cmd.trim()) return;
     if (SECRET.test(cmd)) { this.ui.toast(tr('Not recorded: the command may hold a secret'), 'info'); return; }
     this.fillOutput(tab);
     const marker = term.registerMarker(0);
-    this.push({ step: { run: { session, command: cmd.trim() } }, tab, term, marker });
+    const u = this.phase() === 'steps' ? undoOf(this.undoRules(deviceType), cmd) : '';
+    this.push({ step: { run: { session, command: cmd.trim() } }, phase: this.phase(), undo: u ? { run: { session, command: u } } : undefined, tab, term, marker });
+  }
+
+  /** The undo rules of a device type: its own, else the built-in ones for its name. */
+  private undoRules(deviceType: string) {
+    const d = this.ui.settings()?.deviceTypes?.find(x => x.name.toLowerCase() === deviceType.toLowerCase());
+    return d?.undoRules?.trim() ? d.undoRules : builtinUndo(deviceType);
   }
 
   /** A request sent in the API client; its status becomes the first check. */
   http(h: NonNullable<TestStep['http']>, status: number, ms: number, body: string) {
     if (!this.recording() || !h.url) return;
     const expect: TestExpect[] = status ? [{ status }] : [];
-    this.push({ step: { http: h, expect }, output: body, status, ms });
+    const step: TestStep = { http: h, expect };
+    let undo: TestStep | undefined;
+    // a POST that created something: its DELETE undoes it (the id comes from the answer)
+    if (this.phase() === 'steps' && (h.method || 'GET').toUpperCase() === 'POST' && status >= 200 && status < 300) {
+      try {
+        const j = JSON.parse(body), id = ['id', 'data.id', 'uuid', 'name'].find(k => k.split('.').reduce((o: any, p) => o?.[p], j) != null);
+        if (id) {
+          const v = 'created_' + (this.steps().length + 1);
+          step.save = [{ var: v, json: id }];
+          undo = { http: { session: h.session, environment: h.environment, collection: h.collection, method: 'DELETE', url: h.url.replace(/\/+$/, '') + '/{{' + v + '}}' }, expect: [{ status: 200 }] };
+          undo.expect = [];
+        }
+      } catch { /* not JSON */ }
+    }
+    this.push({ step, phase: this.phase(), undo, output: body, status, ms });
   }
 
   /** An SNMP get, walk or set in the SNMP Browser; a get's values become checks (the readable ones). */
-  snmp(s: NonNullable<TestStep['snmp']>, rows: { name: string; display: string }[]) {
+  snmp(s: NonNullable<TestStep['snmp']>, rows: { name: string; display: string }[], old?: { value: string; type?: string }) {
     if (!this.recording() || !s.session) return;
     const op = s.op === 'table' ? 'walk' : s.op;
     const expect: TestExpect[] = op === 'get' ? rows.slice(0, 5).map(r => ({ oid: r.name.replace(/^[\w-]+::/, ''), equals: r.display })) : [];
-    this.push({ step: { snmp: { ...s, op }, expect }, output: rows.map(r => r.name + ' = ' + r.display).join('\n') });
+    // a set: setting the old value back undoes it
+    const v = s.values?.[0], undo: TestStep | undefined = this.phase() === 'steps' && op === 'set' && v && old ? { snmp: { session: s.session, op: 'set', values: [{ oid: v.oid, type: old.type || v.type, value: old.value }] } } : undefined;
+    this.push({ step: { snmp: { ...s, op }, expect }, phase: this.phase(), undo, output: rows.map(r => r.name + ' = ' + r.display).join('\n') });
   }
 
-  private push(s: RecStep) { this.steps.update(l => [...l, s]); }
+  /** Adds a step's suggested undo to the cleanup (the cleanup runs in reverse order of what it undoes). */
+  addUndo(i: number) {
+    const s = this.steps()[i];
+    if (!s?.undo || s.undone) return;
+    this.steps.update(l => {
+      const c = l.map((x, k) => k === i ? { ...x, undone: true } : x);
+      const firstClean = c.findIndex(x => x.phase === 'cleanup');
+      const item: RecStep = { step: structuredClone(s.undo!), phase: 'cleanup' };
+      if (firstClean < 0) c.push(item); else c.splice(firstClean, 0, item); // newest change undone first
+      return c;
+    });
+  }
+  /** Adds every suggested undo, the last change first. */
+  addAllUndos() {
+    const idx = this.steps().map((s, i) => s.undo && !s.undone ? i : -1).filter(i => i >= 0);
+    for (const i of idx) this.addUndo(i);
+  }
+  toggleRestore(k: 'config' | 'lab', on: boolean) { this.restore.update(l => on ? [...new Set([...l, k])] : l.filter(x => x !== k)); }
+
+  /** New steps go to the end of their phase: setup first, then the steps, then the cleanup. */
+  private push(s: RecStep) {
+    const order: RecPhase[] = ['setup', 'steps', 'cleanup'];
+    this.steps.update(l => { const at = l.findIndex(x => order.indexOf(x.phase) > order.indexOf(s.phase)); const c = [...l]; if (at < 0) c.push(s); else c.splice(at, 0, s); return c; });
+  }
 
   /** The output of a tab's last step: the lines after its command up to the prompt line. */
   private fillOutput(tab: string) {
@@ -137,8 +191,10 @@ export class Recorder {
   testCase(): TestCase {
     const l = this.steps();
     l.forEach(s => this.output(s));
-    const steps = l.map(s => structuredClone(s.step));
-    if (!this.roles()) return { name: this.name().trim() || tr('New test'), steps };
+    const pick = (p: RecPhase) => l.filter(s => s.phase === p).map(s => structuredClone(s.step));
+    const setup = pick('setup'), steps = pick('steps'), cleanup = pick('cleanup');
+    const extra = { ...(setup.length ? { setup } : {}), ...(cleanup.length ? { cleanup } : {}), ...(this.restore().length ? { restore: this.restore() } : {}) };
+    if (!this.roles()) return { name: this.name().trim() || tr('New test'), ...extra, steps };
     const vars: Record<string, string> = {}, role = (p: string) => {
       if (!p || p.includes('{{')) return p;
       let r = roleName(p), i = 2;
@@ -146,12 +202,12 @@ export class Recorder {
       vars[r] = p;
       return '{{' + r + '}}';
     };
-    for (const s of steps) {
+    for (const s of [...setup, ...steps, ...cleanup]) {
       if (s.run) s.run.session = role(s.run.session);
       if (s.snmp) s.snmp.session = role(s.snmp.session);
       if (s.http?.session) s.http.session = role(s.http.session);
     }
-    return { name: this.name().trim() || tr('New test'), vars, steps };
+    return { name: this.name().trim() || tr('New test'), vars, ...extra, steps };
   }
 
   async save(): Promise<boolean> {
@@ -176,6 +232,8 @@ export class Recorder {
     this.steps.set([]);
     this.on.set(false);
     this.paused.set(false);
+    this.phase.set('steps');
+    this.restore.set([]);
   }
 }
 
@@ -205,4 +263,44 @@ function slugFile(s: string) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '-'
 export function roleName(path: string) {
   const n = (path.split('/').pop() ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   return !n || /^\d/.test(n) ? 'dev_' + n : n;
+}
+
+/** The built-in undo rules by device type name (as Termwright's device types have them). */
+const CISCO_UNDO = `^(show|ping|traceroute|exit|end|copy|write|save|terminal|enable|configure|conf t|do) =>
+^interface .* =>
+^router .* =>
+^no (.+) => $1
+^(.+) => no $1`;
+const BUILTIN_UNDO: Record<string, string> = {
+  exos: `^(show|ping|traceroute|save|top|clear) =>
+^create vlan (\\S+).* => delete vlan $1
+^configure vlan (\\S+) add ports (\\S+).* => configure vlan $1 delete ports $2
+^configure vlan (\\S+) ipaddress .* => unconfigure vlan $1 ipaddress
+^configure vlan (\\S+) tag .* =>
+^create (\\S+) (\\S+).* => delete $1 $2
+^enable (.+) => disable $1
+^disable (.+) => enable $1`,
+  voss: CISCO_UNDO, 'cisco ios': CISCO_UNDO, 'cisco nx-os': CISCO_UNDO, 'eltex mes': CISCO_UNDO, 'ruckus icx': CISCO_UNDO,
+  'huawei vrp': `^(display|ping|tracert|save|quit|return|system-view|screen-length) =>
+^interface .* =>
+^undo (.+) => $1
+^(.+) => undo $1`,
+};
+export function builtinUndo(deviceType: string) { return BUILTIN_UNDO[deviceType.toLowerCase()] ?? ''; }
+
+/** The undo of a command by rules ("regex => undo" per line, first match wins; "" = none needed). */
+export function undoOf(rules: string, cmd: string): string {
+  cmd = cmd.trim();
+  for (const line of rules.split('\n')) {
+    const at = line.indexOf('=>');
+    if (at < 0) continue;
+    const pat = line.slice(0, at).trim(), undo = line.slice(at + 2).trim();
+    if (!pat) continue;
+    let re: RegExp;
+    try { re = new RegExp(pat); } catch { continue; }
+    const m = re.exec(cmd);
+    if (!m) continue;
+    return undo.replace(/\$(\d)/g, (_, d) => m[+d] ?? '');
+  }
+  return '';
 }

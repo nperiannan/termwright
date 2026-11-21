@@ -35,7 +35,7 @@ export interface Session {
 /** A login profile for a kind of device (EXOS, VOSS, Cisco IOS …). */
 export interface DeviceType {
   name: string; icon?: string; protocol: string; port: number; username: string; credential: string; initialCr: boolean;
-  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string; aiInstructions?: string; detect?: string; detectCommand?: string; tunnel?: string; webCheck?: string; webHttp?: string; webHttps?: string; webOn?: string; webSave?: string; aiReadOnly?: string;
+  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string; undoRules?: string; testSave?: string; testRestore?: string; aiInstructions?: string; detect?: string; detectCommand?: string; tunnel?: string; webCheck?: string; webHttp?: string; webHttps?: string; webOn?: string; webSave?: string; aiReadOnly?: string;
   facts?: FactRule[] | null;
 }
 /** A value read from command output after connecting: the first group of regex. every = at each connect. */
@@ -588,11 +588,11 @@ export interface TestStep {
   snmp?: { session: string; op?: string; oids?: string[]; values?: { oid: string; type?: string; value: string }[] };
   expect?: TestExpect[]; save?: { var: string; field?: string; json?: string; oid?: string }[]; timeout?: number; continueOnFail?: boolean;
 }
-export interface TestCase { name?: string; description?: string; tags?: string[]; vars?: Record<string, string>; params?: Record<string, string>[]; steps: TestStep[]; }
+export interface TestCase { name?: string; description?: string; tags?: string[]; vars?: Record<string, string>; params?: Record<string, string>[]; restore?: ('config' | 'lab')[]; setup?: TestStep[]; steps: TestStep[]; cleanup?: TestStep[]; }
 export interface TestCaseInfo { file: string; name: string; description?: string; tags?: string[]; steps: number; error?: string; }
 export interface TestCheckResult { what: string; passed: boolean; got?: string; }
-export interface TestStepResult { name: string; kind: string; target?: string; sent?: string; status?: number; output?: string; ms: number; passed: boolean; skipped?: boolean; error?: string; checks?: TestCheckResult[]; }
-export interface TestResult { case: string; file?: string; start: string; ms: number; passed: boolean; error?: string; steps: TestStepResult[]; }
+export interface TestStepResult { name: string; kind: string; phase?: '' | 'setup' | 'cleanup' | 'restore'; target?: string; sent?: string; status?: number; output?: string; ms: number; passed: boolean; skipped?: boolean; error?: string; checks?: TestCheckResult[]; }
+export interface TestResult { case: string; file?: string; start: string; ms: number; passed: boolean; cleanupFailed?: boolean; error?: string; steps: TestStepResult[]; }
 export interface TestsTree { root: string; cases: TestCaseInfo[]; testbeds: string[]; reports: { dir: string; passed: number; failed: number; ms: number }[]; }
 export interface TestSchedule { id: string; name: string; files?: string[]; testbed?: string; repeat: 'daily' | 'weekdays' | 'weekly' | 'hours'; at?: string; day?: number; hours?: number; production?: boolean; off?: boolean; }
 export interface TestScheduleView extends TestSchedule { state: { last: string; passed: number; failed: number; dir?: string; error?: string }; next?: string; when: string; }

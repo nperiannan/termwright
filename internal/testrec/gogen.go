@@ -67,8 +67,23 @@ func GenerateGo(c Case, caseFile string) ([]byte, error) {
 	} else {
 		fmt.Fprintf(&b, "\ttw := twtest.New(t, %s)\n", goMap(c.Vars))
 	}
-	for i, st := range c.Steps {
-		fmt.Fprintf(&b, "\ttw.Step(%s, %v, func(s *twtest.Step) {\n", q(stepName(st, i)), st.ContinueOnFail)
+	if len(c.Restore) > 0 {
+		var ks, ss []string
+		for _, k := range c.Restore {
+			ks = append(ks, q(k))
+		}
+		for _, x := range Sessions(c, nil) {
+			ss = append(ss, q(x))
+		}
+		fmt.Fprintf(&b, "\ttw.Restore([]string{%s}, %s)\n", strings.Join(ks, ", "), strings.Join(ss, ", "))
+	}
+	for _, ps := range phased(c) {
+		st, i := ps.st, ps.i
+		if ps.phase == "cleanup" {
+			fmt.Fprintf(&b, "\ttw.Cleanup(%s, func(s *twtest.Step) {\n", q(PhaseLabel(ps.phase)+stepName(st, i)))
+		} else {
+			fmt.Fprintf(&b, "\ttw.Step(%s, %v, func(s *twtest.Step) {\n", q(PhaseLabel(ps.phase)+stepName(st, i)), st.ContinueOnFail && ps.phase == "")
+		}
 		switch {
 		case st.Run != nil:
 			fmt.Fprintf(&b, "\t\ta := s.Run(%s, %s, %s, %d)\n", q(st.Run.Session), q(st.Run.Command), q(st.Run.Prompt), st.Timeout)
@@ -139,6 +154,9 @@ func GenerateGo(c Case, caseFile string) ([]byte, error) {
 			b.WriteString("\t\t_ = a\n")
 		}
 		b.WriteString("\t})\n")
+	}
+	if len(c.Restore) > 0 {
+		b.WriteString("\ttw.Finish()\n")
 	}
 	if len(c.Params) > 0 {
 		b.WriteString("\t})\n")
