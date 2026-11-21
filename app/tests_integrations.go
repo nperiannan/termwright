@@ -54,6 +54,7 @@ func (a *App) TestSendQTest(dir string, files []string) (string, error) {
 	}
 	if len(sent) > 0 {
 		f.SaveReport(rep)
+		f.Audit("send to qTest", strings.Join(sent, ", "))
 	}
 	var b strings.Builder
 	if len(sent) > 0 {
@@ -126,6 +127,7 @@ func (a *App) TestCreateDefect(dir, file string) ([]string, error) {
 	if key != "" {
 		rep.Results[idx].Defect, rep.Results[idx].DefectURL = key, link
 		f.SaveReport(rep)
+		f.Audit("Jira defect", key+" for "+r.Case)
 	}
 	if err != nil {
 		return []string{key, link}, err

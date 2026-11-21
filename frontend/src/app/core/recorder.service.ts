@@ -5,13 +5,13 @@ import { Ui } from './ui.service';
 import { tr } from './i18n';
 import { SECRET } from './history.service';
 import { TestCase, TestExpect, TestStep, TestTable } from './models';
-import { predictApiChecks, predictChecks } from './predict';
+import { configValues, predictApiChecks, predictChecks } from './predict';
 
 /** A recorded step; for a terminal step the marker on its command line finds its output later. */
 export type RecPhase = 'setup' | 'steps' | 'cleanup';
 /** A recorded step; for a terminal step the marker on its command line finds its output later. undo: the
  *  suggested cleanup step (from the device type's undo rules, a POST's DELETE or an SNMP set's old value). */
-export interface RecStep { auto?: number; table?: TestTable; step: TestStep; phase: RecPhase; undo?: TestStep; undone?: boolean; tab?: string; term?: Terminal; marker?: IMarker; output?: string; status?: number; ms?: number; }
+export interface RecStep { autoWhy?: string; auto?: number; table?: TestTable; step: TestStep; phase: RecPhase; undo?: TestStep; undone?: boolean; tab?: string; term?: Terminal; marker?: IMarker; output?: string; status?: number; ms?: number; }
 
 export type ExpectKind = 'contains' | 'field' | 'matches' | 'notContains' | 'save';
 
@@ -233,7 +233,15 @@ export class Recorder {
     const out = this.output(s);
     const configs = l.slice(0, i).filter(x => x.step.run && x.step.run.session === s.step.run!.session && !isRead(x.step) && x.phase !== 'cleanup').map(x => x.step.run!.command);
     const add = predictChecks(configs, s.step.run.command, out, s.phase === 'cleanup', s.step.expect ?? []);
-    this.steps.update(m => m.map((x, j) => j === i ? { ...x, auto: add.length, step: { ...x.step, expect: [...(x.step.expect ?? []), ...add] } } : x));
+    let why = '';
+    if (!add.length) {
+      const vals = [...new Set(configs.flatMap(c => configValues(c).map(v => v.value)))];
+      why = !configs.length ? `no configuration command was recorded before it on ${s.step.run.session}`
+        : !out.trim() ? 'its output was empty when it was read'
+        : !vals.length ? `the commands before it (${configs.slice(-3).join('; ')}) set no names or numbers to look for`
+        : `looked for ${vals.slice(0, 6).join(', ')} - not in its output, or the commands are about something else`;
+    }
+    this.steps.update(m => m.map((x, j) => j === i ? { ...x, auto: add.length, autoWhy: why, step: { ...x.step, expect: [...(x.step.expect ?? []), ...add] } } : x));
   }
 
   /** Checks worth adding to a read step: the names and numbers of the configuration commands recorded before it

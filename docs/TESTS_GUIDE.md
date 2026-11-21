@@ -60,7 +60,7 @@ A test shows its setup, steps and cleanup as a table - device, command, its chec
 
 ## 5. Edit
 
-**✎ Edit** changes the test without YAML: each step's session and command (method and URL, image, traffic test), timeout, *Go on when it fails*, **Wait** (seconds before it), **If** (`{{vlan}} != 1`; `==`, `!=`, `contains`, `~`, `>`, `<`), **Retry until it passes** (for links coming up or routes converging), *Ignore device errors*, **Parse** (`auto` for a table); ↑ ↓ ✕; **+ Step**, **+ Wait**, **+ Upgrade**, **+ Traffic**, **+ Loop** per section; checks with × and **+ Check** (also *table value*: `VLAN_ID=200: STATUS = active`).
+**✎ Edit** changes the test without YAML (**+ More** adds an API request, a step from a curl command, a manual step, a wait, a loop, an upgrade or a traffic test; a failed step's **Compare with the last pass** shows which output lines changed): each step's session and command (method and URL, image, traffic test), timeout, *Go on when it fails*, **Wait** (seconds before it), **If** (`{{vlan}} != 1`; `==`, `!=`, `contains`, `~`, `>`, `<`), **Retry until it passes** (for links coming up or routes converging), *Ignore device errors*, **Parse** (`auto` for a table); ↑ ↓ ✕; **+ Step**, **+ Wait**, **+ Upgrade**, **+ Traffic**, **+ Loop** per section; checks with × and **+ Check** (also *table value*: `VLAN_ID=200: STATUS = active`).
 
 **While the test runs** makes a test fail on **syslog** messages (`LINK-3-UPDOWN`, `/%.*-[0-2]-/`) or **SNMP notifications** (`linkDown`) from its devices - the syslog server or trap receiver must be on - and **Compare the configuration before and after** reads each device's configuration (its device type's backup commands) before the test and after its cleanup; a difference fails the test with the lines that changed.
 
@@ -114,7 +114,7 @@ A **testbed** maps the roles to sessions: the recorder saves sessions as roles (
   save: [{var: name, where: {VLAN_ID: "200"}, column: NAME}]
 ```
 
-Templates and the code helpers are in **Library**.
+Templates and the code helpers are in **Library**; **Get Community Templates** downloads the ntc-templates into `templates/ntc` and adds their index after yours. **Audit log** there lists who ran, saved, renamed, deleted or reported what.
 
 ## 11. Schedule
 

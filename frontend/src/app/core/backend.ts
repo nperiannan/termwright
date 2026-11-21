@@ -321,6 +321,7 @@ export class Backend {
   testStop() { return this.call<void>('TestStop'); }
   testManualAnswer(id: string, result: string, note: string) { return this.call<void>('TestManualAnswer', id, result, note); }
   testImportManual(device: string) { return this.call<string[]>('TestImportManual', device); }
+  testsFetchTemplates() { return this.call<string>('TestsFetchTemplates'); }
   testRemove(file: string) { return this.call<string>('TestRemove', file); }
   testRename(file: string, to: string, copy: boolean) { return this.call<string>('TestRename', file, to, copy); }
   testGenerateGo(file: string) { return this.call<string>('TestGenerateGo', file); }

@@ -609,4 +609,4 @@ export interface TestsGitInfo { repo: boolean; branch?: string; changed: number;
 export type CleanupMode = '' | 'off' | 'auto';
 export type OnCleanupFail = '' | 'stop' | 'restore' | 'factory';
 export interface TestHistory { file: string; runs: { at: string; dir: string; file: string; case: string; passed: boolean; skipped?: boolean; ms: number; testbed?: string; versions?: Record<string, string>; problem?: string }[]; passed: number; failed: number; skipped: number; flips: number; avgMs: number; byVersion: { version: string; passed: number; failed: number }[]; }
-export interface TestRunReport { versions?: Record<string, string>; testbed?: string; cleanup?: CleanupMode; dir: string; passed: number; failed: number; skipped?: number; onCleanupFail?: OnCleanupFail; recovery?: TestStepResult[]; ms: number; results: TestResult[]; }
+export interface TestRunReport { runBy?: string; versions?: Record<string, string>; testbed?: string; cleanup?: CleanupMode; dir: string; passed: number; failed: number; skipped?: number; onCleanupFail?: OnCleanupFail; recovery?: TestStepResult[]; ms: number; results: TestResult[]; }

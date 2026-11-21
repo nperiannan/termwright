@@ -55,7 +55,7 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
               @for (v of s.step.save ?? []; track $index; let j = $index) { <span class="chip var">{{ '{{' + v.var + '}}' }} ← {{ v.field || v.json || v.oid || v.column }}<button type="button" (click)="rec.removeSave(i, j)" title="Remove">×</button></span> }
             </div>
             @if (s.auto) { <div class="mut">✦ {{ s.auto }} {{ s.auto === 1 ? 'check' : 'checks' }} added from what was configured before it</div> }
-          } @else if (isReadStep(s.step)) { <div class="mut warn">○ no checks yet - it passes whenever the device answers.@if (s.auto === 0) { None of the values configured before it is in its output: select a value and right-click → Expect this. }</div> }
+          } @else if (isReadStep(s.step)) { <div class="mut warn">○ no checks yet - it passes whenever the device answers.@if (s.auto === 0) { No checks were added: {{ s.autoWhy }}. Select a value and right-click → Expect this. }</div> }
           @if (rec.suggest(i).length) {
             <div class="chips"><span class="mut">Suggested:</span>@for (x of rec.suggest(i); track $index) { <button type="button" class="sug" (click)="rec.addSuggested(i, x)" [title]="s.phase === 'cleanup' ? 'The cleanup removed it: check that it is gone' : 'A configuration command before this step set it: check that it is there'">+ {{ label(x) }}</button> }</div>
           }

@@ -107,7 +107,9 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
             </div>
           }
           @case ('library') {
-            <div class="stop"><b>Library</b><span class="mut">helpers of the generated code, and output templates</span></div>
+            <div class="stop"><b>Library</b><span class="mut">helpers of the generated code, and output templates</span>
+              <button type="button" (click)="fetchTemplates()" [disabled]="fetching()" title="Download the community ntc-templates: TextFSM templates for hundreds of commands of many vendors">{{ fetching() ? 'Downloading…' : 'Get Community Templates' }}</button>
+              <button type="button" class="lnk" (click)="openFile('reports/audit.log')" title="Who ran, saved, deleted or reported what, and when">Audit log</button></div>
             <div class="list">
               <div class="fold"><span>suites</span><span class="cnt">{{ tree()?.suites?.length ?? 0 }}</span></div>
               @for (l of tree()?.suites ?? []; track l.file) { <div class="case" [class.sel]="fileSel() === l.file" (click)="openFile(l.file)" (keydown.enter)="openFile(l.file)" tabindex="0" role="button"><span class="cn">{{ l.name }}</span><span class="n">{{ l.tests }}</span></div> }
@@ -139,7 +141,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
         @switch (section()) {
           @case ('runs') {
             @if (runRep(); as rep) {
-              <div class="head"><div class="crumb">{{ rep.dir }} · {{ rep.testbed ? 'testbed ' + base(rep.testbed) : "the tests' own sessions" }} · {{ rep.cleanup === 'off' ? 'no cleanup' : rep.cleanup === 'auto' ? 'cleanup or undo' : 'cleanup steps' }} · {{ dur(rep.ms) }}@if (verText(rep.versions)) { · {{ verText(rep.versions) }} }</div>
+              <div class="head"><div class="crumb">{{ rep.dir }} · {{ rep.testbed ? 'testbed ' + base(rep.testbed) : "the tests' own sessions" }} · {{ rep.cleanup === 'off' ? 'no cleanup' : rep.cleanup === 'auto' ? 'cleanup or undo' : 'cleanup steps' }} · {{ dur(rep.ms) }}@if (verText(rep.versions)) { · {{ verText(rep.versions) }} }@if (rep.runBy) { · run by {{ rep.runBy }} }</div>
                 <div class="title"><h1>Run · {{ when(rep.dir) }}</h1>
                   <span class="pill" [class]="rep.failed ? 'pill f' : rep.skipped ? 'pill s' : 'pill p'">{{ rep.failed ? rep.failed + ' failed' : rep.skipped ? rep.skipped + ' skipped' : 'all passed' }}</span>
                   <span class="sp"></span>
@@ -235,18 +237,29 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                       </div></div>
                     @for (ph of phases; track ph.k) {
                       <div class="sec">
-                        <div class="sh">{{ ph.l }}<span class="sp"></span><button type="button" class="lnk" (click)="addStep(ph.k)">+ Step</button><button type="button" class="lnk" (click)="addWait(ph.k)">+ Wait</button><button type="button" class="lnk" (click)="addManual(ph.k)" title="A step a person does or checks; the run asks Passed or Failed">+ Manual</button><button type="button" class="lnk" (click)="addUpgrade(ph.k)" title="Install a software image (the device type's upgrade commands) and wait for the device">+ Upgrade</button><button type="button" class="lnk" (click)="addTraffic(ph.k)" title="Run a saved traffic test of the emulated lab">+ Traffic</button><button type="button" class="lnk" (click)="addLoop(ph.k)" title="Run steps once per value">+ Loop</button></div>
+                        <div class="sh">{{ ph.l }}<span class="sp"></span><button type="button" class="lnk" (click)="addStep(ph.k)">+ Command</button><button type="button" class="lnk" (click)="addMenu($event, ph.k)" title="An API request, a curl command, a manual step, a wait, a loop, an upgrade or a traffic test">+ More ▾</button></div>
                         @for (s of listOf(d, ph.k); track $index; let i = $index; let lastI = $last) {
                           <div class="ed">
                             <div class="row"><b class="num">{{ i + 1 }}</b>
                               @if (s.run) { <input class="ses" [(ngModel)]="s.run.session" placeholder="session" aria-label="Session" /><input class="cmdi" [(ngModel)]="s.run.command" placeholder="command" aria-label="Command" /> }
-                              @else if (s.http) { <select [(ngModel)]="s.http.method" aria-label="Method">@for (m of methods; track m) { <option [value]="m">{{ m }}</option> }</select><input class="cmdi" [(ngModel)]="s.http.url" placeholder="URL" aria-label="URL" /> }
+                              @else if (s.http) { <input class="ses" [(ngModel)]="s.http.session" placeholder="API session (or a full URL)" aria-label="API session" /><select [(ngModel)]="s.http.method" aria-label="Method">@for (m of methods; track m) { <option [value]="m">{{ m }}</option> }</select><input class="cmdi" [(ngModel)]="s.http.url" placeholder="URL or /path" aria-label="URL" /> }
                               @else if (s.manual) { <span class="mut">manual</span><input class="cmdi" [(ngModel)]="s.manual.instruction" placeholder="what the person does or checks" aria-label="Instruction" /> }
                               @else if (s.upgrade) { <span class="mut">upgrade</span><input class="ses" [(ngModel)]="s.upgrade.session" placeholder="session" aria-label="Session" /><input class="cmdi" [(ngModel)]="s.upgrade.image" placeholder="image file or URL" aria-label="Image" /> }
                               @else if (s.traffic) { <span class="mut">traffic test</span><input class="cmdi" [(ngModel)]="s.traffic.test" placeholder="saved lab traffic test" aria-label="Traffic test" /> }
-                              @else { <span class="cmd fl">{{ text(s) }}</span><span class="sp"></span>@if (s.loop) { <span class="mut">edit loops in the YAML</span> } }
+                              @else { <span class="cmd fl">{{ s.loop ? 'loop' : text(s) }}</span><span class="sp"></span> }
                               <button type="button" class="lnk" (click)="moveStep(ph.k, i, -1)" [disabled]="i === 0" title="Move up">↑</button><button type="button" class="lnk" (click)="moveStep(ph.k, i, 1)" [disabled]="lastI" title="Move down">↓</button><button type="button" class="lnk" (click)="removeStep(ph.k, i)" title="Remove the step">✕</button>
                             </div>
+                            @if (s.http && s.http.method !== 'GET' && s.http.method !== 'DELETE') { <div class="row opts"><label class="wide">Body <textarea class="cmdi body" [(ngModel)]="s.http.body" rows="2" placeholder='{"name": "v200", "vid": 200}'></textarea></label></div> }
+                            @if (s.loop; as lp) {
+                              <div class="row opts"><label>For each <input class="pin" [(ngModel)]="lp.var" placeholder="port" /></label>
+                                <label class="wide" title="Values separated by commas, a range like 1:1-1:8, or a variable like {{ '{{' }}list{{ '}}' }}">in <input class="cmdi" [ngModel]="loopSrc(lp)" (ngModelChange)="setLoopSrc(lp, $event)" placeholder="1:1-1:8  or  10, 20, 30  or  {{ '{{' }}list{{ '}}' }}" /></label></div>
+                              @for (ls of lp.steps; track $index; let k = $index) {
+                                <div class="row opts inner"><span class="mut">{{ k + 1 }}</span>
+                                  @if (ls.run) { <input class="ses" [(ngModel)]="ls.run.session" placeholder="session" /><input class="cmdi" [(ngModel)]="ls.run.command" placeholder="command - use {{ '{{' }}{{ lp.var }}{{ '}}' }}" /> } @else { <span class="cmd fl">{{ text(ls) }}</span> }
+                                  <button type="button" class="lnk" (click)="lp.steps.splice(k, 1); touch()" title="Remove">✕</button></div>
+                              }
+                              <div class="row opts inner"><button type="button" class="lnk" (click)="lp.steps.push({ run: { session: lastSession(), command: '' } }); touch()">+ Step in the loop</button></div>
+                            }
                             <div class="row opts"><label class="wide" title="What should happen, in words - shown with the step and in the reports">Expected <input class="cmdi" [(ngModel)]="s.expected" placeholder="e.g. VLAN 200 lists port 1:2 tagged" /></label></div>
                             <div class="row opts"><label>Timeout <input type="number" min="0" class="num2" [(ngModel)]="s.timeout" /> s</label>
                               <label><input type="checkbox" [(ngModel)]="s.continueOnFail" /> Go on when it fails</label>
@@ -257,7 +270,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                               @if (s.run) { <label title="Do not fail the step when the device answers with an error message"><input type="checkbox" [(ngModel)]="s.ignoreErrors" /> Ignore device errors</label>
                                 <label title="Turn the output into a table with a TextFSM template: auto (templates/index) or a file in templates/">Parse <input class="pin" [(ngModel)]="s.run.parse" placeholder="off" list="tw-parse" /></label> }</div>
                             <div class="chips">@for (e of s.expect ?? []; track $index; let j = $index) { <span class="chip">{{ label(e) }} <button type="button" class="x" (click)="removeCheck(s, j)" title="Remove the check">×</button></span> }
-                              @if (ck(ph.k, i); as c) {
+                              @if (!s.loop && !s.manual && ck(ph.k, i); as c) {
                                 <span class="addck"><select [(ngModel)]="c.k" aria-label="Check">@for (k of checkKinds(s); track k.k) { <option [value]="k.k">{{ k.l }}</option> }</select>
                                   <input [(ngModel)]="c.v" [placeholder]="checkHint(c.k)" aria-label="Value" (keydown.enter)="addCheck(s, c)" /><button type="button" (click)="addCheck(s, c)" [disabled]="!c.v.trim()">+ Check</button></span>
                               }</div>
@@ -275,7 +288,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                           <div class="srow hd"><span>#</span><span>Device</span><span>Command</span><span>Checks</span><span>Result</span><span class="r">Time</span></div>
                           @for (s of listOf(t, ph.k); track $index; let i = $index) {
                             @let r = resOf(ph.k, i);
-                            <div class="srow" [class.f]="r && !r.passed && !r.skipped" [class.open]="isOpen(ph.k, i)" (click)="toggleRow(ph.k, i)" (keydown.enter)="toggleRow(ph.k, i)" tabindex="0" role="button">
+                            <div class="srow" [attr.aria-expanded]="isOpen(ph.k, i)" [class.f]="r && !r.passed && !r.skipped" [class.open]="isOpen(ph.k, i)" (click)="toggleRow(ph.k, i)" (keydown.enter)="toggleRow(ph.k, i)" tabindex="0" role="button">
                               <span class="mut">{{ i + 1 }}</span><span class="dev" [title]="target(s)">{{ s.loop ? 'loop' : s.manual ? 'you' : shortDev(target(s)) }}</span><span class="cmd" [class.manual]="!!s.manual">{{ text(s) }}@if (logicText(s)) { <span class="logic">{{ logicText(s) }}</span> }@if (s.expected) { <span class="expd">Expected: {{ s.expected }}</span> }</span>
                               <span class="chips">@for (e of s.expect ?? []; track $index; let j = $index) { <span class="chip" [class.b]="r?.checks?.[j]?.passed === false">{{ r?.checks?.[j]?.passed === false ? '✗' : r ? '✓' : '' }} {{ label(e) }}</span> }
                                 @if (!(s.expect?.length) && !s.manual) { <span class="chip w" title="Without checks the step passes when the device accepts the command">○ not checked</span> }@if (s.manual) { <span class="chip m">you decide</span> }</span>
@@ -299,6 +312,11 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                                 </div>
                                 <div>
                                   @if (r?.table; as tb) { <h4>Table · {{ tb.rows.length }} rows</h4><div class="tbw"><table class="ptab"><tr>@for (h of tb.header; track $index) { <th>{{ h }}</th> }</tr>@for (x of tb.rows.slice(0, 200); track $index) { <tr>@for (c of x; track $index) { <td>{{ c }}</td> }</tr> }</table></div> }
+                                  @if (diffOf(ph.k, i); as df) {
+                                    <h4>Changes since the last pass ({{ df.when }})</h4>
+                                    @if (df.lines.length) { <pre class="diff">@for (l of df.lines; track $index) { <span [class]="l[0] === '+' ? 'da' : 'dr'">{{ l }}</span>
+} </pre> } @else { <p class="mut">The output is the same as in that run.</p> }
+                                  } @else if (r && !r.skipped && r.output) { <button type="button" class="lnk cmp" (click)="compare(ph.k, i)" title="Show which lines of the output differ from the last run where this test passed">Compare with the last pass</button> }
                                   <h4>Output · select text, right-click to check it</h4>
                                   @if (r?.output) { <pre (contextmenu)="outMenu($event, { i: i, phase: ph.k === 'steps' ? '' : ph.k })">{{ r?.output }}</pre> } @else { <p class="mut">{{ r ? 'no output' : 'not run yet' }}</p> }
                                 </div>
@@ -341,7 +359,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
         }
         <ng-template #fileView>
           @if (fileSel(); as fp) {
-            <div class="head"><div class="crumb">{{ fp }}</div><div class="title"><h1>{{ base(fp) }}</h1>@if (lockOf(fp); as l) { <span class="pill s">🔒 in use by {{ l.user }} on {{ l.host }} since {{ l.since.slice(11, 16) }}</span><button type="button" (click)="releaseLock(fp)" title="Free the testbed when that run is over">Release</button> }<span class="sp"></span><button type="button" (click)="backend.testsOpenInEditor(fp)">Open in VS Code</button><button type="button" class="pri" (click)="saveFile()">Save</button></div></div>
+            <div class="head"><div class="crumb">{{ fp }}</div><div class="title"><h1>{{ base(fp) }}</h1>@if (fp.startsWith('reports/')) { <span class="pill">read only</span> }@if (lockOf(fp); as l) { <span class="pill s">🔒 in use by {{ l.user }} on {{ l.host }} since {{ l.since.slice(11, 16) }}</span><button type="button" (click)="releaseLock(fp)" title="Free the testbed when that run is over">Release</button> }<span class="sp"></span><button type="button" (click)="backend.testsOpenInEditor(fp)">Open in VS Code</button>@if (!fp.startsWith('reports/')) { <button type="button" class="pri" (click)="saveFile()">Save</button> }</div></div>
             <div class="body"><textarea class="code" [(ngModel)]="fileText" spellcheck="false" [attr.aria-label]="fp"></textarea>
               <div class="row"><span class="mut">{{ fp.startsWith('lib/') ? 'Termwright writes twtest and run_tests again when it is updated: keep your own helpers in other files.' : fp.startsWith('templates/') ? 'TextFSM templates; the index says which command each one parses (ntc-templates format).' : 'Roles and values: role: Folder/session, name: value.' }}</span></div></div>
           } @else { <div class="empty mut">Select a file.</div> }
@@ -454,6 +472,10 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .opts .wide { flex: 1; } .opts .wide .cmdi { height: 26px; }
     .dots { display: flex; gap: 3px; flex-wrap: wrap; } .dots i { width: 10px; height: 18px; border-radius: 3px; } .dp { background: var(--ok, #3fbf75); } .df { background: var(--danger, #ef6161); } .dw { background: var(--warn, #e0a030); }
     .vrow { display: grid; grid-template-columns: minmax(160px, 1fr) 90px 90px 1.2fr; gap: 10px; padding: 7px 12px; border-top: 1px solid var(--border); font-size: 12.5px; align-items: center; } .bar2 { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--text) 8%, transparent); }
+    .diff { margin: 0 0 10px; font: 12px/1.45 var(--mono, monospace); background: var(--term-bg, rgba(0,0,0,.3)); border-radius: 7px; padding: 8px 10px; max-height: 220px; overflow: auto; white-space: pre-wrap; }
+    .da { color: var(--ok, #3fbf75); } .dr { color: var(--danger, #ef6161); } .cmp { display: block; margin-bottom: 8px; }
+    .inner { padding-left: 46px !important; } .body.cmdi, textarea.body { height: auto !important; min-height: 44px; resize: vertical; }
+    .srow:focus-visible, .case:focus-visible, .rrow:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
     .console { display: flex; flex-direction: column; border-bottom: 1px solid var(--border); background: var(--term-bg, #0e0f12); }
     .console .ch { display: flex; align-items: center; gap: 10px; padding: 5px 20px; font-size: 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
     .console pre { margin: 0; height: 240px; min-height: 80px; resize: vertical; overflow: auto; padding: 8px 20px; font: 12px/1.45 var(--mono, monospace); color: #cfd3da; white-space: pre-wrap; }
@@ -986,13 +1008,63 @@ export class TestsView implements OnInit, OnDestroy {
   }
   edit() { const t = this.test(); if (t) { this.cks.clear(); const d = structuredClone({ ...t, setup: t.setup ?? [], steps: t.steps ?? [], cleanup: t.cleanup ?? [] }); for (const x of [...d.setup, ...d.steps, ...d.cleanup]) if (x.http) x.http.method ||= 'GET'; this.draft.set(d); } }
   listOf(d: TestCase, p: Phase): TestStep[] { return (p === 'steps' ? d.steps : p === 'setup' ? d.setup : d.cleanup) ?? []; }
-  private touch() { const d = this.draft(); if (d) this.draft.set({ ...d }); this.cks.clear(); }
+  touch() { const d = this.draft(); if (d) this.draft.set({ ...d }); this.cks.clear(); }
   addStep(p: Phase) {
     const d = this.draft(); if (!d) return;
     const all = [...(d.setup ?? []), ...d.steps, ...(d.cleanup ?? [])];
     const ses = [...all].reverse().find(s => s.run)?.run?.session ?? '';
     this.listOf(d, p).push({ run: { session: ses, command: '' } });
     this.touch();
+  }
+  lastSession() { const d = this.draft(); const all = d ? [...(d.setup ?? []), ...d.steps, ...(d.cleanup ?? [])] : []; return [...all].reverse().find(s => s.run)?.run?.session ?? ''; }
+  loopSrc(l: NonNullable<TestStep['loop']>) { return l.values?.length ? l.values.join(', ') : l.range ?? l.from ?? ''; }
+  setLoopSrc(l: NonNullable<TestStep['loop']>, v: string) {
+    delete l.values; delete l.range; delete l.from; v = v.trim();
+    if (/^\{\{.+\}\}$/.test(v)) l.from = v;
+    else if (/^[\w:./]*\d+\s*-\s*[\w:./]*\d+$/.test(v) && !v.includes(',')) l.range = v.replace(/\s/g, '');
+    else l.values = v.split(',').map(x => x.trim()).filter(Boolean);
+  }
+  addApi(p: Phase) { const d = this.draft(); if (!d) return; const last = [...(d.steps ?? [])].reverse().find(s => s.http)?.http?.session ?? ''; this.listOf(d, p).push({ http: { session: last, method: 'GET', url: '' }, expect: [{ status: 200 }] }); this.touch(); }
+  async addCurl(p: Phase) {
+    const d = this.draft(); if (!d) return;
+    const c = await this.ui.input(tr('Paste a curl Command'), tr('It becomes a REST step (method, URL, headers, body). Passwords and tokens in it are not kept: use an API session for the login.'), '');
+    if (!c?.trim()) return;
+    const h = parseCurl(c);
+    if (!h) return this.ui.toast(tr('That is not a curl command with a URL'), 'error');
+    this.listOf(d, p).push({ http: h, expect: [{ status: h.method === 'POST' ? 201 : 200 }] }); this.touch();
+  }
+  private diffs = signal<Record<string, { when: string; lines: string[] }>>({});
+  diffOf(p: Phase, i: number) { return this.diffs()[this.sel() + '|' + p + i]; }
+  async compare(p: Phase, i: number) {
+    const cur = this.resOf(p, i), file = this.sel();
+    const h = (await this.backend.testHistory(file, 50).catch(() => []))?.[0];
+    const lastDir = this.last()[file] ? this.report()?.dir : '';
+    const prev = h?.runs.find(x => x.passed && !x.skipped && x.dir !== lastDir);
+    if (!prev || !cur) return this.ui.toast(tr('No earlier passing run of this test to compare with'), 'info');
+    try {
+      const rep = JSON.parse(await this.backend.testFile(prev.dir + '/result.json')) as TestRunReport;
+      const r = rep.results.find(x => x.file === file);
+      const old = r?.steps.filter(x => (x.phase ?? '') === (p === 'steps' ? '' : p))[i];
+      if (!old) return this.ui.toast(tr('That run has no such step'), 'info');
+      this.diffs.update(m => ({ ...m, [file + '|' + p + i]: { when: prev.at.slice(0, 16).replace('T', ' '), lines: lineDiff(old.output ?? '', cur.output ?? '') } }));
+    } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  readonly fetching = signal(false);
+  async fetchTemplates() {
+    this.fetching.set(true);
+    try { this.ui.toast(await this.backend.testsFetchTemplates(), 'success'); await this.load(); } catch (e) { this.ui.toast(errText(e), 'error'); }
+    this.fetching.set(false);
+  }
+  addMenu(ev: MouseEvent, p: Phase) {
+    this.ui.showMenu(ev, [
+      { label: 'API Request', action: () => this.addApi(p) },
+      { label: 'From a curl Command…', action: () => void this.addCurl(p) },
+      { label: 'Manual Step (a person answers)', action: () => this.addManual(p) },
+      { label: 'Wait', action: () => this.addWait(p) },
+      { label: 'Loop over Values', action: () => this.addLoop(p) },
+      { label: 'Software Upgrade', action: () => this.addUpgrade(p) },
+      { label: 'Lab Traffic Test', action: () => this.addTraffic(p) },
+    ]);
   }
   addManual(p: Phase) { const d = this.draft(); if (!d) return; this.listOf(d, p).push({ manual: { instruction: '' } }); this.touch(); }
   readonly manual = signal<{ id: string; name: string; instruction: string; expected: string } | null>(null);
@@ -1048,7 +1120,6 @@ export class TestsView implements OnInit, OnDestroy {
     const all = [...(d.setup ?? []), ...d.steps, ...(d.cleanup ?? [])], ses = [...all].reverse().find(s => s.run)?.run?.session ?? '';
     this.listOf(d, p).push({ loop: { var: 'port', range: '1-4', steps: [{ run: { session: ses, command: 'show ports {{port}} information' } }] } });
     this.touch();
-    this.ui.toast(tr('Loop added: change its values and steps in the YAML after saving'), 'info');
   }
   moveStep(p: Phase, i: number, by: number) { const d = this.draft(); if (!d) return; const l = this.listOf(d, p); [l[i], l[i + by]] = [l[i + by], l[i]]; this.touch(); }
   removeStep(p: Phase, i: number) { const d = this.draft(); if (!d) return; this.listOf(d, p).splice(i, 1); this.touch(); }
@@ -1108,4 +1179,42 @@ export class TestsView implements OnInit, OnDestroy {
     const c = s.checks?.find(x => !x.passed);
     return `step ${i + 1}: ` + (s.error || (c ? `${c.what}, got "${c.got ?? ''}"` : 'failed'));
   }
+}
+
+/** A curl command as a REST step: -X, -H (no Authorization/Cookie: those belong in an API session), -d / --data*. */
+export function parseCurl(cmd: string): NonNullable<TestStep['http']> | null {
+  const toks: string[] = [];
+  const re = /'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"|(\S+)/g;
+  let m: RegExpExecArray | null;
+  const flat = cmd.replace(/\\\r?\n/g, ' ');
+  while ((m = re.exec(flat))) toks.push(m[1] ?? m[2] ?? m[3]);
+  if (!toks.length || !/curl$/.test(toks[0])) return null;
+  let method = '', url = '', body = '';
+  const headers: Record<string, string> = {};
+  for (let i = 1; i < toks.length; i++) {
+    const t = toks[i];
+    if (t === '-X' || t === '--request') method = (toks[++i] ?? '').toUpperCase();
+    else if (t === '-H' || t === '--header') { const [k, ...v] = (toks[++i] ?? '').split(':'); if (k && !/^(authorization|cookie|x-auth-token|x-api-key)$/i.test(k.trim())) headers[k.trim()] = v.join(':').trim(); }
+    else if (/^(-d|--data|--data-raw|--data-binary|--json)$/.test(t)) body = toks[++i] ?? '';
+    else if (/^-(u|-user)$/.test(t)) i++;
+    else if (/^https?:\/\//.test(t)) url = t;
+    else if (t.startsWith('-')) { if (/^-(o|-output|w|-write-out|m|-max-time|-connect-timeout)$/.test(t)) i++; }
+  }
+  if (!url) return null;
+  if (!method) method = body ? 'POST' : 'GET';
+  const h: NonNullable<TestStep['http']> = { method, url };
+  if (Object.keys(headers).length) h.headers = headers;
+  if (body) h.body = body;
+  return h;
+}
+
+/** The lines removed (- …) and added (+ …) between two outputs, spacing ignored, at most 200. */
+export function lineDiff(a: string, b: string): string[] {
+  const norm = (s: string) => s.split('\n').map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const x = norm(a), y = norm(b), cy = new Map<string, number>(), cx = new Map<string, number>(), out: string[] = [];
+  for (const l of y) cy.set(l, (cy.get(l) ?? 0) + 1);
+  for (const l of x) { const n = cy.get(l) ?? 0; if (n) cy.set(l, n - 1); else out.push('- ' + l); }
+  for (const l of x) cx.set(l, (cx.get(l) ?? 0) + 1);
+  for (const l of y) { const n = cx.get(l) ?? 0; if (n) cx.set(l, n - 1); else out.push('+ ' + l); }
+  return out.slice(0, 200);
 }

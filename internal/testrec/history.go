@@ -22,6 +22,7 @@ type HistoryEntry struct {
 	Testbed  string            `json:"testbed,omitempty"`
 	Versions map[string]string `json:"versions,omitempty"`
 	Problem  string            `json:"problem,omitempty"`
+	RunBy    string            `json:"runBy,omitempty"`
 }
 
 func (f Folder) historyFile() string { return filepath.Join(f.Root, "reports", "history.jsonl") }
@@ -33,7 +34,7 @@ func (f Folder) appendHistory(rep RunReport) {
 	}
 	defer fh.Close()
 	for _, r := range rep.Results {
-		e := HistoryEntry{At: r.Start, Dir: rep.Dir, File: r.File, Case: r.Case, Passed: r.Passed, Skipped: r.Skipped, Ms: r.Ms, Testbed: rep.Testbed, Versions: r.Versions}
+		e := HistoryEntry{At: r.Start, Dir: rep.Dir, File: r.File, Case: r.Case, Passed: r.Passed, Skipped: r.Skipped, Ms: r.Ms, Testbed: rep.Testbed, Versions: r.Versions, RunBy: rep.RunBy}
 		if !r.Passed {
 			e.Problem = FirstProblem(r)
 		}
@@ -193,4 +194,16 @@ func (f Folder) CaseQTest(file string) string {
 		return strings.TrimSpace(c.QTest.TestCase)
 	}
 	return ""
+}
+
+// Audit adds a line to reports/audit.log: when, who, what (run, save, delete, send to qTest …).
+func (f Folder) Audit(action, detail string) {
+	u, h := me()
+	fh, err := os.OpenFile(filepath.Join(f.Root, "reports", "audit.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer fh.Close()
+	fmt := time.Now().Format("2006-01-02 15:04:05")
+	fh.WriteString(fmt + "\t" + u + "@" + h + "\t" + action + "\t" + strings.ReplaceAll(detail, "\n", " ") + "\n")
 }

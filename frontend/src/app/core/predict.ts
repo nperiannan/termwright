@@ -99,6 +99,9 @@ export function predictChecks(configs: string[], show: string, out: string, clea
 
 /** A field pattern as people read it: "Admin\s+State:\s*(\S+)" → "Admin State". */
 export function fieldName(pattern: string): string {
+  // "(?m)^4\s+\S+\s+(\S+)": a value in the line that starts with 4
+  const m = pattern.match(/^(?:\(\?m\))?\^(.+?)((?:\\s\+\\S\+)*)\\s\+\(\\S\+\)$/);
+  if (m) { const n = (m[2].match(/\\S\+/g) ?? []).length + 2; return `line "${m[1].replace(/\\(.)/g, '$1')}", value ${n}`; }
   const s = pattern.replace(/\(\?[a-z]+\)/g, '').replace(/\\s[+*]/g, ' ').replace(/\((?:[^()\\]|\\.)*\)\s*$/, '').replace(/\\(.)/g, '$1').replace(/[:\s]+$/, '').trim();
   return s && s.length <= 40 && !/[()[\]|*+?^$]/.test(s) ? s : pattern;
 }

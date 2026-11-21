@@ -363,6 +363,7 @@ func (a *App) TestRemove(file string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	f.Audit("delete", file)
 	return f.Remove(file)
 }
 
@@ -372,6 +373,7 @@ func (a *App) TestRename(file, to string, copy bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	f.Audit(map[bool]string{true: "duplicate", false: "rename"}[copy], file+" → "+to)
 	return f.Rename(file, to, copy)
 }
 

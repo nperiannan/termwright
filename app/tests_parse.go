@@ -1,10 +1,17 @@
 package app
 
 import (
+	"archive/zip"
+	"bytes"
+	"context"
+	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/termwright/termwright/internal/textfsm"
 )
@@ -66,4 +73,93 @@ func (a *App) TestParse(session, command, template, output string) (*textfsm.Tab
 		template = "auto"
 	}
 	return a.parseWith(f.TemplatesDir(), session, command, template, output)
+}
+
+// TestsFetchTemplates downloads the community ntc-templates (TextFSM templates for many vendors and
+// commands) into the tests folder's templates/ntc and adds their index lines after your own.
+func (a *App) TestsFetchTemplates() (string, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "GET", "https://codeload.github.com/networktocode/ntc-templates/zip/refs/heads/master", nil)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("download ntc-templates: %v", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return "", fmt.Errorf("download ntc-templates: %s", res.Status)
+	}
+	b, err := io.ReadAll(io.LimitReader(res.Body, 64<<20))
+	if err != nil {
+		return "", err
+	}
+	zr, err := zip.NewReader(bytes.NewReader(b), int64(len(b)))
+	if err != nil {
+		return "", err
+	}
+	dst := filepath.Join(f.TemplatesDir(), "ntc")
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return "", err
+	}
+	n := 0
+	var index []byte
+	for _, zf := range zr.File {
+		i := strings.Index(zf.Name, "/ntc_templates/templates/")
+		if i < 0 || zf.FileInfo().IsDir() {
+			continue
+		}
+		name := filepath.Base(zf.Name)
+		rc, err := zf.Open()
+		if err != nil {
+			continue
+		}
+		data, _ := io.ReadAll(io.LimitReader(rc, 4<<20))
+		rc.Close()
+		if name == "index" {
+			index = data
+			continue
+		}
+		if strings.HasSuffix(name, ".textfsm") && os.WriteFile(filepath.Join(dst, name), data, 0o644) == nil {
+			n++
+		}
+	}
+	if index == nil {
+		return "", errors.New("the download has no index")
+	}
+	// add their index lines (paths under ntc/) after ours, once
+	ip := filepath.Join(f.TemplatesDir(), "index")
+	ours, _ := os.ReadFile(ip)
+	if i := strings.Index(string(ours), "\n# --- ntc-templates"); i >= 0 {
+		ours = ours[:i+1]
+	}
+	var add []string
+	header := true
+	for _, l := range strings.Split(string(index), "\n") {
+		t := strings.TrimSpace(l)
+		if t == "" || strings.HasPrefix(t, "#") {
+			continue
+		}
+		if header && strings.HasPrefix(t, "Template") {
+			header = false
+			continue
+		}
+		parts := strings.SplitN(l, ",", 2)
+		if len(parts) < 2 {
+			continue
+		}
+		var files []string
+		for _, x := range strings.Split(parts[0], ":") {
+			files = append(files, "ntc/"+strings.TrimSpace(x))
+		}
+		add = append(add, strings.Join(files, ":")+","+parts[1])
+	}
+	out := strings.TrimRight(string(ours), "\n") + "\n\n# --- ntc-templates (downloaded; Library → Get Community Templates again to update)\n" + strings.Join(add, "\n") + "\n"
+	if err := os.WriteFile(ip, []byte(out), 0o644); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%d templates for %d commands in templates/ntc", n, len(add)), nil
 }

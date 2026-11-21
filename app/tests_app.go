@@ -73,6 +73,9 @@ func (a *App) TestSave(file string, c testrec.Case) (string, error) {
 		return "", errors.New("the test seems to hold a password, key or community: name a saved session instead - its login is in the credential store")
 	}
 	rel, err := f.Save(file, c)
+	if err == nil {
+		f.Audit("save", rel)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -254,6 +257,9 @@ func (a *App) runTests(ctx context.Context, r TestRunRequest, ask netAsker) (tes
 	rep, err := f.RunFilesWith(ctx, r.Files, drv, r.Vars, opt, func(res testrec.Result) {
 		emitter{a}.Emit("tests:progress", res)
 	})
+	if rep.Dir != "" {
+		f.Audit("run", fmt.Sprintf("%s: %d passed, %d failed, %d skipped (testbed %s)", rep.Dir, rep.Passed, rep.Failed, rep.Skipped, orDash(r.Testbed)))
+	}
 	if err == nil || len(rep.Results) > 0 {
 		testsMu.Lock()
 		testsLast = &rep

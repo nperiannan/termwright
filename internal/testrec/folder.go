@@ -275,6 +275,8 @@ func (f Folder) Save(rel string, c Case) (string, error) {
 
 // RunReport is a run of one or more cases with its reports.
 type RunReport struct {
+	// RunBy: who ran it (user@computer).
+	RunBy string `json:"runBy,omitempty"`
 	// Versions: the software each device ran at the start of the run (session → version).
 	Versions map[string]string `json:"versions,omitempty"`
 	// Testbed the run used ("" = the tests' own sessions) and its cleanup mode.
@@ -347,7 +349,8 @@ func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars
 	if mode != "restore" && mode != "factory" {
 		mode = "stop"
 	}
-	rep := RunReport{OnCleanupFail: mode, Testbed: opt.Testbed, Cleanup: opt.Cleanup}
+	u, h := me()
+	rep := RunReport{OnCleanupFail: mode, Testbed: opt.Testbed, Cleanup: opt.Cleanup, RunBy: u + "@" + h}
 	rc, canRecover := d.(Recoverer)
 	cases := map[string]Case{}
 	var all []string // every device the run uses, for the configuration saved before it
