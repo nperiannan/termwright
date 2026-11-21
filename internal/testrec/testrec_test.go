@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -298,4 +299,116 @@ cleanup:
 	if !r2.Steps[1].Skipped || r2.Steps[2].Skipped || r2.Steps[2].Phase != "cleanup" || r2.CleanupFailed {
 		t.Fatalf("%+v", r2.Steps)
 	}
+}
+
+type recov struct {
+	*fake
+	base, rec   []string
+	failRecover bool
+}
+
+func (r *recov) Baseline(_ context.Context, s []string) []StepResult {
+	r.base = append(r.base, s...)
+	return []StepResult{{Name: "save configuration", Target: strings.Join(s, ","), Passed: true}}
+}
+func (r *recov) Recover(_ context.Context, mode string, s []string) []StepResult {
+	r.rec = append(r.rec, mode+":"+strings.Join(s, ","))
+	return []StepResult{{Name: mode, Target: strings.Join(s, ","), Passed: !r.failRecover}}
+}
+func (r *recov) DeviceError(_, out string) string {
+	if strings.HasPrefix(out, "Error:") {
+		return strings.TrimSpace(out)
+	}
+	return ""
+}
+
+func TestCleanupFailurePolicy(t *testing.T) {
+	f := Folder{Root: t.TempDir()}
+	f.Init()
+	bad, _ := Parse([]byte("steps: [{run: {session: s1, command: show version}}]\ncleanup: [{run: {session: s1, command: nope}}]"))
+	good, _ := Parse([]byte("steps: [{run: {session: s2, command: show version}}]"))
+	f.Save("a-bad", bad)
+	f.Save("b-good", good)
+	f.Save("c-good", good)
+	// stop (default): the cases after the failed cleanup are skipped with the reason
+	rep, err := f.RunFilesWith(context.Background(), nil, &fake{}, nil, RunOptions{}, nil)
+	if err != nil || rep.Failed != 1 || rep.Skipped != 2 || !rep.Results[1].Skipped || !strings.Contains(rep.Results[1].Error, "cleanup of") {
+		t.Fatalf("%+v %v", rep, err)
+	}
+	if j := string(JUnit(rep)); !strings.Contains(j, `skipped="2"`) || !strings.Contains(j, "the cleanup failed") {
+		t.Fatal(j)
+	}
+	// restore: saved before the run, put back after the failed cleanup, the run goes on
+	r := &recov{fake: &fake{}}
+	rep, err = f.RunFilesWith(context.Background(), nil, r, nil, RunOptions{OnCleanupFail: "restore"}, nil)
+	if err != nil || rep.Passed != 2 || rep.Skipped != 0 || strings.Join(r.base, ",") != "s1,s2" || len(r.rec) != 1 || r.rec[0] != "restore:s1" || len(rep.Recovery) != 2 {
+		t.Fatalf("%+v %v %v %v", rep, err, r.base, r.rec)
+	}
+	// factory that fails: the rest is skipped
+	r = &recov{fake: &fake{}, failRecover: true}
+	rep, _ = f.RunFilesWith(context.Background(), nil, r, nil, RunOptions{OnCleanupFail: "factory"}, nil)
+	if rep.Skipped != 2 || !strings.Contains(rep.Results[2].Error, "factory default") || len(r.base) != 0 {
+		t.Fatalf("%+v", rep)
+	}
+	// a driver that cannot recover refuses restore and factory
+	if _, err := f.RunFilesWith(context.Background(), nil, &fake{}, nil, RunOptions{OnCleanupFail: "factory"}, nil); err == nil {
+		t.Fatal("factory without a recoverer")
+	}
+	if h := string(HTML(rep)); !strings.Contains(h, "skipped") || !strings.Contains(h, "failed (cleanup)") {
+		t.Fatal("html")
+	}
+}
+
+type errFake struct{ *recov }
+
+func (e errFake) Command(_ context.Context, s, cmd, _ string) (string, error) {
+	if cmd == "create vlan v1" {
+		return "Error: VLAN v1 already exists", nil
+	}
+	return "ok", nil
+}
+
+func TestDeviceErrorsAndUnchecked(t *testing.T) {
+	c, _ := Parse([]byte("steps:\n  - run: {session: s, command: create vlan v1, ignoreErrors: true}\n  - run: {session: s, command: show x}\n  - run: {session: s, command: create vlan v1}\n"))
+	r := Run(context.Background(), c, errFake{&recov{fake: &fake{}}}, nil)
+	if !r.Steps[0].Passed || !r.Steps[1].Passed || !r.Steps[1].Unchecked || r.Steps[2].Passed || !strings.Contains(r.Steps[2].Error, "refused the command: Error: VLAN v1 already exists") {
+		t.Fatalf("%+v", r.Steps)
+	}
+}
+
+func TestRemoveRename(t *testing.T) {
+	f := Folder{Root: t.TempDir()}
+	f.Init()
+	c, _ := Parse([]byte("name: a\nsteps: [{run: {session: s, command: show version}}]"))
+	rel, _ := f.Save("x/a", c)
+	f.WriteGo(rel)
+	dup, err := f.Rename(rel, "x/b", true)
+	if err != nil || dup != "cases/x/b.yaml" {
+		t.Fatal(dup, err)
+	}
+	if b, _ := f.Load(dup); b.Name != "a (copy)" {
+		t.Fatal(b.Name)
+	}
+	mv, err := f.Rename(rel, "y/c", false)
+	if err != nil || mv != "cases/y/c.yaml" || fileThere(f, "cases/x/a.yaml") || !fileThere(f, "cases/y/c_test.go") {
+		t.Fatal(mv, err)
+	}
+	where, err := f.Remove(dup)
+	if err != nil || fileThere(f, "cases/x/b.yaml") || !fileThere(f, where+"/cases/x/b.yaml") || !fileThere(f, where+"/cases/x/b_test.go") {
+		t.Fatal(where, err)
+	}
+	if len(f.List()) != 1 {
+		t.Fatal("removed tests are not listed", f.List())
+	}
+	if l := f.LibFiles(); !slices.Contains(l, "lib/twtest/twtest.go") {
+		t.Fatal(l)
+	}
+	if _, err := f.Remove("../../etc/passwd"); err == nil {
+		t.Fatal("removed outside")
+	}
+}
+
+func fileThere(f Folder, rel string) bool {
+	_, err := os.Stat(filepath.Join(f.Root, rel))
+	return err == nil
 }

@@ -28,4 +28,18 @@ func TestUndoOf(t *testing.T) {
 	if s, r := (DeviceType{Name: "Cisco NX-OS"}).TestState(); len(s) != 1 || len(r) != 2 {
 		t.Error(s, r)
 	}
+	match := func(typ, out string) bool {
+		for _, re := range (DeviceType{Name: typ}).Errors() {
+			if re.MatchString(out) {
+				return true
+			}
+		}
+		return false
+	}
+	if !match("EXOS", "ok\nError: VLAN v200 already exists\n") || match("EXOS", "VLAN Interface with name v200 created by user") || !match("Cisco IOS", "% Invalid input detected at '^' marker.") || match("Linux", "Error: x") {
+		t.Error("error patterns")
+	}
+	if len((DeviceType{Name: "EXOS"}).Factory()) != 1 || len((DeviceType{Name: "VOSS"}).Factory()) != 0 {
+		t.Error("factory")
+	}
 }

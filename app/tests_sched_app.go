@@ -170,7 +170,7 @@ func (a *App) testsScheduler(ctx context.Context) {
 func (a *App) runSchedule(ctx context.Context, s testrec.Schedule) bool {
 	rctx, cancel := context.WithTimeout(ctx, 6*time.Hour)
 	defer cancel()
-	rep, err := a.runTests(rctx, TestRunRequest{Files: s.Files, Testbed: s.Testbed, Confirmed: s.Production}, nil)
+	rep, err := a.runTests(rctx, TestRunRequest{Files: s.Files, Testbed: s.Testbed, Confirmed: s.Production, OnCleanupFail: s.OnCleanupFail}, nil)
 	if err != nil && len(rep.Results) == 0 && strings.Contains(err.Error(), "already running") {
 		return false
 	}

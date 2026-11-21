@@ -42,9 +42,44 @@ Type `show vlan 42`. To check a value, select it in the output (a double-click s
 
 ## 4. Record the rest
 
-Type the next command (`show ports 4 information`), send a request in the API Client or read a value in the SNMP Browser. Each becomes a step with its checks. ↑ moves a step up, ✕ removes it, × on a check removes the check. A step without checks passes when it runs without an error.
+Type the next command (`show ports 4 information`), send a request in the API Client or read a value in the SNMP Browser. Each becomes a step with its checks. ↑ moves a step up, ✕ removes it, × on a check removes the check.
+
+**A step without checks only proves that the command ran** - see *How a step passes or fails* below. Under a read step (`show …`) the panel suggests checks from the configuration commands you recorded before it on the same device: after `create vlan v200 tag 200`, a `show vlan` step offers **+ contains "v200"**. Click one to add it. Saving a test whose read steps check nothing asks first.
 
 ![Two steps with their checks](screenshots/tests-guide/04-steps-recorded.png)
+
+### How a step passes or fails
+
+Termwright does not know what a command is meant to do; it only knows the checks you give it. A step passes when:
+
+1. the command was sent and the device answered (no timeout, the session could log in), **and**
+2. the answer has no line that matches the device type's **error patterns** - `% Invalid input`, `Error:`, `%% Unrecognized command` … (built in for EXOS, VOSS, Cisco IOS, NX-OS, Huawei VRP, Eltex MES and Ruckus ICX; your own in Global Options → Device Types), **and**
+3. every check of the step is true.
+
+So a step **without checks** passes whenever the device accepts the command - also a `show vlan` that shows that `v200` is missing. The run marks such steps **○ ran, nothing checked**, in the Tests tab and in the report, with their output under **Output**. **The same holds for cleanup steps**: `delete vlan v200` without a check passes as long as the device does not answer with an error.
+
+To make a test really test something, give the read steps checks:
+
+| You did | Then check |
+|---|---|
+| `create vlan v200 tag 200` | `show vlan` - **contains** `v200` (or a field: the VLAN's state = `Enabled`) |
+| `delete vlan v200` in the cleanup | `show vlan` in the cleanup - **does not contain** `v200` |
+| POST a VLAN | GET it - status 200 and a JSON path, e.g. `data.name = v200` |
+
+In the YAML the same test reads:
+
+```yaml
+steps:
+  - run: {session: "{{sw}}", command: create vlan v200 tag 200}
+  - run: {session: "{{sw}}", command: show vlan}
+    expect: [{contains: v200}]
+cleanup:
+  - run: {session: "{{sw}}", command: delete vlan v200}
+  - run: {session: "{{sw}}", command: show vlan}
+    expect: [{notContains: v200}]
+```
+
+A command that is allowed to answer with an error (for example deleting something that may not be there in the setup) gets `ignoreErrors: true` - or *Ignore device errors* in the step editor. The report shows each check as expected vs. got, so a failure says what was there instead.
 
 **Sessions as roles** (on by default) saves the session as a role - `access-sw7` becomes `{{access_sw7}}` with this session as the default - so the same test can later run on other devices (section 10).
 
@@ -89,6 +124,12 @@ Saving writes the test as YAML and also as Go, Python and TCL code (section 7).
 
 ![The Tests tab with the recorded test](screenshots/tests-guide/06-tests-tab.png)
 
+**✎ Edit Steps** changes the test without YAML: the session and command of each step (method and URL for REST), its timeout, *Go on when it fails* and *Ignore device errors*; ↑ ↓ move a step, ✕ removes it, **+ Step** adds one to the setup, steps or cleanup, × removes a check and **+ Check** adds one (contains, does not contain, matches; for REST the status, a JSON path `path = value` or a time limit; for SNMP `OID = value`). **Save** writes the YAML and the Go, Python and TCL code again.
+
+![Editing the steps of a test](screenshots/tests-guide/19-edit-steps.png)
+
+**Rename…** moves the test to another name or folder, **Duplicate…** copies it, **Delete** moves it and its code to `.removed/` in the tests folder - nothing is erased, so you can bring it back from there.
+
 **YAML** shows the test as a file you can edit and **Save** (it is checked first). This is the part to edit - the code is written from it.
 
 ![The test as YAML](screenshots/tests-guide/07-yaml.png)
@@ -98,6 +139,8 @@ Saving writes the test as YAML and also as Go, Python and TCL code (section 7).
 ![The test as Python](screenshots/tests-guide/08-python.png)
 
 ![The test as TCL](screenshots/tests-guide/08b-tcl.png)
+
+The library is kept apart from the tests: **LIB** in the tree lists the files in `lib/` (the helpers `twtest` and `run_tests` that the generated code uses, and your own); click one to read it, **Open in VS Code** to change it. Keep your own helpers in their own files - Termwright writes its helpers again when it is updated. The tests keep their values as variables (`{{vlan}}`, `vars:`, `params:` and the testbeds), so you change a value in one place.
 
 Run them in the tests folder while Termwright is open:
 
@@ -109,15 +152,29 @@ tclsh lib/tcl/run_tests.tcl -junit junit.xml
 
 ## 8. Run it on a testbed
 
-Pick a **testbed** next to **▶ Run** (or none to use the recorded devices) and press **▶ Run** - **▶▶** at the top runs every test. The steps show the result of each check and what came back; the commands of a test run over one login per device. The **Last run** list shows each test with its first failure.
+Pick a **testbed** next to **▶ Run** (or none to use the recorded devices) and press **▶ Run** - **▶▶** at the top runs every test, **▶** on a folder runs the tests in it, and the check boxes in front of the tests with **▶ Run Selected (N)** run only those. The steps show the result of each check and what came back; the commands of a test run over one login per device. The **Last run** list shows each test with its first failure.
 
 ![A run: three steps passed, the SNMP step failed](screenshots/tests-guide/09-run-results.png)
+
+![Two tests selected; each step's output under Output](screenshots/tests-guide/18-selected-unchecked.png)
 
 A test with setup and cleanup shows its sections; the restore lines say whether the lab snapshot (or configuration) was saved and put back, and a failed cleanup is shown as *the device may not be clean*:
 
 ![A run with setup, steps, cleanup and a lab snapshot](screenshots/tests-guide/17-cleanup-run.png)
 
 A run that uses production sessions is asked first.
+
+### When a cleanup fails
+
+A test whose cleanup fails is reported as **failed (cleanup)** - also when its steps passed - because the devices may not be clean for the next test. What happens next is chosen with **On a failed cleanup** above the tree, before the run:
+
+| Choice | What Termwright does |
+|---|---|
+| **Stop the run** (default) | stops; the remaining tests are reported as **skipped**, with the reason |
+| **Restore the saved configuration** | saves each device's configuration before the run (the device type's *Test save / restore* commands), puts it back after a failed cleanup, then goes on |
+| **Factory default** | resets the devices of that test with the device type's *Factory reset* commands (built in: EXOS `unconfigure switch all`, Cisco IOS and NX-OS `write erase` + `reload`), then goes on |
+
+Both may reboot the device; Termwright answers the confirmations and waits up to 15 minutes until it can log in again. If bringing the devices back fails too, the run stops and the remaining tests are skipped. A factory default is never run on production sessions, and it may remove the management address - use console sessions for tests that may need it. The report lists these recovery steps at the top.
 
 ## 9. Read the report
 
@@ -143,7 +200,7 @@ To run a test with several values, add `params` to its YAML: `params: [{vlan: "4
 
 ## 11. Schedule it
 
-**+** next to **Schedules** runs tests by themselves while Termwright is open: all tests or the selected one, with a testbed, daily, on weekdays, weekly or every N hours. A failed run shows a notification; the list shows each schedule's last result (with its report) and next run. **Run Now** starts it at once.
+**+** next to **Schedules** runs tests by themselves while Termwright is open: all tests or the selected one, with a testbed, daily, on weekdays, weekly or every N hours. *Failed cleanup* sets the same policy for the schedule's runs. A failed run shows a notification; the list shows each schedule's last result (with its report) and next run. **Run Now** starts it at once.
 
 ![A schedule: weekdays at 07:30 on lab-a](screenshots/tests-guide/12-schedule.png)
 
@@ -167,7 +224,8 @@ Tests may use production sessions in a schedule only when *May use production se
 - **Without the window**, on a CI machine with Termwright installed:
 
   ```sh
-  termwright tests run --testbed lab-a.yaml --junit junit.xml   # exits 1 when a test failed
+  termwright tests run --testbed lab-a.yaml --junit junit.xml   # exits 1 when a test failed or was skipped
+  termwright tests run --on-cleanup-failure restore             # stop (default) | restore | factory
   termwright tests serve                                         # only the local API, for the Go/Python/TCL code
   termwright tests secrets                                       # which TERMWRIGHT_SECRET_… variables the tests may need
   ```
@@ -177,7 +235,8 @@ Tests may use production sessions in a schedule only when *May use production se
 ## Tips
 
 - **Mode-dependent commands**: the commands of a test share one login per device, like when you recorded them - a test that goes into configure mode stays there for its next steps. Make the cleanup leave that mode where the device needs it.
-- **Always clean up**: record the undo of every change (or tick *lab snapshot* on the emulated lab); add a check in the cleanup that the change is gone.
+- **Always clean up**: record the undo of every change (or tick *lab snapshot* on the emulated lab); add a check in the cleanup that the change is gone - without it, a cleanup step passes whenever the device accepts the command.
+- **○ ran, nothing checked** in a run means the step has no checks: add one, or the test cannot fail there.
 - **Values that change** (uptime, counters): check them with a field and `greater` / `less` in the YAML instead of an exact text.
 - **A value that must change**: save it in one step and check `notEquals: "{{name}}"` in a later one.
 - **Slow devices**: give a step `timeout: 120` (seconds) in the YAML.

@@ -44,6 +44,7 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
             <span class="chip var">{{ '{{' + v.var + '}}' }} ← {{ v.field || v.json || v.oid }}<button type="button" (click)="rec.removeSave(i, j)" title="Remove">×</button></span>
           }
           @if (!(s.step.expect?.length)) { <div class="mut">no checks - passes when it runs without an error</div> }
+          @for (x of rec.suggest(i); track $index) { <button type="button" class="lnk sug" (click)="rec.addSuggested(i, x)" [title]="s.phase === 'cleanup' ? 'The cleanup removed it: check that it is gone' : 'A configuration command before this step created it: check that it is there'">+ {{ label(x) }}</button> }
           @if (s.undo && !s.undone) { <div class="undo"><span class="mut">↩ undo:</span> <code>{{ sent(s.undo) }}</code><button type="button" class="lnk" (click)="rec.addUndo(i)" title="Add this undo to the cleanup">+ Cleanup</button></div> }
           @if (adding() === i) {
             <div class="add">
@@ -87,6 +88,7 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
     .pri { background: var(--accent); color: #fff; border-color: transparent; } .empty { padding: 16px 0; text-align: center; }
     .phases { display: flex; gap: 2px; background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: 7px; padding: 2px; } .phases button { flex: 1; border: 0; background: none; color: var(--text); padding: 4px 6px; border-radius: 5px; cursor: pointer; } .phases button.on { background: color-mix(in srgb, var(--accent) 28%, transparent); } .phases .n { color: var(--muted); font-size: 11px; }
     .ph { font-size: 11px; letter-spacing: .06em; color: var(--muted); text-transform: uppercase; margin-top: 2px; } .st.cl { border-color: color-mix(in srgb, var(--warn, #e0a030) 45%, var(--border)); } .st.su { border-style: dashed; }
+    .sug { font-size: 12px; padding: 1px 4px; margin: 3px 4px 0 0; border: 1px dashed color-mix(in srgb, var(--accent) 50%, transparent); border-radius: 10px; }
     .undo { font-size: 12px; display: flex; gap: 6px; align-items: center; width: 100%; } .undo code { font-family: var(--mono, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
     .rst { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12px; } .rst label { display: flex; gap: 4px; align-items: center; } .row { display: flex; gap: 6px; } .row button { flex: 1; font-size: 12px; } .roles { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
   `],

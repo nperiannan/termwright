@@ -1488,7 +1488,9 @@ Termwright can turn manual testing into repeatable tests, the way record-and-rep
 - **+ Check** on a step adds status, JSON path (`data.items[0].name`, `[-1]`, `length`), *takes at most (ms)*, contains, matches or field checks by hand.
 - ↑ and ✕ reorder or remove steps; ⏸ pauses recording. **Save Test…** writes the test into the tests folder (`cases/…yaml`).
 
-A step without checks passes when it runs without an error. When a test runs, its commands go over **one background login per session** (the device type's after-login steps run once), so later steps see what earlier ones left - configure mode, a directory - just as when you recorded them; the login ends with the test.
+**How a step passes:** the command ran, the answer has no line matching the device type's **Error patterns** (Global Options → Device Types; built in for EXOS, VOSS, Cisco IOS, NX-OS, Huawei VRP, Eltex MES, Ruckus ICX - a step with `ignoreErrors: true` skips this), and every check is true. A step **without checks** - in the steps or in the cleanup - therefore only proves that the device accepted the command: a `show vlan` without a check passes also when the VLAN is missing. Runs mark such steps *○ ran, nothing checked* and keep their output. Give read steps checks (`contains: v200` after creating it, `notContains: v200` in the cleanup after deleting it); the recorder suggests them from the configuration commands recorded before, and saving a test whose read steps check nothing asks first. See the [testing guide](TESTS_GUIDE.md#how-a-step-passes-or-fails) for a worked example.
+
+When a test runs, its commands go over **one background login per session** (the device type's after-login steps run once), so later steps see what earlier ones left - configure mode, a directory - just as when you recorded them; the login ends with the test.
 
 ### The Tests tab
 
@@ -1496,7 +1498,10 @@ A step without checks passes when it runs without an error. When a test runs, it
 
 - **Cases** by folder, with a dot for the last result (green passed, red failed, amber unreadable file); **Testbeds**; **Reports** (past runs - click one to open its HTML report).
 - The selected test as **Steps** (the last run's checks marked ✓ or ✗ with what came back), as **YAML** (edit and **Save** - the file is checked first) or as its generated **Go** test (read-only; *Open in VS Code*).
-- **▶ Run** runs the test, **▶▶** runs all of them; the testbed menu fills the `{{variables}}` from a file in `testbeds/`. A run that uses production sessions is asked first.
+- **▶ Run** runs the test, **▶▶** runs all of them, **▶** on a folder its tests, and the check boxes with **▶ Run Selected (N)** only the ticked ones; the testbed menu fills the `{{variables}}` from a file in `testbeds/`. A run that uses production sessions is asked first.
+- **✎ Edit Steps** edits the steps without YAML: session and command (method and URL for REST), timeout, *Go on when it fails*, *Ignore device errors*, move / add / remove steps in the setup, steps and cleanup, add / remove checks; **Save** writes the YAML and the code again. **Rename…**, **Duplicate…** and **Delete** (moves the test and its Go, Python and TCL code to `.removed/<time>/` in the tests folder - nothing is erased).
+- **LIB** lists the files in `lib/` (the generated tests' helpers and your own); click one to read it, *Open in VS Code* to change it.
+- **On a failed cleanup** (above the tree) decides what a run does when a test's cleanup fails. The test is reported as *failed (cleanup)*, then: **Stop the run** (default - the remaining tests are reported as skipped, with the reason), **Restore the saved configuration** (each device's configuration is saved before the run with the device type's *Test save / restore* commands and put back) or **Factory default** (the device type's *Factory reset* commands; built in for EXOS, Cisco IOS and NX-OS; never on production sessions, and it may remove the management address - use console sessions). Both may reboot: Termwright answers the confirmations and waits up to 15 minutes for each device, then goes on; if that fails too, the run stops. The schedule form has the same option, the CLI `--on-cleanup-failure stop|restore|factory`, the `tests` tool and the API `on_cleanup_fail`.
 - The last run lists each test with its first failure; **Open Report** opens the HTML report and **JUnit XML** the file CI systems read.
 - **Open…** makes another folder the tests folder; **Clone…** clones a Git repository of tests with this computer's `git` and its saved login (an address with a password in it is refused). When the folder is a Git repository its branch, number of changed files and ↑ / ↓ (commits not pushed / not pulled) are shown, with **Pull** (fast-forward only - it never merges), **Commit…** (the tests, testbeds and library, with your own git name and e-mail; `reports/` stays out through the folder's `.gitignore`) and **Push** (the first push sets the branch's upstream on `origin`; never forced). **Make it a Git repository** starts one. Git uses this computer's saved login and never asks in a terminal. Files changed outside Termwright (an editor, `git pull`) show up within a few seconds.
 
@@ -1611,11 +1616,12 @@ The `termwright` program runs tests without opening its window:
 termwright tests run                                   # all tests in the tests folder
 termwright tests run cases/vlan --testbed lab-a.yaml --var vlan=7 --junit junit.xml
 termwright tests run --folder ~/network-tests          # another tests folder (a Git checkout)
+termwright tests run --on-cleanup-failure restore      # after a failed cleanup: stop (default), restore or factory
 termwright tests serve                                 # only the local API, for the Go/Python/TCL tests
 termwright tests secrets                               # which environment variables the tests may need
 ```
 
-- `run` uses Termwright's sessions, saved logins and device types, prints pass/fail per step and exits with 1 when a test failed. Tests that use production sessions are refused unless you add `--production`.
+- `run` uses Termwright's sessions, saved logins and device types, prints pass/fail per step and exits with 1 when a test failed or was skipped. Tests that use production sessions are refused unless you add `--production`.
 - `serve` starts only the local API (its address and key go to `mcp.json` in the data folder, where the generated tests find them) until Ctrl+C - then `go test ./cases/...`, `python lib/python/run_tests.py` or `tclsh lib/tcl/run_tests.tcl` work on that machine.
 - On a machine without a credential store, passwords, communities and keys can come from environment variables named `TERMWRIGHT_SECRET_` plus the key in capitals (a session's password: its path - `Lab/core-sw1` → `TERMWRIGHT_SECRET_LAB_CORE_SW1`; its SNMP community: `TERMWRIGHT_SECRET_SNMP_COMMUNITY_LAB_CORE_SW1`; an API session: `TERMWRIGHT_SECRET_API_SECRET_…`). `termwright tests secrets` lists the names for the tests' sessions and whether each is set - never the values. The credential store always wins when it has the key.
 - The sessions themselves come from the data folder (`TERMWRIGHT_HOME` can point at one prepared for CI, for example from Settings → Backup).

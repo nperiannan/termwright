@@ -106,6 +106,7 @@ steps:
 """)
 print(lab.tests.run("cases/smoke/version.yaml", vars={"vlan": "42"}))  # pass/fail per step, report path
 print(lab.tests.run())          # all tests
+print(lab.tests.run(on_cleanup_fail="restore"))  # after a failed cleanup put back the saved configuration (or "factory"; default "stop")
 print(lab.tests.run(testbed="lab-a.yaml"))   # the same tests on other devices
 lab.tests.new_testbed("lab-a", "Lab")        # a role per saved session of the Lab folder
 lab.tests.schedule("nightly", repeat="daily", at="02:15", testbed="lab-a.yaml")   # runs while Termwright is open

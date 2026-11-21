@@ -41,6 +41,13 @@ type DeviceType struct {
 	// Empty = the built-in ones for the type's name, if any.
 	TestSave    string `json:"testSave,omitempty"`
 	TestRestore string `json:"testRestore,omitempty"`
+	// ErrorPatterns: regular expressions (one per line) for the device's error messages; a test step
+	// whose output has a line that matches one fails (the device refused the command). Empty = the
+	// built-in ones for the type's name.
+	ErrorPatterns string `json:"errorPatterns,omitempty"`
+	// FactoryReset: commands that reset the device to factory default (a run's "on a failed cleanup:
+	// factory default"), one per line; the device may restart. Empty = the built-in ones, if any.
+	FactoryReset string `json:"factoryReset,omitempty"`
 	// The device's web server, for Open Web Interface (each empty = the built-in one for the type's name):
 	// WebCheck prints its state, WebHTTP and WebHTTPS match that output while each is on, WebOn turns both
 	// on and WebSave keeps it after a restart (commands one per line; {name} is the session's name).
@@ -396,7 +403,64 @@ const ciscoUndo = `^(show|ping|traceroute|exit|end|copy|write|save|terminal|enab
 // builtinTestState are the built-in save and restore commands for a test's restore: [config].
 var builtinTestState = map[string][2]string{
 	"cisco nx-os": {"checkpoint {file}", "rollback running-config checkpoint {file}\nno checkpoint {file}"},
+	"cisco ios":   {"copy running-config flash:{file}.cfg", "configure replace flash:{file}.cfg force"},
+	"exos":        {"save configuration {file}", "use configuration {file}\nreboot"},
 }
+
+// builtinErrors are the built-in error patterns by device type name.
+var builtinErrors = map[string]string{
+	"exos":        "^\\s*Error:\n%% (Invalid|Incomplete|Ambiguous|Unrecognized)",
+	"voss":        "^\\s*% *(Invalid|Unrecognized|Incomplete|Ambiguous|Error|Cannot)",
+	"cisco ios":   "^\\s*% *(Invalid|Incomplete|Ambiguous|Unknown|Error|Bad)",
+	"cisco nx-os": "^\\s*% *(Invalid|Incomplete|Ambiguous)\n^\\s*ERROR:",
+	"huawei vrp":  "^\\s*Error:",
+	"eltex mes":   "^\\s*% *(Unrecognized|Invalid|Incomplete|Ambiguous|Error)",
+	"ruckus icx":  "Invalid input\n^\\s*Error",
+}
+
+// builtinFactory are the built-in factory-default commands by device type name.
+var builtinFactory = map[string]string{
+	"exos":        "unconfigure switch all",
+	"cisco ios":   "write erase\nreload",
+	"cisco nx-os": "write erase\nreload",
+}
+
+// Errors returns the device type's error patterns (its own, else the built-in ones).
+func (d DeviceType) Errors() []*regexp.Regexp {
+	src := d.ErrorPatterns
+	if strings.TrimSpace(src) == "" {
+		src = builtinErrors[strings.ToLower(d.Name)]
+	}
+	var out []*regexp.Regexp
+	for _, l := range strings.Split(src, "\n") {
+		if l = strings.TrimSpace(l); l == "" {
+			continue
+		}
+		if re, err := regexp.Compile("(?m)" + l); err == nil {
+			out = append(out, re)
+		}
+	}
+	return out
+}
+
+// Factory returns the commands that reset the device to factory default (none: nil).
+func (d DeviceType) Factory() []string {
+	src := d.FactoryReset
+	if strings.TrimSpace(src) == "" {
+		src = builtinFactory[strings.ToLower(d.Name)]
+	}
+	var out []string
+	for _, l := range strings.Split(src, "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// BuiltinErrors and BuiltinFactory return the built-in error patterns and factory commands of a name.
+func BuiltinErrors(name string) string  { return builtinErrors[strings.ToLower(name)] }
+func BuiltinFactory(name string) string { return builtinFactory[strings.ToLower(name)] }
 
 // Undo returns the device type's undo rules (its own, else the built-in ones).
 func (d DeviceType) Undo() string {

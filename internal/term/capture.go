@@ -74,6 +74,14 @@ func (m *Manager) captureEach(ctx context.Context, s session.Session, commands [
 // reYesNo is a yes/no question at the end of a line: "(y/N)", "[y/n]", "(yes/no)".
 var reYesNo = regexp.MustCompile(`(?i)[(\[]\s*(y/n|yes/no)\s*[)\]]\s*[:?]?\s*$`)
 
+// reConfirm: "[confirm]" or a question with its default in brackets ("Destination filename [x.cfg]?"),
+// answered with Enter; reSaveFirst: "Save? [yes/no]" before a reload, answered no (the reload is meant
+// to drop the changes).
+var (
+	reConfirm   = regexp.MustCompile(`(?i)(\[confirm\]|\[[^\]\n]*\]\s*\?)\s*$`)
+	reSaveFirst = regexp.MustCompile(`(?i)(modified|changed).*save\??\s*[(\[]\s*yes/no\s*[)\]]\s*:?\s*$`)
+)
+
 // CaptureConn is a background login kept open so several commands run on it one after another
 // (the tests reuse one per session instead of logging in for every step). Not safe for parallel use.
 type CaptureConn struct {
@@ -192,10 +200,21 @@ func (c *CaptureConn) atPrompt(from int, quiet time.Duration) (bool, string) {
 		_ = c.m.Write(c.id, []byte(" "))
 		return false, ""
 	}
-	if c.yes && reYesNo.MatchString(lastLine) && len(txt) > c.answered { // once per question
-		c.answered = len(txt)
-		_ = c.m.Write(c.id, []byte("y\r"))
-		return false, ""
+	if c.yes && len(txt) > c.answered { // once per question
+		switch {
+		case reSaveFirst.MatchString(lastLine):
+			c.answered = len(txt)
+			_ = c.m.Write(c.id, []byte("no\r"))
+			return false, ""
+		case reYesNo.MatchString(lastLine):
+			c.answered = len(txt)
+			_ = c.m.Write(c.id, []byte("y\r"))
+			return false, ""
+		case reConfirm.MatchString(lastLine):
+			c.answered = len(txt)
+			_ = c.m.Write(c.id, []byte("\r"))
+			return false, ""
+		}
 	}
 	ok := c.re.MatchString(lastLine) || (c.loose && c.defRe.MatchString(lastLine)) || (c.exact != "" && strings.TrimSpace(lastLine) == c.exact)
 	return ok, lastLine

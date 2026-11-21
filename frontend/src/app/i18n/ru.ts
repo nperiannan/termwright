@@ -4979,6 +4979,20 @@ const ru: Record<string, string> = {
   'AI instructions': 'Инструкции для ИИ',
   'Instructions': 'Инструкции',
   'New skill': 'Новый навык',
+  'Discard the changes?': 'Отменить изменения?',
+  'The steps you changed are not saved.': 'Изменённые шаги не сохранены.',
+  'Factory Default on a Failed Cleanup?': 'Сброс к заводским настройкам при неудачной очистке?',
+  'When a cleanup fails, the devices of that test are reset to factory default and rebooted, then the run goes on. A factory default may remove the management address: use console sessions. Production sessions are never reset.': 'Если очистка не удалась, устройства этого теста сбрасываются к заводским настройкам и перезагружаются, затем запуск продолжается. Сброс может удалить адрес управления: используйте консольные сеансы. Production-сеансы никогда не сбрасываются.',
+  'Duplicate Test': 'Дублировать тест',
+  'Rename Test': 'Переименовать тест',
+  'File in cases/ (a / makes a folder)': 'Файл в cases/ (/ создаёт папку)',
+  'Delete the test?': 'Удалить тест?',
+  '{0} and its Go, Python and TCL code are moved to .removed/ in the tests folder.': '{0} и его код Go, Python и TCL перемещаются в .removed/ в папке тестов.',
+  'Enter a number': 'Введите число',
+  'Every command step needs a session and a command.': 'Каждому шагу с командой нужны сеанс и команда.',
+  'Save Without Checks?': 'Сохранить без проверок?',
+  '{0} steps read the device but check nothing, so they pass whenever they run. Add a check: select the value and choose Expect this, or use a suggested check.': '{0} шагов читают устройство, но ничего не проверяют, поэтому проходят при любом запуске. Добавьте проверку: выделите значение и выберите «Ожидать это» или используйте предложенную проверку.',
+  'Save Anyway': 'Всё равно сохранить',
 };
 
 export default ru;

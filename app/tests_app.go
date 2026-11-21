@@ -99,6 +99,10 @@ type TestRunRequest struct {
 	Vars map[string]string `json:"vars,omitempty"`
 	// Testbed: a file in testbeds/ whose values are used as {{variables}} (Vars win).
 	Testbed string `json:"testbed,omitempty"`
+	// OnCleanupFail: when a test's cleanup fails - "stop" (default: the remaining tests are skipped),
+	// "restore" (the configuration saved before the run is put back, the device may restart) or
+	// "factory" (the device type's factory-default commands; never on production sessions).
+	OnCleanupFail string `json:"onCleanupFail,omitempty"`
 	// Confirmed: the person agreed to run steps on production sessions.
 	Confirmed bool `json:"confirmed,omitempty"`
 }
@@ -149,7 +153,7 @@ func (a *App) runTests(ctx context.Context, r TestRunRequest, ask netAsker) (tes
 		return testrec.RunReport{}, errors.New("tests are already running")
 	}
 	defer testsRun.Unlock()
-	rep, err := f.RunFiles(ctx, r.Files, newTestDriver(a), r.Vars, func(res testrec.Result) {
+	rep, err := f.RunFilesWith(ctx, r.Files, newTestDriver(a), r.Vars, testrec.RunOptions{OnCleanupFail: r.OnCleanupFail}, func(res testrec.Result) {
 		emitter{a}.Emit("tests:progress", res)
 	})
 	if err == nil || len(rep.Results) > 0 {
@@ -221,6 +225,9 @@ func (a *App) TestLastRun() *testrec.RunReport {
 type testDriver struct {
 	a   *App
 	own map[string]*term.CaptureConn
+	// baseline puts back the configuration saved before the run (on a failed cleanup: restore)
+	baseline         func(context.Context) []testrec.StepResult
+	baselineSessions []string
 }
 
 func newTestDriver(a *App) *testDriver { return &testDriver{a: a, own: map[string]*term.CaptureConn{}} }
@@ -370,7 +377,7 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 		}
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 		defer cancel()
-		rep, err := a.runTests(ctx, TestRunRequest{Files: files, Vars: vars, Testbed: argStr(args, "testbed")}, ask)
+		rep, err := a.runTests(ctx, TestRunRequest{Files: files, Vars: vars, Testbed: argStr(args, "testbed"), OnCleanupFail: argStr(args, "on_cleanup_fail")}, ask)
 		if err != nil && len(rep.Results) == 0 {
 			return "", err
 		}
@@ -502,9 +509,26 @@ func testStepText(st testrec.Step) string {
 
 func testsReportText(f testrec.Folder, rep testrec.RunReport) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%d passed, %d failed in %.1f s. Report: %s\n", rep.Passed, rep.Failed, float64(rep.Ms)/1000, filepath.Join(f.Root, rep.Dir, "report.html"))
+	fmt.Fprintf(&b, "%d passed, %d failed", rep.Passed, rep.Failed)
+	if rep.Skipped > 0 {
+		fmt.Fprintf(&b, ", %d skipped", rep.Skipped)
+	}
+	fmt.Fprintf(&b, " in %.1f s. Report: %s\n", float64(rep.Ms)/1000, filepath.Join(f.Root, rep.Dir, "report.html"))
+	for _, st := range rep.Recovery {
+		fmt.Fprintf(&b, "  %s recovery: %s %s", map[bool]string{true: "✓", false: "✗"}[st.Passed], st.Name, st.Target)
+		if st.Error != "" {
+			b.WriteString(": " + st.Error)
+		}
+		b.WriteByte('\n')
+	}
 	for _, r := range rep.Results {
-		fmt.Fprintf(&b, "\n%s %s (%s)\n", map[bool]string{true: "PASS", false: "FAIL"}[r.Passed], r.Case, r.File)
+		word := map[bool]string{true: "PASS", false: "FAIL"}[r.Passed]
+		if r.Skipped {
+			word = "SKIP"
+		} else if r.CleanupFailed {
+			word = "FAIL (cleanup)"
+		}
+		fmt.Fprintf(&b, "\n%s %s (%s)\n", word, r.Case, r.File)
 		if r.Error != "" {
 			b.WriteString("  " + r.Error + "\n")
 		}

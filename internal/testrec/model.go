@@ -59,6 +59,10 @@ type RunStep struct {
 	Command string `yaml:"command" json:"command"`
 	// Prompt: a regular expression for the prompt that ends the output ("" = the device type's).
 	Prompt string `yaml:"prompt,omitempty" json:"prompt,omitempty"`
+	// IgnoreErrors: the device's error messages (its device type's error patterns, e.g. "Error:",
+	// "% Invalid input") do not fail the step - for commands that may be refused, like removing what
+	// may not be there.
+	IgnoreErrors bool `yaml:"ignoreErrors,omitempty" json:"ignoreErrors,omitempty"`
 }
 
 // HTTPStep is an HTTP request.

@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -233,15 +234,43 @@ type RunReport struct {
 	Passed int `json:"passed"`
 	// Failed cases (errors included).
 	Failed int `json:"failed"`
+	// Skipped cases (the run stopped after a failed cleanup).
+	Skipped int `json:"skipped,omitempty"`
 	// Ms: the whole run.
 	Ms int64 `json:"ms"`
+	// OnCleanupFail: what the run did when a cleanup failed: stop, restore or factory.
+	OnCleanupFail string `json:"onCleanupFail,omitempty"`
+	// Recovery: saving the devices' configuration before the run and the recoveries after failed
+	// cleanups, in order.
+	Recovery []StepResult `json:"recovery,omitempty"`
 	// Results: one per case.
 	Results []Result `json:"results"`
+}
+
+// RunOptions are how a run of several cases goes.
+type RunOptions struct {
+	// OnCleanupFail: when a case's cleanup fails - "stop" (default: the remaining cases are skipped),
+	// "restore" (the configuration saved before the run is put back, then the run goes on) or
+	// "factory" (the device type's factory-default commands, then the run goes on).
+	OnCleanupFail string
+}
+
+// Recoverer is a Driver that can bring devices back after a failed cleanup: Baseline saves their
+// configuration before the run (mode restore); Recover puts it back or resets them to factory default
+// (mode factory), waiting for a restart.
+type Recoverer interface {
+	Baseline(ctx context.Context, sessions []string) []StepResult
+	Recover(ctx context.Context, mode string, sessions []string) []StepResult
 }
 
 // RunFiles runs the cases (rel paths; "" or "all" runs every case) one after another and writes
 // reports/<time>/result.json, junit.xml and report.html. progress, when set, is called after each case.
 func (f Folder) RunFiles(ctx context.Context, files []string, d Driver, vars map[string]string, progress func(Result)) (RunReport, error) {
+	return f.RunFilesWith(ctx, files, d, vars, RunOptions{}, progress)
+}
+
+// RunFilesWith is RunFiles with options (what to do when a cleanup fails).
+func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars map[string]string, opt RunOptions, progress func(Result)) (RunReport, error) {
 	if len(files) == 0 || len(files) == 1 && (files[0] == "" || strings.EqualFold(files[0], "all")) {
 		files = nil
 		for _, c := range f.List() {
@@ -252,24 +281,97 @@ func (f Folder) RunFiles(ctx context.Context, files []string, d Driver, vars map
 		}
 	}
 	start := time.Now()
-	rep := RunReport{}
+	mode := opt.OnCleanupFail
+	if mode != "restore" && mode != "factory" {
+		mode = "stop"
+	}
+	rep := RunReport{OnCleanupFail: mode}
+	rc, canRecover := d.(Recoverer)
+	cases := map[string]Case{}
+	var all []string // every device the run uses, for the configuration saved before it
+	for _, file := range files {
+		if c, err := f.Load(file); err == nil {
+			cases[file] = c
+			v := map[string]string{}
+			for k, x := range c.Vars {
+				v[k] = x
+			}
+			for k, x := range vars {
+				v[k] = x
+			}
+			for _, s := range Sessions(c, v) {
+				if !slices.Contains(all, s) {
+					all = append(all, s)
+				}
+			}
+		}
+	}
+	if mode != "stop" && !canRecover {
+		return rep, errors.New("this runner cannot restore or reset devices after a failed cleanup")
+	}
+	if mode == "restore" && len(all) > 0 {
+		for _, sr := range rc.Baseline(ctx, all) {
+			sr.Phase = "recovery"
+			rep.Recovery = append(rep.Recovery, sr)
+			if !sr.Passed {
+				return rep, fmt.Errorf("the configuration of %s could not be saved before the run: %s", sr.Target, sr.Error)
+			}
+		}
+	}
+	stopped := "" // why the remaining cases are skipped
 	for _, file := range files {
 		var rs []Result
-		if c, err := f.Load(file); err != nil {
+		c, loaded := cases[file]
+		switch {
+		case stopped != "":
+			name := file
+			if loaded && c.Name != "" {
+				name = c.Name
+			}
+			rs = []Result{{Case: name, File: file, Start: time.Now(), Skipped: true, Error: stopped}}
+		case !loaded:
+			_, err := f.Load(file)
 			rs = []Result{{Case: file, File: file, Start: time.Now(), Error: err.Error()}}
-		} else {
+		default:
 			rs = RunParams(ctx, c, d, vars)
 		}
 		for _, r := range rs {
 			r.File = file
-			if r.Passed {
+			switch {
+			case r.Skipped:
+				rep.Skipped++
+			case r.Passed:
 				rep.Passed++
-			} else {
+			default:
 				rep.Failed++
 			}
 			rep.Results = append(rep.Results, r)
 			if progress != nil {
 				progress(r)
+			}
+			if !r.CleanupFailed || stopped != "" {
+				continue
+			}
+			// a failed cleanup: the devices may be dirty for the next test
+			if mode == "stop" {
+				stopped = fmt.Sprintf("skipped: the cleanup of %q failed, so the devices may not be clean (on a failed cleanup: stop the run)", r.Case)
+				continue
+			}
+			v := map[string]string{}
+			for k, x := range c.Vars {
+				v[k] = x
+			}
+			for k, x := range vars {
+				v[k] = x
+			}
+			ok := true
+			for _, sr := range rc.Recover(ctx, mode, Sessions(c, v)) {
+				sr.Phase = "recovery"
+				rep.Recovery = append(rep.Recovery, sr)
+				ok = ok && sr.Passed
+			}
+			if !ok {
+				stopped = fmt.Sprintf("skipped: the cleanup of %q failed and bringing the devices back (%s) failed too", r.Case, map[string]string{"restore": "restoring the saved configuration", "factory": "factory default"}[mode])
 			}
 		}
 		if ctx.Err() != nil {
@@ -321,6 +423,8 @@ type Tree struct {
 	Testbeds []string `json:"testbeds"`
 	// Reports: past runs, newest first (at most 30).
 	Reports []ReportInfo `json:"reports"`
+	// Lib: the files in lib/ (the helpers of the generated tests and your own).
+	Lib []string `json:"lib"`
 }
 
 // ReportInfo is a past run.
@@ -337,7 +441,7 @@ type ReportInfo struct {
 
 // Tree lists the folder.
 func (f Folder) Tree() Tree {
-	t := Tree{Root: f.Root, Cases: f.List(), Testbeds: []string{}, Reports: []ReportInfo{}}
+	t := Tree{Root: f.Root, Cases: f.List(), Testbeds: []string{}, Reports: []ReportInfo{}, Lib: f.LibFiles()}
 	if t.Cases == nil {
 		t.Cases = []CaseInfo{}
 	}
@@ -483,3 +587,102 @@ func (f Folder) WriteTestbed(name string, sessions []string, comment string) (st
 }
 
 func exists(p string) bool { _, err := os.Stat(p); return err == nil }
+
+// Remove moves a test and its generated code (Go, Python, TCL) to .removed/<time>/ in the tests folder:
+// nothing is deleted. It returns where they went.
+func (f Folder) Remove(rel string) (string, error) {
+	p, err := f.find(rel)
+	if err != nil {
+		return "", err
+	}
+	r, _ := filepath.Rel(f.Root, p)
+	r = filepath.ToSlash(r)
+	if !strings.HasPrefix(r, "cases/") || !isCaseFile(r) {
+		return "", fmt.Errorf("%s is not a test in cases/", rel)
+	}
+	dest := filepath.Join(".removed", time.Now().Format("2006-01-02_150405"))
+	for _, x := range []string{r, GoFile(r), PyFile(r), TclFile(r)} {
+		src := filepath.Join(f.Root, filepath.FromSlash(x))
+		if _, err := os.Stat(src); err != nil {
+			continue
+		}
+		to := filepath.Join(f.Root, dest, filepath.FromSlash(x))
+		if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
+			return "", err
+		}
+		if err := os.Rename(src, to); err != nil {
+			return "", err
+		}
+	}
+	return filepath.ToSlash(dest), nil
+}
+
+// Rename moves a test to another file in cases/ (its generated code is written again there, the old
+// code goes to .removed/); copy keeps the original (Duplicate). It returns the new file.
+func (f Folder) Rename(rel, to string, copy bool) (string, error) {
+	c, err := f.Load(rel)
+	if err != nil {
+		return "", err
+	}
+	src, _ := f.find(rel)
+	b, err := os.ReadFile(src)
+	if err != nil {
+		return "", err
+	}
+	to = filepath.ToSlash(strings.TrimSpace(to))
+	if !strings.HasPrefix(to, "cases/") {
+		to = "cases/" + to
+	}
+	if !isCaseFile(to) {
+		to += ".yaml"
+	}
+	dst, err := f.path(to)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(dst); err == nil {
+		return "", fmt.Errorf("%s is already there", to)
+	}
+	if copy && c.Name != "" {
+		var m map[string]any
+		if yaml.Unmarshal(b, &m) == nil {
+			c.Name += " (copy)"
+			if nb, err := Marshal(c); err == nil {
+				b = nb
+			}
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(dst, b, 0o644); err != nil {
+		return "", err
+	}
+	if !copy {
+		if _, err := f.Remove(rel); err != nil {
+			return to, err
+		}
+	}
+	_, err = f.WriteGo(to)
+	return to, err
+}
+
+// LibFiles lists the files under lib/ (relative to the folder), at most 300.
+func (f Folder) LibFiles() []string {
+	out := []string{}
+	root := filepath.Join(f.Root, "lib")
+	filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || len(out) >= 300 {
+			return nil
+		}
+		if d.IsDir() && p != root && strings.HasPrefix(d.Name(), ".") {
+			return filepath.SkipDir
+		}
+		if !d.IsDir() {
+			r, _ := filepath.Rel(f.Root, p)
+			out = append(out, filepath.ToSlash(r))
+		}
+		return nil
+	})
+	return out
+}

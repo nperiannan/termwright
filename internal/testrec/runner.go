@@ -41,8 +41,11 @@ type Result struct {
 	Ms int64 `json:"ms"`
 	// Passed: every step (setup and cleanup too) passed.
 	Passed bool `json:"passed"`
-	// CleanupFailed: a cleanup step (or the restore) failed - the device may not be clean.
+	// CleanupFailed: a cleanup step (or the restore) failed - the device may not be clean; the case
+	// failed because of its cleanup.
 	CleanupFailed bool `json:"cleanupFailed,omitempty"`
+	// Skipped: the case did not run (Error says why: an earlier cleanup failed).
+	Skipped bool `json:"skipped,omitempty"`
 	// Error: why the case could not run at all (a bad file).
 	Error string `json:"error,omitempty"`
 	// Steps: one per step that ran (steps after a failure are Skipped).
@@ -75,6 +78,8 @@ type StepResult struct {
 	Error string `json:"error,omitempty"`
 	// Rows: the values an SNMP step got.
 	Rows []SNMPValue `json:"rows,omitempty"`
+	// Unchecked: it passed without checks - it ran, nothing was checked.
+	Unchecked bool `json:"unchecked,omitempty"`
 	// Checks: one per expect.
 	Checks []CheckResult `json:"checks,omitempty"`
 }
@@ -90,6 +95,12 @@ type CheckResult struct {
 }
 
 const maxOut = 64 << 10
+
+// DeviceErrors is a Driver that knows the error messages of the devices' types: DeviceError returns
+// the line of output in which the device refused a command ("" when it did not).
+type DeviceErrors interface {
+	DeviceError(session, output string) string
+}
 
 // CaseEnder is a Driver that keeps logins open while a case runs (one per session instead of one
 // per step); EndCase is called when the case is done so it logs out.
@@ -308,6 +319,11 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 	case st.Run != nil:
 		sr.Target, sr.Sent = Fill(st.Run.Session, v), Fill(st.Run.Command, v)
 		out, err = d.Command(sctx, sr.Target, sr.Sent, st.Run.Prompt)
+		if de, ok := d.(DeviceErrors); ok && err == nil && !st.Run.IgnoreErrors {
+			if line := de.DeviceError(sr.Target, out); line != "" {
+				err = fmt.Errorf("the device refused the command: %s", line)
+			}
+		}
 	case st.HTTP != nil:
 		h := fillHTTP(*st.HTTP, v)
 		if h.Method == "" {
@@ -339,6 +355,7 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 		return sr
 	}
 	sr.Passed = true
+	sr.Unchecked = len(st.Expect) == 0
 	for _, e := range st.Expect {
 		c := check(e, out, sr.Status, sr.Ms, v, rows)
 		sr.Checks = append(sr.Checks, c)

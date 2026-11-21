@@ -100,6 +100,9 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **Headless runs for CI**: `termwright tests run` (JUnit, exit code, `--production` to allow production sessions), `termwright tests serve` (only the local API, for the generated code), `termwright tests secrets`; `TERMWRIGHT_SECRET_<KEY>` environment variables where there is no credential store.
 - **Go tests**: each test is also written as a Go test with a small standard-library helper; `go test ./cases/...` runs them through Termwright (saved logins, no passwords in code); `go run ./lib/junit` makes JUnit XML for CI.
 - **Tests folder**: any folder, a Git repository too (Clone…; branch and changes shown); testbeds fill the variables; production sessions are asked first; tests with passwords are refused.
+- **Honest results**: device error messages (`% Invalid input`, `Error:` … built in for seven device types, your own per device type) fail a step; steps without checks are marked *ran, nothing checked* with their output; the recorder suggests checks from the configuration you recorded (`contains v200`, in the cleanup `does not contain v200`) and asks before saving read steps without checks.
+- **Failed cleanups**: a test whose cleanup fails is reported as *failed (cleanup)*; the run then stops (remaining tests skipped, with the reason), restores the configuration saved before the run, or resets the devices to factory default (never production), waits for them and goes on.
+- **Edit and select**: edit steps and checks in the Tests tab, rename, duplicate and delete tests (to `.removed/`), run only the ticked tests or a folder; the `lib/` helpers are listed apart from the tests.
 - **Tests for AI and automation**: the `tests` tool for the AI assistant and MCP apps, `POST /api/v1/tools/tests`, and `lab.tests` in Python.
 
 ## AI assistant and connector

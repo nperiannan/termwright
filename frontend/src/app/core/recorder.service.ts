@@ -210,8 +210,34 @@ export class Recorder {
     return { name: this.name().trim() || tr('New test'), vars, ...extra, steps };
   }
 
+  /** Checks worth adding to a read step: the names and numbers of the configuration commands recorded before it
+   *  on the same device - in the steps, what they created must be in the output (contains); in the cleanup, what was
+   *  removed must be gone (does not contain). */
+  suggest(i: number): TestExpect[] {
+    const l = this.steps(), s = l[i], cmd = s?.step.run?.command ?? '';
+    if (!s?.step.run || !isRead(s.step) || s.output == null) return [];
+    const out = s.output, have = new Set((s.step.expect ?? []).map(e => e.contains ?? e.notContains));
+    const toks = new Set<string>();
+    for (const x of l.slice(0, i)) {
+      if (!x.step.run || x.step.run.session !== s.step.run.session || isRead(x.step) || x.phase !== 'steps') continue;
+      for (const t of x.step.run.command.split(/\s+/)) if (t.length >= 2 && /\d/.test(t) && /^[\w.:/-]+$/.test(t) && !(' ' + cmd + ' ').includes(' ' + t + ' ')) toks.add(t);
+    }
+    const res: TestExpect[] = [];
+    for (const t of toks) {
+      if (have.has(t)) continue;
+      const there = new RegExp('(^|[^\\w])' + t.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&') + '($|[^\\w])', 'm').test(out);
+      if (s.phase === 'cleanup' && !there) res.push({ notContains: t });
+      else if (s.phase !== 'cleanup' && there) res.push({ contains: t });
+      if (res.length >= 3) break;
+    }
+    return res;
+  }
+  addSuggested(i: number, e: TestExpect) { this.steps.update(l => l.map((x, j) => j === i ? { ...x, step: { ...x.step, expect: [...(x.step.expect ?? []), e] } } : x)); }
+
   async save(): Promise<boolean> {
     if (!this.steps().length) { this.ui.toast(tr('Nothing recorded yet'), 'info'); return false; }
+    const bare = this.steps().filter(s => isRead(s.step) && !s.step.expect?.length).length;
+    if (bare && !(await this.ui.confirm(tr('Save Without Checks?'), tr('{0} steps read the device but check nothing, so they pass whenever they run. Add a check: select the value and choose Expect this, or use a suggested check.', bare), tr('Save Anyway')))) return false;
     const file = await this.ui.input(tr('Save Test'), tr('File in the tests folder (cases/…)'), 'cases/' + slugFile(this.name()) + '.yaml');
     if (!file) return false;
     try {
@@ -303,4 +329,12 @@ export function undoOf(rules: string, cmd: string): string {
     return undo.replace(/\$(\d)/g, (_, d) => m[+d] ?? '');
   }
   return '';
+}
+
+/** A step that only reads: show/display commands, REST GET, SNMP get/walk. */
+export function isRead(s: TestStep): boolean {
+  if (s.run) return /^\s*(show|sh|display|dis|get|ping|traceroute)\b/i.test(s.run.command);
+  if (s.http) return (s.http.method || 'GET').toUpperCase() === 'GET';
+  if (s.snmp) return (s.snmp.op || 'get') !== 'set';
+  return false;
 }

@@ -16,7 +16,7 @@ func TestTestsSaveState(t *testing.T) {
 	cfg, _ := config.Load(dir)
 	st, _ := session.NewStore(dir + "/Sessions")
 	a := &App{cfg: cfg, store: st}
-	s, _ := st.Save(session.Session{Name: "sw", Folder: "Lab", Protocol: session.ProtoSSH2, Hostname: "10.0.0.9", DeviceType: "EXOS"}, "")
+	s, _ := st.Save(session.Session{Name: "sw", Folder: "Lab", Protocol: session.ProtoSSH2, Hostname: "10.0.0.9", DeviceType: "VOSS"}, "")
 	res, back := a.testsSaveState(context.Background(), []string{"config", "lab"}, []string{s.Path})
 	if len(res) != 2 || res[0].Passed || !strings.Contains(res[0].Error, "no save and restore commands") || res[1].Passed || !strings.Contains(res[1].Error, "emulated lab") {
 		t.Fatalf("%+v", res)

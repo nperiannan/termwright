@@ -309,7 +309,9 @@ export class Backend {
   testsGit() { return this.call<TestsGitInfo>('TestsGit'); }
   testsOpen(rel: string) { return this.call<void>('TestsOpen', rel); }
   testsOpenInEditor(rel: string) { return this.call<void>('TestsOpenInEditor', rel); }
-  runTests(r: { files?: string[]; vars?: Record<string, string>; testbed?: string; confirmed?: boolean }) { return this.call<TestRunReport>('RunTests', r); }
+  runTests(r: { files?: string[]; vars?: Record<string, string>; testbed?: string; confirmed?: boolean; onCleanupFail?: string }) { return this.call<TestRunReport>('RunTests', r); }
+  testRemove(file: string) { return this.call<string>('TestRemove', file); }
+  testRename(file: string, to: string, copy: boolean) { return this.call<string>('TestRename', file, to, copy); }
   testGenerateGo(file: string) { return this.call<string>('TestGenerateGo', file); }
   testLastRun() { return this.call<TestRunReport | null>('TestLastRun'); }
   keepAwakeStatus() { return this.call<{ active: boolean; error?: string }>('KeepAwakeStatus'); }

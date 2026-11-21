@@ -345,3 +345,21 @@ func (a *App) TestsNewTestbed(name, folder string) (string, error) {
 	}
 	return f.WriteTestbed(name, paths, "the sessions of "+folder)
 }
+
+// TestRemove moves a test and its generated code to .removed/ in the tests folder (nothing is deleted).
+func (a *App) TestRemove(file string) (string, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return "", err
+	}
+	return f.Remove(file)
+}
+
+// TestRename moves a test to another file (copy: Duplicate keeps the original); it returns the new file.
+func (a *App) TestRename(file, to string, copy bool) (string, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return "", err
+	}
+	return f.Rename(file, to, copy)
+}

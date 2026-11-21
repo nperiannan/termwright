@@ -448,6 +448,12 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <div class="row2"><textarea name="dtts" class="mono" rows="2" [(ngModel)]="d.testSave" [placeholder]="testStateDefault(d.name, 0) || 'Save the configuration, e.g. checkpoint {file}'"></textarea>
                     <textarea name="dttr" class="mono" rows="2" [(ngModel)]="d.testRestore" [placeholder]="testStateDefault(d.name, 1) || 'Put it back, e.g. rollback running-config checkpoint {file}'"></textarea></div>
                   <label></label><div class="hint">For tests with <b>Afterwards put back: configuration</b>: run before the test and after its cleanup, one command per line; <code>{{ '{file}' }}</code> is a name for the saved copy.</div>
+                  <label>Error patterns</label>
+                  <textarea name="dter" class="mono" rows="2" [(ngModel)]="d.errorPatterns" [placeholder]="errorsDefault(d.name) || 'Error messages of the device, one regular expression per line, e.g. ^ *% *Invalid'"></textarea>
+                  <label></label><div class="hint">A test step fails when the device answers a command with a line that matches (unless the step has <b>Ignore device errors</b>). Empty: the built-in patterns{{ errorsDefault(d.name) ? '' : ' (none for this type)' }}.</div>
+                  <label>Factory reset</label>
+                  <textarea name="dtfr" class="mono" rows="2" [(ngModel)]="d.factoryReset" [placeholder]="factoryDefault(d.name) || 'Commands that reset to factory default and reboot, e.g. write erase / reload'"></textarea>
+                  <label></label><div class="hint">For test runs with <b>On a failed cleanup: Factory default</b>; Termwright answers the confirmations and waits up to 15 minutes for the device. Never run on production sessions.</div>
                   <label>Web server</label>
                   <div class="webd">
                     <textarea name="dtwc" class="mono" rows="1" [(ngModel)]="d.webCheck" [placeholder]="webDefault(d.name, 'check') || 'A command that shows the web server, e.g. show web-server'" title="Open Web Interface runs it in the background to see whether HTTP and HTTPS are on"></textarea>
@@ -881,9 +887,23 @@ export class OptionsDialog implements OnInit {
   }
   undoDefault(name: string) { const r = builtinUndo(name); return r ? r + '\n(built-in rules)' : ''; }
   testStateDefault(name: string, i: 0 | 1) {
-    const d: Record<string, [string, string]> = { 'cisco nx-os': ['checkpoint {file}', 'rollback running-config checkpoint {file}\nno checkpoint {file}'] };
+    const d: Record<string, [string, string]> = { 'cisco nx-os': ['checkpoint {file}', 'rollback running-config checkpoint {file}\nno checkpoint {file}'],
+      'cisco ios': ['copy running-config flash:{file}.cfg', 'configure replace flash:{file}.cfg force'], exos: ['save configuration {file}', 'use configuration {file}\nreboot'] };
     const c = d[name.toLowerCase()]?.[i];
     return c ? c + '  (built-in)' : '';
+  }
+  /** Copies of the built-ins in internal/session/devicetype.go. */
+  errorsDefault(name: string) {
+    const d: Record<string, string> = { exos: '^\\s*Error:\n%% (Invalid|Incomplete|Ambiguous|Unrecognized)', voss: '^\\s*% *(Invalid|Unrecognized|Incomplete|Ambiguous|Error|Cannot)',
+      'cisco ios': '^\\s*% *(Invalid|Incomplete|Ambiguous|Unknown|Error|Bad)', 'cisco nx-os': '^\\s*% *(Invalid|Incomplete|Ambiguous)\n^\\s*ERROR:', 'huawei vrp': '^\\s*Error:',
+      'eltex mes': '^\\s*% *(Unrecognized|Invalid|Incomplete|Ambiguous|Error)', 'ruckus icx': 'Invalid input\n^\\s*Error' };
+    const c = d[name.toLowerCase()];
+    return c ? c + '\n(built-in)' : '';
+  }
+  factoryDefault(name: string) {
+    const d: Record<string, string> = { exos: 'unconfigure switch all', 'cisco ios': 'write erase\nreload', 'cisco nx-os': 'write erase\nreload' };
+    const c = d[name.toLowerCase()];
+    return c ? c + '\n(built-in)' : '';
   }
   backupDefault(name: string) {
     const d: Record<string, string> = { exos: 'show configuration', voss: 'show running-config', 'cisco ios': 'show running-config' };

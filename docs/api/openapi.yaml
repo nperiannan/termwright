@@ -2188,6 +2188,13 @@ paths:
                                 name:
                                     description: 'new_testbed: the testbed''s name'
                                     type: string
+                                on_cleanup_fail:
+                                    description: 'run: when a test''s cleanup fails - stop (skip the rest), restore (the configuration saved before the run) or factory (factory default)'
+                                    enum:
+                                        - stop
+                                        - restore
+                                        - factory
+                                    type: string
                                 production:
                                     description: 'schedule: allow production sessions (asked)'
                                     enum:
