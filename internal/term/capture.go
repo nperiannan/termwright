@@ -90,6 +90,7 @@ type CaptureConn struct {
 	t          *Tab
 	mu         sync.Mutex
 	out        strings.Builder
+	tap        func(string) // sees the device's output as it arrives (a test run's live log)
 	strip      logging.Stripper
 	last       time.Time
 	unsub      func()
@@ -138,9 +139,14 @@ func (m *Manager) openCapture(ctx context.Context, s session.Session, prompt str
 	}
 	c.unsub = c.t.subscribe(func(p []byte) {
 		c.mu.Lock()
-		c.out.Write(c.strip.Strip(p))
+		txt := c.strip.Strip(p)
+		c.out.Write(txt)
 		c.last = time.Now()
+		tap := c.tap
 		c.mu.Unlock()
+		if tap != nil && len(txt) > 0 {
+			tap(string(txt))
+		}
 	})
 	*transcript = func() string { s, _ := c.snapshot(); return s }
 	if err := m.Start(c.id, 400, 50); err != nil {
@@ -365,4 +371,11 @@ func clip(s string, n int) string {
 		return s[:n] + "…"
 	}
 	return s
+}
+
+// SetTap gives the device's output, as it arrives, to f (nil stops it).
+func (c *CaptureConn) SetTap(f func(string)) {
+	c.mu.Lock()
+	c.tap = f
+	c.mu.Unlock()
 }

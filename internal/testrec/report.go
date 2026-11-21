@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"html"
+	"path/filepath"
 	"strings"
 )
 
@@ -176,6 +177,9 @@ pre{white-space:pre-wrap;background:#0b0f14;padding:8px;border-radius:6px;max-he
 		}
 		fmt.Fprintf(&b, `<details%s><summary><span class="%s">%s</span> %s <span class="mut">%s · %s s · %s</span></summary>`,
 			map[bool]string{true: "", false: " open"}[r.Passed], cls, word, e(r.Case), e(r.File), secs(r.Ms), r.Start.Format("2006-01-02 15:04:05"))
+		if r.Log != "" {
+			fmt.Fprintf(&b, `<p class="mut"><a href="logs/%s">Run log</a> - every step: what was sent, the full answer and the checks</p>`, e(filepath.Base(r.Log)))
+		}
 		if r.Error != "" {
 			fmt.Fprintf(&b, `<p class="bad">%s</p>`, e(r.Error))
 		}

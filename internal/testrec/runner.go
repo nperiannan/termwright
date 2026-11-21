@@ -42,6 +42,8 @@ type Result struct {
 	Ms int64 `json:"ms"`
 	// Passed: every step (setup and cleanup too) passed.
 	Passed bool `json:"passed"`
+	// Log: the test's run log (every step: sent, the full answer, checks) in the run's folder.
+	Log string `json:"log,omitempty"`
 	// QTestRun: the qTest test run the result was sent to (TR-81); Defect / DefectURL: the Jira issue
 	// opened for it.
 	QTestRun  string `json:"qtestRun,omitempty"`
@@ -218,6 +220,9 @@ func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt 
 				var cancel context.CancelFunc
 				sctx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
 				defer cancel()
+			}
+			if opt.OnStepStart != nil {
+				opt.OnStepStart(opt.file, r.Case, PhaseLabel(phase)+Fill(stepName(st, i), v))
 			}
 			for _, sr := range execStep(sctx, st, i, d, v) {
 				sr.Phase = phase

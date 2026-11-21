@@ -125,7 +125,15 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
             <span class="spin"></span><b>Running</b>
             @if (liveStep(); as ls) { <span class="fl">{{ ls.case }} · {{ ls.step.name }}</span><span [class]="ls.step.skipped ? 'mut' : ls.step.passed ? 'ok' : 'bad'">{{ ls.step.skipped ? 'skipped' : ls.step.passed ? '✓' : '✗' }}</span> } @else { <span class="mut">starting…</span> }
             <span class="mut">{{ liveCount() }} steps done</span><span class="sp"></span>
+            <button type="button" (click)="showLive.set(!showLive())">{{ showLive() ? 'Hide log' : 'Show log' }}</button>
             <button type="button" (click)="stopRun()" title="Stop after the step that runs now (cleanups still run)">■ Stop</button>
+          </div>
+        }
+        @if (showLive() && liveLog().length) {
+          <div class="console">
+            <div class="ch"><b>{{ busy() ? 'Live log' : 'Log of the last run' }}</b><span class="mut">what is sent to the devices and what comes back</span><span class="sp"></span>
+              <button type="button" class="lnk" (click)="copyLive()">Copy</button>@if (!busy()) { <button type="button" class="lnk" (click)="showLive.set(false)">Close</button> }</div>
+            <pre #con>{{ liveLog().join('\n') }}</pre>
           </div>
         }
         @switch (section()) {
@@ -152,7 +160,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                       <span>{{ r.case }}@if (r.cleanupFailed) { <span class="pill f sm">cleanup</span> }</span>
                       <span class="mut">{{ r.passed ? notChecked(r) : failText(r) }}@if (!r.passed && !r.skipped) { · <button type="button" class="lnk" (click)="$event.stopPropagation(); explain(r)">✦ Explain</button> }</span>
                       <span class="mut">{{ r.qtestRun }}@if (r.defect) { @if (r.qtestRun) { · } <button type="button" class="lnk" (click)="$event.stopPropagation(); backend.openURL(r.defectUrl!)">{{ r.defect }}</button> } @else if (!r.passed && !r.skipped) { @if (r.qtestRun) { · } <button type="button" class="lnk" (click)="$event.stopPropagation(); createDefect(rep.dir, r)" title="Open a Jira defect with the steps, the failed output and the report">+ defect</button> }</span>
-                      <span class="r mut">{{ dur(r.ms) }}</span></div>
+                      <span class="r mut">{{ dur(r.ms) }}@if (r.log) { <button type="button" class="lnk" (click)="$event.stopPropagation(); openLog(r.log!, r.case)" title="Every step: what was sent, the full answer, the checks">Log</button> }</span></div>
                   }
                 </div>
               </div>
@@ -191,6 +199,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                   @if (last()[sel()]; as lr) { <span class="pill" [class]="lr.skipped ? 'pill s' : lr.passed ? 'pill p' : 'pill f'">{{ lr.skipped ? 'skipped' : lr.passed ? 'passed' : lr.cleanupFailed ? 'failed (cleanup)' : 'failed' }} · {{ ago(lr.start) }}</span> } @else { <span class="pill">not run yet</span> }
                   @for (g of t.tags ?? []; track g) { <span class="tag">{{ g }}</span> }
                   <span class="sp"></span>
+                  @if (last()[sel()]?.log; as lg) { <button type="button" (click)="openLog(lg, t.name || sel())" title="The last run's log: every step, what was sent and what came back">Run Log</button> }
                   @if (!draft()) { <button type="button" (click)="edit()">✎ Edit</button> }
                   <button type="button" (click)="testMenu($event)" title="Rename, duplicate, delete, open">⋯</button>
                   <button type="button" class="pri" (click)="openRun([sel()], t.name || sel())" [disabled]="busy()">{{ busy() ? 'Running…' : '▶ Run…' }}</button>
@@ -338,6 +347,14 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
           } @else { <div class="empty mut">Select a file.</div> }
         </ng-template>
       </section>
+      @if (logView(); as lv) {
+        <div class="scrim fixed" (click)="logView.set(null)" aria-hidden="true"></div>
+        <div class="mdlg logdlg" role="dialog" aria-label="Run log">
+          <div class="row"><h2 class="fl">Run log · {{ lv.title }}</h2><span class="sp"></span><button type="button" (click)="copyText(lv.text)">Copy</button><button type="button" (click)="backend.testsOpenInEditor(lv.file)">Open in Editor</button><button type="button" (click)="logView.set(null)">Close</button></div>
+          <span class="mut">{{ lv.file }}</span>
+          <pre class="logpre">{{ lv.text }}</pre>
+        </div>
+      }
       @if (manual(); as m) {
         <div class="scrim fixed" aria-hidden="true"></div>
         <div class="mdlg" role="dialog" aria-label="Manual step">
@@ -437,6 +454,10 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .opts .wide { flex: 1; } .opts .wide .cmdi { height: 26px; }
     .dots { display: flex; gap: 3px; flex-wrap: wrap; } .dots i { width: 10px; height: 18px; border-radius: 3px; } .dp { background: var(--ok, #3fbf75); } .df { background: var(--danger, #ef6161); } .dw { background: var(--warn, #e0a030); }
     .vrow { display: grid; grid-template-columns: minmax(160px, 1fr) 90px 90px 1.2fr; gap: 10px; padding: 7px 12px; border-top: 1px solid var(--border); font-size: 12.5px; align-items: center; } .bar2 { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--text) 8%, transparent); }
+    .console { display: flex; flex-direction: column; border-bottom: 1px solid var(--border); background: var(--term-bg, #0e0f12); }
+    .console .ch { display: flex; align-items: center; gap: 10px; padding: 5px 20px; font-size: 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
+    .console pre { margin: 0; height: 240px; min-height: 80px; resize: vertical; overflow: auto; padding: 8px 20px; font: 12px/1.45 var(--mono, monospace); color: #cfd3da; white-space: pre-wrap; }
+    .logdlg { width: min(1000px, 94vw); height: min(80vh, 900px); } .logpre { flex: 1; margin: 0; overflow: auto; padding: 10px 12px; border-radius: 8px; background: var(--term-bg, #0e0f12); color: #cfd3da; font: 12px/1.5 var(--mono, monospace); white-space: pre-wrap; }
     .live { display: flex; align-items: center; gap: 10px; padding: 7px 20px; background: color-mix(in srgb, var(--accent) 12%, var(--panel)); border-bottom: 1px solid var(--border); font-size: 12.5px; }
     .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); border-top-color: var(--accent); animation: sp 0.9s linear infinite; } @keyframes sp { to { transform: rotate(360deg); } }
     .scrim.fixed { position: fixed; z-index: 50; } .mdlg { position: fixed; z-index: 51; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(560px, 92vw); display: flex; flex-direction: column; gap: 10px; padding: 20px 22px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 24px 60px rgba(0,0,0,.45); }
@@ -553,7 +574,13 @@ export class TestsView implements OnInit, OnDestroy {
     void this.backend.testLastRun().then(r => { if (r) this.took(r); }).catch(() => {});
     this.offs.push(this.backend.on('tests:schedule', () => void this.load()));
     this.offs.push(this.backend.on('tests:progress', (r: TestResult) => { if (r.file) this.last.update(m => ({ ...m, [r.file!]: r })); }));
-    this.offs.push(this.backend.on('tests:step', (e: { case: string; step: TestStepResult }) => { this.liveStep.set(e); this.liveCount.update(n => n + 1); }));
+    this.offs.push(this.backend.on('tests:step', (e: { case: string; step: TestStepResult }) => {
+      this.liveStep.set(e); this.liveCount.update(n => n + 1);
+      const s = e.step, bad = s.checks?.find(c => !c.passed);
+      this.liveLine(s.skipped ? '   – skipped' + (s.error ? ': ' + s.error : '') : s.passed ? `   ✓ passed (${this.dur(s.ms)})` : `   ✗ FAILED: ${s.error || (bad ? bad.what + ', got "' + (bad.got ?? '') + '"' : '')}`);
+    }));
+    this.offs.push(this.backend.on('tests:step-start', (e: { case: string; step: string }) => this.liveLine(`\n▶ ${e.case} · ${e.step}`)));
+    this.offs.push(this.backend.on('tests:out', (e: { session: string; text: string }) => this.addLive(e.text)));
     this.offs.push(this.backend.on('tests:manual', (m: { id: string; name: string; instruction: string; expected: string }) => { this.manualNote = ''; this.manual.set(m); }));
     this.offs.push(this.backend.on('tests:manual-done', (id: string) => { if (this.manual()?.id === id) this.manual.set(null); }));
     this.timer = setInterval(() => { if (this.visible()) void this.poll(); }, 4000);
@@ -608,7 +635,7 @@ export class TestsView implements OnInit, OnDestroy {
   }
 
   async run(files: string[], confirmed = false, forceLock = false): Promise<void> {
-    this.liveStep.set(null); this.liveCount.set(0);
+    this.liveStep.set(null); this.liveCount.set(0); this.liveLog.set([]); this.livePart = ''; this.showLive.set(true);
     if (!confirmed && this.cleanupMode !== 'off' && this.onCleanupFail === 'factory' && !(await this.ui.confirm(tr('Factory Default on a Failed Cleanup?'),
       tr('When a cleanup fails, the devices of that test are reset to factory default and rebooted, then the run goes on. A factory default may remove the management address: use console sessions. Production sessions are never reset.'), tr('Run'), true))) return;
     this.busy.set(true);
@@ -979,6 +1006,22 @@ export class TestsView implements OnInit, OnDestroy {
   readonly liveStep = signal<{ case: string; step: TestStepResult } | null>(null);
   readonly liveCount = signal(0);
   async stopRun() { await this.backend.testStop().catch(() => {}); this.ui.toast(tr('Stopping after the step that runs now…'), 'info'); }
+  readonly showLive = signal(true);
+  readonly liveLog = signal<string[]>([]);
+  private livePart = '';
+  private addLive(text: string) {
+    const parts = (this.livePart + text.replace(/\r/g, '')).split('\n');
+    this.livePart = parts.pop() ?? '';
+    this.liveLog.update(l => { const n = [...l, ...parts]; return n.length > 4000 ? n.slice(-4000) : n; });
+    queueMicrotask(() => { const el = document.querySelector('app-tests-view .console pre'); if (el) el.scrollTop = el.scrollHeight; });
+  }
+  private liveLine(line: string) { if (this.livePart) { this.addLive('\n'); } this.addLive(line + '\n'); }
+  copyLive() { this.copyText(this.liveLog().join('\n')); }
+  copyText(t: string) { void navigator.clipboard?.writeText(t).then(() => this.ui.toast(tr('Copied'), 'success')).catch(() => {}); }
+  readonly logView = signal<{ title: string; file: string; text: string } | null>(null);
+  async openLog(file: string, title: string) {
+    try { this.logView.set({ title, file, text: await this.backend.testFile(file) }); } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
   async importManual() {
     const dev = await this.ui.input(tr('Import Manual Test Cases'), tr('Session for steps without a Device column (empty: such steps become manual steps). Then pick the Excel or CSV file.'), '');
     if (dev === null || dev === undefined) return;

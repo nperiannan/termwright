@@ -241,7 +241,13 @@ func (a *App) runTests(ctx context.Context, r TestRunRequest, ask netAsker) (tes
 	defer func() { testsRun.Lock(); delete(testsStops, r.Testbed); testsRun.Unlock() }()
 	drv := newTestDriver(a)
 	drv.interactive = r.interactive
+	drv.live = func(session, text string) {
+		emitter{a}.Emit("tests:out", map[string]string{"testbed": r.Testbed, "session": session, "text": text})
+	}
 	opt := testrec.RunOptions{OnCleanupFail: r.OnCleanupFail, Cleanup: r.Cleanup, Testbed: r.Testbed, Tags: r.Tags,
+		OnStepStart: func(file, name, step string) {
+			emitter{a}.Emit("tests:step-start", map[string]string{"file": file, "case": name, "testbed": r.Testbed, "step": step})
+		},
 		OnStep: func(file, name string, sr testrec.StepResult) {
 			emitter{a}.Emit("tests:step", map[string]any{"file": file, "case": name, "testbed": r.Testbed, "step": sr})
 		}}
@@ -325,6 +331,8 @@ type testDriver struct {
 	baselineSessions []string
 	// interactive: a person started the run in the window (manual steps can be asked)
 	interactive bool
+	// live gets the device output as it arrives (the Tests tab's live log)
+	live func(session, text string)
 }
 
 func newTestDriver(a *App) *testDriver { return &testDriver{a: a, own: map[string]*term.CaptureConn{}} }
@@ -365,7 +373,11 @@ func (d *testDriver) Command(ctx context.Context, session, cmd, prompt string) (
 		} else if c, release, err = testPool.get(ctx, d.a, s, prompt); err != nil {
 			return "", err
 		}
+		if d.live != nil {
+			c.SetTap(func(t string) { d.live(session, t) })
+		}
 		out, err := c.Run(ctx, cmd)
+		c.SetTap(nil)
 		bad := err != nil && ctx.Err() == nil
 		release(bad)
 		if bad && try == 0 && !c.Alive() {
