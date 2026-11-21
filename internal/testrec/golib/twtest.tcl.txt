@@ -336,8 +336,77 @@ proc tw::_get {k} {
     return ""
 }
 
-proc tw::run {session command {prompt ""} {timeout 0}} {
-    tw::_send "\{\"run\":\{\"session\":[tw::jstr [tw::fill $session]],\"command\":[tw::jstr [tw::fill $command]],\"prompt\":[tw::jstr $prompt]\},\"timeout\":$timeout\}"
+proc tw::run {session command {prompt ""} {timeout 0} {parse ""}} {
+    tw::_send "\{\"run\":\{\"session\":[tw::jstr [tw::fill $session]],\"command\":[tw::jstr [tw::fill $command]],\"prompt\":[tw::jstr $prompt],\"parse\":[tw::jstr $parse]\},\"timeout\":$timeout\}"
+}
+
+# tw::rows where -> the parsed rows (dicts, column names in capitals) whose columns match where
+# (a dict; exact, case-insensitive; "~regex" a pattern).
+proc tw::rows {where} {
+    variable ans
+    set out {}
+    if {![dict exists $ans table]} { return {} }
+    set t [lindex [dict get $ans table] 1]
+    set hdr {}
+    if {[dict exists $t header]} { foreach h [lindex [dict get $t header] 1] { lappend hdr [string toupper [lindex $h 1]] } }
+    set rows {}
+    if {[dict exists $t rows] && [lindex [dict get $t rows] 0] eq "a"} { set rows [lindex [dict get $t rows] 1] }
+    foreach r $rows {
+        set m {}
+        set i 0
+        foreach c [lindex $r 1] { dict set m [lindex $hdr $i] [lindex $c 1]; incr i }
+        set ok 1
+        dict for {k w} $where {
+            set k [string toupper $k]
+            set w [tw::fill $w]
+            if {![dict exists $m $k]} { set ok 0; break }
+            set got [dict get $m $k]
+            if {[string index $w 0] eq "~"} {
+                if {![regexp -- [string range $w 1 end] $got]} { set ok 0 }
+            } elseif {![string equal -nocase [string trim $got] [string trim $w]]} { set ok 0 }
+        }
+        if {$ok} { lappend out $m }
+    }
+    return $out
+}
+
+# tw::table where column op ?want?  - a column of the first matching row; column "" checks the
+# number of rows (op equals) or that one is there (exists / missing).
+proc tw::table {where column op {want ""}} {
+    set rs [tw::rows $where]
+    set w [tw::fill $want]
+    if {$column eq ""} {
+        set n [llength $rs]
+        switch -- $op {
+            equals  { set pass [expr {$n == $w}] }
+            exists - found { set pass [expr {$n > 0}] }
+            missing { set pass [expr {$n == 0}] }
+            default { error "unknown table check $op" }
+        }
+        if {!$pass} { tw::fail "rows $where: expected $op $w, got $n rows" }
+        return
+    }
+    set c [string toupper $column]
+    set ok [expr {[llength $rs] && [dict exists [lindex $rs 0] $c]}]
+    set t [expr {$ok ? [dict get [lindex $rs 0] $c] : ""}]
+    switch -- $op {
+        equals     { set pass [expr {$ok && $t eq $w}] }
+        not_equals { set pass [expr {$t ne $w}] }
+        matches    { set pass [expr {$ok && [regexp -- $w $t]}] }
+        greater    { set pass [expr {$ok && [string is double -strict $t] && $t > $w}] }
+        less       { set pass [expr {$ok && [string is double -strict $t] && $t < $w}] }
+        exists - found { set pass $ok }
+        missing    { set pass [expr {!$ok}] }
+        default    { error "unknown table check $op" }
+    }
+    if {!$pass} { tw::fail "row $where -> $column: expected $op $w, got \"$t\"" }
+}
+
+proc tw::save_cell {var where column} {
+    variable vars
+    set rs [tw::rows $where]
+    set c [string toupper $column]
+    if {[llength $rs] && [dict exists [lindex $rs 0] $c]} { dict set vars $var [dict get [lindex $rs 0] $c] }
 }
 
 # tw::http url ?-session s? ?-method m? ?-body b? ?-headers {k v ...}? ?-environment e? ?-collection c? ?-timeout n?
@@ -357,14 +426,22 @@ proc tw::snmp {session op oids {values {}} {timeout 0}} {
     tw::_send "\{\"snmp\":\{\"session\":[tw::jstr [tw::fill $session]],\"op\":[tw::jstr $op],\"oids\":\[[join $o ,]\],\"values\":\[[join $v ,]\]\},\"timeout\":$timeout\}"
 }
 
+# tw::has_text out t: out contains t, spacing and line breaks not counted.
+proc tw::has_text {out t} {
+    if {[string first $t $out] >= 0} { return 1 }
+    set n1 [string trim [regsub -all {\s+} $out " "]]
+    set n2 [string trim [regsub -all {\s+} $t " "]]
+    return [expr {[string first $n2 $n1] >= 0}]
+}
+
 proc tw::contains {text} {
     set t [tw::fill $text]
-    if {[string first $t [tw::_get output]] < 0} { tw::fail "expected the output to contain \"$t\"\n[tw::_get output]" }
+    if {![tw::has_text [tw::_get output] $t]} { tw::fail "expected the output to contain \"$t\"\n[tw::_get output]" }
 }
 
 proc tw::not_contains {text} {
     set t [tw::fill $text]
-    if {[string first $t [tw::_get output]] >= 0} { tw::fail "expected the output not to contain \"$t\"" }
+    if {[tw::has_text [tw::_get output] $t]} { tw::fail "expected the output not to contain \"$t\"" }
 }
 
 proc tw::matches {pattern} {

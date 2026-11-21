@@ -94,8 +94,11 @@ func GenerateTcl(c Case, caseFile string) ([]byte, error) {
 		switch {
 		case st.Run != nil:
 			args := []string{tclStr(st.Run.Session), tclStr(st.Run.Command)}
-			if st.Run.Prompt != "" || st.Timeout > 0 {
+			if st.Run.Prompt != "" || st.Timeout > 0 || st.Run.Parse != "" {
 				args = append(args, tclStr(st.Run.Prompt), strconv.Itoa(st.Timeout))
+			}
+			if st.Run.Parse != "" {
+				args = append(args, tclStr(st.Run.Parse))
 			}
 			fmt.Fprintf(&b, "%stw::run %s\n", in, strings.Join(args, " "))
 		case st.HTTP != nil:
@@ -145,6 +148,8 @@ func GenerateTcl(c Case, caseFile string) ([]byte, error) {
 			switch {
 			case s.OID != "":
 				fmt.Fprintf(&b, "%stw::save %s oid %s\n", in, tclStr(s.Var), tclStr(s.OID))
+			case s.Column != "":
+				fmt.Fprintf(&b, "%stw::save_cell %s %s %s\n", in, tclStr(s.Var), tclDict(s.Where), tclStr(s.Column))
 			case s.Field != "":
 				fmt.Fprintf(&b, "%stw::save %s field %s\n", in, tclStr(s.Var), tclStr(s.Field))
 			case s.JSON != "":
@@ -162,6 +167,39 @@ func GenerateTcl(c Case, caseFile string) ([]byte, error) {
 
 func tclExpect(e Expect) []string {
 	switch {
+	case e.Table != nil:
+		t := e.Table
+		pre := "tw::table " + tclDict(t.Where) + " " + tclStr(t.Column) + " "
+		switch {
+		case t.Rows != nil:
+			return []string{"tw::table " + tclDict(t.Where) + " {} equals " + strconv.Itoa(*t.Rows)}
+		case t.Column == "" && t.Exists != nil && !*t.Exists:
+			return []string{pre + "missing"}
+		case t.Column == "":
+			return []string{pre + "exists"}
+		case t.Matches != "":
+			return []string{pre + "matches " + tclStr(t.Matches)}
+		}
+		var out []string
+		if t.Exists != nil {
+			out = append(out, pre+map[bool]string{true: "exists", false: "missing"}[*t.Exists])
+		}
+		if t.Equals != nil {
+			out = append(out, pre+"equals "+tclStr(*t.Equals))
+		}
+		if t.NotEquals != nil {
+			out = append(out, pre+"not_equals "+tclStr(*t.NotEquals))
+		}
+		if t.Greater != nil {
+			out = append(out, pre+"greater "+strconv.FormatFloat(*t.Greater, 'g', -1, 64))
+		}
+		if t.Less != nil {
+			out = append(out, pre+"less "+strconv.FormatFloat(*t.Less, 'g', -1, 64))
+		}
+		if len(out) == 0 {
+			out = append(out, pre+"exists")
+		}
+		return out
 	case e.Contains != "":
 		return []string{"tw::contains " + tclStr(e.Contains)}
 	case e.NotContains != "":

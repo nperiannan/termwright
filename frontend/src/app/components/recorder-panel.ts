@@ -2,7 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Recorder, RecPhase } from '../core/recorder.service';
 import { AIChat } from '../core/ai-chat.service';
-import { TestExpect, TestStep } from '../core/models';
+import { TestExpect, TestTableExpect, TestStep } from '../core/models';
 
 type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid' | 'status' | 'maxMs';
 
@@ -37,6 +37,13 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
             <button type="button" class="ic" (click)="rec.removeStep(i)" title="Remove the step">✕</button>
           </div>
           <div class="cmd">{{ sent(s.step) }}</div>
+          @if (s.step.run && (s.term || s.output)) {
+            @if (s.table; as tb) {
+              <div class="tbw"><table class="ptab"><tr>@for (h of tb.header; track $index) { <th>{{ h }}</th> }</tr>
+                @for (r of tb.rows.slice(0, 40); track $index) { <tr>@for (c of r; track $index; let ci = $index) { <td (click)="rec.addCellCheck(i, r, ci)" title="Check this value">{{ c }}</td> }</tr> }</table></div>
+              <div class="mut">{{ tb.rows.length }} rows · click a value to check it</div>
+            } @else { <button type="button" class="lnk sm" (click)="rec.parseStep(i)" title="Turn the output into a table with a TextFSM template (templates/ in the tests folder)">⊞ Parse as Table</button> }
+          }
           @for (e of s.step.expect ?? []; track $index; let j = $index) {
             <span class="chip">✓ {{ label(e) }}<button type="button" (click)="rec.removeCheck(i, j)" title="Remove the check">×</button></span>
           }
@@ -89,6 +96,7 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
     .phases { display: flex; gap: 2px; background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: 7px; padding: 2px; } .phases button { flex: 1; border: 0; background: none; color: var(--text); padding: 4px 6px; border-radius: 5px; cursor: pointer; } .phases button.on { background: color-mix(in srgb, var(--accent) 28%, transparent); } .phases .n { color: var(--muted); font-size: 11px; }
     .ph { font-size: 11px; letter-spacing: .06em; color: var(--muted); text-transform: uppercase; margin-top: 2px; } .st.cl { border-color: color-mix(in srgb, var(--warn, #e0a030) 45%, var(--border)); } .st.su { border-style: dashed; }
     .sug { font-size: 12px; padding: 1px 4px; margin: 3px 4px 0 0; border: 1px dashed color-mix(in srgb, var(--accent) 50%, transparent); border-radius: 10px; }
+    .tbw { max-height: 180px; overflow: auto; margin: 4px 0; border: 1px solid var(--border); border-radius: 6px; } .ptab { border-collapse: collapse; font: 11.5px var(--mono, monospace); width: 100%; } .ptab th { position: sticky; top: 0; background: var(--panel); text-align: left; padding: 2px 6px; color: var(--muted); font-weight: 500; } .ptab td { padding: 2px 6px; cursor: pointer; border-top: 1px solid var(--border); white-space: nowrap; } .ptab td:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
     .undo { font-size: 12px; display: flex; gap: 6px; align-items: center; width: 100%; } .undo code { font-family: var(--mono, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
     .rst { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12px; } .rst label { display: flex; gap: 4px; align-items: center; } .row { display: flex; gap: 6px; } .row button { flex: 1; font-size: 12px; } .roles { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
   `],
@@ -144,7 +152,34 @@ export class RecorderPanel {
 
 }
 
+/** "ID=200 → STATE = active", "rows STATE=active: 2". */
+export function tableLabel(t: TestTableExpect): string {
+  const w = Object.entries(t.where ?? {}).map(([k, v]) => `${k}=${v}`).join(' ');
+  const row = w ? `row ${w}` : 'rows';
+  if (t.rows !== undefined) return `${row}: ${t.rows} rows`;
+  if (!t.column) return `${row} ${t.exists === false ? 'is not there' : 'is there'}`;
+  const cmp = t.matches ? `~ ${t.matches}` : t.equals !== undefined ? `= ${t.equals}` : t.notEquals !== undefined ? `≠ ${t.notEquals}` : t.greater !== undefined ? `> ${t.greater}` : t.less !== undefined ? `< ${t.less}` : 'is there';
+  return `${row} → ${t.column} ${cmp}`;
+}
+/** Reads "ID=200, NAME=v2: STATE = active" (also "~ regex", "!= x", "> 5", "rows 2", "missing"). */
+export function parseTableCheck(text: string): TestTableExpect | null {
+  const i = text.indexOf(':');
+  const wherePart = i >= 0 ? text.slice(0, i) : '', rest = (i >= 0 ? text.slice(i + 1) : text).trim();
+  const where: Record<string, string> = {};
+  for (const p of wherePart.split(',')) { const m = p.match(/^\s*([\w.-]+)\s*=\s*(.*?)\s*$/); if (m) where[m[1]] = m[2]; else if (p.trim()) return null; }
+  const t: TestTableExpect = Object.keys(where).length ? { where } : {};
+  let m: RegExpMatchArray | null;
+  if ((m = rest.match(/^rows\s+(\d+)$/i))) return { ...t, rows: Number(m[1]) };
+  if (/^(missing|not there)$/i.test(rest)) return { ...t, exists: false };
+  if (/^(exists|there|)$/i.test(rest)) return t;
+  if (!(m = rest.match(/^([\w.-]+)\s*(=|!=|≠|~|>|<)\s*(.*)$/))) return null;
+  const [, col, op, v] = m;
+  const c: TestTableExpect = { ...t, column: col };
+  if (op === '=') c.equals = v; else if (op === '~') c.matches = v; else if (op === '>' || op === '<') { const n = Number(v); if (!Number.isFinite(n)) return null; if (op === '>') c.greater = n; else c.less = n; } else c.notEquals = v;
+  return c;
+}
 export function expectLabel(e: TestExpect): string {
+  if (e.table) return tableLabel(e.table);
   const cmp = [e.equals !== undefined ? `= ${e.equals}` : '', e.notEquals !== undefined ? `≠ ${e.notEquals}` : '', e.greater !== undefined ? `> ${e.greater}` : '', e.less !== undefined ? `< ${e.less}` : '', e.exists === false ? 'missing' : ''].filter(Boolean).join(' ');
   if (e.contains) return `contains "${e.contains}"`;
   if (e.notContains) return `no "${e.notContains}"`;

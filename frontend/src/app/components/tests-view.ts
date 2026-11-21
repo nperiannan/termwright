@@ -4,8 +4,8 @@ import { Backend, errText } from '../core/backend';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { Recorder } from '../core/recorder.service';
-import { OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
-import { expectLabel, stepText } from './recorder-panel';
+import { CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
+import { expectLabel, parseTableCheck, stepText } from './recorder-panel';
 import { AIChat } from '../core/ai-chat.service';
 
 type View = 'steps' | 'yaml' | 'go' | 'py' | 'tcl';
@@ -20,8 +20,12 @@ type Phase = 'setup' | 'steps' | 'cleanup';
       <aside class="side">
         <div class="row"><button type="button" (click)="openFolder()" title="Use another folder as the tests folder">Open…</button><button type="button" (click)="clone()" title="Clone a Git repository of tests">Clone…</button>
           <span class="sp"></span><button type="button" (click)="run([])" [disabled]="busy() || !tree()?.cases?.length" title="Run all tests">▶▶</button></div>
+        <label class="ocf" title="Whether each test cleans up after itself. Off: the next test starts from what this one configured"><span>After each test</span>
+          <select [(ngModel)]="cleanupMode" (ngModelChange)="keepOcf()"><option value="off">No cleanup - tests build on each other</option><option value="">Run its cleanup steps</option><option value="auto">Cleanup steps, else undo its configuration</option></select></label>
+        @if (cleanupMode !== 'off') {
         <label class="ocf" title="What happens when a test's cleanup fails: the devices may not be clean for the next test"><span>On a failed cleanup</span>
           <select [(ngModel)]="onCleanupFail" (ngModelChange)="keepOcf()"><option value="stop">Stop the run</option><option value="restore">Restore the saved configuration</option><option value="factory">Factory default</option></select></label>
+        }
         @if (picked().length) { <div class="row"><button type="button" class="pri" (click)="run(picked())" [disabled]="busy()">▶ Run Selected ({{ picked().length }})</button><button type="button" class="lnk" (click)="picked.set([])">Clear</button></div> }
         <div class="git" [title]="tree()?.root ?? ''">@if (git()?.repo) { <span>⎇ {{ git()?.branch }}</span><span>{{ git()?.changed }} changed</span>
             @if (git()?.ahead) { <span title="Commits not pushed yet">↑{{ git()?.ahead }}</span> } @if (git()?.behind) { <span title="Commits on the remote not pulled yet">↓{{ git()?.behind }}</span> } } @else { <span>{{ folderName() }}</span> }
@@ -74,6 +78,7 @@ type Phase = 'setup' | 'steps' | 'cleanup';
               @if (s.repeat === 'weekly') { <label><span>Day</span><select [(ngModel)]="s.day">@for (d of days; track $index) { <option [ngValue]="$index">{{ d }}</option> }</select></label> }
               <label><span>At</span><input type="time" [(ngModel)]="s.at" /></label>
             }
+            <label><span>Cleanup</span><select [(ngModel)]="s.cleanup"><option [ngValue]="undefined">Run each test's cleanup steps</option><option value="off">No cleanup - tests build on each other</option><option value="auto">Cleanup steps, else undo its configuration</option></select></label>
             <label><span>Failed cleanup</span><select [(ngModel)]="s.onCleanupFail"><option [ngValue]="undefined">Stop the run</option><option value="restore">Restore the saved configuration</option><option value="factory">Factory default</option></select></label>
             <label class="ck"><input type="checkbox" [(ngModel)]="s.production" /> May use production sessions</label>
             <label class="ck"><input type="checkbox" [(ngModel)]="s.off" /> Off</label>
@@ -117,7 +122,8 @@ type Phase = 'setup' | 'steps' | 'cleanup';
                         </div>
                         <div class="row opts"><label>Timeout <input type="number" min="0" class="num" [(ngModel)]="s.timeout" /> s</label>
                           <label><input type="checkbox" [(ngModel)]="s.continueOnFail" /> Go on when it fails</label>
-                          @if (s.run) { <label title="Do not fail the step when the device answers with an error message"><input type="checkbox" [(ngModel)]="s.ignoreErrors" /> Ignore device errors</label> }</div>
+                          @if (s.run) { <label title="Do not fail the step when the device answers with an error message"><input type="checkbox" [(ngModel)]="s.ignoreErrors" /> Ignore device errors</label>
+                            <label title="Turn the output into a table with a TextFSM template: auto (templates/index) or a file in templates/">Parse <input class="pin" [(ngModel)]="s.run.parse" placeholder="off" list="tw-parse" /></label> }</div>
                         <div>@for (e of s.expect ?? []; track $index; let j = $index) { <span class="chip">{{ label(e) }} <button type="button" class="x" (click)="removeCheck(s, j)" title="Remove the check">×</button></span> }
                           @if (ck(ph.k, i); as c) {
                             <span class="addck"><select [(ngModel)]="c.k" aria-label="Check">@for (k of checkKinds(s); track k.k) { <option [value]="k.k">{{ k.l }}</option> }</select>
@@ -126,10 +132,11 @@ type Phase = 'setup' | 'steps' | 'cleanup';
                       </div>
                     } @empty { <div class="mut">no {{ ph.l.toLowerCase() }} steps</div> }
                   }
+                  <datalist id="tw-parse"><option value="auto"></option></datalist>
                   <div class="row"><span class="mut">Saving writes the test's YAML and its Go, Python and TCL code again.</span><span class="sp"></span><button type="button" (click)="draft.set(null)">Cancel</button><button type="button" class="pri" (click)="saveDraft()">Save</button></div>
                 } @else {
                 @for (row of rows(); track $index) {
-                  @if ($index === 0 || rows()[$index - 1].phase !== row.phase) { <div class="phh">{{ row.phase === 'setup' ? 'Setup' : row.phase === 'cleanup' ? 'Cleanup - always runs' : 'Steps' }}</div> }
+                  @if ($index === 0 || rows()[$index - 1].phase !== row.phase) { <div class="phh">{{ row.phase === 'setup' ? 'Setup' : row.phase === 'cleanup' ? (cleanupMode === 'off' ? 'Cleanup - off for runs from here (After each test)' : 'Cleanup - runs after the steps, also when one failed') : 'Steps' }}</div> }
                   <div class="st" [class.f]="res(row)?.passed === false && !res(row)?.skipped" [class.cl]="row.phase === 'cleanup'" [class.su]="row.phase === 'setup'">
                     <div><b>{{ row.i + 1 }}</b> <span class="mut">{{ row.s.run?.session ?? row.s.http?.session ?? row.s.snmp?.session ?? '' }} ›</span> <span class="cmd">{{ text(row.s) }}</span>
                       @if (res(row); as r) { <span class="ms">{{ r.skipped ? 'skipped' : r.ms + ' ms' }}</span> }</div>
@@ -139,6 +146,7 @@ type Phase = 'setup' | 'steps' | 'cleanup';
                     @for (v of row.s.save ?? []; track $index) { <span class="chip v">{{ '{{' + v.var + '}}' }}</span> }
                     @if (res(row); as r) { @if (r.unchecked && r.passed && !r.skipped) { <span class="chip u" title="The step has no checks: it passes when the command runs and the device does not answer with an error">○ ran, nothing checked</span> } }
                     @if (res(row)?.error) { <div class="bad">{{ res(row)?.error }}</div> }
+                    @if (res(row); as r) { @if (r.table; as tb) { <details class="out"><summary>Table · {{ tb.rows.length }} rows</summary><div class="tbw"><table class="ptab"><tr>@for (h of tb.header; track $index) { <th>{{ h }}</th> }</tr>@for (x of tb.rows.slice(0, 200); track $index) { <tr>@for (c of x; track $index) { <td>{{ c }}</td> }</tr> }</table></div></details> } }
                     @if (res(row); as r) { @if (r.output && !r.skipped) { <details class="out"><summary>Output</summary><pre>{{ r.output }}</pre></details> } }
                   </div>
                 }
@@ -203,6 +211,7 @@ type Phase = 'setup' | 'steps' | 'cleanup';
     .itr { display: flex; align-items: center; gap: 2px; } .itr .it { flex: 1; min-width: 0; } .itr input { margin: 0 0 0 2px; } .grp { display: flex; justify-content: space-between; align-items: center; }
     .ed .row { gap: 6px; margin-bottom: 4px; } .ses { width: 150px; height: 26px; } .cmdi { flex: 1; min-width: 0; height: 26px; font-family: var(--mono, monospace); } .num { width: 60px; height: 24px; } .opts { font-size: 12px; color: var(--muted); gap: 14px; } .opts label { display: flex; align-items: center; gap: 4px; }
     .x { border: 0; background: none; color: inherit; cursor: pointer; padding: 0 0 0 4px; } .addck { display: inline-flex; gap: 4px; margin-top: 4px; } .addck select, .addck input { height: 24px; font-size: 12px; } .addck input { width: 200px; }
+    .pin { width: 110px; height: 24px; } .tbw { max-height: 260px; overflow: auto; margin-top: 4px; border: 1px solid var(--border); border-radius: 6px; } .ptab { border-collapse: collapse; font: 12px var(--mono, monospace); } .ptab th { position: sticky; top: 0; background: var(--panel); text-align: left; padding: 2px 8px; color: var(--muted); font-weight: 500; } .ptab td { padding: 2px 8px; border-top: 1px solid var(--border); white-space: nowrap; }
     .chip.u { background: color-mix(in srgb, var(--warn, #e0a030) 15%, transparent); color: var(--warn, #e0a030); } .out summary { font-size: 11.5px; color: var(--muted); cursor: pointer; margin-top: 4px; } .out pre { font: 12px/1.45 var(--mono, monospace); max-height: 260px; overflow: auto; margin: 4px 0 0; padding: 6px 8px; border-radius: 6px; background: var(--term-bg, rgba(0,0,0,.25)); white-space: pre-wrap; }
     footer { border-top: 1px solid var(--border); padding: 8px 12px; max-height: 32%; display: flex; flex-direction: column; gap: 4px; min-height: 0; } .res { overflow: auto; }
     .rr { display: flex; gap: 8px; width: 100%; border: 0; background: none; color: var(--text); padding: 3px 4px; text-align: left; cursor: pointer; font: inherit; } .rr:hover { background: var(--hover, rgba(255,255,255,.05)); }
@@ -240,6 +249,7 @@ export class TestsView implements OnInit, OnDestroy {
   readonly phases: { k: Phase; l: string }[] = [{ k: 'setup', l: 'Setup' }, { k: 'steps', l: 'Steps' }, { k: 'cleanup', l: 'Cleanup - always runs' }];
   readonly methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
   private cks = new Map<string, { k: string; v: string }>();
+  cleanupMode: CleanupMode = (() => { try { const v = localStorage.getItem('tw.tests.cleanup'); return (v === null ? 'off' : v) as CleanupMode; } catch { return 'off'; } })();
   onCleanupFail: OnCleanupFail = (() => { try { return (localStorage.getItem('tw.tests.ocf') as OnCleanupFail) || 'stop'; } catch { return 'stop'; } })();
   /** The last result of each test file, for the tree's dots. */
   readonly last = signal<Record<string, TestResult>>({});
@@ -319,11 +329,11 @@ export class TestsView implements OnInit, OnDestroy {
   }
 
   async run(files: string[], confirmed = false): Promise<void> {
-    if (!confirmed && this.onCleanupFail === 'factory' && !(await this.ui.confirm(tr('Factory Default on a Failed Cleanup?'),
+    if (!confirmed && this.cleanupMode !== 'off' && this.onCleanupFail === 'factory' && !(await this.ui.confirm(tr('Factory Default on a Failed Cleanup?'),
       tr('When a cleanup fails, the devices of that test are reset to factory default and rebooted, then the run goes on. A factory default may remove the management address: use console sessions. Production sessions are never reset.'), tr('Run'), true))) return;
     this.busy.set(true);
     try {
-      this.took(await this.backend.runTests({ files, testbed: this.testbed || undefined, confirmed, onCleanupFail: this.onCleanupFail }));
+      this.took(await this.backend.runTests({ files, testbed: this.testbed || undefined, confirmed, onCleanupFail: this.cleanupMode === 'off' ? undefined : this.onCleanupFail, cleanup: this.cleanupMode || undefined }));
       await this.load();
     } catch (e) {
       const t = errText(e);
@@ -416,7 +426,7 @@ export class TestsView implements OnInit, OnDestroy {
     try { const rel = await this.backend.testsNewTestbed(name, folder); this.ui.toast(tr('Wrote {0}', rel), 'success'); await this.load(); void this.backend.testsOpen(rel); }
     catch (e) { this.ui.toast(errText(e), 'error'); }
   }
-  keepOcf() { try { localStorage.setItem('tw.tests.ocf', this.onCleanupFail); } catch { /* not kept */ } }
+  keepOcf() { try { localStorage.setItem('tw.tests.ocf', this.onCleanupFail); localStorage.setItem('tw.tests.cleanup', this.cleanupMode); } catch { /* not kept */ } }
   pick(f: string) { this.picked.update(l => l.includes(f) ? l.filter(x => x !== f) : [...l, f]); }
   filesOf(g: { cases: TestCaseInfo[] }) { return g.cases.map(c => c.file); }
   async openLib(f: string) {
@@ -453,13 +463,19 @@ export class TestsView implements OnInit, OnDestroy {
   ck(p: Phase, i: number) { const k = p + i; let c = this.cks.get(k); if (!c) { c = { k: 'contains', v: '' }; this.cks.set(k, c); } return c; }
   checkKinds(s: TestStep) {
     const k = [{ k: 'contains', l: 'contains' }, { k: 'notContains', l: 'does not contain' }, { k: 'matches', l: 'matches' }];
-    return s.http ? [{ k: 'status', l: 'status' }, { k: 'json', l: 'JSON path =' }, ...k, { k: 'maxMs', l: 'within ms' }] : s.snmp ? [{ k: 'oid', l: 'OID =' }, ...k] : k;
+    return s.http ? [{ k: 'status', l: 'status' }, { k: 'json', l: 'JSON path =' }, ...k, { k: 'maxMs', l: 'within ms' }] : s.snmp ? [{ k: 'oid', l: 'OID =' }, ...k] : [...k, { k: 'table', l: 'table value' }];
   }
-  checkHint(k: string) { return k === 'json' ? 'data.items[0].name = v42' : k === 'oid' ? 'ifOperStatus.4 = up' : k === 'status' ? '200' : k === 'maxMs' ? '500' : k === 'matches' ? 'v42\\s+42' : 'text'; }
+  checkHint(k: string) { return k === 'json' ? 'data.items[0].name = v42' : k === 'oid' ? 'ifOperStatus.4 = up' : k === 'status' ? '200' : k === 'maxMs' ? '500' : k === 'matches' ? 'v42\\s+42' : k === 'table' ? 'VLAN_ID=200: STATUS = active' : 'text'; }
   addCheck(s: TestStep, c: { k: string; v: string }) {
     const v = c.v.trim(); if (!v) return;
     let e: TestExpect;
     if (c.k === 'status' || c.k === 'maxMs') { const n = Number(v); if (!Number.isFinite(n)) return this.ui.toast(tr('Enter a number'), 'error'); e = { [c.k]: n }; }
+    else if (c.k === 'table') {
+      const t = parseTableCheck(v);
+      if (!t) return this.ui.toast(tr('Write it as COLUMN=value: COLUMN = value (or rows N, missing, ~ pattern)'), 'error');
+      e = { table: t };
+      if (s.run && !s.run.parse) s.run.parse = 'auto';
+    }
     else if (c.k === 'json' || c.k === 'oid') { const i = v.indexOf('='); e = i > 0 ? { [c.k]: v.slice(0, i).trim(), equals: v.slice(i + 1).trim() } : { [c.k]: v, exists: true }; }
     else e = { [c.k]: v };
     (s.expect ??= []).push(e); c.v = ''; this.touch();
@@ -468,7 +484,7 @@ export class TestsView implements OnInit, OnDestroy {
     const d = this.draft(); if (!d) return;
     const all = [...(d.setup ?? []), ...d.steps, ...(d.cleanup ?? [])];
     if (all.some(s => s.run && (!s.run.session.trim() || !s.run.command.trim()))) return this.ui.toast(tr('Every command step needs a session and a command.'), 'error');
-    for (const s of all) { if (!s.timeout) delete s.timeout; if (!s.continueOnFail) delete s.continueOnFail; if (!s.ignoreErrors) delete s.ignoreErrors; if (!s.expect?.length) delete s.expect; }
+    for (const s of all) { if (s.run && !s.run.parse) delete s.run.parse; if (!s.timeout) delete s.timeout; if (!s.continueOnFail) delete s.continueOnFail; if (!s.ignoreErrors) delete s.ignoreErrors; if (!s.expect?.length) delete s.expect; }
     const c: TestCase = { ...d, setup: d.setup?.length ? d.setup : undefined, cleanup: d.cleanup?.length ? d.cleanup : undefined };
     try { await this.backend.testSave(this.sel(), c); this.draft.set(null); this.ui.toast(tr('Saved'), 'success'); await this.load(); }
     catch (e) { this.ui.toast(errText(e), 'error'); }

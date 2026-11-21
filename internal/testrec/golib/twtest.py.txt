@@ -168,8 +168,11 @@ class Step:
     def __init__(self, run, skip=False):
         self.r, self.skip, self.errors = run, skip, []
 
-    def run(self, session, command, prompt="", timeout=0):
-        return self._send({"run": {"session": self.r.fill(session), "command": self.r.fill(command), "prompt": prompt}, "timeout": timeout})
+    def run(self, session, command, prompt="", timeout=0, parse=""):
+        run = {"session": self.r.fill(session), "command": self.r.fill(command), "prompt": prompt}
+        if parse:
+            run["parse"] = parse
+        return self._send({"run": run, "timeout": timeout})
 
     def http(self, url, session="", method="GET", headers=None, body="", environment="", collection="", timeout=0):
         h = {k: self.r.fill(v) for k, v in (headers or {}).items()}
@@ -198,6 +201,8 @@ class Step:
         if ans.get("error"):
             raise _Fatal(ans["error"])
         a.output, a.status, a.ms, a.rows = ans.get("output", ""), ans.get("status", 0), ans.get("ms", 0), ans.get("rows") or []
+        t = ans.get("table") or {}
+        a.table = [{h.upper(): (r[i] if i < len(r) else "") for i, h in enumerate(t.get("header") or [])} for r in (t.get("rows") or [])]
         return a
 
     def fail(self, msg):
@@ -209,17 +214,42 @@ class Answer:
     """What a step got: output (or HTTP body), status, ms, rows (SNMP)."""
 
     def __init__(self, s):
-        self.s, self.output, self.status, self.ms, self.rows = s, "", 0, 0, []
+        self.s, self.output, self.status, self.ms, self.rows, self.table = s, "", 0, 0, [], []
+
+    def _where(self, where):
+        out = []
+        for r in self.table:
+            ok = True
+            for k, w in where.items():
+                w, got = self.s.r.fill(w), r.get(k.upper())
+                if w.startswith("~"):
+                    ok = ok and got is not None and re.search(w[1:], got) is not None
+                else:
+                    ok = ok and got is not None and got.strip().lower() == w.strip().lower()
+            if ok:
+                out.append(r)
+        return out
+
+    def cell(self, where, column):
+        """A column of the first parsed row whose columns match where."""
+        rs = self._where(where)
+        what = "row %s -> %s" % (where, column)
+        if rs and column.upper() in rs[0]:
+            return Value(self.s, what, rs[0][column.upper()], True)
+        return Value(self.s, what)
+
+    def row_count(self, where):
+        return Value(self.s, "rows %s" % (where,), str(len(self._where(where))), True)
 
     def contains(self, text):
         t = self.s.r.fill(text)
-        if t not in self.output:
+        if not _has_text(self.output, t):
             self.s.fail("expected the output to contain %r\n%s" % (t, self.output))
         return self
 
     def not_contains(self, text):
         t = self.s.r.fill(text)
-        if t in self.output:
+        if _has_text(self.output, t):
             self.s.fail("expected the output not to contain %r" % t)
         return self
 
@@ -280,6 +310,14 @@ class Answer:
         return Value(self.s, "oid " + o)
 
 
+def _has_text(out, t):
+    """out contains t, spacing and line breaks not counted."""
+    if t in out:
+        return True
+    n = lambda x: " ".join(x.split())
+    return n(t) in n(out)
+
+
 class Value:
     """A field, JSON or SNMP value to check."""
 
@@ -297,6 +335,12 @@ class Value:
     def exists(self, want=True):
         if self.found != want:
             self.s.fail("%s: expected exists = %s" % (self.what, want))
+        return self
+
+    def matches(self, pattern):
+        p = self.s.r.fill(pattern)
+        if not self.found or not re.search(p, self.text):
+            self.s.fail("%s: expected to match %s, got %r" % (self.what, p, self.text))
         return self
 
     def is_found(self):

@@ -86,7 +86,11 @@ func GenerateGo(c Case, caseFile string) ([]byte, error) {
 		}
 		switch {
 		case st.Run != nil:
-			fmt.Fprintf(&b, "\t\ta := s.Run(%s, %s, %s, %d)\n", q(st.Run.Session), q(st.Run.Command), q(st.Run.Prompt), st.Timeout)
+			if st.Run.Parse != "" {
+				fmt.Fprintf(&b, "\t\ta := s.RunParsed(%s, %s, %s, %s, %d)\n", q(st.Run.Session), q(st.Run.Command), q(st.Run.Prompt), q(st.Run.Parse), st.Timeout)
+			} else {
+				fmt.Fprintf(&b, "\t\ta := s.Run(%s, %s, %s, %d)\n", q(st.Run.Session), q(st.Run.Command), q(st.Run.Prompt), st.Timeout)
+			}
 		case st.HTTP != nil:
 			h := st.HTTP
 			var f []string
@@ -144,6 +148,8 @@ func GenerateGo(c Case, caseFile string) ([]byte, error) {
 		for _, s := range st.Save {
 			if s.OID != "" {
 				fmt.Fprintf(&b, "\t\ta.OID(%s).Save(%s)\n", q(s.OID), q(s.Var))
+			} else if s.Column != "" {
+				fmt.Fprintf(&b, "\t\ta.Cell(%s, %s).Save(%s)\n", goMap(s.Where), q(s.Column), q(s.Var))
 			} else if s.Field != "" {
 				fmt.Fprintf(&b, "\t\ta.Field(%s).Save(%s)\n", goStr(s.Field), q(s.Var))
 			} else if s.JSON != "" {
@@ -172,6 +178,22 @@ func GenerateGo(c Case, caseFile string) ([]byte, error) {
 func goExpect(e Expect) string {
 	q := strconv.Quote
 	switch {
+	case e.Table != nil:
+		t := e.Table
+		if t.Rows != nil {
+			return fmt.Sprintf("a.RowCount(%s).Equals(%q)", goMap(t.Where), strconv.Itoa(*t.Rows))
+		}
+		if t.Column == "" {
+			if t.Exists != nil && !*t.Exists {
+				return fmt.Sprintf("a.RowCount(%s).Equals(\"0\")", goMap(t.Where))
+			}
+			return fmt.Sprintf("a.RowCount(%s).Greater(0)", goMap(t.Where))
+		}
+		v := fmt.Sprintf("a.Cell(%s, %s)", goMap(t.Where), q(t.Column))
+		if t.Matches != "" {
+			return v + ".Matches(" + goStr(t.Matches) + ")"
+		}
+		return v + goChain(Expect{Equals: t.Equals, NotEquals: t.NotEquals, Greater: t.Greater, Less: t.Less, Exists: t.Exists})
 	case e.Contains != "":
 		return "a.Contains(" + q(e.Contains) + ")"
 	case e.NotContains != "":
@@ -189,26 +211,7 @@ func goExpect(e Expect) string {
 		} else if e.Field != "" {
 			v = "a.Field(" + goStr(e.Field) + ")"
 		}
-		var c []string
-		if e.Exists != nil {
-			c = append(c, fmt.Sprintf(".Exists(%v)", *e.Exists))
-		}
-		if e.Equals != nil {
-			c = append(c, ".Equals("+q(*e.Equals)+")")
-		}
-		if e.NotEquals != nil {
-			c = append(c, ".NotEquals("+q(*e.NotEquals)+")")
-		}
-		if e.Greater != nil {
-			c = append(c, ".Greater("+strconv.FormatFloat(*e.Greater, 'g', -1, 64)+")")
-		}
-		if e.Less != nil {
-			c = append(c, ".Less("+strconv.FormatFloat(*e.Less, 'g', -1, 64)+")")
-		}
-		if len(c) == 0 {
-			c = append(c, ".IsFound()")
-		}
-		return v + strings.Join(c, "")
+		return v + goChain(e)
 	}
 	return "// empty check"
 }
@@ -342,4 +345,29 @@ func (f Folder) writeGenerated(rel string, b []byte) error {
 		return err
 	}
 	return os.WriteFile(p, b, 0o644)
+}
+
+// goChain: the Value checks of e (.Equals(…) …; none: .IsFound()).
+func goChain(e Expect) string {
+	q := strconv.Quote
+	var c []string
+	if e.Exists != nil {
+		c = append(c, fmt.Sprintf(".Exists(%v)", *e.Exists))
+	}
+	if e.Equals != nil {
+		c = append(c, ".Equals("+q(*e.Equals)+")")
+	}
+	if e.NotEquals != nil {
+		c = append(c, ".NotEquals("+q(*e.NotEquals)+")")
+	}
+	if e.Greater != nil {
+		c = append(c, ".Greater("+strconv.FormatFloat(*e.Greater, 'g', -1, 64)+")")
+	}
+	if e.Less != nil {
+		c = append(c, ".Less("+strconv.FormatFloat(*e.Less, 'g', -1, 64)+")")
+	}
+	if len(c) == 0 {
+		c = append(c, ".IsFound()")
+	}
+	return strings.Join(c, "")
 }

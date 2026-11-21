@@ -3,6 +3,7 @@ package config
 
 import (
 	"encoding/json"
+	"github.com/termwright/termwright/internal/integrations"
 	"github.com/termwright/termwright/internal/session"
 	"github.com/termwright/termwright/internal/testrec"
 	"os"
@@ -128,6 +129,7 @@ type Settings struct {
 	DownloadDir          string                       `json:"downloadDir"`
 	TestsDir             string                       `json:"testsDir,omitempty"`      // the tests folder (cases, lib, testbeds, reports); "" = tests in the data folder
 	TestSchedules        []testrec.Schedule           `json:"testSchedules,omitempty"` // tests that run by themselves while Termwright is open
+	Integrations         integrations.Config          `json:"integrations"`            // qTest, Jira and Git host (tokens in the credential store)
 	FontFamily           string                       `json:"fontFamily"`
 	FontSize             int                          `json:"fontSize"`
 	LineHeight           float64                      `json:"lineHeight"`           // terminal line spacing (1.0 = the font's own; 0 = 1.0)

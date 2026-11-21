@@ -4993,6 +4993,8 @@ const ru: Record<string, string> = {
   'Save Without Checks?': 'Сохранить без проверок?',
   '{0} steps read the device but check nothing, so they pass whenever they run. Add a check: select the value and choose Expect this, or use a suggested check.': '{0} шагов читают устройство, но ничего не проверяют, поэтому проходят при любом запуске. Добавьте проверку: выделите значение и выберите «Ожидать это» или используйте предложенную проверку.',
   'Save Anyway': 'Всё равно сохранить',
+  'Write it as COLUMN=value: COLUMN = value (or rows N, missing, ~ pattern)': 'Запишите как СТОЛБЕЦ=значение: СТОЛБЕЦ = значение (или rows N, missing, ~ шаблон)',
+  'The token is saved in the OS keychain.': 'Токен сохранён в связке ключей ОС.',
 };
 
 export default ru;

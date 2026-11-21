@@ -37,6 +37,7 @@ var netTools = []mcpTool{
 			"day":             map[string]any{"type": "integer", "description": "schedule: weekday for weekly, 0 Sunday … 6 Saturday"},
 			"hours":           map[string]any{"type": "integer", "description": "schedule: every N hours (repeat hours)"},
 			"production":      map[string]any{"type": "string", "enum": []string{"true", "false"}, "description": "schedule: allow production sessions (asked)"},
+			"cleanup":         map[string]any{"type": "string", "enum": []string{"steps", "off", "auto"}, "description": "run: steps (default: each test's cleanup steps), off (no cleanup - tests build on each other) or auto (the cleanup steps, else the undo of the configuration commands that ran)"},
 			"on_cleanup_fail": map[string]any{"type": "string", "enum": []string{"stop", "restore", "factory"}, "description": "run: when a test's cleanup fails - stop (skip the rest), restore (the configuration saved before the run) or factory (factory default)"},
 			"kinds":           map[string]any{"type": "array", "items": map[string]any{"type": "string", "enum": []string{"config", "lab"}}, "description": "save_state: what to save"},
 			"sessions":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "save_state: the saved sessions"},

@@ -2,6 +2,7 @@ package testrec
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,8 +23,16 @@ import (
 // testbeds/ (which devices a run uses) and reports/ (one folder per run).
 type Folder struct{ Root string }
 
+// builtinTemplates: TextFSM templates and their index, written to templates/ when missing.
+//
+//go:embed templates
+var builtinTemplates embed.FS
+
+// TemplatesDir is where the TextFSM templates are.
+func (f Folder) TemplatesDir() string { return filepath.Join(f.Root, "templates") }
+
 // Dirs of a tests folder.
-var Dirs = []string{"cases", "lib", "testbeds", "reports"}
+var Dirs = []string{"cases", "lib", "testbeds", "reports", "templates"}
 
 // MaxCaseSize is the largest case file read (1 MB).
 const MaxCaseSize = 1 << 20
@@ -38,6 +47,16 @@ func (f Folder) Init() error {
 	if gi := filepath.Join(f.Root, ".gitignore"); !exists(gi) {
 		if err := os.WriteFile(gi, []byte("# run reports are kept out of Git\nreports/\n"), 0o644); err != nil {
 			return err
+		}
+	}
+	ents, _ := builtinTemplates.ReadDir("templates")
+	for _, e := range ents {
+		dst := filepath.Join(f.Root, "templates", e.Name())
+		if !exists(dst) {
+			b, _ := builtinTemplates.ReadFile("templates/" + e.Name())
+			if err := os.WriteFile(dst, b, 0o644); err != nil {
+				return err
+			}
 		}
 	}
 	readme := filepath.Join(f.Root, "README.md")
@@ -252,7 +271,10 @@ type RunOptions struct {
 	// OnCleanupFail: when a case's cleanup fails - "stop" (default: the remaining cases are skipped),
 	// "restore" (the configuration saved before the run is put back, then the run goes on) or
 	// "factory" (the device type's factory-default commands, then the run goes on).
-	OnCleanupFail string
+	OnCleanupFail string `json:"onCleanupFail,omitempty"`
+	// Cleanup: "" (each test's cleanup steps and restore), "off" (none: tests build on what earlier
+	// ones configured) or "auto" (the cleanup steps; without them the undo of the commands that ran).
+	Cleanup string `json:"cleanup,omitempty"`
 }
 
 // Recoverer is a Driver that can bring devices back after a failed cleanup: Baseline saves their
@@ -333,7 +355,7 @@ func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars
 			_, err := f.Load(file)
 			rs = []Result{{Case: file, File: file, Start: time.Now(), Error: err.Error()}}
 		default:
-			rs = RunParams(ctx, c, d, vars)
+			rs = RunParamsWith(ctx, c, d, vars, opt)
 		}
 		for _, r := range rs {
 			r.File = file

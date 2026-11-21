@@ -114,8 +114,9 @@ func (a *App) TestsClone(repo string) (string, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, git, "clone", "--", repo, dest)
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	ga, ge := a.gitCreds()
+	cmd := exec.CommandContext(ctx, git, append(ga, "clone", "--", repo, dest)...)
+	cmd.Env = append(append(os.Environ(), "GIT_TERMINAL_PROMPT=0"), ge...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("git clone: %s", strings.TrimSpace(string(out)))
 	}
@@ -219,8 +220,9 @@ func (a *App) testsGitRun(timeout time.Duration, args ...string) (string, error)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, git, append([]string{"-C", f.Root}, args...)...)
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	ga, ge := a.gitCreds()
+	cmd := exec.CommandContext(ctx, git, append(append(ga, "-C", f.Root), args...)...)
+	cmd.Env = append(append(os.Environ(), "GIT_TERMINAL_PROMPT=0"), ge...)
 	out, err := cmd.CombinedOutput()
 	o := strings.TrimSpace(string(out))
 	if ctx.Err() != nil {
@@ -257,7 +259,7 @@ func (a *App) TestsGitCommit(message string) (string, error) {
 		return "", err
 	}
 	var paths []string
-	for _, p := range []string{"cases", "testbeds", "lib", "go.mod", ".gitignore", "README.md"} {
+	for _, p := range []string{"cases", "testbeds", "lib", "templates", "suites", "go.mod", ".gitignore", "README.md"} {
 		if _, err := os.Stat(filepath.Join(f.Root, p)); err == nil {
 			paths = append(paths, p)
 		}

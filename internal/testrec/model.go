@@ -63,6 +63,9 @@ type RunStep struct {
 	// "% Invalid input") do not fail the step - for commands that may be refused, like removing what
 	// may not be there.
 	IgnoreErrors bool `yaml:"ignoreErrors,omitempty" json:"ignoreErrors,omitempty"`
+	// Parse: turn the output into a table with a TextFSM template - "auto" (templates/index by the
+	// session's device type and the command) or a template file in templates/.
+	Parse string `yaml:"parse,omitempty" json:"parse,omitempty"`
 }
 
 // HTTPStep is an HTTP request.
@@ -148,6 +151,8 @@ type Expect struct {
 	Less *float64 `yaml:"less,omitempty" json:"less,omitempty"`
 	// Exists: the field / JSON value is there (false: is not there).
 	Exists *bool `yaml:"exists,omitempty" json:"exists,omitempty"`
+	// Table: a check on the parsed output (the step needs parse).
+	Table *TableExpect `yaml:"table,omitempty" json:"table,omitempty"`
 }
 
 // Save keeps a value from a step's answer as a variable for later steps.
@@ -160,4 +165,7 @@ type Save struct {
 	JSON string `yaml:"json,omitempty" json:"json,omitempty"`
 	// OID: an SNMP value (its readable value is saved).
 	OID string `yaml:"oid,omitempty" json:"oid,omitempty"`
+	// Where + Column: a value from the parsed output (the first row whose columns match).
+	Where  map[string]string `yaml:"where,omitempty" json:"where,omitempty"`
+	Column string            `yaml:"column,omitempty" json:"column,omitempty"`
 }

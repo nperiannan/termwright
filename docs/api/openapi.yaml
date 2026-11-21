@@ -2157,6 +2157,13 @@ paths:
                                 at:
                                     description: 'schedule: time of day HH:MM (daily, weekdays, weekly)'
                                     type: string
+                                cleanup:
+                                    description: 'run: steps (default: each test''s cleanup steps), off (no cleanup - tests build on each other) or auto (the cleanup steps, else the undo of the configuration commands that ran)'
+                                    enum:
+                                        - steps
+                                        - "off"
+                                        - auto
+                                    type: string
                                 day:
                                     description: 'schedule: weekday for weekly, 0 Sunday … 6 Saturday'
                                     type: integer

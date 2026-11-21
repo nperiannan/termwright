@@ -116,6 +116,9 @@ func GeneratePython(c Case, caseFile string) ([]byte, error) {
 			if st.Run.Prompt != "" {
 				p = ", prompt=" + pyStr(st.Run.Prompt)
 			}
+			if st.Run.Parse != "" {
+				p += ", parse=" + pyStr(st.Run.Parse)
+			}
 			fmt.Fprintf(&b, "%sa = s.run(%s, %s%s%s)\n", in, pyStr(st.Run.Session), pyStr(st.Run.Command), p, to)
 		case st.HTTP != nil:
 			h := st.HTTP
@@ -166,6 +169,8 @@ func GeneratePython(c Case, caseFile string) ([]byte, error) {
 			switch {
 			case s.OID != "":
 				fmt.Fprintf(&b, "%sa.oid(%s).save(%s)\n", in, pyStr(s.OID), pyStr(s.Var))
+			case s.Column != "":
+				fmt.Fprintf(&b, "%sa.cell(%s, %s).save(%s)\n", in, pyDict(s.Where), pyStr(s.Column), pyStr(s.Var))
 			case s.Field != "":
 				fmt.Fprintf(&b, "%sa.field(%s).save(%s)\n", in, pyStr(s.Field), pyStr(s.Var))
 			case s.JSON != "":
@@ -184,6 +189,21 @@ func GeneratePython(c Case, caseFile string) ([]byte, error) {
 
 func pyExpect(e Expect) string {
 	switch {
+	case e.Table != nil:
+		t := e.Table
+		w := pyDict(t.Where)
+		switch {
+		case t.Rows != nil:
+			return fmt.Sprintf("a.row_count(%s).equals(%q)", w, strconv.Itoa(*t.Rows))
+		case t.Column == "" && t.Exists != nil && !*t.Exists:
+			return "a.row_count(" + w + ").equals(\"0\")"
+		case t.Column == "":
+			return "a.row_count(" + w + ").greater(0)"
+		case t.Matches != "":
+			return "a.cell(" + w + ", " + pyStr(t.Column) + ").matches(" + pyStr(t.Matches) + ")"
+		}
+		x := pyExpect(Expect{Field: "\x00", Equals: t.Equals, NotEquals: t.NotEquals, Greater: t.Greater, Less: t.Less, Exists: t.Exists})
+		return "a.cell(" + w + ", " + pyStr(t.Column) + ")" + x[strings.Index(x, ")")+1:]
 	case e.Contains != "":
 		return "a.contains(" + pyStr(e.Contains) + ")"
 	case e.NotContains != "":

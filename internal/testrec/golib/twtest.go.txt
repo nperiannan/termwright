@@ -305,12 +305,23 @@ type Answer struct {
 	Status int    `json:"status"`
 	Ms     int64  `json:"ms"`
 	Error  string `json:"error"`
+	Table  struct {
+		Header []string   `json:"header"`
+		Rows   [][]string `json:"rows"`
+	} `json:"table"`
 }
 
 // Run sends a command on a saved session (prompt "" = its device type's).
 func (s *Step) Run(session, command, prompt string, timeout int) *Answer {
 	s.Helper()
 	return s.send(map[string]any{"run": map[string]any{"session": s.c.Fill(session), "command": s.c.Fill(command), "prompt": prompt}, "timeout": timeout})
+}
+
+// RunParsed sends a command and parses its output into a table with a TextFSM template ("auto": the
+// tests folder's templates/index entry for the device type and command).
+func (s *Step) RunParsed(session, command, prompt, parse string, timeout int) *Answer {
+	s.Helper()
+	return s.send(map[string]any{"run": map[string]any{"session": s.c.Fill(session), "command": s.c.Fill(command), "prompt": prompt, "parse": parse}, "timeout": timeout})
 }
 
 // HTTP sends a request.
@@ -426,7 +437,7 @@ func Endpoint() (string, string, error) {
 // Contains: the output has the text.
 func (a *Answer) Contains(text string) *Answer {
 	a.s.Helper()
-	if t := a.s.c.Fill(text); !strings.Contains(a.Output, t) {
+	if t := a.s.c.Fill(text); !hasText(a.Output, t) {
 		a.s.Errorf("expected the output to contain %q\n%s", t, a.Output)
 	}
 	return a
@@ -435,7 +446,7 @@ func (a *Answer) Contains(text string) *Answer {
 // NotContains: the output does not have the text.
 func (a *Answer) NotContains(text string) *Answer {
 	a.s.Helper()
-	if t := a.s.c.Fill(text); strings.Contains(a.Output, t) {
+	if t := a.s.c.Fill(text); hasText(a.Output, t) {
 		a.s.Errorf("expected the output not to contain %q", t)
 	}
 	return a
@@ -469,6 +480,48 @@ func (a *Answer) MaxMs(ms int64) *Answer {
 		a.s.Errorf("expected at most %d ms, took %d ms", ms, a.Ms)
 	}
 	return a
+}
+
+// rowsWhere: the parsed rows whose columns match where (exact, case-insensitive; "~regex" a pattern).
+func (a *Answer) rowsWhere(where map[string]string) []map[string]string {
+	var out []map[string]string
+	for _, r := range a.Table.Rows {
+		m := map[string]string{}
+		for i, h := range a.Table.Header {
+			if i < len(r) {
+				m[strings.ToUpper(h)] = r[i]
+			}
+		}
+		ok := true
+		for k, w := range where {
+			got, has := m[strings.ToUpper(k)]
+			w = a.s.c.Fill(w)
+			if strings.HasPrefix(w, "~") {
+				re, err := regexp.Compile(w[1:])
+				ok = ok && has && err == nil && re.MatchString(got)
+			} else {
+				ok = ok && has && strings.EqualFold(strings.TrimSpace(got), strings.TrimSpace(w))
+			}
+		}
+		if ok {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// Cell: a column of the first parsed row whose columns match where.
+func (a *Answer) Cell(where map[string]string, column string) *Value {
+	v := &Value{s: a.s, what: fmt.Sprintf("row %v → %s", where, column)}
+	if rs := a.rowsWhere(where); len(rs) > 0 {
+		v.Text, v.Found = rs[0][strings.ToUpper(column)]
+	}
+	return v
+}
+
+// RowCount: how many parsed rows match where.
+func (a *Answer) RowCount(where map[string]string) *Value {
+	return &Value{s: a.s, what: fmt.Sprintf("rows %v", where), Text: strconv.Itoa(len(a.rowsWhere(where))), Found: true}
 }
 
 // Field: the first group of the regular expression (else the match) in the output.
@@ -533,6 +586,16 @@ func (v *Value) num() (float64, error) {
 func (v *Value) Save(name string) *Value {
 	if v.Found {
 		v.s.c.Vars[name] = v.Text
+	}
+	return v
+}
+
+// Matches: the value matches a regular expression.
+func (v *Value) Matches(pattern string) *Value {
+	v.s.Helper()
+	re, err := regexp.Compile(v.s.c.Fill(pattern))
+	if err != nil || !v.Found || !re.MatchString(v.Text) {
+		v.s.Errorf("%s: expected to match %s, got %q", v.what, pattern, v.Text)
 	}
 	return v
 }
@@ -630,4 +693,15 @@ func jsonPath(doc any, path string) (any, bool) {
 		}
 	}
 	return cur, true
+}
+
+var spaceRun = regexp.MustCompile(`\s+`)
+
+// hasText: out contains t, spacing and line breaks not counted.
+func hasText(out, t string) bool {
+	if strings.Contains(out, t) {
+		return true
+	}
+	n := func(s string) string { return strings.TrimSpace(spaceRun.ReplaceAllString(s, " ")) }
+	return strings.Contains(n(out), n(t))
 }

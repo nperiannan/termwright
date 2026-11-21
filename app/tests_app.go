@@ -103,6 +103,9 @@ type TestRunRequest struct {
 	// "restore" (the configuration saved before the run is put back, the device may restart) or
 	// "factory" (the device type's factory-default commands; never on production sessions).
 	OnCleanupFail string `json:"onCleanupFail,omitempty"`
+	// Cleanup: "" (each test's cleanup steps), "off" (no cleanup: tests build on each other) or
+	// "auto" (the cleanup steps; without them the undo of the configuration commands that ran).
+	Cleanup string `json:"cleanup,omitempty"`
 	// Confirmed: the person agreed to run steps on production sessions.
 	Confirmed bool `json:"confirmed,omitempty"`
 }
@@ -153,7 +156,7 @@ func (a *App) runTests(ctx context.Context, r TestRunRequest, ask netAsker) (tes
 		return testrec.RunReport{}, errors.New("tests are already running")
 	}
 	defer testsRun.Unlock()
-	rep, err := f.RunFilesWith(ctx, r.Files, newTestDriver(a), r.Vars, testrec.RunOptions{OnCleanupFail: r.OnCleanupFail}, func(res testrec.Result) {
+	rep, err := f.RunFilesWith(ctx, r.Files, newTestDriver(a), r.Vars, testrec.RunOptions{OnCleanupFail: r.OnCleanupFail, Cleanup: r.Cleanup}, func(res testrec.Result) {
 		emitter{a}.Emit("tests:progress", res)
 	})
 	if err == nil || len(rep.Results) > 0 {
@@ -377,7 +380,7 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 		}
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 		defer cancel()
-		rep, err := a.runTests(ctx, TestRunRequest{Files: files, Vars: vars, Testbed: argStr(args, "testbed"), OnCleanupFail: argStr(args, "on_cleanup_fail")}, ask)
+		rep, err := a.runTests(ctx, TestRunRequest{Files: files, Vars: vars, Testbed: argStr(args, "testbed"), OnCleanupFail: argStr(args, "on_cleanup_fail"), Cleanup: argStr(args, "cleanup")}, ask)
 		if err != nil && len(rep.Results) == 0 {
 			return "", err
 		}

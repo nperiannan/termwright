@@ -16,7 +16,7 @@ import { UI_FONTS, UI_SIZES, uiFontStack } from '../core/ui-fonts';
 import { DEVICE_KINDS } from '../components/device-icon';
 
 interface DtPw { orig: string; pw: string; empty: boolean; state: string; forget: boolean; }
-type Page = 'general' | 'terminal' | 'schemes' | 'envs' | 'keywords' | 'keymap' | 'buttons' | 'updates' | 'devices' | 'alerts' | 'cards' | 'ai' | 'skills';
+type Page = 'general' | 'terminal' | 'schemes' | 'envs' | 'keywords' | 'keymap' | 'buttons' | 'updates' | 'devices' | 'alerts' | 'cards' | 'ai' | 'skills' | 'integrations';
 
 /** What Global Options can find: page, the text shown on the page, extra words people search for. */
 const SEARCH: [Page, string, string][] = [
@@ -41,7 +41,7 @@ const SEARCH: [Page, string, string][] = [
   ['updates', 'Notify me about', 'update stable nightly'], ['updates', 'Check at start-up', 'update automatic'], ['updates', 'Repository', 'github'],
 ];
 const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Terminal & Appearance', schemes: 'Color Schemes', envs: 'Environments', keywords: 'Keyword Highlighting',
-  keymap: 'Key Map', buttons: 'Button Bar', devices: 'Device Types', alerts: 'Alerts', cards: 'Smart Cards', updates: 'Updates', ai: 'AI Assistant', skills: 'Instructions & Skills' };
+  keymap: 'Key Map', buttons: 'Button Bar', devices: 'Device Types', alerts: 'Alerts', cards: 'Smart Cards', updates: 'Updates', ai: 'AI Assistant', integrations: 'Integrations', skills: 'Instructions & Skills' };
 
 /** Global Options dialog. */
 @Component({
@@ -73,6 +73,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
           <a [class.on]="page() === 'alerts'" (click)="page.set('alerts')"><app-icon name="bell" [size]="15" />Alerts</a>
           <a [class.on]="page() === 'ai'" (click)="page.set('ai'); loadAI()"><app-icon name="sparkles" [size]="15" />AI Assistant</a>
           <a class="sub" [class.on]="page() === 'skills'" (click)="page.set('skills'); loadSkills()"><app-icon name="checklist" [size]="15" />Instructions &amp; Skills</a>
+          <a [class.on]="page() === 'integrations'" (click)="page.set('integrations'); loadInteg()"><app-icon name="connect" [size]="15" />Integrations</a>
           <div class="cat-g">System</div>
           <a [class.on]="page() === 'cards'" (click)="page.set('cards'); loadCards()"><app-icon name="card" [size]="15" />Smart Cards</a>
           <a [class.on]="page() === 'updates'" (click)="page.set('updates')"><app-icon name="down" [size]="15" />Updates</a>
@@ -642,6 +643,43 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 <div class="gf">For test frameworks and CI on this computer: a new random key each time Termwright starts, kept with the address in {{ mcp()?.keyFile || 'mcp.json in the data folder' }}. Changes made through it are not asked first and show as API in the Events.</div>
               </div>
             }
+            @case ('integrations') {
+              @if (integ(); as g) {
+                @for (k of integKinds; track k.k) {
+                  <div class="glist">
+                    <div class="gt">{{ k.t }}</div>
+                    <div class="list">
+                      @switch (k.k) {
+                        @case ('qtest') {
+                          <div class="li"><span class="l">Address<small>qTest Manager site</small></span><input name="qtu" class="v" [(ngModel)]="g.qtest.baseUrl" placeholder="https://yourcompany.qtestnet.com" /></div>
+                          <div class="li"><span class="l">User name</span><input name="qtn" class="v" [(ngModel)]="g.qtest.user" autocomplete="off" /></div>
+                          <div class="li"><span class="l">Project id<small>a number, see Test connection</small></span><input name="qtp" class="v" type="number" min="0" [(ngModel)]="g.qtest.project" /></div>
+                          <div class="li"><span class="l">Test cycle id<small>where test runs are made; empty: the project</small></span><input name="qtc" class="v" type="number" min="0" [(ngModel)]="g.qtest.cycle" /></div>
+                          <div class="li"><span class="l">Send every run<small>without asking, also scheduled runs</small></span><input name="qta" type="checkbox" [(ngModel)]="g.qtest.auto" /></div>
+                        }
+                        @case ('jira') {
+                          <div class="li"><span class="l">Address<small>Jira Cloud or Data Center</small></span><input name="jiu" class="v" [(ngModel)]="g.jira.baseUrl" placeholder="https://yourcompany.atlassian.net" /></div>
+                          <div class="li"><span class="l">E-mail / user<small>Cloud: your e-mail; Data Center with a personal access token: empty</small></span><input name="jin" class="v" [(ngModel)]="g.jira.user" autocomplete="off" /></div>
+                          <div class="li"><span class="l">Project key</span><input name="jip" class="v" [(ngModel)]="g.jira.project" placeholder="NET" /></div>
+                          <div class="li"><span class="l">Issue type</span><input name="jit" class="v" [(ngModel)]="g.jira.issueType" placeholder="Bug" /></div>
+                          <div class="li"><span class="l">Defect for failures<small>open a defect for each failed test of a scheduled run</small></span><input name="jia" type="checkbox" [(ngModel)]="g.jira.auto" /></div>
+                        }
+                        @case ('git') {
+                          <div class="li"><span class="l">Host<small>the tests folder's remote, over HTTPS</small></span><input name="gih" class="v" [(ngModel)]="g.git.host" placeholder="github.com" /></div>
+                          <div class="li"><span class="l">User name</span><input name="giu" class="v" [(ngModel)]="g.git.user" autocomplete="off" /></div>
+                        }
+                      }
+                      <div class="li"><span class="l">Token<small>{{ integHas()[k.k] ? 'Saved in the OS keychain' : 'Kept in the OS keychain, never in the settings' }}</small></span>
+                        <input [name]="'tok' + k.k" class="v" type="password" autocomplete="off" [(ngModel)]="integTok[k.k]" [placeholder]="integHas()[k.k] ? '•••••••• (type to change)' : 'paste the token'" />
+                        <button type="button" (click)="saveIntegTok(k.k)" [disabled]="!integTok[k.k].trim()">Save Token</button>
+                        @if (integHas()[k.k]) { <button type="button" (click)="forgetIntegTok(k.k)">Forget</button> }</div>
+                      <div class="li"><span class="l"></span><button type="button" (click)="testInteg(k.k)">Test Connection</button><span class="hint">{{ integMsg()[k.k] }}</span></div>
+                    </div>
+                  </div>
+                }
+                <div class="hint">Addresses and user names are saved with the options; tokens only in the OS keychain - they are never shown, logged or put in a command line.</div>
+              }
+            }
             @case ('skills') {
               <div class="skp">
                 <div class="skh"><b>Instructions</b><span class="mut">followed in every AI chat - your team's rules, naming, change windows. Folders (Folder Defaults) and device types (Device Types) can add their own.</span>
@@ -1167,6 +1205,28 @@ export class OptionsDialog implements OnInit {
   }
   readonly aiMsg = signal('');
   aiKey = '';
+  readonly integKinds = [{ k: 'qtest', t: 'qTest - test results' }, { k: 'jira', t: 'Jira / Atlassian - defects' }, { k: 'git', t: 'Git host - the tests folder' }];
+  readonly integHas = signal<Record<string, boolean>>({});
+  readonly integMsg = signal<Record<string, string>>({});
+  integTok: Record<string, string> = { qtest: '', jira: '', git: '' };
+  /** The settings' integrations (created when missing, so the fields can bind). */
+  integ() {
+    if (!this.s) return null;
+    const g = (this.s.integrations ??= { qtest: {}, jira: {}, git: {} });
+    g.qtest ??= {}; g.jira ??= {}; g.git ??= {};
+    return g;
+  }
+  loadInteg() { void this.backend.integrationTokens().then(m => this.integHas.set(m ?? {})).catch(() => {}); }
+  async saveIntegTok(k: string) {
+    try { await this.backend.integrationSetToken(k, this.integTok[k]); this.integTok[k] = ''; this.integMsg.update(m => ({ ...m, [k]: tr('The token is saved in the OS keychain.') })); this.loadInteg(); }
+    catch (e) { this.integMsg.update(m => ({ ...m, [k]: errText(e) })); }
+  }
+  async forgetIntegTok(k: string) { await this.backend.integrationSetToken(k, '').catch(() => {}); this.loadInteg(); }
+  async testInteg(k: string) {
+    this.integMsg.update(m => ({ ...m, [k]: tr('Checking…') }));
+    try { const r = await this.backend.integrationTest(k, this.integ() ?? undefined); this.integMsg.update(m => ({ ...m, [k]: '✓ ' + r })); }
+    catch (e) { this.integMsg.update(m => ({ ...m, [k]: '✗ ' + errText(e) })); }
+  }
   loadAI() {
     void this.backend.aiState().then(x => this.aiSt.set(x)).catch(() => {});
     void this.backend.mcpState().then(x => this.mcp.set(x)).catch(() => {});

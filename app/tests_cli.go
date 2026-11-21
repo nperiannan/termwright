@@ -25,11 +25,14 @@ const testsCLIHelp = `termwright tests - Termwright tests without the window (fo
 
   termwright tests run [files or folders…] [--testbed lab.yaml] [--var name=value]… [--folder dir]
                        [--junit junit.xml] [--production] [--on-cleanup-failure stop|restore|factory]
+                       [--cleanup steps|off|auto]
       Runs tests (default: all) with Termwright's sessions, saved logins and device types, prints
       pass/fail per step and exits 1 when a test failed. --production lets tests use production
       sessions (refused otherwise). When a test's cleanup fails the run stops and the remaining
       tests are skipped, unless --on-cleanup-failure restore (put back the configuration saved before
       the run; the device may restart) or factory (the device type's factory-default commands).
+      --cleanup off runs no cleanups (tests build on what earlier ones configured); auto runs the
+      cleanup steps and, for a test without them, the undo of the configuration commands that ran.
 
   termwright tests serve [--listen 127.0.0.1:8765] [--folder dir]
       Starts only the local API, so the generated Go, Python and TCL tests run on this computer
@@ -56,6 +59,7 @@ func testsCLIMain(args []string) int {
 	listen := fs.String("listen", "127.0.0.1:0", "serve: address to listen on")
 	prod := fs.Bool("production", false, "run: allow production sessions")
 	onFail := fs.String("on-cleanup-failure", "stop", "run: stop, restore or factory")
+	cleanup := fs.String("cleanup", "steps", "run: steps, off or auto")
 	vars := map[string]string{}
 	fs.Func("var", "name=value for {{name}} (repeatable)", func(s string) error {
 		k, v, ok := strings.Cut(s, "=")
@@ -94,7 +98,7 @@ func testsCLIMain(args []string) int {
 	}
 	switch args[0] {
 	case "run":
-		return a.testsCLIRun(f, files, *testbed, vars, *junit, *prod, *onFail)
+		return a.testsCLIRun(f, files, *testbed, vars, *junit, *prod, *onFail, strings.TrimPrefix(*cleanup, "steps"))
 	case "serve":
 		return a.testsCLIServe(*listen)
 	case "secrets":
@@ -131,10 +135,10 @@ func relFiles(f testrec.Folder, in []string) []string {
 	return out
 }
 
-func (a *App) testsCLIRun(f testrec.Folder, files []string, testbed string, vars map[string]string, junit string, prod bool, onFail string) int {
+func (a *App) testsCLIRun(f testrec.Folder, files []string, testbed string, vars map[string]string, junit string, prod bool, onFail, cleanup string) int {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	req := TestRunRequest{Files: relFiles(f, files), Vars: vars, Testbed: testbed, Confirmed: prod, OnCleanupFail: onFail}
+	req := TestRunRequest{Files: relFiles(f, files), Vars: vars, Testbed: testbed, Confirmed: prod, OnCleanupFail: onFail, Cleanup: cleanup}
 	rep, err := a.runTests(ctx, req, nil)
 	if err != nil && len(rep.Results) == 0 {
 		fmt.Fprintln(os.Stderr, err)

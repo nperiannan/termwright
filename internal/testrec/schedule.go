@@ -25,6 +25,8 @@ type Schedule struct {
 	Hours int `json:"hours,omitempty"`
 	// OnCleanupFail: stop (default), restore or factory - see TestRunRequest.
 	OnCleanupFail string `json:"onCleanupFail,omitempty"`
+	// Cleanup: "" (steps), "off" or "auto" - see RunOptions.
+	Cleanup string `json:"cleanup,omitempty"`
 	// Production: the tests may use production sessions (otherwise such a run is refused).
 	Production bool `json:"production,omitempty"`
 	// Off: kept but not run.

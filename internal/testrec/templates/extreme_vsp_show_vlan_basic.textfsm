@@ -1,0 +1,12 @@
+# VOSS: show vlan basic (a starting point - check it against your release's output)
+Value VLAN_ID (\d+)
+Value NAME (\S+)
+Value TYPE (\S+)
+Value INST_ID (\S+)
+Value PROTOCOL_ID (\S+)
+Value SUBNET (\S+)
+Value MASK (\S+)
+Value VRF (\S+)
+
+Start
+  ^${VLAN_ID}\s+${NAME}\s+${TYPE}\s+${INST_ID}\s+${PROTOCOL_ID}\s+${SUBNET}\s+${MASK}\s+${VRF}\s*$$ -> Record

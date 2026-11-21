@@ -273,3 +273,13 @@ func (d *testDriver) waitUp(ctx context.Context, path string, limit time.Duratio
 	}
 	return fmt.Errorf("it did not log in again within %s: %v", limit, last)
 }
+
+// UndoOf: the command that undoes a configuration command (the session's device type's undo rules).
+func (d *testDriver) UndoOf(path, cmd string) string {
+	s, err := d.a.store.Get(path)
+	if err != nil || s.DeviceType == "" {
+		return ""
+	}
+	dt, _ := d.a.deviceTypeNamed(s.DeviceType)
+	return session.UndoOf(dt.Undo(), cmd)
+}

@@ -4,13 +4,13 @@ import { Backend, errText } from './backend';
 import { Ui } from './ui.service';
 import { tr } from './i18n';
 import { SECRET } from './history.service';
-import { TestCase, TestExpect, TestStep } from './models';
+import { TestCase, TestExpect, TestStep, TestTable } from './models';
 
 /** A recorded step; for a terminal step the marker on its command line finds its output later. */
 export type RecPhase = 'setup' | 'steps' | 'cleanup';
 /** A recorded step; for a terminal step the marker on its command line finds its output later. undo: the
  *  suggested cleanup step (from the device type's undo rules, a POST's DELETE or an SNMP set's old value). */
-export interface RecStep { step: TestStep; phase: RecPhase; undo?: TestStep; undone?: boolean; tab?: string; term?: Terminal; marker?: IMarker; output?: string; status?: number; ms?: number; }
+export interface RecStep { table?: TestTable; step: TestStep; phase: RecPhase; undo?: TestStep; undone?: boolean; tab?: string; term?: Terminal; marker?: IMarker; output?: string; status?: number; ms?: number; }
 
 export type ExpectKind = 'contains' | 'field' | 'matches' | 'notContains' | 'save';
 
@@ -231,6 +231,23 @@ export class Recorder {
       if (res.length >= 3) break;
     }
     return res;
+  }
+  /** Parses a command step's output with a template (the device type's, from templates/index). */
+  async parseStep(i: number) {
+    const s = this.steps()[i];
+    if (!s?.step.run) return;
+    const out = this.output(s);
+    try {
+      const table = await this.backend.testParse(s.step.run.session, s.step.run.command, 'auto', out);
+      this.steps.update(l => l.map((x, j) => j === i ? { ...x, table, step: { ...x.step, run: { ...x.step.run!, parse: 'auto' } } } : x));
+    } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  /** A check on a parsed value: the row picked by its first column. */
+  addCellCheck(i: number, row: string[], col: number) {
+    const t = this.steps()[i]?.table;
+    if (!t) return;
+    const where = { [t.header[0]]: row[0] };
+    this.addSuggested(i, { table: col === 0 ? { where } : { where, column: t.header[col], equals: row[col] } });
   }
   addSuggested(i: number, e: TestExpect) { this.steps.update(l => l.map((x, j) => j === i ? { ...x, step: { ...x.step, expect: [...(x.step.expect ?? []), e] } } : x)); }
 

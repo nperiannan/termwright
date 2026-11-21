@@ -3,6 +3,7 @@ package testrec
 import (
 	"context"
 	"errors"
+	"github.com/termwright/termwright/internal/textfsm"
 	"os"
 	"path/filepath"
 	"slices"
@@ -24,6 +25,8 @@ func (f *fake) Command(_ context.Context, session, cmd, _ string) (string, error
 		return "ExtremeXOS version 32.6.1.4\nUptime: 3 days\n", nil
 	case "show vlan 42":
 		return "VLAN Interface with name v42 created by user\n", nil
+	case "show vlan":
+		return "1 active\n200 active\n300 suspended\n", nil
 	}
 	return "", errors.New("no answer")
 }
@@ -411,4 +414,42 @@ func TestRemoveRename(t *testing.T) {
 func fileThere(f Folder, rel string) bool {
 	_, err := os.Stat(filepath.Join(f.Root, rel))
 	return err == nil
+}
+
+func (f *fake) ParseOutput(_, _, tpl, out string) (*textfsm.Table, error) {
+	t, err := textfsm.Parse("Value ID (\\d+)\nValue STATE (\\S+)\n\nStart\n  ^${ID}\\s+${STATE} -> Record\n")
+	if err != nil {
+		return nil, err
+	}
+	tab, err := t.Run(out)
+	return &tab, err
+}
+
+func TestHasTextSpacing(t *testing.T) {
+	out := "  IP Anycast:         Disabled\n  IPv4 Forwarding:    Disabled\n  Primary IP:          200.1.1.1/24\n"
+	if !HasText(out, "Primary IP: 200.1.1.1/24") || !HasText(out, "IP Anycast: Disabled IPv4 Forwarding: Disabled") || HasText(out, "Primary IP: 200.1.1.2") {
+		t.Fatal("spacing")
+	}
+}
+
+func (f *fake) UndoOf(_, cmd string) string {
+	if cmd == "show vlan 42" {
+		return "show version"
+	}
+	return ""
+}
+
+func TestCleanupModes(t *testing.T) {
+	c, _ := Parse([]byte("steps:\n  - run: {session: s, command: show vlan 42}\n  - run: {session: s, command: show version}\ncleanup: [{run: {session: s, command: show vlan}}]\n"))
+	f := &fake{}
+	r := RunWith(context.Background(), c, f, nil, RunOptions{Cleanup: CleanupOff})
+	if !r.Passed || len(f.sent) != 2 || !r.Steps[2].Skipped || r.Steps[2].Error == "" {
+		t.Fatal(f.sent, r.Steps)
+	}
+	f = &fake{}
+	c.Cleanup = nil
+	r = RunWith(context.Background(), c, f, nil, RunOptions{Cleanup: CleanupAuto})
+	if !r.Passed || len(f.sent) != 3 || f.sent[2] != "s: show version" || r.Steps[2].Name != "undo: show vlan 42" {
+		t.Fatal(f.sent, r.Steps)
+	}
 }

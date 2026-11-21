@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/termwright/termwright/internal/textfsm"
 	"regexp"
 	"sort"
 	"strconv"
@@ -80,6 +81,8 @@ type StepResult struct {
 	Rows []SNMPValue `json:"rows,omitempty"`
 	// Unchecked: it passed without checks - it ran, nothing was checked.
 	Unchecked bool `json:"unchecked,omitempty"`
+	// Table: the parsed output (steps with parse).
+	Table *textfsm.Table `json:"table,omitempty"`
 	// Checks: one per expect.
 	Checks []CheckResult `json:"checks,omitempty"`
 }
@@ -108,6 +111,27 @@ type CaseEnder interface{ EndCase() }
 
 // Run runs a case. vars win over the case's own.
 func Run(ctx context.Context, c Case, d Driver, vars map[string]string) Result {
+	return RunWith(ctx, c, d, vars, RunOptions{})
+}
+
+// Undoer gives the command that undoes a configuration command on a session (its device type's
+// undo rules; "" = none needed or unknown) - for RunOptions.Cleanup "auto".
+type Undoer interface {
+	UndoOf(session, command string) string
+}
+
+// Cleanup modes of RunOptions.
+const (
+	CleanupSteps = ""     // run each test's cleanup steps and restore (the default)
+	CleanupOff   = "off"  // no cleanup and no restore: the next test starts from what this one left
+	CleanupAuto  = "auto" // the cleanup steps; a test without them undoes the configuration commands that ran
+)
+
+// RunWith runs a case with run options (the cleanup mode).
+func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt RunOptions) Result {
+	if opt.Cleanup == CleanupOff {
+		c.Restore = nil
+	}
 	if e, ok := d.(CaseEnder); ok {
 		defer e.EndCase()
 	}
@@ -166,7 +190,16 @@ func Run(ctx context.Context, c Case, d Driver, vars map[string]string) Result {
 	}
 	run(c.Setup, "setup", false)
 	run(c.Steps, "", false)
-	run(c.Cleanup, "cleanup", true)
+	switch {
+	case opt.Cleanup == CleanupOff:
+		for i, st := range c.Cleanup {
+			r.Steps = append(r.Steps, StepResult{Name: Fill(stepName(st, i), v), Kind: stepKind(st), Phase: "cleanup", Skipped: true, Error: "cleanup is off for this run"})
+		}
+	case opt.Cleanup == CleanupAuto && len(c.Cleanup) == 0:
+		run(autoUndo(c, r.Steps, d, v), "cleanup", true)
+	default:
+		run(c.Cleanup, "cleanup", true)
+	}
 	if restore != nil {
 		rctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
@@ -183,6 +216,37 @@ func Run(ctx context.Context, c Case, d Driver, vars map[string]string) Result {
 	}
 	r.Ms = time.Since(r.Start).Milliseconds()
 	return r
+}
+
+// autoUndo: the undo of every configuration command of the test's setup and steps that ran without an
+// error, the last first.
+func autoUndo(c Case, done []StepResult, d Driver, v map[string]string) []Step {
+	u, ok := d.(Undoer)
+	if !ok {
+		return nil
+	}
+	var out []Step
+	ran := map[string]bool{}
+	for _, sr := range done {
+		if sr.Kind == "run" && !sr.Skipped && sr.Error == "" {
+			ran[sr.Target+"\x00"+sr.Sent] = true
+		}
+	}
+	for _, list := range [][]Step{c.Setup, c.Steps} {
+		for _, st := range list {
+			if st.Run == nil {
+				continue
+			}
+			s, cmd := Fill(st.Run.Session, v), Fill(st.Run.Command, v)
+			if !ran[s+"\x00"+cmd] {
+				continue
+			}
+			if x := u.UndoOf(s, cmd); x != "" {
+				out = append([]Step{{Name: "undo: " + cmd, Run: &RunStep{Session: s, Command: x}}}, out...)
+			}
+		}
+	}
+	return out
 }
 
 // Restorer is a Driver that can save the devices' state before a test and put it back after it
@@ -216,8 +280,13 @@ func Sessions(c Case, v map[string]string) []string {
 // RunParams runs a case once per Params entry (once when it has none); each result is named
 // "case [name=value …]". vars win over the params, which win over the case's own vars.
 func RunParams(ctx context.Context, c Case, d Driver, vars map[string]string) []Result {
+	return RunParamsWith(ctx, c, d, vars, RunOptions{})
+}
+
+// RunParamsWith is RunParams with run options.
+func RunParamsWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt RunOptions) []Result {
 	if len(c.Params) == 0 {
-		return []Result{Run(ctx, c, d, vars)}
+		return []Result{RunWith(ctx, c, d, vars, opt)}
 	}
 	var out []Result
 	for _, p := range c.Params {
@@ -228,7 +297,7 @@ func RunParams(ctx context.Context, c Case, d Driver, vars map[string]string) []
 		for k, x := range vars {
 			v[k] = x
 		}
-		r := Run(ctx, c, d, v)
+		r := RunWith(ctx, c, d, v, opt)
 		r.Case = c.Name + " " + ParamName(p)
 		out = append(out, r)
 		if ctx.Err() != nil {
@@ -324,6 +393,13 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 				err = fmt.Errorf("the device refused the command: %s", line)
 			}
 		}
+		if err == nil && st.Run.Parse != "" {
+			if p, ok := d.(Parser); ok {
+				sr.Table, err = p.ParseOutput(sr.Target, sr.Sent, st.Run.Parse, out)
+			} else {
+				err = errors.New("parse: this runner cannot parse output")
+			}
+		}
 	case st.HTTP != nil:
 		h := fillHTTP(*st.HTTP, v)
 		if h.Method == "" {
@@ -357,7 +433,12 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 	sr.Passed = true
 	sr.Unchecked = len(st.Expect) == 0
 	for _, e := range st.Expect {
-		c := check(e, out, sr.Status, sr.Ms, v, rows)
+		var c CheckResult
+		if e.Table != nil {
+			c = checkTable(*e.Table, sr.Table, v)
+		} else {
+			c = check(e, out, sr.Status, sr.Ms, v, rows)
+		}
 		sr.Checks = append(sr.Checks, c)
 		sr.Passed = sr.Passed && c.Passed
 	}
@@ -367,6 +448,12 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 			var r SNMPValue
 			r, ok = FindOID(rows, Fill(s.OID, v))
 			val = r.Display
+		}
+		if s.Column != "" {
+			ok = false
+			if rs := TableRows(sr.Table, s.Where, v); len(rs) > 0 {
+				val, ok = lookupCol(rs[0], s.Column)
+			}
 		}
 		if ok && s.Var != "" {
 			v[s.Var] = val
@@ -407,10 +494,12 @@ func check(e Expect, out string, status int, ms int64, v map[string]string, rows
 	switch {
 	case e.Contains != "":
 		t := Fill(e.Contains, v)
-		return CheckResult{What: fmt.Sprintf("contains %q", t), Passed: strings.Contains(out, t)}
+		ok := HasText(out, t)
+		return CheckResult{What: fmt.Sprintf("contains %q", t), Passed: ok, Got: map[bool]string{true: "", false: "not in the output"}[ok]}
 	case e.NotContains != "":
 		t := Fill(e.NotContains, v)
-		return CheckResult{What: fmt.Sprintf("does not contain %q", t), Passed: !strings.Contains(out, t)}
+		ok := !HasText(out, t)
+		return CheckResult{What: fmt.Sprintf("does not contain %q", t), Passed: ok, Got: map[bool]string{true: "", false: "it is in the output"}[ok]}
 	case e.Matches != "":
 		re, err := regexp.Compile(Fill(e.Matches, v))
 		if err != nil {
@@ -585,13 +674,15 @@ type StepAnswer struct {
 	Error string `json:"error,omitempty"`
 	// Rows: the values an SNMP step got.
 	Rows []SNMPValue `json:"rows,omitempty"`
+	// Table: the parsed output (run steps with parse).
+	Table *textfsm.Table `json:"table,omitempty"`
 }
 
 // RunOne runs one step's action (variables already filled in) without its checks - for the
 // generated tests, which send their steps to Termwright one by one.
 func RunOne(ctx context.Context, st Step, d Driver) StepAnswer {
 	sr := runStep(ctx, Step{Run: st.Run, HTTP: st.HTTP, SNMP: st.SNMP, Timeout: st.Timeout}, 0, d, map[string]string{})
-	return StepAnswer{Output: sr.Output, Status: sr.Status, Ms: sr.Ms, Error: sr.Error, Rows: sr.Rows}
+	return StepAnswer{Output: sr.Output, Status: sr.Status, Ms: sr.Ms, Error: sr.Error, Rows: sr.Rows, Table: sr.Table}
 }
 
 func actions(s Step) int {
@@ -667,4 +758,16 @@ func FindOID(rows []SNMPValue, oid string) (SNMPValue, bool) {
 		}
 	}
 	return SNMPValue{}, false
+}
+
+var spaceRun = regexp.MustCompile(`\s+`)
+
+// HasText: out contains t, with spacing and line breaks not counted (text selected over several
+// lines of a device's aligned output is still found: "Primary IP: 200.1.1.1/24").
+func HasText(out, t string) bool {
+	if strings.Contains(out, t) {
+		return true
+	}
+	n := func(s string) string { return strings.TrimSpace(spaceRun.ReplaceAllString(s, " ")) }
+	return strings.Contains(n(out), n(t))
 }

@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import type { TopoRequest, TopoResult, LayoutRequest, LayoutResult, TestCase, TestCaseInfo, TestRunReport, TestsTree, TestsGitInfo, TestSchedule, TestScheduleView } from './models';
+import type { TopoRequest, TopoResult, LayoutRequest, LayoutResult, TestCase, TestCaseInfo, TestRunReport, TestsTree, TestsGitInfo, TestSchedule, TestScheduleView, IntegrationsConfig, TestTable } from './models';
 import { EmuEngines, EmuHostNIC, EmuTrex,
   EmuServer, EmuServerView,
   AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange, SNMPRequest, SNMPResult, SNMPMibNode, SNMPModule, SNMPSecretState, SNMPTrapState, SNMPTrapsView, HSendRequest, HResponse, HCollection, HCollectionInfo, HRunRequest, HRunResult, HHistoryItem, HRequest, AISkill, HEnv, HVar, HHostCookies, SyslogSettings, SyslogState, SyslogMsg, SyslogRule, SyslogQuery, SyslogSendIn } from './models';
@@ -309,7 +309,8 @@ export class Backend {
   testsGit() { return this.call<TestsGitInfo>('TestsGit'); }
   testsOpen(rel: string) { return this.call<void>('TestsOpen', rel); }
   testsOpenInEditor(rel: string) { return this.call<void>('TestsOpenInEditor', rel); }
-  runTests(r: { files?: string[]; vars?: Record<string, string>; testbed?: string; confirmed?: boolean; onCleanupFail?: string }) { return this.call<TestRunReport>('RunTests', r); }
+  runTests(r: { files?: string[]; vars?: Record<string, string>; testbed?: string; confirmed?: boolean; onCleanupFail?: string; cleanup?: string }) { return this.call<TestRunReport>('RunTests', r); }
+  testParse(session: string, command: string, template: string, output: string) { return this.call<TestTable>('TestParse', session, command, template, output); }
   testRemove(file: string) { return this.call<string>('TestRemove', file); }
   testRename(file: string, to: string, copy: boolean) { return this.call<string>('TestRename', file, to, copy); }
   testGenerateGo(file: string) { return this.call<string>('TestGenerateGo', file); }
@@ -491,6 +492,9 @@ export class Backend {
   mcpAddToDesktop() { return this.call<void>('MCPAddToDesktop'); }
   mcpAddToClaudeCode() { return this.call<string>('MCPAddToClaudeCode'); }
   aiState() { return this.call<AIStatus>('AIState'); }
+  integrationTokens() { return this.call<Record<string, boolean>>('IntegrationTokens'); }
+  integrationSetToken(kind: string, token: string) { return this.call<void>('IntegrationSetToken', kind, token); }
+  integrationTest(kind: string, cfg?: IntegrationsConfig) { return this.call<string>('IntegrationTest', kind, cfg ?? null); }
   aiSetKey(provider: string, key: string) { return this.call<void>('AISetKey', provider, key); }
   aiModels(s: AISettings) { return this.call<string[]>('AIModels', s); }
   /** The sections of this version's guides that match (for the AI assistant). */

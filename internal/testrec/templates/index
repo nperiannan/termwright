@@ -1,0 +1,10 @@
+# Which TextFSM template parses which command (the ntc-templates index format).
+# Template, Hostname, Platform, Command - Platform is the device type's platform (extreme_exos,
+# extreme_vsp, cisco_ios, cisco_nxos, huawei_vrp, ruckus_fastiron, ...); [[...]] may be left out.
+# The first matching line wins. Add your own templates and lines; ntc-templates files work here too.
+Template, Hostname, Platform, Command
+
+extreme_exos_show_vlan.textfsm, .*, extreme_exos, sh[[ow]] vl[[an]]
+extreme_vsp_show_vlan_basic.textfsm, .*, extreme_vsp, sh[[ow]] vl[[an]] b[[asic]]
+cisco_ios_show_vlan_brief.textfsm, .*, cisco_ios, sh[[ow]] vl[[an]] br[[ief]]
+cisco_ios_show_interfaces_status.textfsm, .*, cisco_ios|cisco_nxos, sh[[ow]] int[[erfaces]] st[[atus]]
