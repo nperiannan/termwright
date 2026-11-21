@@ -107,7 +107,7 @@ func Run(ctx context.Context, c Case, d Driver, vars map[string]string) Result {
 	failed := false
 	for i, st := range c.Steps {
 		if failed || ctx.Err() != nil {
-			r.Steps = append(r.Steps, StepResult{Name: stepName(st, i), Kind: stepKind(st), Skipped: true})
+			r.Steps = append(r.Steps, StepResult{Name: Fill(stepName(st, i), v), Kind: stepKind(st), Skipped: true})
 			continue
 		}
 		sr := runStep(ctx, st, i, d, v)

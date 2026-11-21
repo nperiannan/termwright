@@ -22,7 +22,7 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
       @for (s of rec.steps(); track $index; let i = $index) {
         <div class="st">
           <div class="top"><b>{{ i + 1 }}</b>
-            <span class="tg">{{ target(s.step) }} ›</span><span class="cmd">{{ sent(s.step) }}</span>
+            <span class="tg" [title]="target(s.step)">{{ short(target(s.step)) }} ›</span><span class="cmd">{{ sent(s.step) }}</span>
             <span class="sp"></span>
             <button type="button" class="ic" (click)="rec.moveStep(i, -1)" [disabled]="i === 0" title="Move up">↑</button>
             <button type="button" class="ic" (click)="rec.removeStep(i)" title="Remove the step">✕</button>
@@ -63,7 +63,7 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
     .nm { height: 30px; } .hint, .mut { color: var(--muted); font-size: 12px; line-height: 1.45; }
     .list { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
     .st { border: 1px solid var(--border); border-radius: 8px; padding: 7px 8px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
-    .top { width: 100%; } .top b { margin-right: 2px; } .tg { color: var(--muted); white-space: nowrap; } .cmd { font-family: var(--mono, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .top { width: 100%; } .top b { margin-right: 2px; } .tg { color: var(--muted); white-space: nowrap; flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; } .cmd { font-family: var(--mono, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .ic { padding: 0 6px; height: 22px; } .chip { font-size: 11.5px; padding: 1px 4px 1px 8px; border-radius: 10px; background: color-mix(in srgb, var(--ok, #4ec07a) 15%, transparent); color: var(--ok, #4ec07a); display: inline-flex; gap: 4px; align-items: center; max-width: 100%; overflow: hidden; }
     .chip.var { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); } .chip button { border: 0; background: none; color: inherit; padding: 0 3px; cursor: pointer; }
     .lnk { border: 0; background: none; color: var(--accent); padding: 0; cursor: pointer; font-size: 12px; }
@@ -80,6 +80,8 @@ export class RecorderPanel {
 
   target(s: TestStep) { return s.run?.session ?? s.http?.session ?? s.snmp?.session ?? ''; }
   sent(s: TestStep) { return stepText(s); }
+  /** The session's name (the last part of its path); the full path is the tooltip. */
+  short(p: string) { return p.split('/').pop() ?? p; }
   kinds(s: TestStep): { v: AddKind; l: string }[] {
     const k: { v: AddKind; l: string }[] = [{ v: 'contains', l: 'Contains' }, { v: 'notContains', l: 'Does not contain' }, { v: 'matches', l: 'Matches (regular expression)' }, { v: 'field', l: 'Field (regular expression with a group)' }];
     if (s.snmp) return [{ v: 'oid', l: 'SNMP value (name or OID)' }, ...k];

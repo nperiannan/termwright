@@ -1466,6 +1466,8 @@ Termwright receives syslog from your devices while it runs, so you do not need a
 
 ## 9f. Tests: record, run and generate code
 
+> A step-by-step walk-through with pictures - record, run, report, schedule, AI - is in [TESTS_GUIDE.md](TESTS_GUIDE.md).
+
 Termwright can turn manual testing into repeatable tests, the way record-and-replay test tools do: you work as usual, mark what must be true, and Termwright saves a test you can run again on any testbed - from Termwright, from the AI assistant, from CI, or as plain Go code.
 
 ### Recording a test

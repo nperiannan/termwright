@@ -123,6 +123,8 @@ And much more - see the [feature list](docs/FEATURES.md).
 
 ![Tests tab](docs/screenshots/tests.png)
 
+Step by step with pictures: [Testing with Termwright](docs/TESTS_GUIDE.md).
+
 ## SNMP, syslog and REST API
 
 - **SNMP Browser**: v1, v2c and v3 against saved sessions, a MIB tree with the standard MIBs built in and vendor MIBs loaded from files, Walk, Table, Compare, Poll with a live chart, Set, Send Trap, and a trap receiver
