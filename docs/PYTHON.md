@@ -112,6 +112,8 @@ steps:
 print(lab.tests.run("cases/smoke/version.yaml", vars={"vlan": "42"}))  # pass/fail per step, report path
 print(lab.tests.run())          # all tests
 print(lab.tests.run("suites/nightly.yaml", tags=["smoke", "!slow"], cleanup="off"))
+print(lab.tests.run("smoke", rerun=2, test_timeout=300, run_timeout=3600))  # flaky tests, time limits
+print(lab.tests.book("testbeds/lab-a.yaml", end="2026-12-01 18:00", why="upgrade"))  # bookings(), unbook(id)
 print(lab.tests.run("cases/smoke/version.yaml", step_only=3))   # debug one step (step_from=3: from there on)
 print(lab.tests.run(testbeds=["testbeds/lab-a.yaml", "testbeds/lab-b.yaml"]))  # at the same time
 print(lab.tests.history("cases/smoke/version.yaml"))   # pass rate, flips, per software version

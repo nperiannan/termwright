@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/termwright/termwright/internal/integrations"
 	"os"
 	"path/filepath"
 	"strings"
@@ -170,7 +171,7 @@ func (a *App) testsScheduler(ctx context.Context) {
 func (a *App) runSchedule(ctx context.Context, s testrec.Schedule) bool {
 	rctx, cancel := context.WithTimeout(ctx, 6*time.Hour)
 	defer cancel()
-	rep, err := a.runTests(rctx, TestRunRequest{Files: s.Files, Testbed: s.Testbed, Confirmed: s.Production, OnCleanupFail: s.OnCleanupFail, Cleanup: s.Cleanup, Tags: s.Tags, scheduled: true}, nil)
+	rep, err := a.runTests(rctx, TestRunRequest{Files: s.Files, Testbed: s.Testbed, Confirmed: s.Production, OnCleanupFail: s.OnCleanupFail, Cleanup: s.Cleanup, Tags: s.Tags, Rerun: s.Rerun, RunTimeout: s.RunTimeout * 60, scheduled: true}, nil)
 	if err != nil && len(rep.Results) == 0 && strings.Contains(err.Error(), "already running") {
 		return false
 	}
@@ -181,6 +182,22 @@ func (a *App) runSchedule(ctx context.Context, s testrec.Schedule) bool {
 	a.schedSetState(s.ID, state)
 	emitter{a}.Emit("tests:schedule", s.ID)
 	a.afterRun(rep, true)
+	m := integrations.Message{Title: "Scheduled tests " + s.Name, Failed: state.Error != "" || rep.Failed > 0 || rep.Skipped > 0}
+	switch {
+	case state.Error != "":
+		m.Text = "did not run: " + state.Error
+	default:
+		m.Text = fmt.Sprintf("%d passed, %d failed, %d skipped (%s, testbed %s)", rep.Passed, rep.Failed, rep.Skipped, (time.Duration(rep.Ms) * time.Millisecond).Round(time.Second), orDash(s.Testbed))
+		for _, r := range rep.Results {
+			if !r.Passed && len(m.Lines) < 20 {
+				m.Lines = append(m.Lines, r.Case+": "+orDash(testrec.FirstProblem(r)))
+			}
+		}
+		if rep.Dir != "" {
+			m.Lines = append(m.Lines, "Report: "+rep.Dir)
+		}
+	}
+	a.notifyResults(m)
 	switch {
 	case state.Error != "":
 		emitter{a}.Emit("toast", map[string]string{"level": "error", "message": "Scheduled tests " + s.Name + ": " + state.Error})

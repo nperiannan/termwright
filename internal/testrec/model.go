@@ -10,6 +10,8 @@ type Case struct {
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
 	// Description: what it checks.
 	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+	// Timeout: at most this many seconds for the whole test (its cleanup still runs); 0 = the run's default.
+	Timeout int `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 	// Tags to pick tests by (smoke, snmp, vlan …).
 	Tags []string `yaml:"tags,omitempty" json:"tags,omitempty"`
 	// DependsOn: tests (files in cases/, or names) that must pass first; when one failed or was
@@ -88,6 +90,8 @@ type Step struct {
 	Call *CallStep `yaml:"call,omitempty" json:"call,omitempty"`
 	// Netconf: a NETCONF operation over SSH (get, get-config, edit-config or any rpc).
 	Netconf *NetconfStep `yaml:"netconf,omitempty" json:"netconf,omitempty"`
+	// Web: drive a browser with Playwright (open a page, click, fill, check text, screenshot).
+	Web *WebStep `yaml:"web,omitempty" json:"web,omitempty"`
 	// Sample: run the step several times; checks with agg (min, max, avg, delta, rate) look at all the
 	// values, the others at the last answer.
 	Sample *Sample `yaml:"sample,omitempty" json:"sample,omitempty"`

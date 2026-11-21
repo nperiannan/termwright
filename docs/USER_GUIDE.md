@@ -1578,6 +1578,14 @@ site:
 
 **+** next to **Testbeds** in the Tests tab writes one for you: give a session folder (for example the emulated lab's folder, or a site) and a name, and it gets a role for each saved session in it (`core-sw1` → `core_sw1: Lab/core-sw1`). A test recorded with *Sessions as roles* then runs on those devices when you pick the testbed. An existing testbed is never replaced.
 
+### Run control, notifications, trends, bookings and web steps
+
+- **Run control** (Run panel): rerun a failed test up to 3 times (a test that then passes is marked *flaky*), a test timeout and a run timeout in minutes. Schedules have them too.
+- **Notifications** (Options → Integrations): a Teams or chat webhook and/or e-mail for scheduled runs, API monitors and SNMP alarms - only on failures or always. **Send a Test** checks them.
+- **PDF report**: each run writes `report.pdf`; **PDF** in the run opens it. **📈 Trends** in Runs shows pass rates, the tests that fail most and results per software version.
+- **📅 Calendar** in Testbeds: book a testbed for a time; other people's runs ask first and their schedules are refused. Bookings are in `bookings.yaml` (share it with Git).
+- **Web steps**: + More → **Web Page (Playwright)** - click, type, check text and take screenshots on a web page; **Set Up Playwright** installs it once (Node.js needed).
+
 ### Go tests
 
 Saving a test also writes it as a Go test next to it (`cases/vlan/vlan-42_test.go`): one subtest per step, checks as plain calls, for example ``a.Field(`Admin\s+State:\s*(\S+)`).Equals("Enabled")``. Termwright also writes `go.mod` (module `termwright-tests`) and `lib/twtest`, a small helper that uses only Go's standard library. Edit the YAML, not the Go file - it is written again on every save; files you add to `lib/` yourself are never replaced.

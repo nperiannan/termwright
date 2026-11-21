@@ -151,6 +151,7 @@ export interface IntegrationsConfig {
   qtest: { baseUrl?: string; user?: string; project?: number; cycle?: number; auto?: boolean };
   jira: { baseUrl?: string; user?: string; project?: string; issueType?: string; auto?: boolean };
   git: { host?: string; user?: string };
+  notify: { webhook?: boolean; smtpHost?: string; smtpPort?: number; smtpUser?: string; from?: string; to?: string[]; when?: string };
 }
 export interface Settings {
   integrations?: IntegrationsConfig;
@@ -592,6 +593,7 @@ export interface TestTableExpect { where?: Record<string, string>; column?: stri
 export interface TestTable { header: string[]; rows: string[][]; }
 export interface TestStep {
   call?: { proc: string; with?: Record<string, string> };
+  web?: TestWeb;
   netconf?: { session: string; op?: string; source?: string; target?: string; filter?: string; config?: string; rpc?: string; port?: number };
   sample?: { count: number; interval?: number };
   name?: string; run?: { session: string; command: string; prompt?: string; parse?: string };
@@ -604,9 +606,9 @@ export interface TestCase { data?: string; qtest?: { testCase: string }; name?: 
 export interface TestCaseInfo { file: string; name: string; description?: string; tags?: string[]; steps: number; error?: string; }
 export interface TestCheckResult { what: string; passed: boolean; got?: string; }
 export interface TestStepResult { vars?: Record<string, string>; name: string; kind: string; phase?: '' | 'setup' | 'cleanup' | 'restore'; target?: string; sent?: string; status?: number; output?: string; ms: number; passed: boolean; skipped?: boolean; unchecked?: boolean; error?: string; checks?: TestCheckResult[]; table?: TestTable; expected?: string; }
-export interface TestResult { case: string; file?: string; start: string; ms: number; passed: boolean; skipped?: boolean; cleanupFailed?: boolean; log?: string; qtestRun?: string; defect?: string; defectUrl?: string; versions?: Record<string, string>; error?: string; steps: TestStepResult[]; }
+export interface TestResult { case: string; file?: string; start: string; ms: number; passed: boolean; skipped?: boolean; cleanupFailed?: boolean; log?: string; qtestRun?: string; defect?: string; defectUrl?: string; versions?: Record<string, string>; error?: string; attempts?: number; flaky?: boolean; steps: TestStepResult[]; }
 export interface TestsTree { root: string; cases: TestCaseInfo[]; testbeds: string[]; reports: { dir: string; passed: number; failed: number; ms: number; skipped?: number; testbed?: string }[]; lib?: string[]; templates?: string[]; suites?: { file: string; name: string; tests: number; error?: string }[]; locks?: { testbed: string; user: string; host: string; since: string; mine?: boolean }[]; }
-export interface TestSchedule { id: string; name: string; files?: string[]; testbed?: string; repeat: 'daily' | 'weekdays' | 'weekly' | 'hours'; at?: string; day?: number; hours?: number; production?: boolean; off?: boolean; onCleanupFail?: OnCleanupFail; cleanup?: CleanupMode; tags?: string[]; }
+export interface TestSchedule { id: string; name: string; files?: string[]; testbed?: string; repeat: 'daily' | 'weekdays' | 'weekly' | 'hours'; at?: string; day?: number; hours?: number; production?: boolean; off?: boolean; onCleanupFail?: OnCleanupFail; cleanup?: CleanupMode; tags?: string[]; rerun?: number; runTimeout?: number; }
 export interface TestScheduleView extends TestSchedule { state: { last: string; passed: number; failed: number; dir?: string; error?: string }; next?: string; when: string; }
 export interface TestsGitInfo { repo: boolean; branch?: string; changed: number; upstream?: boolean; ahead?: number; behind?: number; hasGo: boolean; hasGit: boolean; }
 export type CleanupMode = '' | 'off' | 'auto';
@@ -635,3 +637,9 @@ export interface SNMPSimState { running: boolean; address?: string; community?: 
 export interface TestProc { name?: string; description?: string; params?: string[]; steps: TestStep[]; }
 export interface TestProcInfo { file: string; name: string; description?: string; params?: string[]; steps: number; error?: string; }
 export interface TemplateSpec { kind: 'table' | 'fields'; header?: string; columns?: { name: string; spaces?: boolean; match?: string }[]; fields?: { name: string; label: string }[]; }
+
+export interface TestTrends { runs: { dir: string; at: string; passed: number; failed: number; skipped: number; flaky: number; ms: number; testbed?: string; version?: string }[]; tests: { file: string; case: string; runs: number; failures: number; flips: number; flaky: number; last?: string }[]; versions: { version: string; passed: number; total: number }[]; }
+export interface TestBooking { id: string; testbed: string; from: string; to: string; who: string; why?: string; mine?: boolean; }
+export interface TestWebAction { do: string; target?: string; value?: string; }
+export interface TestWeb { url?: string; browser?: string; show?: boolean; insecure?: boolean; actions?: TestWebAction[]; }
+export interface WebStatus { node?: string; version?: string; ready: boolean; dir: string; hint?: string; }

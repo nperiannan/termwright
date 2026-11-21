@@ -597,6 +597,8 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
     pre.json ::ng-deep .k { color: #60a5fa; } pre.json ::ng-deep .s { color: #34d399; } pre.json ::ng-deep .n { color: #f59e0b; } pre.json ::ng-deep .b { color: #c084fc; }
     .mono-btn { display: inline-flex; align-items: center; justify-content: center; padding: 3px 6px; color: var(--muted); }
     .mono-btn.on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+    :host-context(.light) pre.json ::ng-deep .k { color: #1d4ed8; } :host-context(.light) pre.json ::ng-deep .s { color: #047857; } :host-context(.light) pre.json ::ng-deep .n { color: #b45309; } :host-context(.light) pre.json ::ng-deep .b { color: #7e22ce; }
+    :host-context(.light) .m.POST, :host-context(.light) .meth.m-POST ::ng-deep input { color: #b45309; } :host-context(.light) .m.PUT, :host-context(.light) .meth.m-PUT ::ng-deep input { color: #1d4ed8; } :host-context(.light) .m.PATCH, :host-context(.light) .meth.m-PATCH ::ng-deep input { color: #7e22ce; }
     pre.out.mono, pre.json.mono ::ng-deep span { color: #fff !important; }
     :host-context(.light) pre.out.mono, :host-context(.light) pre.json.mono ::ng-deep span { color: #000 !important; }
     .err { margin: 10px 12px; padding: 8px 10px; border-radius: var(--r); background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); white-space: pre-wrap; }

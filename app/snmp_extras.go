@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/termwright/termwright/internal/integrations"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -400,6 +401,7 @@ func (a *App) dashValue(d config.SNMPDashboard, i int, r SNMPRow, now time.Time)
 	label := orDefault(it.Label, it.OID)
 	if v.Alarm != "" && was == "" {
 		_ = a.Notify("SNMP alarm: "+d.Name, label+" on "+it.Session+" "+v.Alarm)
+		a.notifyResults(integrations.Message{Title: "SNMP alarm: " + d.Name, Text: label + " on " + it.Session + " " + v.Alarm, Failed: true})
 		if a.ctx != nil {
 			wruntime.EventsEmit(a.ctx, "snmp:alarm", map[string]string{"dashboard": d.Name, "item": label, "session": it.Session, "alarm": v.Alarm})
 		}

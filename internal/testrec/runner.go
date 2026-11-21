@@ -65,6 +65,10 @@ type Result struct {
 	// CleanupFailed: a cleanup step (or the restore) failed - the device may not be clean; the case
 	// failed because of its cleanup.
 	CleanupFailed bool `json:"cleanupFailed,omitempty"`
+	// Attempts: how many times it ran (more than 1: it was run again after failing); Flaky: it failed,
+	// then passed when run again.
+	Attempts int  `json:"attempts,omitempty"`
+	Flaky    bool `json:"flaky,omitempty"`
 	// Skipped: the case did not run (Error says why: an earlier cleanup failed).
 	Skipped bool `json:"skipped,omitempty"`
 	// Error: why the case could not run at all (a bad file).
@@ -152,9 +156,23 @@ const (
 )
 
 // RunWith runs a case with run options (the cleanup mode).
-func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt RunOptions) Result {
+func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt RunOptions) (res Result) {
 	if opt.Cleanup == CleanupOff {
 		c.Restore = nil
+	}
+	if to := c.Timeout; to > 0 || opt.CaseTimeout > 0 {
+		if to <= 0 {
+			to = opt.CaseTimeout
+		}
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(to)*time.Second)
+		defer cancel()
+		defer func() {
+			if ctx.Err() == context.DeadlineExceeded {
+				res.Passed = false
+				res.Error = strings.TrimSpace(fmt.Sprintf("the test took longer than %d s: stopped (its cleanup ran) %s", to, res.Error))
+			}
+		}()
 	}
 	if e, ok := d.(CaseEnder); ok {
 		defer e.EndCase()
@@ -536,6 +554,9 @@ func stepKind(s Step) string {
 	if s.Netconf != nil {
 		return "netconf"
 	}
+	if s.Web != nil {
+		return "web"
+	}
 	if s.Call != nil {
 		return "call"
 	}
@@ -564,6 +585,8 @@ func stepName(s Step, i int) string {
 		return "call " + s.Call.Proc
 	case s.Netconf != nil:
 		return NetconfText(*s.Netconf)
+	case s.Web != nil:
+		return WebText(*s.Web)
 	case actions(s) == 0 && s.Wait > 0:
 		return fmt.Sprintf("wait %g s", s.Wait)
 	case s.Run != nil:
@@ -660,6 +683,14 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 			out, err = nd.Netconf(sctx, nc)
 		} else {
 			err = errors.New("this runner cannot send NETCONF")
+		}
+	case st.Web != nil:
+		w := fillWeb(*st.Web, v)
+		sr.Target, sr.Sent = "browser", WebText(w)
+		if wd, ok := d.(WebDriver); ok {
+			out, err = wd.Web(sctx, w)
+		} else {
+			err = errors.New("this runner cannot drive a browser")
 		}
 	case st.Call != nil:
 		err = fmt.Errorf("procedure %s was not expanded (run the test from its tests folder)", st.Call.Proc)
@@ -768,7 +799,7 @@ func check(e Expect, out string, status int, ms int64, v map[string]string, rows
 		sch, name := e.Schema, "the schema"
 		if !strings.HasPrefix(strings.TrimSpace(sch), "{") {
 			name = sch
-			b, err := os.ReadFile(filepath.Join(schemaRoot.Load().(string), filepath.Clean("/" + sch)))
+			b, err := os.ReadFile(filepath.Join(schemaRoot.Load().(string), filepath.Clean("/"+sch)))
 			if err != nil {
 				return CheckResult{What: "fits " + name, Got: err.Error()}
 			}
@@ -956,7 +987,7 @@ type StepAnswer struct {
 // RunOne runs one step's action (variables already filled in) without its checks - for the
 // generated tests, which send their steps to Termwright one by one.
 func RunOne(ctx context.Context, st Step, d Driver) StepAnswer {
-	one := Step{Run: st.Run, HTTP: st.HTTP, SNMP: st.SNMP, Traffic: st.Traffic, Upgrade: st.Upgrade, Netconf: st.Netconf, Timeout: st.Timeout}
+	one := Step{Run: st.Run, HTTP: st.HTTP, SNMP: st.SNMP, Traffic: st.Traffic, Upgrade: st.Upgrade, Netconf: st.Netconf, Web: st.Web, Timeout: st.Timeout}
 	var sr StepResult
 	if st.Sample != nil && st.Sample.Count > 1 { // the checks over all samples are made here
 		one.Sample, one.Expect = st.Sample, st.Expect
@@ -970,7 +1001,7 @@ func RunOne(ctx context.Context, st Step, d Driver) StepAnswer {
 			sr.Error = "" // the generated test checks again and says what was wrong
 		}
 	} else {
-		if st.Netconf != nil { // XML answers are checked here
+		if st.Netconf != nil || st.Web != nil { // XML answers and pages are checked here
 			one.Expect = st.Expect
 		}
 		sr = runStep(ctx, one, 0, d, map[string]string{})
@@ -980,7 +1011,7 @@ func RunOne(ctx context.Context, st Step, d Driver) StepAnswer {
 
 func actions(s Step) int {
 	n := 0
-	for _, b := range []bool{s.Run != nil, s.HTTP != nil, s.SNMP != nil, s.Traffic != nil, s.Upgrade != nil, s.Manual != nil, s.Netconf != nil} {
+	for _, b := range []bool{s.Run != nil, s.HTTP != nil, s.SNMP != nil, s.Traffic != nil, s.Upgrade != nil, s.Manual != nil, s.Netconf != nil, s.Web != nil} {
 		if b {
 			n++
 		}
@@ -1171,10 +1202,10 @@ func stepVars(st Step, v map[string]string) map[string]string {
 // rawStep is a step for the generated code's Raw call: Termwright runs it and makes its checks
 // (NETCONF answers, samples over time).
 func rawStep(st Step) (string, bool) {
-	if st.Netconf == nil && st.Sample == nil {
+	if st.Netconf == nil && st.Sample == nil && st.Web == nil {
 		return "", false
 	}
-	r := Step{Run: st.Run, HTTP: st.HTTP, SNMP: st.SNMP, Netconf: st.Netconf, Sample: st.Sample, Expect: st.Expect, Timeout: st.Timeout}
+	r := Step{Run: st.Run, HTTP: st.HTTP, SNMP: st.SNMP, Netconf: st.Netconf, Web: st.Web, Sample: st.Sample, Expect: st.Expect, Timeout: st.Timeout}
 	b, _ := json.Marshal(r)
 	return string(b), true
 }

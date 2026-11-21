@@ -2162,6 +2162,9 @@ paths:
                                         - reject
                                         - procs
                                         - save_file
+                                        - bookings
+                                        - book
+                                        - unbook
                                     type: string
                                 at:
                                     description: 'schedule: time of day HH:MM (daily, weekdays, weekly)'
@@ -2178,6 +2181,9 @@ paths:
                                     type: integer
                                 dir:
                                     description: 'send_qtest/defect: a run''s folder (reports/…); default the last run'
+                                    type: string
+                                end:
+                                    description: 'book: when it ends, YYYY-MM-DD HH:MM local time'
                                     type: string
                                 file:
                                     description: 'show/save/run: a test file relative to the tests folder, e.g. cases/vlan/add-vlan.yaml (cases/ and .yaml may be left out)'
@@ -2200,7 +2206,7 @@ paths:
                                     description: 'schedule: every N hours (repeat hours)'
                                     type: integer
                                 id:
-                                    description: 'schedule/unschedule: the schedule''s id (schedules lists them); approve/reject: the request''s id'
+                                    description: 'schedule/unschedule: the schedule''s id (schedules lists them); approve/reject: the request''s id; unbook: the booking''s id'
                                     type: string
                                 kinds:
                                     description: 'save_state: what to save'
@@ -2214,7 +2220,7 @@ paths:
                                     description: 'new_testbed: the testbed''s name'
                                     type: string
                                 note:
-                                    description: 'approve/reject: a note'
+                                    description: 'approve/reject: a note; book: why the testbed is booked'
                                     type: string
                                 on_cleanup_fail:
                                     description: 'run: when a test''s cleanup fails - stop (skip the rest), restore (the configuration saved before the run) or factory (factory default)'
@@ -2243,11 +2249,20 @@ paths:
                                         - weekly
                                         - hours
                                     type: string
+                                rerun:
+                                    description: 'run: run a failed test again up to this many times (0-5); one that then passes is reported flaky'
+                                    type: integer
+                                run_timeout:
+                                    description: 'run: seconds the whole run may take (tests not started by then are skipped)'
+                                    type: integer
                                 sessions:
                                     description: 'save_state: the saved sessions'
                                     items:
                                         type: string
                                     type: array
+                                start:
+                                    description: 'book: when the booking starts, YYYY-MM-DD HH:MM local time (default now)'
+                                    type: string
                                 step:
                                     description: 'step: one step {run: {session, command, prompt}}, {http: {session, method, url, headers, body}} or {snmp: {session, op, oids, values}}, timeout'
                                     type: object
@@ -2256,8 +2271,11 @@ paths:
                                     items:
                                         type: string
                                     type: array
+                                test_timeout:
+                                    description: 'run: seconds a test may take when it has no timeout of its own'
+                                    type: integer
                                 testbed:
-                                    description: 'run: a file in testbeds/ whose values are used as {{variables}}'
+                                    description: 'run: a file in testbeds/ whose values are used as {{variables}}; book/bookings: the testbed'
                                     type: string
                                 testbeds:
                                     description: 'run: several testbeds - the tests run on each at the same time'

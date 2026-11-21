@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -37,7 +38,7 @@ func (a *App) gitCreds() ([]string, []string) {
 
 func validKind(kind string) error {
 	switch kind {
-	case integrations.KindQTest, integrations.KindJira, integrations.KindGit:
+	case integrations.KindQTest, integrations.KindJira, integrations.KindGit, integrations.KindWebhook, integrations.KindSMTP:
 		return nil
 	}
 	return errors.New("unknown integration " + kind)
@@ -46,7 +47,7 @@ func validKind(kind string) error {
 // IntegrationTokens says which integrations have a token saved (the tokens are never returned).
 func (a *App) IntegrationTokens() map[string]bool {
 	m := map[string]bool{}
-	for _, k := range []string{integrations.KindQTest, integrations.KindJira, integrations.KindGit} {
+	for _, k := range []string{integrations.KindQTest, integrations.KindJira, integrations.KindGit, integrations.KindWebhook, integrations.KindSMTP} {
 		m[k] = integrationToken(k) != ""
 	}
 	return m
@@ -80,6 +81,20 @@ func (a *App) IntegrationTest(kind string, cfg *integrations.Config) (string, er
 		return integrations.QTestClient{Cfg: c.QTest, Token: integrationToken(kind)}.Check(ctx)
 	case integrations.KindJira:
 		return integrations.JiraClient{Cfg: c.Jira, Token: integrationToken(kind)}.Check(ctx)
+	case integrations.KindWebhook:
+		u := integrationToken(kind)
+		if u == "" {
+			return "", errors.New("save the webhook address first")
+		}
+		if err := integrations.SendWebhook(ctx, u, integrations.Message{Title: "Termwright test message", Text: "Run results will appear in this channel."}); err != nil {
+			return "", err
+		}
+		return "a test message was posted", nil
+	case integrations.KindSMTP:
+		if err := integrations.SendMail(ctx, c.Notify, integrationToken(kind), integrations.Message{Title: "Termwright test message", Text: "Run results will be sent to this address."}); err != nil {
+			return "", err
+		}
+		return "a test e-mail was sent to " + strings.Join(c.Notify.To, ", "), nil
 	}
 	g := c.Git
 	tok := integrationToken(integrations.KindGit)
@@ -100,4 +115,27 @@ func (a *App) IntegrationTest(kind string, cfg *integrations.Config) (string, er
 		return "the token is saved; " + g.Host + " has no user API to check it (" + res.Status + ") - Clone, Pull and Push use it", nil
 	}
 	return "connected to " + g.Host + " - Clone, Pull and Push of the tests folder use this token", nil
+}
+
+// notifyResults sends a result to the Teams/Slack webhook and by e-mail when they are set up (and the
+// "when" setting wants it), in the background; failures are logged, not shown.
+func (a *App) notifyResults(m integrations.Message) {
+	n := a.integrationsCfg().Notify
+	if !n.Wanted(m) {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
+		if u := integrationToken(integrations.KindWebhook); n.Webhook && u != "" {
+			if err := integrations.SendWebhook(ctx, u, m); err != nil {
+				log.Printf("notify webhook: %v", err)
+			}
+		}
+		if n.SMTPHost != "" && len(n.To) > 0 {
+			if err := integrations.SendMail(ctx, n, integrationToken(integrations.KindSMTP), m); err != nil {
+				log.Printf("notify mail: %v", err)
+			}
+		}
+	}()
 }

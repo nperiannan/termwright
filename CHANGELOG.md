@@ -22,6 +22,20 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 - **Tests tab tidy-ups**: Save and Cancel sit at the top next to Edit while editing; Clear and Save as Plan are buttons; suite names are larger with their tests indented under them; the run log viewer is wider and keeps the device's line layout; **+ New** testbed picks the session folder from a list of your folders, showing the roles it will make; testbeds and plans can be deleted (right-click, or Delete in the file view; they go to `.removed/`).
 
+- **Run control**: the Run panel has **Rerun a failed test** (once, twice, 3 times), **Test timeout** and **Run timeout** (minutes). A test that passes on a rerun is marked **flaky**; a test over its time is stopped (its cleanup still runs); tests not started before the run timeout are skipped. A test can set its own `timeout:` (seconds). Schedules have rerun and a run time limit too. Also `--rerun`, `--test-timeout`, `--run-timeout` on the command line and in the tools.
+
+- **Notifications**: Options → Integrations → **Notifications** sends the results of scheduled runs, API monitor failures and SNMP alarms to a **Teams or chat webhook** (a Teams card with the failed tests) and/or by **e-mail** (STARTTLS or TLS), only when something failed or after every run. The webhook address and mail password are kept in the OS keychain. **Send a Test** checks both.
+
+- **PDF report**: each run also writes `report.pdf` - the summary, the tests, and every step with what was sent, each check with expected and found, errors and the output. **PDF** opens it from the run.
+
+- **Trends**: **📈 Trends** in Runs shows the pass rate of the last 40 runs (click a bar to open the run), the tests that fail or flip most with their last problem, flaky counts and the pass rate per software version - for every test, one plan or one testbed.
+
+- **Testbed calendar**: **📅 Calendar** in Testbeds books a testbed for a time (double-click the week view, or **+ Book**). Runs and schedules by other people are refused while it is booked (a run can still take it after asking). Bookings are in `bookings.yaml` in the tests folder, so the team shares them through Git; also `bookings`, `book`, `unbook` in the tools and the Python client.
+
+- **Web steps with Playwright**: **+ More → Web Page (Playwright)** opens a page and clicks, types, presses keys, chooses options, checks text is shown or gone, waits and takes screenshots - targets as `text=Sign in`, `#id`, `role=button[name="Save"]`, `label=Password`. **Set Up Playwright** installs it once (needs Node.js). The step's output is the action log and the page's text, so contains checks work; a failed action saves a screenshot in `reports/web-shots`. Passwords typed into password fields are not logged. Also in the generated Go, Python and TCL.
+
+- **Light theme**: the API Client's JSON colours and request methods are darker and readable on the light background.
+
 ## 0.43.0 (2026-11-21)
 
 - **Faster steps**: after the first command, a prompt shaped like the last one (`Stack.5 #` after `Stack.4 #`) is recognised after 0.2 s of quiet instead of 0.9 s, so each command step takes about a third of the time.

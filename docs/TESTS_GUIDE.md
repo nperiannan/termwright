@@ -176,7 +176,21 @@ In a test: **+ More → Call a Procedure**, choose it and fill the parameters (`
 
 **Tables without TextFSM**: open a step's result → **▦ Make a Table…**: click the header line (or tick `label: value` lines), rename the columns, tick *spaces* for columns whose values have spaces, watch the preview, **Save Table**. Then add **table value** checks (`NAME=v200: VID = 200`).
 
-## 15. Export a standalone suite
+## 15. Run control, notifications, trends, bookings and web pages
+
+**Rerun and timeouts.** In the Run panel, **Run control** has *Rerun a failed test* (up to 3 times), *Test timeout* and *Run timeout* in minutes. A test that only passes on a rerun is shown as **flaky** in the results and counted in Trends. A test over its time is stopped and its cleanup still runs; a test can set its own limit with `timeout: 300` (seconds). Tests not started before the run timeout are reported as skipped. Schedules have the same choices.
+
+**Notifications.** Options → Integrations → *Notifications - Teams / chat webhook* and *Notifications - e-mail*. Paste the incoming webhook address (it is kept in the OS keychain), fill the mail server, from and to, choose *Only when something failed* or *After every run*, and press **Send a Test**. Scheduled runs, API monitors that start failing and SNMP alarms are sent.
+
+**PDF report.** Every run writes `report.pdf` next to the HTML report and JUnit XML; **PDF** in the run opens it.
+
+**Trends.** Runs → **📈 Trends**: the pass rate of each run (oldest left), the tests that fail most with their flips and last problem, and the pass rate per software version. Choose a plan or a testbed to narrow it.
+
+**Booking a testbed.** Testbeds → **📅 Calendar** shows the week, one row per testbed. Double-click a row (or **+ Book**), pick the times and say why. While it is booked, other people's runs ask before taking it and their schedules are refused. Commit `bookings.yaml` so the team sees the bookings.
+
+**Web pages (Playwright).** + More → **Web Page (Playwright)**. Give the address, then actions: *Click*, *Type into*, *Press key*, *Choose option*, *Tick*, *Check it shows*, *Check it is gone*, *Wait for*, *Go to address*, *Screenshot*. Targets: `text=Sign in`, `#user`, `role=button[name="Save"]`, `label=Password`, `placeholder=Search` or an XPath. The first time, **Set Up Playwright** installs Playwright and its Chromium (Node.js is needed). Tick *Self-signed certificate OK* for device web pages. The output is the action log and the page's text, so a *contains* check works on what the page shows; a failed action saves a screenshot in `reports/web-shots`.
+
+## 16. Export a standalone suite
 
 ⋯ → **Export Automation Suite** asks which tests (the selected ones, this test, a plan or all), the language (Python, Go or TCL), the operating system it will run on (Linux, macOS or Windows), the default testbed and a name, and saves a zip:
 
@@ -194,7 +208,7 @@ network-tests/
 
 The library is also what you build on: besides run, http, snmp and the checks, it has `configure(session, commands)`, `wait_for(session, command, pattern, timeout, interval)`, `log(text)` and `session(role)` (Go: `Configure`, `WaitFor`, `Log`, `Session`; TCL: `tw::configure`, `tw::wait_for`, `tw::log`, `tw::session`).
 
-## 16. Code, CI and the AI assistant
+## 17. Code, CI and the AI assistant
 
 The generated tests run outside the window while Termwright is open - they send each step to Termwright, which logs in with the saved logins:
 

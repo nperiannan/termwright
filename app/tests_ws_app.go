@@ -544,3 +544,22 @@ func (a *App) TestPickData() (string, error) {
 	}
 	return rel, os.WriteFile(filepath.Join(f.Root, filepath.FromSlash(rel)), b, 0o644)
 }
+
+// TestTrends is the suite over its runs: counts per run, the tests that fail most and pass rates per
+// software version (files: only those tests or plans; testbed: only runs on it).
+func (a *App) TestTrends(files []string, testbed string, limit int) (testrec.Trends, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return testrec.Trends{}, err
+	}
+	var exp []string
+	if len(files) > 0 {
+		if exp, err = f.ExpandFiles(files, nil); err != nil {
+			return testrec.Trends{}, err
+		}
+	}
+	if limit <= 0 {
+		limit = 30
+	}
+	return f.SuiteTrends(exp, testbed, limit), nil
+}

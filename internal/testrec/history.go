@@ -23,6 +23,7 @@ type HistoryEntry struct {
 	Versions map[string]string `json:"versions,omitempty"`
 	Problem  string            `json:"problem,omitempty"`
 	RunBy    string            `json:"runBy,omitempty"`
+	Flaky    bool              `json:"flaky,omitempty"`
 }
 
 func (f Folder) historyFile() string { return filepath.Join(f.Root, "reports", "history.jsonl") }
@@ -34,7 +35,7 @@ func (f Folder) appendHistory(rep RunReport) {
 	}
 	defer fh.Close()
 	for _, r := range rep.Results {
-		e := HistoryEntry{At: r.Start, Dir: rep.Dir, File: r.File, Case: r.Case, Passed: r.Passed, Skipped: r.Skipped, Ms: r.Ms, Testbed: rep.Testbed, Versions: r.Versions, RunBy: rep.RunBy}
+		e := HistoryEntry{At: r.Start, Dir: rep.Dir, File: r.File, Case: r.Case, Passed: r.Passed, Skipped: r.Skipped, Ms: r.Ms, Testbed: rep.Testbed, Versions: r.Versions, RunBy: rep.RunBy, Flaky: r.Flaky}
 		if !r.Passed {
 			e.Problem = FirstProblem(r)
 		}
@@ -206,4 +207,161 @@ func (f Folder) Audit(action, detail string) {
 	defer fh.Close()
 	fmt := time.Now().Format("2006-01-02 15:04:05")
 	fh.WriteString(fmt + "\t" + u + "@" + h + "\t" + action + "\t" + strings.ReplaceAll(detail, "\n", " ") + "\n")
+}
+
+// RunTrend is one run in a trend: its counts.
+type RunTrend struct {
+	Dir     string    `json:"dir"`
+	At      time.Time `json:"at"`
+	Passed  int       `json:"passed"`
+	Failed  int       `json:"failed"`
+	Skipped int       `json:"skipped"`
+	Flaky   int       `json:"flaky"`
+	Ms      int64     `json:"ms"`
+	Testbed string    `json:"testbed,omitempty"`
+	Version string    `json:"version,omitempty"`
+}
+
+// TestTrend is a test's record over the runs of a trend.
+type TestTrend struct {
+	File     string `json:"file"`
+	Case     string `json:"case"`
+	Runs     int    `json:"runs"`
+	Failures int    `json:"failures"`
+	Flips    int    `json:"flips"`
+	Flaky    int    `json:"flaky"`
+	Last     string `json:"last,omitempty"` // the last problem
+}
+
+// VersionTrend is the pass rate on one software version.
+type VersionTrend struct {
+	Version string `json:"version"`
+	Passed  int    `json:"passed"`
+	Total   int    `json:"total"`
+}
+
+// Trends is the whole suite over its runs.
+type Trends struct {
+	Runs     []RunTrend     `json:"runs"`
+	Tests    []TestTrend    `json:"tests"` // the most failing first
+	Versions []VersionTrend `json:"versions"`
+}
+
+// SuiteTrends reads the history: the last runs (only those tests when files is set, only that testbed when
+// testbed is set), the tests that fail most, and pass rates per software version.
+func (f Folder) SuiteTrends(files []string, testbed string, limit int) Trends {
+	want := map[string]bool{}
+	for _, x := range files {
+		want[x] = true
+	}
+	fh, err := os.Open(f.historyFile())
+	out := Trends{Runs: []RunTrend{}, Tests: []TestTrend{}, Versions: []VersionTrend{}}
+	if err != nil {
+		return out
+	}
+	defer fh.Close()
+	runs := map[string]*RunTrend{}
+	tests := map[string]*TestTrend{}
+	lastPass := map[string]*bool{}
+	vers := map[string]*VersionTrend{}
+	sc := bufio.NewScanner(fh)
+	sc.Buffer(make([]byte, 1<<20), 1<<24)
+	for sc.Scan() {
+		var e HistoryEntry
+		if json.Unmarshal(sc.Bytes(), &e) != nil || (len(want) > 0 && !want[e.File]) || (testbed != "" && e.Testbed != testbed) {
+			continue
+		}
+		rt := runs[e.Dir]
+		if rt == nil {
+			rt = &RunTrend{Dir: e.Dir, At: e.At, Testbed: e.Testbed}
+			runs[e.Dir] = rt
+		}
+		ver := versionText(e.Versions)
+		if rt.Version == "" {
+			rt.Version = ver
+		}
+		rt.Ms += e.Ms
+		switch {
+		case e.Skipped:
+			rt.Skipped++
+		case e.Passed:
+			rt.Passed++
+			if e.Flaky {
+				rt.Flaky++
+			}
+		default:
+			rt.Failed++
+		}
+		if e.Skipped {
+			continue
+		}
+		tt := tests[e.File]
+		if tt == nil {
+			tt = &TestTrend{File: e.File, Case: e.Case}
+			tests[e.File] = tt
+		}
+		tt.Runs++
+		if !e.Passed {
+			tt.Failures++
+			tt.Last = e.Problem
+		}
+		if e.Flaky {
+			tt.Flaky++
+		}
+		if lp := lastPass[e.File]; lp != nil && *lp != e.Passed {
+			tt.Flips++
+		}
+		p := e.Passed
+		lastPass[e.File] = &p
+		if ver != "" {
+			vt := vers[ver]
+			if vt == nil {
+				vt = &VersionTrend{Version: ver}
+				vers[ver] = vt
+			}
+			vt.Total++
+			if e.Passed {
+				vt.Passed++
+			}
+		}
+	}
+	for _, r := range runs {
+		out.Runs = append(out.Runs, *r)
+	}
+	sort.Slice(out.Runs, func(i, j int) bool { return out.Runs[i].At.Before(out.Runs[j].At) })
+	if limit > 0 && len(out.Runs) > limit {
+		out.Runs = out.Runs[len(out.Runs)-limit:]
+	}
+	for _, t := range tests {
+		if t.Failures > 0 || t.Flaky > 0 {
+			out.Tests = append(out.Tests, *t)
+		}
+	}
+	sort.Slice(out.Tests, func(i, j int) bool {
+		if out.Tests[i].Failures != out.Tests[j].Failures {
+			return out.Tests[i].Failures > out.Tests[j].Failures
+		}
+		return out.Tests[i].Flips > out.Tests[j].Flips
+	})
+	if len(out.Tests) > 15 {
+		out.Tests = out.Tests[:15]
+	}
+	for _, v := range vers {
+		out.Versions = append(out.Versions, *v)
+	}
+	sort.Slice(out.Versions, func(i, j int) bool { return out.Versions[i].Version > out.Versions[j].Version })
+	return out
+}
+
+// versionText is the software of a result in a few words ("33.7.1.6", or "sw1 33.7.1.6, sw2 9.1").
+func versionText(v map[string]string) string {
+	seen := map[string]bool{}
+	var l []string
+	for _, k := range sortedKeys(v) {
+		if !seen[v[k]] {
+			seen[v[k]] = true
+			l = append(l, v[k])
+		}
+	}
+	return strings.Join(l, ", ")
 }

@@ -62,6 +62,9 @@ func testsCLIMain(args []string) int {
 	prod := fs.Bool("production", false, "run: allow production sessions")
 	onFail := fs.String("on-cleanup-failure", "stop", "run: stop, restore or factory")
 	cleanup := fs.String("cleanup", "steps", "run: steps, off or auto")
+	rerun := fs.Int("rerun", 0, "run: run a failed test again up to this many times (flaky tests)")
+	testTimeout := fs.Int("test-timeout", 0, "run: seconds a test may take (when it has no timeout of its own)")
+	runTimeout := fs.Int("run-timeout", 0, "run: seconds the whole run may take")
 	tagList := fs.String("tag", "", "run: only tests with one of these tags (comma-separated; !tag leaves out)")
 	vars := map[string]string{}
 	fs.Func("var", "name=value for {{name}} (repeatable)", func(s string) error {
@@ -101,6 +104,7 @@ func testsCLIMain(args []string) int {
 	}
 	switch args[0] {
 	case "run":
+		cliRunExtra = TestRunRequest{Rerun: *rerun, CaseTimeout: *testTimeout, RunTimeout: *runTimeout}
 		return a.testsCLIRun(f, files, *testbed, vars, *junit, *prod, *onFail, strings.TrimPrefix(*cleanup, "steps"), splitList(*tagList))
 	case "serve":
 		return a.testsCLIServe(*listen)
@@ -141,7 +145,8 @@ func relFiles(f testrec.Folder, in []string) []string {
 func (a *App) testsCLIRun(f testrec.Folder, files []string, testbed string, vars map[string]string, junit string, prod bool, onFail, cleanup string, tags []string) int {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	req := TestRunRequest{Files: relFiles(f, files), Vars: vars, Testbed: testbed, Confirmed: prod, OnCleanupFail: onFail, Cleanup: cleanup, Tags: tags}
+	req := TestRunRequest{Files: relFiles(f, files), Vars: vars, Testbed: testbed, Confirmed: prod, OnCleanupFail: onFail, Cleanup: cleanup, Tags: tags,
+		Rerun: cliRunExtra.Rerun, CaseTimeout: cliRunExtra.CaseTimeout, RunTimeout: cliRunExtra.RunTimeout}
 	if tbs := splitList(testbed); len(tbs) > 1 { // several testbeds: at the same time
 		req.Testbed, req.Testbeds = "", tbs
 		reps, err := a.runParallel(ctx, req, nil)
@@ -289,3 +294,6 @@ func splitList(s string) []string {
 	}
 	return out
 }
+
+// cliRunExtra: the run options of the command line that testsCLIRun has no parameter for.
+var cliRunExtra TestRunRequest

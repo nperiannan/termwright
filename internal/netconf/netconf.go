@@ -20,11 +20,11 @@ const eom = "]]>]]>"
 
 // Client talks NETCONF on a stream.
 type Client struct {
-	mu   sync.Mutex
-	r    *bufio.Reader
-	w    io.Writer
-	v11  bool
-	id   int
+	mu  sync.Mutex
+	r   *bufio.Reader
+	w   io.Writer
+	v11 bool
+	id  int
 	// Hello is the server's hello (its capabilities).
 	Hello string
 }
