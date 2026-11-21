@@ -47,3 +47,12 @@ func TestRerunAndTimeouts(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestTryChecks(t *testing.T) {
+	out := "v1000           1000 10.1.1.1       /24  ---------   ANY    0 /1   VR-Default\nTotal number of VLAN(s) : 3"
+	eq := "10.1.1.1/24"
+	r := TryChecks([]Expect{{Contains: "Total number of VLAN(s) : 3"}, {Field: `Primary\s+IP:\s*(\S+)`, Equals: &eq}}, out, 0, nil)
+	if !r[0].Passed || r[1].Passed {
+		t.Fatal(r)
+	}
+}

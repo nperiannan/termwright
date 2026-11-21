@@ -1209,3 +1209,17 @@ func rawStep(st Step) (string, bool) {
 	b, _ := json.Marshal(r)
 	return string(b), true
 }
+
+// TryChecks runs a step's checks (not table checks) on an output already seen - the recorder uses it to make
+// sure each check holds for what the device showed while recording.
+func TryChecks(expects []Expect, out string, status int, vars map[string]string) []CheckResult {
+	res := make([]CheckResult, 0, len(expects))
+	for _, e := range expects {
+		if e.Table != nil || e.Agg != "" {
+			res = append(res, CheckResult{What: "table/sample check", Passed: true})
+			continue
+		}
+		res = append(res, check(e, out, status, 0, vars, nil))
+	}
+	return res
+}

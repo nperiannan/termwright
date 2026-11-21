@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/termwright/termwright/internal/testrec"
 	"github.com/termwright/termwright/internal/textfsm"
 )
 
@@ -162,4 +163,9 @@ func (a *App) TestsFetchTemplates() (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%d templates for %d commands in templates/ntc", n, len(add)), nil
+}
+
+// TestTryChecks runs checks on an output seen while recording: which of them hold.
+func (a *App) TestTryChecks(expects []testrec.Expect, output string, status int) []testrec.CheckResult {
+	return testrec.TryChecks(expects, output, status, nil)
 }

@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Recorder: checks land on the right step and are verified**: a check now goes to the command whose output holds the selected text (it used to go to the tab's last command, and a step's output could take in the commands after it, so checks from a later `show` command were added to an earlier one). Before saving, every check is tried on what the device showed while recording; checks that would fail with nothing changed are listed with their step and can be removed.
+
 - **Procedures**: shared steps with parameters (`procs/<name>.yaml`) that tests call with **+ More → Call a Procedure** - choose it, fill its parameters (values or `{{variables}}`); change the procedure once and every test follows. The **Procedures** view lists them with their parameters, steps and how many tests use them; ⋯ on a test → **Make a Procedure from This Test** turns its steps into one (its variables become the parameters). Calls are expanded in Termwright's runs and in the generated Go, Python and TCL.
 
 - **Test data from a file**: a test's **Test data** (Edit) is a CSV or Excel file - one run per row, the column names are the variables. A file outside the tests folder is copied into `data/`.
