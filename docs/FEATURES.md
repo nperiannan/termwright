@@ -113,6 +113,8 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **Workspace**: Tests, Runs, Schedules, Testbeds and Library; tests as tables with expected vs got; a Run panel for every run setting.
 - **Edit and select**: edit steps and checks in the Tests tab, rename, duplicate and delete tests (to `.removed/`), run only the ticked tests or a folder; the `lib/` helpers are listed apart from the tests.
 - **Tests for AI and automation**: the `tests` tool for the AI assistant and MCP apps, `POST /api/v1/tools/tests`, and `lab.tests` in Python.
+- **Standalone suites**: export tests, a plan or all as a zip for Linux, macOS or Windows - code (Go, Python, TCL), library, testbeds, plan and run script writing JUnit XML and run logs; the library adds run logs, configure, wait_for, log and testbed roles.
+- **Debugging**: pause on a failed step (retry, continue, stop, open the device), run one step or from a step, variables per step.
 - **Import from Postman and OpenAPI**: one test per request or operation, folders and tags as suites, status checks from the scripts, examples or 2xx answers; Excel and CSV manual test cases too.
 - **Team roles and approvals**: `roles.yaml` (editors, runners, approvers) and approved runs on production sessions (or always), requested and decided in the Tests tab, valid 24 hours, in the audit log.
 - **JSON Schema checks**: `schema` on API steps (inline or a file); SNMP gets and walks recorded with checks that hold (set values, configured names; no counters).

@@ -4,8 +4,11 @@
     python lib/python/run_tests.py                 # every cases/**/test_*.py
     python lib/python/run_tests.py cases/vlan      # one folder (or files)
     python lib/python/run_tests.py --junit junit.xml
+    python lib/python/run_tests.py --testbed testbeds/lab.yaml --list plan.txt --reports reports
 
-TW_TESTBED=testbeds/lab.yaml and TW_VAR_<name>=<value> set {{variables}}. pytest works too: pytest cases
+--testbed sets the devices (TW_TESTBED), --list reads the test files from a file (one per line), --reports
+writes reports/<date-time>/ with junit.xml and logs/ (each test's run log). TW_VAR_<name>=<value> sets
+{{variables}}. pytest works too: pytest cases
 """
 import importlib.util
 import os
@@ -45,12 +48,29 @@ class Result(unittest.TextTestResult):
         self.rows.append((test.id(), sub._subDescription(), st, "" if err is None else str(err[1])))
 
 
+def opt(argv, name):
+    if name in argv:
+        i = argv.index(name)
+        return argv[i + 1], argv[:i] + argv[i + 2:]
+    return None, argv
+
+
 def main(argv):
-    junit = None
-    if "--junit" in argv:
-        i = argv.index("--junit")
-        junit = argv[i + 1]
-        argv = argv[:i] + argv[i + 2:]
+    junit, argv = opt(argv, "--junit")
+    tb, argv = opt(argv, "--testbed")
+    lst, argv = opt(argv, "--list")
+    reports, argv = opt(argv, "--reports")
+    if tb:
+        os.environ["TW_TESTBED"] = tb
+    if lst:
+        with open(lst) as f:
+            argv += [os.path.join(ROOT, l.strip()) for l in f if l.strip() and not l.startswith("#")]
+    if reports:
+        out = os.path.join(reports, time.strftime("%Y%m%d-%H%M%S"))
+        os.makedirs(os.path.join(out, "logs"), exist_ok=True)
+        os.environ["TW_LOG_DIR"] = os.path.join(out, "logs")
+        junit = junit or os.path.join(out, "junit.xml")
+        print("reports: " + out)
     suite = unittest.TestSuite()
     for p in files(argv):
         name = "tw_" + os.path.relpath(p, ROOT).replace(os.sep, "_").replace("-", "_")[:-3]

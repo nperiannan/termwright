@@ -44,3 +44,19 @@ func TestRolesApproval(t *testing.T) {
 		t.Fatal()
 	}
 }
+
+func TestRemoveTestbed(t *testing.T) {
+	f := Folder{Root: t.TempDir()}
+	os.MkdirAll(filepath.Join(f.Root, "testbeds"), 0o755)
+	os.WriteFile(filepath.Join(f.Root, "testbeds", "lab.yaml"), []byte("sw: Lab/sw1\n"), 0o644)
+	d, err := f.Remove("testbeds/lab.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(f.Root, d, "testbeds", "lab.yaml")); err != nil {
+		t.Fatal("not moved", err)
+	}
+	if _, err := f.Remove("lib/twtest/twtest.go"); err == nil {
+		t.Fatal("removed a library file")
+	}
+}

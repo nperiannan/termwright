@@ -123,6 +123,7 @@ And much more - see the [feature list](docs/FEATURES.md).
 - **History and reporting**: pass rate, flaky tests and results per software version; send results to **qTest** and open **Jira** defects with the steps and output attached
 - **Plain files**: tests are YAML in a folder that can be a Git repository (Pull, Commit, Push in the Tests tab), and each is also written as **Go**, **Python** and **TCL** test code (`go test ./cases/...`, `python lib/python/run_tests.py`, `tclsh lib/tcl/run_tests.tcl`) - no passwords in any of them, Termwright logs in with the saved logins
 - **Scheduled runs** with a notification when one fails, and the AI assistant to **write a test** from a description or **explain why one failed**
+- **Export a standalone suite** for Linux, macOS or Windows (Go, Python or TCL, with the library, testbeds, a plan and a run script that writes JUnit XML and run logs), and **debug** a failing test: pause at the failed step, retry it, run one step or from a step
 - **Import and teams**: Excel/CSV manual test cases, Postman collections and OpenAPI descriptions become tests; `roles.yaml` says who edits, runs and approves, and runs on production can wait for an approval
 - **CI without the window**: `termwright tests run --junit junit.xml`, or `termwright tests serve` for the generated code; secrets from the credential store or `TERMWRIGHT_SECRET_…` variables
 - Usable from the AI assistant, MCP apps, the local REST API and Python

@@ -6,7 +6,11 @@ logins, requests go through API sessions, SNMP uses the sessions' SNMP settings)
 checked here. Only Python's standard library is used.
 
 Settings (environment): TERMWRIGHT_API and TERMWRIGHT_KEY (else mcp.json in Termwright's data
-folder); TW_TESTBED=testbeds/lab.yaml; TW_VAR_<name>=<value> for {{name}}.
+folder); TW_TESTBED=testbeds/lab.yaml; TW_VAR_<name>=<value> for {{name}}; TW_LOG_DIR=<folder>: each
+test writes its run log there (what was sent, what came back, each check with expected and found).
+
+Beyond the generated steps, a hand-written test can use s.configure(session, [commands]), s.wait_for(session,
+command, pattern, timeout, interval), r.log(text), testbed() and session(role).
 """
 import contextlib
 import json
@@ -85,6 +89,34 @@ class _Fatal(Exception):
     pass
 
 
+def testbed():
+    """The variables of the testbed (TW_TESTBED) and TW_VAR_ settings: role -> session, and the rest."""
+    return _vars({})
+
+
+def session(role):
+    """The saved session of a testbed role ("core" -> "Lab/core-sw1"); the role itself when it is not one."""
+    return testbed().get(role, role)
+
+
+class _Log:
+    """A test's run log in TW_LOG_DIR (nothing without it)."""
+
+    def __init__(self, name):
+        self.f = None
+        d = os.environ.get("TW_LOG_DIR")
+        if d:
+            os.makedirs(d, exist_ok=True)
+            safe = re.sub(r"[^\w.-]+", "-", name).strip("-")[:120] or "test"
+            self.f = open(os.path.join(d, safe + ".log"), "a", encoding="utf-8")
+            self.w("Test:     %s\nStarted:  %s\n" % (name, time.strftime("%Y-%m-%d %H:%M:%S")))
+
+    def w(self, text):
+        if self.f:
+            self.f.write(text if text.endswith("\n") else text + "\n")
+            self.f.flush()
+
+
 def _call(body):
     """A tests tool action; returns the JSON in its result."""
     api, key = endpoint()
@@ -123,6 +155,12 @@ class Run:
         self.tc = tc
         self.vars = _vars(base)
         self.stopped = False
+        self.logf = _Log(tc.id())
+
+    def log(self, text):
+        """A line in the run log (and on the console)."""
+        print(text)
+        self.logf.w(self.fill(text))
 
     def fill(self, s):
         return _VAR.sub(lambda m: self.vars.get(m.group(1), m.group(0)), s or "")
@@ -187,12 +225,20 @@ class Run:
         name = self.fill(name)
         with self.tc.subTest(step=name):
             s = Step(self, skip=self.stopped and not cleanup)
+            t0 = time.time()
+            self.logf.w("\n=== %s%s ===" % ("cleanup: " if cleanup else "", name))
             try:
                 yield s
             except _Fatal as e:
                 s.errors.append(str(e))
+            except unittest.SkipTest as e:
+                self.logf.w("Result:   SKIPPED (%s)" % e)
+                raise
+            ms = int((time.time() - t0) * 1000)
             if s.skip:
+                self.logf.w("Result:   SKIPPED (an earlier step failed)")
                 raise unittest.SkipTest("an earlier step failed")
+            self.logf.w("Result:   %s  (%d ms)%s" % ("FAILED" if s.errors else "PASSED", ms, "\nError:    " + "\n          ".join(s.errors) if s.errors else ""))
             if s.errors:
                 if not continue_on_fail and not cleanup:
                     self.stopped = True
@@ -232,6 +278,38 @@ class Step:
         """Termwright repeats the next step until these checks (JSON, as in the test file) pass."""
         self._retry = {"retry": {"timeout": timeout, "interval": interval}, "expect": json.loads(expect)}
 
+    def log(self, text):
+        self.r.log(text)
+
+    def configure(self, session, commands, prompt="", timeout=0):
+        """Sends configuration commands one after another; a device error fails the step (and stops the rest)."""
+        out = []
+        for c in commands if isinstance(commands, (list, tuple)) else str(commands).splitlines():
+            if c.strip() and not self.errors:
+                out.append(self.run(session, c, prompt, timeout).output)
+        a = Answer(self)
+        a.output = "\n".join(out)
+        return a
+
+    def wait_for(self, session, command, pattern, timeout=60, interval=5, prompt=""):
+        """Runs the command until its output matches the regular expression (or the time is up)."""
+        p, end, a = self.r.fill(pattern), time.time() + timeout, Answer(self)
+        while not self.skip:
+            a = self.run(session, command, prompt)
+            if re.search(p, a.output):
+                self.ok("matches %s (waited for it)" % p, re.search(p, a.output).group(0))
+                return a
+            if time.time() >= end:
+                self.fail("%r did not show %s within %d s" % (self.r.fill(command), p, timeout))
+                return a
+            time.sleep(interval)
+        return a
+
+    def ok(self, what, found=""):
+        """A check that passed, for the run log."""
+        if not self.skip:
+            self.r.logf.w("  ✓ pass  %-50s  %s" % (what, found or "found"))
+
     def run(self, session, command, prompt="", timeout=0, parse=""):
         run = {"session": self.r.fill(session), "command": self.r.fill(command), "prompt": prompt}
         if parse:
@@ -268,6 +346,15 @@ class Step:
         if ans.get("error"):
             raise _Fatal(ans["error"])
         a.output, a.status, a.ms, a.rows = ans.get("output", ""), ans.get("status", 0), ans.get("ms", 0), ans.get("rows") or []
+        lg = self.r.logf
+        if ans.get("target"):
+            lg.w("Device:   %s" % ans["target"])
+        if ans.get("sent"):
+            lg.w("Sent:     %s" % ans["sent"])
+        if a.status:
+            lg.w("Status:   %d" % a.status)
+        if a.output:
+            lg.w("--- output ---\n%s\n--------------" % a.output.rstrip("\n"))
         t = ans.get("table") or {}
         a.table = [{h.upper(): (r[i] if i < len(r) else "") for i, h in enumerate(t.get("header") or [])} for r in (t.get("rows") or [])]
         return a
@@ -275,6 +362,7 @@ class Step:
     def fail(self, msg):
         if not self.skip:
             self.errors.append(msg)
+            self.r.logf.w("  ✗ FAIL  %s" % msg.split("\n")[0])
 
 
 class Answer:
@@ -312,12 +400,16 @@ class Answer:
         t = self.s.r.fill(text)
         if not _has_text(self.output, t):
             self.s.fail("expected the output to contain %r\n%s" % (t, self.output))
+        else:
+            self.s.ok("contains %r" % t)
         return self
 
     def not_contains(self, text):
         t = self.s.r.fill(text)
         if _has_text(self.output, t):
             self.s.fail("expected the output not to contain %r" % t)
+        else:
+            self.s.ok("does not contain %r" % t, "not there")
         return self
 
     def matches(self, pattern):
@@ -329,6 +421,8 @@ class Answer:
     def status_is(self, code):
         if self.status != code:
             self.s.fail("expected status %d, got %d" % (code, self.status))
+        else:
+            self.s.ok("status %d" % code, str(self.status))
         return self
 
     def max_ms(self, ms):
@@ -417,6 +511,8 @@ class Value:
         w = self.s.r.fill(want)
         if not self.found or (self.text != w and (not self.raw or self.raw != w)):
             self.s.fail("%s: expected %r, got %r" % (self.what, w, self.text))
+        else:
+            self.s.ok("%s = %r" % (self.what, w), self.text)
         return self
 
     def not_equals(self, want):
@@ -432,6 +528,8 @@ class Value:
             ok = False
         if not ok:
             self.s.fail("%s: expected > %g, got %r" % (self.what, n, self.text))
+        else:
+            self.s.ok("%s > %g" % (self.what, n), self.text)
         return self
 
     def less(self, n):
@@ -441,6 +539,8 @@ class Value:
             ok = False
         if not ok:
             self.s.fail("%s: expected < %g, got %r" % (self.what, n, self.text))
+        else:
+            self.s.ok("%s < %g" % (self.what, n), self.text)
         return self
 
 

@@ -6,7 +6,7 @@ import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { Recorder, escapeRe, fieldPattern, isRead } from '../core/recorder.service';
 import { Tabs } from '../core/tabs.service';
-import { TestApproval, CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestHistory, TestStepResult, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
+import { SessionNode, TestApproval, CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestHistory, TestStepResult, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
 import { expectLabel, parseTableCheck, stepText } from './recorder-panel';
 import { AIChat } from '../core/ai-chat.service';
 import { Icon } from './icon';
@@ -52,11 +52,11 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                 }
               }
               @for (g of groups(); track g.dir) {
-                <div class="fold"><button type="button" class="lnk fl" (click)="toggleFold(g.dir)">{{ folded().includes(g.dir) ? '▸' : '▾' }} {{ g.dir || 'No suite' }}</button><span class="cnt">{{ g.cases.length }}</span>
+                <div class="fold suite"><button type="button" class="lnk fl" (click)="toggleFold(g.dir)">{{ folded().includes(g.dir) ? '▸' : '▾' }} {{ g.dir || 'No suite' }}</button><span class="cnt">{{ g.cases.length }}</span>
                   <button type="button" class="lnk" (click)="openRun(filesOf(g), g.dir || 'cases')" [title]="'Run the tests in ' + (g.dir || 'cases')">▶</button></div>
                 @if (!folded().includes(g.dir)) {
                   @for (c of g.cases; track c.file) {
-                    <div class="case" [class.sel]="c.file === sel() && section() === 'tests'" (click)="select(c.file)" (keydown.enter)="select(c.file)" tabindex="0" role="button" [title]="c.error || c.description || c.file">
+                    <div class="case in" [class.sel]="c.file === sel() && section() === 'tests'" (click)="select(c.file)" (keydown.enter)="select(c.file)" tabindex="0" role="button" [title]="c.error || c.description || c.file">
                       <input type="checkbox" [checked]="picked().includes(c.file)" (click)="$event.stopPropagation()" (change)="pick(c.file)" [attr.aria-label]="'Select ' + c.name" />
                       <span class="dot" [class]="dot(c)"></span><span class="cn">{{ caseName(c) }}</span><span class="n">{{ c.steps }}</span></div>
                   }
@@ -77,7 +77,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
               }
             </div>
             @if (picked().length) {
-              <div class="selbar"><b>{{ picked().length }} selected</b><span class="sp"></span><button type="button" class="lnk" (click)="picked.set([])">Clear</button><button type="button" class="lnk" (click)="saveSuite()" title="Keep the selected tests as a plan (suites/…) to run them together again">Save as plan…</button><button type="button" class="go" (click)="openRun(picked(), (picked().length === 1 ? '1 test' : picked().length + ' tests'))"><app-icon name="play" [size]="12" /> Run {{ picked().length === 1 ? 'Test' : picked().length + ' Tests' }}</button></div>
+              <div class="selbar"><b>{{ picked().length }} selected</b><span class="sp"></span><button type="button" class="sbtn" (click)="picked.set([])">Clear</button><button type="button" class="sbtn" (click)="saveSuite()" title="Keep the selected tests as a plan (suites/…) to run them together again">Save as plan…</button><button type="button" class="go" (click)="openRun(picked(), (picked().length === 1 ? '1 test' : picked().length + ' tests'))"><app-icon name="play" [size]="12" /> Run {{ picked().length === 1 ? 'Test' : picked().length + ' Tests' }}</button></div>
             } @else if (filtering()) {
               <div class="selbar"><span class="mut">{{ filtered().length }} of {{ tree()?.cases?.length ?? 0 }} shown</span><span class="sp"></span><button type="button" (click)="openRun(shownFiles(), filtered().length + ' shown tests')" [disabled]="!filtered().length"><app-icon name="play" [size]="13" /> Run shown…</button></div>
             } @else {
@@ -115,9 +115,9 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
             </div>
           }
           @case ('testbeds') {
-            <div class="stop"><div class="row"><b class="grow">Testbeds</b><button type="button" (click)="newTestbed()" title="A role for each session of a session folder">+ New</button></div><span class="mut">which devices a run uses</span></div>
+            <div class="stop"><div class="row"><b class="grow">Testbeds</b><button type="button" (click)="openTbPick()" title="A role for each session of a session folder">+ New</button></div><span class="mut">which devices a run uses</span></div>
             <div class="list">
-              @for (b of tree()?.testbeds ?? []; track b) { <div class="case" [class.sel]="fileSel() === b" (click)="openFile(b)" (keydown.enter)="openFile(b)" tabindex="0" role="button"><span class="cn">{{ base(b) }}</span>@if (lockOf(b); as l) { <span class="n" [title]="'Locked by ' + l.user + ' on ' + l.host + ' since ' + l.since.slice(11, 16)">🔒 {{ l.mine ? 'running' : l.user }}</span> }</div> } @empty { <div class="empty-s">No testbeds.</div> }
+              @for (b of tree()?.testbeds ?? []; track b) { <div class="case" [class.sel]="fileSel() === b" (click)="openFile(b)" (keydown.enter)="openFile(b)" (contextmenu)="fileMenu($event, b)" tabindex="0" role="button"><span class="cn">{{ base(b) }}</span>@if (lockOf(b); as l) { <span class="n" [title]="'Locked by ' + l.user + ' on ' + l.host + ' since ' + l.since.slice(11, 16)">🔒 {{ l.mine ? 'running' : l.user }}</span> }</div> } @empty { <div class="empty-s">No testbeds.</div> }
             </div>
           }
           @case ('library') {
@@ -250,7 +250,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                   @for (g of t.tags ?? []; track g) { <span class="tag">{{ g }}</span> }
                   <span class="sp"></span>
                   @if (last()[sel()]?.log; as lg) { <button type="button" (click)="openLog(lg, t.name || sel())" title="The last run's log: every step, what was sent and what came back">Run Log</button> }
-                  @if (!draft()) { <button type="button" (click)="edit()">✎ Edit</button> }
+                  @if (!draft()) { <button type="button" (click)="edit()">✎ Edit</button> } @else { <button type="button" (click)="draft.set(null)">Cancel</button><button type="button" class="savb" (click)="saveDraft()" title="Save the test (its YAML, Go, Python and TCL)">Save</button> }
                   <button type="button" (click)="testMenu($event)" title="Rename, duplicate, delete, open">⋯</button>
                   <button type="button" class="go" (click)="openRun([sel()], t.name || sel())" [disabled]="busy()"><app-icon name="play" [size]="12" /> {{ busy() ? 'Running…' : 'Run Test' }}</button>
                 </div>
@@ -327,7 +327,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                       </div>
                     }
                     <datalist id="tw-parse"><option value="auto"></option></datalist>
-                    <div class="row"><span class="mut">Saving writes the test's YAML and its Go, Python and TCL code again.</span><span class="sp"></span><button type="button" (click)="draft.set(null)">Cancel</button><button type="button" class="pri" (click)="saveDraft()">Save</button></div>
+                    <div class="row"><span class="mut">Saving writes the test's YAML and its Go, Python and TCL code again.</span></div>
                   } @else {
                     @for (ph of phases; track ph.k) {
                       @if (ph.k === 'steps' || listOf(t, ph.k).length) {
@@ -416,7 +416,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
         }
         <ng-template #fileView>
           @if (fileSel(); as fp) {
-            <div class="head"><div class="crumb">{{ fp }}</div><div class="title"><h1>{{ base(fp) }}</h1>@if (fp.startsWith('reports/')) { <span class="pill">read only</span> }@if (lockOf(fp); as l) { <span class="pill s">🔒 in use by {{ l.user }} on {{ l.host }} since {{ l.since.slice(11, 16) }}</span><button type="button" (click)="releaseLock(fp)" title="Free the testbed when that run is over">Release</button> }<span class="sp"></span><button type="button" (click)="copyText(fileText)" title="Copy to the clipboard"><app-icon name="copy" [size]="13" /> Copy</button><button type="button" (click)="backend.testsOpenInEditor(fp)">Open in VS Code</button>@if (!fp.startsWith('reports/')) { <button type="button" class="pri" (click)="saveFile()">Save</button> }</div></div>
+            <div class="head"><div class="crumb">{{ fp }}</div><div class="title"><h1>{{ base(fp) }}</h1>@if (fp.startsWith('reports/')) { <span class="pill">read only</span> }@if (lockOf(fp); as l) { <span class="pill s">🔒 in use by {{ l.user }} on {{ l.host }} since {{ l.since.slice(11, 16) }}</span><button type="button" (click)="releaseLock(fp)" title="Free the testbed when that run is over">Release</button> }<span class="sp"></span><button type="button" (click)="copyText(fileText)" title="Copy to the clipboard"><app-icon name="copy" [size]="13" /> Copy</button><button type="button" (click)="backend.testsOpenInEditor(fp)">Open in VS Code</button>@if (fp.startsWith('testbeds/') || fp.startsWith('suites/')) { <button type="button" class="badbtn" (click)="removeFile(fp)" title="Move it to .removed/ in the tests folder"><app-icon name="trash" [size]="13" /> Delete</button> }@if (!fp.startsWith('reports/')) { <button type="button" class="savb" (click)="saveFile()">Save</button> }</div></div>
             <div class="body"><textarea class="code" [(ngModel)]="fileText" spellcheck="false" [attr.aria-label]="fp"></textarea>
               <div class="row"><span class="mut">{{ fp.startsWith('lib/') ? 'Termwright writes twtest and run_tests again when it is updated: keep your own helpers in other files.' : fp.startsWith('templates/') ? 'TextFSM templates; the index says which command each one parses (ntc-templates format).' : 'Roles and values: role: Folder/session, name: value.' }}</span></div></div>
           } @else { <div class="empty mut">Select a file.</div> }
@@ -428,6 +428,43 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
           <div class="row"><h2 class="fl">Run log · {{ lv.title }}</h2><span class="sp"></span><button type="button" (click)="copyText(lv.text)">Copy</button><button type="button" (click)="backend.testsOpenInEditor(lv.file)">Open in Editor</button><button type="button" (click)="logView.set(null)">Close</button></div>
           <span class="mut">{{ lv.file }}</span>
           <pre class="logpre">@for (ln of lv.text.split('\n'); track $index) {<span [class]="logCls(ln)">{{ ln + '\n' }}</span>}</pre>
+        </div>
+      }
+      @if (tbPick()) {
+        <div class="scrim fixed" (click)="tbPick.set(false)" aria-hidden="true"></div>
+        <div class="mdlg wide" role="dialog" aria-label="New testbed">
+          <h3>New Testbed</h3>
+          <span class="mut">Choose the session folder: each of its sessions becomes a role the tests can use.</span>
+          <input class="tbq" [(ngModel)]="tbQuery" placeholder="Search folders" aria-label="Search folders" />
+          <div class="fpick">
+            @for (fo of folderList(); track fo.path) {
+              <div class="fo" [class.on]="tbFolder === fo.path" [style.padding-left.px]="10 + fo.depth * 16" (click)="tbFolder = fo.path; tbName = fo.name" (dblclick)="tbFolder = fo.path; tbName = fo.name; createTestbed()" role="button" tabindex="0">
+                <span class="fi"></span><span class="ell">{{ fo.name }}</span><span class="mut">{{ fo.n }} {{ fo.n === 1 ? 'session' : 'sessions' }}</span>
+              </div>
+            } @empty { <p class="mut">No session folders{{ tbQuery ? ' match' : '' }}.</p> }
+          </div>
+          @if (tbFolder) {
+            <span class="mut">Roles: {{ rolesOf(tbFolder).slice(0, 8).join(', ') }}{{ rolesOf(tbFolder).length > 8 ? ' …' : '' }}</span>
+            <label class="fld"><span>Testbed name</span><input [(ngModel)]="tbName" /></label>
+          }
+          <div class="row"><span class="sp"></span><button type="button" (click)="tbPick.set(false)">Cancel</button><button type="button" class="savb" (click)="createTestbed()" [disabled]="!tbFolder || !tbName.trim()">Create</button></div>
+        </div>
+      }
+      @if (exp(); as x) {
+        <div class="scrim fixed" (click)="exp.set(null)" aria-hidden="true"></div>
+        <div class="mdlg wide" role="dialog" aria-label="Export automation suite">
+          <h3>Export Automation Suite</h3>
+          <span class="mut">A zip that runs on its own: the tests with their code, the library, the testbeds, a plan and a run script that writes JUnit XML and each test's run log. The steps go through Termwright (the app, or <code>termwright tests serve</code> on a server), which logs in with the saved sessions - no passwords in the zip.</span>
+          <label class="fld"><span>Tests</span><select [(ngModel)]="x.what">
+            @if (picked().length) { <option value="picked">The {{ picked().length }} selected {{ picked().length === 1 ? 'test' : 'tests' }}</option> }
+            @if (sel()) { <option value="sel">This test ({{ base(sel()) }})</option> }
+            @for (p of tree()?.suites ?? []; track p.file) { <option [value]="p.file">Plan: {{ p.name }}</option> }
+            <option value="all">Every test in the folder</option></select></label>
+          <div class="segs"><span class="mut">Language</span>@for (l of ['python', 'go', 'tcl']; track l) { <button type="button" [class.on]="x.lang === l" (click)="x.lang = l">{{ l === 'python' ? 'Python' : l === 'go' ? 'Go' : 'TCL' }}</button> }</div>
+          <div class="segs"><span class="mut">Runs on</span>@for (o of ['linux', 'mac', 'windows']; track o) { <button type="button" [class.on]="x.os === o" (click)="x.os = o">{{ o === 'mac' ? 'macOS' : o === 'linux' ? 'Linux' : 'Windows' }}</button> }</div>
+          <label class="fld"><span>Testbed - the devices it runs on by default</span><select [(ngModel)]="x.testbed"><option value="">The tests' own sessions</option>@for (b of tree()?.testbeds ?? []; track b) { <option [value]="b">{{ base(b) }}</option> }</select></label>
+          <label class="fld"><span>Suite name</span><input [(ngModel)]="x.name" /></label>
+          <div class="row"><span class="sp"></span><button type="button" (click)="exp.set(null)">Cancel</button><button type="button" class="savb" (click)="doExport()">Export…</button></div>
         </div>
       }
       @if (manual(); as m) {
@@ -494,6 +531,8 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
     .list { flex: 1; overflow: auto; padding: 6px; display: flex; flex-direction: column; gap: 1px; }
     .fold { display: flex; align-items: center; gap: 6px; padding: 7px 6px 3px; color: var(--muted); font-size: 12px; } .fold .lnk { color: var(--muted); padding: 0; text-align: left; } .fold .fl { flex: 1; } .cnt { font-size: 11px; }
     .case { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 7px; cursor: pointer; }
+    .fold.suite { padding: 10px 6px 4px; } .fold.suite .lnk.fl { color: var(--text); font-size: 13.5px; font-weight: 600; } .fold.suite .cnt { font-size: 11.5px; }
+    .case.in { margin-left: 16px; font-size: 12.5px; }
     .case:hover { background: var(--hover, rgba(255,255,255,.05)); } .case.sel { background: color-mix(in srgb, var(--accent) 18%, transparent); }
     .case input { margin: 0; } .cn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .n { color: var(--muted); font-size: 11px; }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--text) 25%, transparent); flex: none; } .dot.p { background: var(--ok, #3fbf75); } .dot.f { background: var(--danger, #ef6161); } .dot.e { background: var(--warn, #e0a030); }
@@ -513,6 +552,13 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
     .vars { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; font: 12px/1.45 var(--mono, monospace); margin-bottom: 8px; } .vars .vk { color: var(--accent); } .vars .vv { word-break: break-all; }
     .dbg { display: flex; gap: 6px; margin-top: 10px; } .dbg button { height: 26px; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
     .chk { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; cursor: pointer; } .chk input { margin-top: 2px; }
+    .mdlg.wide { width: min(640px, 94vw); max-height: 86vh; } .mdlg h3 { margin: 0; font-size: 16px; }
+    .tbq { height: 30px; } .fpick { max-height: 300px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; padding: 4px; }
+    .fpick .fo { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; cursor: pointer; } .fpick .fo:hover { background: var(--hover); } .fpick .fo.on { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
+    .fpick .fi { width: 14px; height: 11px; border-radius: 2px; background: var(--folder, #d9b45a); flex: none; } .fpick .ell { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .segs { display: flex; align-items: center; gap: 6px; } .segs .mut { width: 80px; } .segs button { height: 28px; padding: 0 12px; } .segs button.on { background: var(--accent-soft) !important; border-color: var(--accent) !important; color: var(--text) !important; }
+    .sbtn { height: 28px; padding: 0 10px; font-size: 12.5px; }
+    .savb { background: var(--accent) !important; color: #fff !important; border-color: transparent !important; font-weight: 600; } .savb:hover { filter: brightness(1.1); }
     .selbar > * { white-space: nowrap; } .selbar { display: flex; align-items: center; gap: 8px; margin: 8px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: color-mix(in srgb, var(--text) 4%, transparent); }
     .selbar.col { flex-direction: column; align-items: stretch; } .selbar .full { justify-content: center; width: 100%; } .selbar b { font-weight: 600; font-size: 12.5px; }
     .main { position: relative; background: var(--bg); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -566,7 +612,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
     .lres .lms { font-weight: 400; color: inherit; opacity: .85; } .lres .lerr { font-weight: 400; color: #fca5a5; } .lres .lnote { font-weight: 400; color: #8b919b; }
     .console pre.unused { margin: 0; min-height: 60px; overflow: auto; padding: 8px 20px; font: 12px/1.45 var(--mono, monospace); color: #cfd3da; white-space: pre-wrap; }
     .lg-ok { color: #4ade80; } .lg-bad { color: #f87171; } .lg-hd { color: #e8eaee; font-weight: 600; }
-    .logdlg { width: min(1000px, 94vw); height: min(80vh, 900px); } .logpre { flex: 1; margin: 0; overflow: auto; padding: 10px 12px; border-radius: 8px; background: #111317; color: #cfd3da; font: 12px/1.5 var(--mono, monospace); white-space: pre-wrap; }
+    .logdlg { width: min(1500px, 96vw); height: min(88vh, 1100px); } .logpre { flex: 1; margin: 0; overflow: auto; padding: 10px 12px; border-radius: 8px; background: #111317; color: #cfd3da; font: 12px/1.5 var(--mono, monospace); white-space: pre; }
     .live { display: flex; align-items: center; gap: 10px; padding: 7px 20px; background: color-mix(in srgb, var(--accent) 12%, var(--panel)); border-bottom: 1px solid var(--border); font-size: 12.5px; }
     .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); border-top-color: var(--accent); animation: sp 0.9s linear infinite; } @keyframes sp { to { transform: rotate(360deg); } }
     .scrim.fixed { position: fixed; z-index: 50; } .mdlg { position: fixed; z-index: 51; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(560px, 92vw); display: flex; flex-direction: column; gap: 10px; padding: 20px 22px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 24px 60px rgba(0,0,0,.45); }
@@ -866,6 +912,53 @@ export class TestsView implements OnInit, OnDestroy {
     } catch (e) { this.ui.toast(errText(e), 'error'); }
     this.busy.set(false);
   }
+  readonly tbPick = signal(false);
+  tbQuery = ''; tbFolder = ''; tbName = '';
+  openTbPick() { this.tbQuery = ''; this.tbFolder = ''; this.tbName = ''; this.tbPick.set(true); if (!this.ui.tree()) void this.backend.getSessionTree().then(t => this.ui.tree.set(t)).catch(() => {}); }
+  folderList() {
+    const out: { path: string; name: string; depth: number; n: number }[] = [], q = this.tbQuery.trim().toLowerCase();
+    const count = (n: SessionNode): number => (n.children ?? []).reduce((k, c) => k + (c.isFolder ? count(c) : 1), 0);
+    const walk = (l: SessionNode[], d: number) => { for (const n of l) if (n.isFolder) { const k = count(n); if (k && (!q || n.path.toLowerCase().includes(q))) out.push({ path: n.path, name: n.name, depth: q ? 0 : d, n: k }); walk(n.children ?? [], d + 1); } };
+    walk(this.ui.tree()?.children ?? [], 0);
+    return out;
+  }
+  rolesOf(path: string) {
+    const find = (l: SessionNode[]): SessionNode | null => { for (const n of l) { if (n.path === path) return n; const r = find(n.children ?? []); if (r) return r; } return null; };
+    const all = (n: SessionNode | null): SessionNode[] => (n?.children ?? []).flatMap(c => c.isFolder ? all(c) : [c]);
+    return all(find(this.ui.tree()?.children ?? [])).map(c => c.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''));
+  }
+  fileMenu(ev: MouseEvent, rel: string) {
+    ev.preventDefault();
+    this.ui.showMenu(ev, [
+      { label: 'Open', action: () => void this.openFile(rel) },
+      { label: 'Open in VS Code', action: () => void this.backend.testsOpenInEditor(rel) },
+      { separator: true },
+      { label: rel.startsWith('suites/') ? 'Delete Plan' : 'Delete Testbed', icon: 'trash', action: () => void this.removeFile(rel) },
+    ]);
+  }
+  async removeFile(rel: string) {
+    if (!(await this.ui.confirm(tr('Delete {0}?', this.base(rel)), tr('It is moved to .removed/ in the tests folder (it can be brought back from there).'), tr('Delete'), true))) return;
+    try { await this.backend.testRemove(rel); if (this.fileSel() === rel) this.fileSel.set(''); this.ui.toast(tr('Deleted {0}', this.base(rel)), 'success'); await this.load(); }
+    catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  async createTestbed() {
+    if (!this.tbFolder || !this.tbName.trim()) return;
+    this.tbPick.set(false);
+    try { const rel = await this.backend.testsNewTestbed(this.tbName.trim(), this.tbFolder); this.ui.toast(tr('Wrote {0}', rel), 'success'); await this.load(); void this.openFile(rel); this.section.set('testbeds'); }
+    catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  readonly exp = signal<{ what: string; lang: string; os: string; testbed: string; name: string } | null>(null);
+  openExport() {
+    const plat = navigator.platform.toLowerCase(), os = plat.includes('win') ? 'windows' : plat.includes('mac') ? 'mac' : 'linux';
+    const what = this.picked().length ? 'picked' : this.sel() ? 'sel' : 'all';
+    this.exp.set({ what, lang: 'python', os, testbed: this.testbed || '', name: (this.tree()?.root ?? 'termwright-suite').split(/[\\/]/).pop() || 'termwright-suite' });
+  }
+  async doExport() {
+    const x = this.exp(); if (!x) return;
+    const files = x.what === 'picked' ? this.picked() : x.what === 'sel' ? [this.sel()] : x.what === 'all' ? [] : [x.what];
+    try { const p = await this.backend.testsExport({ files, lang: x.lang, os: x.os, testbed: x.testbed, name: x.name }); if (p) { this.exp.set(null); this.ui.toast(tr('Exported {0}', p), 'success'); } }
+    catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
   async newTestbed() {
     const folder = await this.ui.input(tr('New Testbed'), tr('Session folder whose sessions become roles (e.g. Lab)'), '');
     if (!folder) return;
@@ -968,6 +1061,7 @@ export class TestsView implements OnInit, OnDestroy {
     this.ui.showMenu(ev, [
       { label: 'Write a Test with AI…', action: () => void this.writeWithAI() },
       { label: 'Import Test Cases (Excel, CSV, Postman, OpenAPI)…', action: () => void this.importManual() },
+      { label: 'Export Automation Suite (Go, Python, TCL)…', icon: 'export', action: () => this.openExport() },
       { separator: true },
       { label: 'Open a Tests Folder…', action: () => void this.openFolder() },
       { label: 'Clone a Git Repository…', action: () => void this.clone() },

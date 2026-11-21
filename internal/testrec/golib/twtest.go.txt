@@ -5,7 +5,9 @@
 // through API sessions) and checks the answers. Only the Go standard library is used.
 //
 // Settings: TERMWRIGHT_API and TERMWRIGHT_KEY (else mcp.json in Termwright's data folder);
-// -tw.var name=value (repeatable) and -tw.testbed file (lines "name: value") set {{variables}}.
+// -tw.var name=value (repeatable) and -tw.testbed file (lines "name: value") set {{variables}};
+// TW_LOG_DIR=<folder>: each test writes its run log there (sent, output, each check expected and found).
+// Hand-written tests can use s.Configure, s.WaitFor, tw.Log and tw.Session(role) beyond the generated steps.
 package twtest
 
 import (
@@ -53,6 +55,29 @@ type T struct {
 	Vars    map[string]string
 	stopped bool
 	restore string
+	logf    *os.File
+}
+
+func (c *T) log(text string) {
+	if c.logf != nil {
+		fmt.Fprintln(c.logf, strings.TrimRight(text, "\n"))
+	}
+}
+
+// Log writes a line to the run log and the test output.
+func (c *T) Log(text string) {
+	c.t.Helper()
+	text = c.Fill(text)
+	c.t.Log(text)
+	c.log(text)
+}
+
+// Session is a testbed role's saved session ("core" -> "Lab/core-sw1"); the role itself when it is not one.
+func (c *T) Session(role string) string {
+	if s, ok := c.Vars[role]; ok {
+		return s
+	}
+	return role
 }
 
 // New starts a test case with its own variables; the testbed's and -tw.var values win.
@@ -72,7 +97,17 @@ func New(t *testing.T, vars map[string]string) *T {
 	for k, x := range flagVars {
 		v[k] = x
 	}
-	return &T{t: t, Vars: v}
+	c := &T{t: t, Vars: v}
+	if d := os.Getenv("TW_LOG_DIR"); d != "" {
+		_ = os.MkdirAll(d, 0o755)
+		name := strings.Trim(regexp.MustCompile(`[^\w.-]+`).ReplaceAllString(t.Name(), "-"), "-")
+		if f, err := os.OpenFile(filepath.Join(d, name+".log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); err == nil {
+			c.logf = f
+			t.Cleanup(func() { f.Close() })
+			c.log("Test:     " + t.Name() + "\nStarted:  " + time.Now().Format("2006-01-02 15:04:05"))
+		}
+	}
+	return c
 }
 
 // Params runs fn once per params entry as a subtest named [k=v, …]; the entry's values win over
@@ -249,11 +284,15 @@ func call(body map[string]any, out any) error {
 // Step runs one step as a subtest.
 func (c *T) Step(name string, continueOnFail bool, fn func(s *Step)) {
 	name = c.Fill(name)
+	c.log("\n=== " + name + " ===")
 	if c.stopped {
+		c.log("Result:   SKIPPED (an earlier step failed)")
 		c.t.Run(name, func(t *testing.T) { t.Skip("an earlier step failed") })
 		return
 	}
+	t0 := time.Now()
 	ok := c.t.Run(name, func(t *testing.T) { fn(&Step{T: t, c: c}) })
+	c.log(fmt.Sprintf("Result:   %s  (%d ms)", map[bool]string{true: "PASSED", false: "FAILED"}[ok], time.Since(t0).Milliseconds()))
 	if !ok && !continueOnFail {
 		c.stopped = true
 	}
@@ -276,6 +315,62 @@ type Step struct {
 	*testing.T
 	c     *T
 	retry map[string]any
+}
+
+// Errorf fails the step and notes it in the run log.
+func (s *Step) Errorf(format string, a ...any) {
+	s.Helper()
+	s.c.log("  ✗ FAIL  " + strings.SplitN(fmt.Sprintf(format, a...), "\n", 2)[0])
+	s.T.Errorf(format, a...)
+}
+
+// Fatalf fails the step, notes it in the run log and ends it.
+func (s *Step) Fatalf(format string, a ...any) {
+	s.Helper()
+	s.c.log("  ✗ FAIL  " + strings.SplitN(fmt.Sprintf(format, a...), "\n", 2)[0])
+	s.T.Fatalf(format, a...)
+}
+
+// ok notes a passed check in the run log.
+func (s *Step) ok(what, found string) {
+	if found == "" {
+		found = "found"
+	}
+	s.c.log(fmt.Sprintf("  ✓ pass  %-50s  %s", what, found))
+}
+
+// Log writes a line to the run log and the test output.
+func (s *Step) Log(text string) { s.Helper(); s.c.Log(text) }
+
+// Configure sends configuration commands one after another; a device error fails the step.
+func (s *Step) Configure(session string, commands []string, prompt string) *Answer {
+	s.Helper()
+	var out []string
+	for _, c := range commands {
+		if strings.TrimSpace(c) != "" && !s.Failed() {
+			out = append(out, s.Run(session, c, prompt, 0).Output)
+		}
+	}
+	return &Answer{s: s, Output: strings.Join(out, "\n")}
+}
+
+// WaitFor runs the command until its output matches the regular expression, or fails after timeout seconds.
+func (s *Step) WaitFor(session, command, pattern string, timeout, interval time.Duration) *Answer {
+	s.Helper()
+	re := regexp.MustCompile(s.c.Fill(pattern))
+	end := time.Now().Add(timeout * time.Second)
+	for {
+		a := s.Run(session, command, "", 0)
+		if m := re.FindString(a.Output); m != "" {
+			s.ok("matches "+re.String()+" (waited for it)", m)
+			return a
+		}
+		if time.Now().After(end) {
+			s.Errorf("%q did not show %s within %v", s.c.Fill(command), re, timeout*time.Second)
+			return a
+		}
+		time.Sleep(interval * time.Second)
+	}
 }
 
 // Request is an HTTP step.
@@ -301,6 +396,8 @@ type snmpRow struct{ OID, Name, Value, Display string }
 // Answer is what a step got.
 type Answer struct {
 	Rows   []snmpRow `json:"rows"`
+	Target string    `json:"target"`
+	Sent   string    `json:"sent"`
 	s      *Step
 	Output string `json:"output"`
 	Status int    `json:"status"`
@@ -419,6 +516,15 @@ func (s *Step) send(step map[string]any) *Answer {
 	if err := json.Unmarshal([]byte(out.Result), a); err != nil {
 		s.Fatalf("Termwright: %v", err)
 	}
+	if a.Target != "" {
+		s.c.log("Device:   " + a.Target)
+	}
+	if a.Sent != "" {
+		s.c.log("Sent:     " + a.Sent)
+	}
+	if a.Output != "" {
+		s.c.log("--- output ---\n" + strings.TrimRight(a.Output, "\n") + "\n--------------")
+	}
 	if a.Error != "" {
 		s.Fatalf("%s", a.Error)
 	}
@@ -458,6 +564,8 @@ func (a *Answer) Contains(text string) *Answer {
 	a.s.Helper()
 	if t := a.s.c.Fill(text); !hasText(a.Output, t) {
 		a.s.Errorf("expected the output to contain %q\n%s", t, a.Output)
+	} else {
+		a.s.ok(fmt.Sprintf("contains %q", t), "")
 	}
 	return a
 }
@@ -633,6 +741,8 @@ func (v *Value) Equals(want string) *Value {
 	v.s.Helper()
 	if w := v.s.c.Fill(want); !v.Found || (v.Text != w && (v.raw == "" || v.raw != w)) {
 		v.s.Errorf("%s: expected %q, got %q", v.what, w, v.Text)
+	} else {
+		v.s.ok(fmt.Sprintf("%s = %q", v.what, w), v.Text)
 	}
 	return v
 }

@@ -2,6 +2,14 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## Unreleased
+
+- **Export an automation suite**: ⋯ → **Export Automation Suite** packs the chosen tests, a plan or every test as a zip that runs on its own - the YAML and its Go, Python or TCL code, the library, the testbeds, the templates, `plan.txt` and a run script for Linux, macOS (`run.sh`) or Windows (`run.ps1`, `run.cmd`). A run writes `reports/<date-time>/` with JUnit XML and each test's run log. The steps still go through Termwright (the app or `termwright tests serve`), so no passwords are in the zip.
+
+- **A fuller library for your own framework**: the Go, Python and TCL helpers write each test's **run log** (`TW_LOG_DIR`: what was sent, what came back, each check with expected and found, the result) and add `configure` (several commands, stops at a device error), `wait_for` (until the output matches), `log`, and testbed roles (`session(role)`, `testbed()`). The Python and TCL runners take `--testbed`, `--list plan.txt` and `--reports`.
+
+- **Tests tab tidy-ups**: Save and Cancel sit at the top next to Edit while editing; Clear and Save as Plan are buttons; suite names are larger with their tests indented under them; the run log viewer is wider and keeps the device's line layout; **+ New** testbed picks the session folder from a list of your folders, showing the roles it will make; testbeds and plans can be deleted (right-click, or Delete in the file view; they go to `.removed/`).
+
 ## 0.43.0 (2026-11-21)
 
 - **Faster steps**: after the first command, a prompt shaped like the last one (`Stack.5 #` after `Stack.4 #`) is recognised after 0.2 s of quiet instead of 0.9 s, so each command step takes about a third of the time.

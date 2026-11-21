@@ -403,3 +403,25 @@ func (a *App) TestHistory(file string, limit int) ([]testrec.TestHistory, error)
 	}
 	return f.History(file, limit), nil
 }
+
+// TestsExport packs a standalone suite (tests, generated code, library, testbeds, plan, run script for the
+// OS) as a zip the person saves; it returns the file.
+func (a *App) TestsExport(o testrec.ExportOptions) (string, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return "", err
+	}
+	b, name, err := f.Export(o)
+	if err != nil {
+		return "", err
+	}
+	p, err := wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{Title: "Export Automation Suite", DefaultFilename: name, CanCreateDirectories: true})
+	if err != nil || p == "" {
+		return "", err
+	}
+	if err := os.WriteFile(p, b, 0o644); err != nil {
+		return "", err
+	}
+	f.Audit("export", fmt.Sprintf("%s (%s, %s, %d tests or plans)", filepath.Base(p), o.Lang, o.OS, len(o.Files)))
+	return p, nil
+}

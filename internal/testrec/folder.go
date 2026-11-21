@@ -728,11 +728,15 @@ func (f Folder) Remove(rel string) (string, error) {
 	}
 	r, _ := filepath.Rel(f.Root, p)
 	r = filepath.ToSlash(r)
-	if !strings.HasPrefix(r, "cases/") || !isCaseFile(r) {
-		return "", fmt.Errorf("%s is not a test in cases/", rel)
+	files := []string{r, GoFile(r), PyFile(r), TclFile(r)}
+	switch {
+	case (strings.HasPrefix(r, "testbeds/") || strings.HasPrefix(r, "suites/")) && isCaseFile(r):
+		files = []string{r} // a testbed or a plan
+	case !strings.HasPrefix(r, "cases/") || !isCaseFile(r):
+		return "", fmt.Errorf("%s is not a test, testbed or plan", rel)
 	}
 	dest := filepath.Join(".removed", time.Now().Format("2006-01-02_150405"))
-	for _, x := range []string{r, GoFile(r), PyFile(r), TclFile(r)} {
+	for _, x := range files {
 		src := filepath.Join(f.Root, filepath.FromSlash(x))
 		if _, err := os.Stat(src); err != nil {
 			continue

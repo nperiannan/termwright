@@ -233,6 +233,7 @@ proc tw::test {name defaults params body} {
             append label " \[[join $kv {, }]\]"
         }
         puts "# $label"
+        tw::logopen $label
         uplevel 1 $body
     }
 }
@@ -245,8 +246,11 @@ proc tw::step {name continue body} {
     variable skip $stopped
     incr n
     set name [tw::fill $name]
-    if {$skip} { puts "ok $n - $name # SKIP an earlier step failed"; return }
-    if {[catch {uplevel 1 $body} err]} { lappend errors $err }
+    tw::log_ "\n=== $name ==="
+    if {$skip} { puts "ok $n - $name # SKIP an earlier step failed"; tw::log_ "Result:   SKIPPED (an earlier step failed)"; return }
+    set t0 [clock milliseconds]
+    if {[catch {uplevel 1 $body} err]} { lappend errors $err; tw::log_ "  \u2717 FAIL  [lindex [split $err \n] 0]" }
+    tw::log_ "Result:   [expr {[llength $errors] ? {FAILED} : {PASSED}}]  ([expr {[clock milliseconds] - $t0}] ms)"
     if {[llength $errors]} {
         incr failed
         puts "not ok $n - $name"
@@ -257,7 +261,48 @@ proc tw::step {name continue body} {
     }
 }
 
-proc tw::fail {msg} { variable errors; lappend errors $msg }
+proc tw::fail {msg} { variable errors; lappend errors $msg; tw::log_ "  \u2717 FAIL  [lindex [split $msg \n] 0]" }
+
+# tw::ok what found: a check that passed, for the run log.
+proc tw::ok {what {found found}} { tw::log_ [format "  \u2713 pass  %-50s  %s" $what $found] }
+
+# The run log: with TW_LOG_DIR set, each test writes <test>.log there (sent, output, checks, results).
+proc tw::logopen {name} {
+    global env
+    variable logfh ""
+    if {![info exists env(TW_LOG_DIR)] || $env(TW_LOG_DIR) eq ""} { return }
+    file mkdir $env(TW_LOG_DIR)
+    set safe [string range [string trim [regsub -all {[^A-Za-z0-9_.-]+} $name -] -] 0 119]
+    set logfh [open [file join $env(TW_LOG_DIR) "$safe.log"] a]
+    fconfigure $logfh -encoding utf-8
+    puts $logfh "Test:     $name\nStarted:  [clock format [clock seconds] -format {%Y-%m-%d %H:%M:%S}]"
+}
+proc tw::log_ {text} { variable logfh; if {[info exists logfh] && $logfh ne ""} { puts $logfh $text; flush $logfh } }
+
+# tw::log text: a line in the run log and on the console.
+proc tw::log {text} { set t [tw::fill $text]; puts "# $t"; tw::log_ $t }
+
+# tw::configure session commands: sends configuration commands one after another (a device error fails the step).
+proc tw::configure {session commands {prompt ""}} {
+    variable errors
+    foreach c $commands { if {[string trim $c] ne "" && ![llength $errors]} { tw::run $session $c $prompt } }
+}
+
+# tw::wait_for session command pattern ?timeout? ?interval?: runs the command until its output matches.
+proc tw::wait_for {session command pattern {timeout 60} {interval 5} {prompt ""}} {
+    set p [tw::fill $pattern]
+    set end [expr {[clock seconds] + $timeout}]
+    while 1 {
+        tw::run $session $command $prompt
+        if {[regexp -- $p [tw::_get output] m]} { tw::ok "matches $p (waited for it)" $m; return }
+        if {[clock seconds] >= $end} { tw::fail "\"[tw::fill $command]\" did not show $p within $timeout s"; return }
+        after [expr {$interval * 1000}]
+    }
+}
+
+# tw::testbed: the testbed's variables (role -> session, …) as a dict; tw::session role: a role's session.
+proc tw::testbed {} { variable vars; return $vars }
+proc tw::session {role} { variable vars; if {[dict exists $vars $role]} { return [dict get $vars $role] }; return $role }
 
 # tw::cleanup name body: a cleanup step - it runs even after a failed step and never skips the rest.
 proc tw::cleanup {name body} {
@@ -333,6 +378,8 @@ proc tw::_send {stepjson} {
     set res [lindex [dict get [lindex [tw::jparse $body] 1] result] 1]
     set ans [lindex [tw::jparse $res] 1]
     if {[dict exists $ans error] && [lindex [dict get $ans error] 1] ne ""} { error [lindex [dict get $ans error] 1] }
+    foreach {k l} {target Device: sent Sent:} { if {[tw::_get $k] ne ""} { tw::log_ [format "%-9s %s" $l [tw::_get $k]] } }
+    if {[tw::_get output] ne ""} { tw::log_ "--- output ---\n[string trimright [tw::_get output] \n]\n--------------" }
 }
 
 proc tw::_get {k} {
@@ -441,7 +488,7 @@ proc tw::has_text {out t} {
 
 proc tw::contains {text} {
     set t [tw::fill $text]
-    if {![tw::has_text [tw::_get output] $t]} { tw::fail "expected the output to contain \"$t\"\n[tw::_get output]" }
+    if {![tw::has_text [tw::_get output] $t]} { tw::fail "expected the output to contain \"$t\"\n[tw::_get output]" } else { tw::ok "contains \"$t\"" }
 }
 
 proc tw::not_contains {text} {
@@ -517,7 +564,7 @@ proc tw::check {kind subject op {want ""}} {
         missing    { set pass [expr {!$ok}] }
         default    { error "unknown check $op" }
     }
-    if {!$pass} { tw::fail "$what: expected $op $w, got \"$t\"" }
+    if {!$pass} { tw::fail "$what: expected $op $w, got \"$t\"" } else { tw::ok "$what $op $w" $t }
 }
 
 proc tw::save {var kind subject} {

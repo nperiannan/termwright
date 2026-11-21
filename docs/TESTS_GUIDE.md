@@ -149,7 +149,25 @@ A run that needs an approval offers **Ask for an Approval** (with a reason). The
 
 API steps can also check the answer against a **JSON Schema**: `schema: schemas/vlan.json` (a file in the tests folder) or the schema itself.
 
-## 14. Code, CI and the AI assistant
+## 14. Export a standalone suite
+
+⋯ → **Export Automation Suite** asks which tests (the selected ones, this test, a plan or all), the language (Python, Go or TCL), the operating system it will run on (Linux, macOS or Windows), the default testbed and a name, and saves a zip:
+
+```
+network-tests/
+  cases/…          the YAML and the generated code
+  lib/…            the helper library and its runner
+  testbeds/…  templates/…  suites/…
+  plan.txt         the tests to run, in order - edit it to run fewer or more
+  run.sh           (run.ps1 and run.cmd on Windows)
+  README.md
+```
+
+`./run.sh` (or `./run.sh testbeds/other.yaml`) runs the plan and writes `reports/<date-time>/junit.xml` and `logs/` with each test's run log. The steps go through Termwright - the desktop app with its Local API on, or `termwright tests serve` on a server - which logs in with the saved sessions, so the zip holds no passwords.
+
+The library is also what you build on: besides run, http, snmp and the checks, it has `configure(session, commands)`, `wait_for(session, command, pattern, timeout, interval)`, `log(text)` and `session(role)` (Go: `Configure`, `WaitFor`, `Log`, `Session`; TCL: `tw::configure`, `tw::wait_for`, `tw::log`, `tw::session`).
+
+## 15. Code, CI and the AI assistant
 
 The generated tests run outside the window while Termwright is open - they send each step to Termwright, which logs in with the saved logins:
 
