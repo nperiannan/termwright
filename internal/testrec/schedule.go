@@ -15,6 +15,8 @@ type Schedule struct {
 	Files []string `json:"files,omitempty"`
 	// Testbed: a file in testbeds/ whose values fill the {{variables}}.
 	Testbed string `json:"testbed,omitempty"`
+	// Tags: only tests with one of these tags.
+	Tags []string `json:"tags,omitempty"`
 	// Repeat: daily, weekdays, weekly or hours.
 	Repeat string `json:"repeat"`
 	// At: the time of day (15:04) for daily, weekdays and weekly.

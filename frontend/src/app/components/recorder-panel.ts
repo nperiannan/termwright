@@ -210,6 +210,8 @@ export function expectLabel(e: TestExpect): string {
 }
 /** What a step sends, for lists: the command, "GET /path" or "walk IF-MIB::ifTable". */
 export function stepText(s: TestStep): string {
+  if (s.loop) return `for each {{${s.loop.var}}} in ${s.loop.values?.join(', ') ?? s.loop.range ?? s.loop.from ?? ''}: ${s.loop.steps.map(stepText).join('; ')}`;
+  if (!s.run && !s.http && !s.snmp) return s.wait ? `wait ${s.wait} s` : '';
   if (s.run) return s.run.command;
   if (s.snmp) return s.snmp.op === 'set' ? 'set ' + (s.snmp.values ?? []).map(v => `${v.oid} = ${v.value}`).join(', ') : `${s.snmp.op || 'get'} ${(s.snmp.oids ?? []).join(' ')}`;
   return `${s.http?.method || 'GET'} ${s.http?.url ?? ''}`;

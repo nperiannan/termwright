@@ -118,11 +118,31 @@ func TestGeneratedGoRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.Save("tables/t", tb)
+	lg, err := Parse([]byte(`vars: {cmds: "show version, show vlan 42"}
+steps:
+  - wait: 0.01
+  - loop: {var: c, from: "{{cmds}}", steps: [{run: {session: Lab/sw1, command: "{{c}}"}}]}
+  - loop: {var: p, values: ["1", "2"], steps: [{run: {session: Lab/sw1, command: show version}, expect: [{contains: ExtremeXOS}]}]}
+  - run: {session: Lab/sw1, command: show vlan 42}
+    if: "{{cmds}} contains vlan"
+    retry: {timeout: 1, interval: 0.1}
+    expect: [{contains: created}]
+  - run: {session: Lab/sw1, command: show vlan 42}
+    if: "1 == 2"
+    expect: [{contains: NOPE}]
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Save("logic/l", lg)
+	if r := Run(context.Background(), lg, fk, nil); !r.Passed {
+		t.Fatalf("logic run: %+v", r)
+	}
 	if r := Run(context.Background(), tb, fk, nil); !r.Passed {
 		t.Fatalf("table run: %+v", r)
 	}
 	os.WriteFile(filepath.Join(f.Root, "testbeds", "nested.yaml"), []byte("site:\n  sw: Lab/sw1   # the core\n"), 0o644)
-	for _, file := range []string{"cases/vlan/vlan42.yaml", "cases/other/bad.yaml", "cases/snmp/ifs.yaml", "cases/params/vlans.yaml", "cases/clean/c.yaml", "cases/tables/t.yaml"} {
+	for _, file := range []string{"cases/vlan/vlan42.yaml", "cases/other/bad.yaml", "cases/snmp/ifs.yaml", "cases/params/vlans.yaml", "cases/clean/c.yaml", "cases/tables/t.yaml", "cases/logic/l.yaml"} {
 		if _, err := f.WriteGo(file); err != nil {
 			t.Fatal(err)
 		}
@@ -134,7 +154,7 @@ func TestGeneratedGoRuns(t *testing.T) {
 		out, err := cmd.CombinedOutput()
 		return string(out), err
 	}
-	if out, err := run("test", "-count=1", "./cases/vlan/", "./cases/snmp/", "./cases/tables/"); err != nil {
+	if out, err := run("test", "-count=1", "./cases/vlan/", "./cases/snmp/", "./cases/tables/", "./cases/logic/"); err != nil {
 		t.Fatalf("vlan: %v\n%s", err, out)
 	}
 	if out, err := run("test", "-count=1", "-v", "./cases/params/", "-args", "-tw.testbed=testbeds/nested.yaml"); err != nil || !strings.Contains(out, "[vlan=42]") || !strings.Contains(fk.sent[len(fk.sent)-1], "Lab/sw1: show vlan 42") {
@@ -164,7 +184,7 @@ func TestGeneratedGoRuns(t *testing.T) {
 			out, err := cmd.CombinedOutput()
 			return string(out), err
 		}
-		if out, err := prun([]string{"TW_TESTBED=testbeds/nested.yaml"}, "cases/vlan", "cases/snmp", "cases/params", "cases/tables", "--junit", "py.xml"); err != nil {
+		if out, err := prun([]string{"TW_TESTBED=testbeds/nested.yaml"}, "cases/vlan", "cases/snmp", "cases/params", "cases/tables", "cases/logic", "--junit", "py.xml"); err != nil {
 			t.Fatalf("python: %v\n%s", err, out)
 		}
 		if x, _ := os.ReadFile(filepath.Join(f.Root, "py.xml")); !strings.Contains(string(x), "<testsuite") || !strings.Contains(string(x), "params='vlan=42'") {
@@ -188,7 +208,7 @@ func TestGeneratedGoRuns(t *testing.T) {
 			out, err := cmd.CombinedOutput()
 			return string(out), err
 		}
-		if out, err := trun([]string{"TW_TESTBED=testbeds/nested.yaml"}, "cases/vlan", "cases/snmp", "cases/params", "cases/tables", "-junit", "tcl.xml"); err != nil || !strings.Contains(out, "ok 1 - show vlan 42") {
+		if out, err := trun([]string{"TW_TESTBED=testbeds/nested.yaml"}, "cases/vlan", "cases/snmp", "cases/params", "cases/tables", "cases/logic", "-junit", "tcl.xml"); err != nil || !strings.Contains(out, "ok 1 - show vlan 42") {
 			t.Fatalf("tcl: %v\n%s", err, out)
 		}
 		if x, _ := os.ReadFile(filepath.Join(f.Root, "tcl.xml")); !strings.Contains(string(x), `failures="0"`) {

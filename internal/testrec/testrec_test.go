@@ -453,3 +453,75 @@ func TestCleanupModes(t *testing.T) {
 		t.Fatal(f.sent, r.Steps)
 	}
 }
+
+func TestSuitesTagsDeps(t *testing.T) {
+	f := Folder{Root: t.TempDir()}
+	f.Init()
+	mk := func(rel, y string) {
+		c, err := Parse([]byte(y))
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.Save(rel, c)
+	}
+	mk("vlan/create", "name: create\ntags: [l2, smoke]\nsteps: [{run: {session: s, command: show vlan 42}, expect: [{contains: NOPE}]}]")
+	mk("vlan/ports", "name: ports\ntags: [l2]\ndependsOn: [vlan/create]\nsteps: [{run: {session: s, command: show version}}]")
+	mk("sys/ver", "name: ver\ntags: [smoke]\nsteps: [{run: {session: s, command: show version}}]")
+	f.SaveSuite("l2", Suite{Tests: []string{"cases/vlan/ports.yaml", "cases/vlan/create.yaml"}})
+	f.SaveSuite("nightly", Suite{Tests: []string{"suites/l2.yaml", "cases/sys"}, Tags: []string{"!skipme"}})
+	got, err := f.ExpandFiles([]string{"suites/nightly.yaml"}, nil)
+	if err != nil || strings.Join(got, ",") != "cases/vlan/create.yaml,cases/vlan/ports.yaml,cases/sys/ver.yaml" {
+		t.Fatal(got, err)
+	}
+	if got, _ := f.ExpandFiles(nil, []string{"smoke", "!l2"}); strings.Join(got, ",") != "cases/sys/ver.yaml" {
+		t.Fatal(got)
+	}
+	if got, _ := f.ExpandFiles([]string{"cases/vlan"}, nil); len(got) != 2 {
+		t.Fatal(got)
+	}
+	rep, err := f.RunFilesWith(context.Background(), []string{"suites/l2.yaml"}, &fake{}, nil, RunOptions{}, nil)
+	if err != nil || rep.Failed != 1 || rep.Skipped != 1 || !strings.Contains(rep.Results[1].Error, "depends on") {
+		t.Fatal(rep, err)
+	}
+	if s := f.Suites(); len(s) != 2 || s[1].Tests != 3 {
+		t.Fatal(s)
+	}
+}
+
+func TestLogic(t *testing.T) {
+	for in, want := range map[string]bool{"42 == 42": true, "v42 != v42": false, "abc contains b": true, "10 > 9": true, "x ~ ^x$": true, "": false, "{{y}}": false, "yes": true, "abc !contains z": true} {
+		if got, err := Cond(in); err != nil || got != want {
+			t.Fatal(in, got, err)
+		}
+	}
+	if v, _ := rangeValues("1:1-1:3"); strings.Join(v, ",") != "1:1,1:2,1:3" {
+		t.Fatal(v)
+	}
+	c, err := Parse([]byte(`vars: {list: "show version, show vlan 42"}
+steps:
+  - wait: 0.01
+  - loop: {var: cmd, from: "{{list}}", steps: [{run: {session: s, command: "{{cmd}}"}}]}
+  - run: {session: s, command: show version}
+    if: "{{list}} contains vlan"
+  - run: {session: s, command: show vlan 42}
+    if: "1 == 2"
+  - run: {session: s, command: show version}
+    expect: [{contains: NOPE}]
+    retry: {timeout: 0.05, interval: 0.02}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &fake{}
+	r := Run(context.Background(), c, f, nil)
+	names := []string{}
+	for _, s := range r.Steps {
+		names = append(names, s.Name)
+	}
+	if r.Passed || len(r.Steps) != 6 || r.Steps[1].Name != "show version [cmd=show version]" || !r.Steps[4].Skipped || !strings.Contains(r.Steps[5].Error, "did not pass") || len(f.sent) < 5 {
+		t.Fatal(names, r.Steps[5], f.sent)
+	}
+	if _, err := Parse([]byte("steps: [{loop: {var: x, steps: [{run: {session: s, command: a}}]}}]")); err == nil {
+		t.Fatal("loop without values parsed")
+	}
+}

@@ -175,15 +175,16 @@ func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt 
 				sctx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
 				defer cancel()
 			}
-			sr := runStep(sctx, st, i, d, v)
-			sr.Phase = phase
-			r.Steps = append(r.Steps, sr)
-			if !sr.Passed {
-				r.Passed = false
-				if phase == "cleanup" {
-					r.CleanupFailed = true
-				} else if !st.ContinueOnFail {
-					failed = true
+			for _, sr := range execStep(sctx, st, i, d, v) {
+				sr.Phase = phase
+				r.Steps = append(r.Steps, sr)
+				if !sr.Passed && !sr.Skipped {
+					r.Passed = false
+					if phase == "cleanup" {
+						r.CleanupFailed = true
+					} else if !st.ContinueOnFail {
+						failed = true
+					}
 				}
 			}
 		}
@@ -260,8 +261,13 @@ type Restorer interface {
 func Sessions(c Case, v map[string]string) []string {
 	var out []string
 	seen := map[string]bool{}
-	for _, list := range [][]Step{c.Setup, c.Steps, c.Cleanup} {
+	var walk func(list []Step)
+	walk = func(list []Step) {
 		for _, st := range list {
+			if st.Loop != nil {
+				walk(st.Loop.Steps)
+				continue
+			}
 			p := ""
 			if st.Run != nil {
 				p = st.Run.Session
@@ -273,6 +279,9 @@ func Sessions(c Case, v map[string]string) []string {
 				out = append(out, p)
 			}
 		}
+	}
+	for _, list := range [][]Step{c.Setup, c.Steps, c.Cleanup} {
+		walk(list)
 	}
 	return out
 }
@@ -356,6 +365,10 @@ func stepName(s Step, i int) string {
 	switch {
 	case s.Name != "":
 		return s.Name
+	case s.Loop != nil:
+		return "loop " + s.Loop.Var
+	case actions(s) == 0 && s.Wait > 0:
+		return fmt.Sprintf("wait %g s", s.Wait)
 	case s.Run != nil:
 		return s.Run.Command
 	case s.SNMP != nil:
@@ -681,7 +694,17 @@ type StepAnswer struct {
 // RunOne runs one step's action (variables already filled in) without its checks - for the
 // generated tests, which send their steps to Termwright one by one.
 func RunOne(ctx context.Context, st Step, d Driver) StepAnswer {
-	sr := runStep(ctx, Step{Run: st.Run, HTTP: st.HTTP, SNMP: st.SNMP, Timeout: st.Timeout}, 0, d, map[string]string{})
+	one := Step{Run: st.Run, HTTP: st.HTTP, SNMP: st.SNMP, Timeout: st.Timeout}
+	var sr StepResult
+	if st.Retry != nil { // the generated tests' retry: Termwright repeats the step until its checks pass
+		one.Expect, one.Retry = st.Expect, st.Retry
+		sr = retryStep(ctx, one, 0, d, map[string]string{})
+		if strings.HasPrefix(sr.Error, "the checks did not pass") {
+			sr.Error = "" // the generated test checks again and says what was wrong
+		}
+	} else {
+		sr = runStep(ctx, one, 0, d, map[string]string{})
+	}
 	return StepAnswer{Output: sr.Output, Status: sr.Status, Ms: sr.Ms, Error: sr.Error, Rows: sr.Rows, Table: sr.Table}
 }
 

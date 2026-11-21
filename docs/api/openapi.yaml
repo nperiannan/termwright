@@ -2171,7 +2171,7 @@ paths:
                                     description: 'show/save/run: a test file relative to the tests folder, e.g. cases/vlan/add-vlan.yaml (cases/ and .yaml may be left out)'
                                     type: string
                                 files:
-                                    description: 'run: the tests to run (none: all)'
+                                    description: 'run: the tests to run - files, folders of cases/ or suites/… files (none: all)'
                                     items:
                                         type: string
                                     type: array
@@ -2224,6 +2224,11 @@ paths:
                                 step:
                                     description: 'step: one step {run: {session, command, prompt}}, {http: {session, method, url, headers, body}} or {snmp: {session, op, oids, values}}, timeout'
                                     type: object
+                                tags:
+                                    description: 'run: only tests with one of these tags; !tag leaves its tests out'
+                                    items:
+                                        type: string
+                                    type: array
                                 testbed:
                                     description: 'run: a file in testbeds/ whose values are used as {{variables}}'
                                     type: string

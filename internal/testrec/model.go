@@ -12,6 +12,9 @@ type Case struct {
 	Description string `yaml:"description,omitempty" json:"description,omitempty"`
 	// Tags to pick tests by (smoke, snmp, vlan …).
 	Tags []string `yaml:"tags,omitempty" json:"tags,omitempty"`
+	// DependsOn: tests (files in cases/, or names) that must pass first; when one failed or was
+	// skipped in the run, this test is skipped. A run puts them before this test.
+	DependsOn []string `yaml:"dependsOn,omitempty" json:"dependsOn,omitempty"`
 	// Vars: values used as {{name}} in the steps; a run's own values win.
 	Vars map[string]string `yaml:"vars,omitempty" json:"vars,omitempty"`
 	// Params: the test runs once per entry, with its values as {{variables}} (data-driven tests);
@@ -49,6 +52,15 @@ type Step struct {
 	Timeout int `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 	// ContinueOnFail: later steps run even when this one fails.
 	ContinueOnFail bool `yaml:"continueOnFail,omitempty" json:"continueOnFail,omitempty"`
+	// Wait: seconds to pause before the step (a step with only wait is a pause).
+	Wait float64 `yaml:"wait,omitempty" json:"wait,omitempty"`
+	// If: run the step only when the condition holds: "{{x}} == y", !=, contains, !contains,
+	// ~ (regular expression), >, <, >=, <= (numbers); a bare value is true unless empty, 0 or false.
+	If string `yaml:"if,omitempty" json:"if,omitempty"`
+	// Retry: run the step again until its checks pass (or the time is up).
+	Retry *Retry `yaml:"retry,omitempty" json:"retry,omitempty"`
+	// Loop: run its steps once per value, with the value in {{var}}.
+	Loop *Loop `yaml:"loop,omitempty" json:"loop,omitempty"`
 }
 
 // RunStep is a command sent on a saved session (logged in with its saved login, in the background).
@@ -168,4 +180,23 @@ type Save struct {
 	// Where + Column: a value from the parsed output (the first row whose columns match).
 	Where  map[string]string `yaml:"where,omitempty" json:"where,omitempty"`
 	Column string            `yaml:"column,omitempty" json:"column,omitempty"`
+}
+
+// Retry repeats a step until its checks pass.
+type Retry struct {
+	// Timeout: give up after this many seconds (default 60).
+	Timeout float64 `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	// Interval: seconds between tries (default 5).
+	Interval float64 `yaml:"interval,omitempty" json:"interval,omitempty"`
+}
+
+// Loop runs steps once per value.
+type Loop struct {
+	// Var: the variable the value is in ({{port}}).
+	Var string `yaml:"var" json:"var"`
+	// Values, Range ("1-8") or From (a variable or text: values separated by commas, semicolons or lines, else by spaces).
+	Values []string `yaml:"values,omitempty" json:"values,omitempty"`
+	Range  string   `yaml:"range,omitempty" json:"range,omitempty"`
+	From   string   `yaml:"from,omitempty" json:"from,omitempty"`
+	Steps  []Step   `yaml:"steps" json:"steps"`
 }

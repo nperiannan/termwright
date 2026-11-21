@@ -5,7 +5,7 @@ import { Backend, errText } from '../core/backend';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { Recorder, escapeRe, fieldPattern } from '../core/recorder.service';
-import { CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
+import { CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestStepResult, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
 import { expectLabel, parseTableCheck, stepText } from './recorder-panel';
 import { AIChat } from '../core/ai-chat.service';
 
@@ -35,6 +35,16 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
               <div class="tags">@for (t of tagList(); track t.k) { <button type="button" class="tag" [class.on]="tag() === t.k" (click)="tag.set(t.k)">{{ t.l }} <i>{{ t.n }}</i></button> }</div>
             </div>
             <div class="list">
+              @if (tree()?.suites?.length) {
+                <div class="fold"><button type="button" class="lnk fl" (click)="toggleFold('#suites')">{{ folded().includes('#suites') ? '▸' : '▾' }} suites</button><span class="cnt">{{ tree()?.suites?.length }}</span></div>
+                @if (!folded().includes('#suites')) {
+                  @for (s of tree()?.suites ?? []; track s.file) {
+                    <div class="case" (click)="openRun([s.file], 'suite ' + s.name)" (keydown.enter)="openRun([s.file], 'suite ' + s.name)" tabindex="0" role="button" [title]="s.error || 'Run the suite ' + s.name">
+                      <span class="sui">▶</span><span class="cn">{{ s.name }}</span><span class="n">{{ s.tests }}</span>
+                      <button type="button" class="lnk" (click)="$event.stopPropagation(); editSuite(s.file)" title="Open the suite file">✎</button></div>
+                  }
+                }
+              }
               @for (g of groups(); track g.dir) {
                 <div class="fold"><button type="button" class="lnk fl" (click)="toggleFold(g.dir)">{{ folded().includes(g.dir) ? '▸' : '▾' }} {{ g.dir || 'cases' }}</button><span class="cnt">{{ g.cases.length }}</span>
                   <button type="button" class="lnk" (click)="openRun(filesOf(g), g.dir || 'cases')" [title]="'Run the tests in ' + (g.dir || 'cases')">▶</button></div>
@@ -48,7 +58,9 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
               } @empty { <div class="empty-s">No tests yet.<br />Record one, or ⋯ → Write a Test with AI.</div> }
             </div>
             @if (picked().length) {
-              <div class="selbar"><span>{{ picked().length }} selected</span><span class="sp"></span><button type="button" class="ghost" (click)="picked.set([])">Clear</button><button type="button" class="pri" (click)="openRun(picked(), picked().length + ' tests')">▶ Run…</button></div>
+              <div class="selbar"><span>{{ picked().length }} selected</span><span class="sp"></span><button type="button" class="ghost" (click)="picked.set([])">Clear</button><button type="button" class="ghost" (click)="saveSuite()" title="Save the selected tests as a suite (suites/…) to run them together again">Save as suite…</button><button type="button" class="pri" (click)="openRun(picked(), picked().length + ' tests')">▶ Run…</button></div>
+            } @else if (filtering()) {
+              <div class="selbar"><span class="mut">{{ filtered().length }} of {{ tree()?.cases?.length ?? 0 }} shown</span><span class="sp"></span><button type="button" (click)="openRun(shownFiles(), filtered().length + ' shown tests')" [disabled]="!filtered().length">▶ Run shown…</button></div>
             } @else {
               <div class="selbar"><span class="mut">{{ tree()?.cases?.length ?? 0 }} tests</span><span class="sp"></span><button type="button" (click)="openRun([], 'all tests')" [disabled]="!tree()?.cases?.length">▶ Run all…</button></div>
             }
@@ -81,6 +93,8 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
           @case ('library') {
             <div class="stop"><b>Library</b><span class="mut">helpers of the generated code, and output templates</span></div>
             <div class="list">
+              <div class="fold"><span>suites</span><span class="cnt">{{ tree()?.suites?.length ?? 0 }}</span></div>
+              @for (l of tree()?.suites ?? []; track l.file) { <div class="case" [class.sel]="fileSel() === l.file" (click)="openFile(l.file)" (keydown.enter)="openFile(l.file)" tabindex="0" role="button"><span class="cn">{{ l.name }}</span><span class="n">{{ l.tests }}</span></div> }
               <div class="fold"><span>templates</span><span class="cnt">{{ tree()?.templates?.length ?? 0 }}</span></div>
               @for (l of tree()?.templates ?? []; track l) { <div class="case" [class.sel]="fileSel() === l" (click)="openFile(l)" (keydown.enter)="openFile(l)" tabindex="0" role="button"><span class="cn">{{ l.slice(10) }}</span></div> }
               <div class="fold"><span>lib</span><span class="cnt">{{ tree()?.lib?.length ?? 0 }}</span></div>
@@ -123,7 +137,8 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
               <div class="head"><div class="crumb">schedules</div><div class="title"><h1>{{ s.id ? s.name || 'Schedule' : 'New Schedule' }}</h1><span class="mut">runs while Termwright is open; a failed run shows a notification</span></div></div>
               <div class="body"><div class="form">
                 <label><span>Name</span><input [(ngModel)]="s.name" placeholder="Nightly smoke tests" /></label>
-                <label><span>Tests</span><select [(ngModel)]="schedWhat"><option value="all">All tests</option>@if (sel()) { <option value="sel">{{ sel() }}</option> }@if (picked().length) { <option value="picked">The {{ picked().length }} selected tests</option> }@if (s.files?.length && schedWhat === 'keep') { <option value="keep">{{ s.files?.join(', ') }}</option> }</select></label>
+                <label><span>Tests</span><select [(ngModel)]="schedWhat"><option value="all">All tests</option>@if (sel()) { <option value="sel">{{ sel() }}</option> }@if (picked().length) { <option value="picked">The {{ picked().length }} selected tests</option> }@for (su of tree()?.suites ?? []; track su.file) { <option [value]="'suite:' + su.file">Suite {{ su.name }}</option> }@if (s.files?.length && schedWhat === 'keep') { <option value="keep">{{ s.files?.join(', ') }}</option> }</select></label>
+                <label><span>Only tags</span><input [ngModel]="(s.tags ?? []).join(', ')" (ngModelChange)="s.tags = splitTags($event)" placeholder="all - or e.g. smoke, !slow" /></label>
                 <label><span>Testbed</span><select [(ngModel)]="s.testbed"><option value="">The tests' own sessions</option>@for (b of tree()?.testbeds ?? []; track b) { <option [value]="b">{{ base(b) }}</option> }</select></label>
                 <label><span>Repeat</span><select [(ngModel)]="s.repeat"><option value="daily">Daily</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly</option><option value="hours">Every N hours</option></select></label>
                 @if (s.repeat === 'hours') { <label><span>Every</span><input type="number" min="1" max="168" [(ngModel)]="s.hours" /> hours</label> }
@@ -167,23 +182,28 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                     @if (varsText()) { <span>Defaults <b>{{ varsText() }}</b></span> }
                     @if (t.params?.length) { <span>Runs {{ t.params?.length }}× <b>{{ paramsText() }}</b></span> }
                     @if (t.restore?.length) { <span>Afterwards <b>{{ restoreText() }} put back</b></span> }
+                    @if (t.dependsOn?.length) { <span>Depends on <b>{{ t.dependsOn.join(', ') }}</b></span> }
                     <span>After each test <b>{{ cleanupLabel() }}</b></span>
                   </div>
                   @for (r of restoreRes(); track $index) { <div class="trow" [class.bad]="!r.passed"><span>{{ r.passed ? '✓' : '✗' }}</span><span>{{ r.name }}</span><span class="mut">{{ r.target }} {{ r.error }}</span></div> }
                   @if (draft(); as d) {
                     @for (ph of phases; track ph.k) {
                       <div class="sec">
-                        <div class="sh">{{ ph.l }}<span class="sp"></span><button type="button" class="lnk" (click)="addStep(ph.k)">+ Step</button></div>
+                        <div class="sh">{{ ph.l }}<span class="sp"></span><button type="button" class="lnk" (click)="addStep(ph.k)">+ Step</button><button type="button" class="lnk" (click)="addWait(ph.k)">+ Wait</button><button type="button" class="lnk" (click)="addLoop(ph.k)" title="Run steps once per value">+ Loop</button></div>
                         @for (s of listOf(d, ph.k); track $index; let i = $index; let lastI = $last) {
                           <div class="ed">
                             <div class="row"><b class="num">{{ i + 1 }}</b>
                               @if (s.run) { <input class="ses" [(ngModel)]="s.run.session" placeholder="session" aria-label="Session" /><input class="cmdi" [(ngModel)]="s.run.command" placeholder="command" aria-label="Command" /> }
                               @else if (s.http) { <select [(ngModel)]="s.http.method" aria-label="Method">@for (m of methods; track m) { <option [value]="m">{{ m }}</option> }</select><input class="cmdi" [(ngModel)]="s.http.url" placeholder="URL" aria-label="URL" /> }
-                              @else { <span class="cmd fl">{{ text(s) }}</span><span class="sp"></span> }
+                              @else { <span class="cmd fl">{{ text(s) }}</span><span class="sp"></span>@if (s.loop) { <span class="mut">edit loops in the YAML</span> } }
                               <button type="button" class="lnk" (click)="moveStep(ph.k, i, -1)" [disabled]="i === 0" title="Move up">↑</button><button type="button" class="lnk" (click)="moveStep(ph.k, i, 1)" [disabled]="lastI" title="Move down">↓</button><button type="button" class="lnk" (click)="removeStep(ph.k, i)" title="Remove the step">✕</button>
                             </div>
                             <div class="row opts"><label>Timeout <input type="number" min="0" class="num2" [(ngModel)]="s.timeout" /> s</label>
                               <label><input type="checkbox" [(ngModel)]="s.continueOnFail" /> Go on when it fails</label>
+                              <label title="Seconds to wait before the step">Wait <input type="number" min="0" class="num2" [(ngModel)]="s.wait" /> s</label>
+                              <label title="Run the step only when this holds, e.g. {{ '{{' }}vlan{{ '}}' }} != 1 (==, !=, contains, ~, >, <)">If <input class="pin" [(ngModel)]="s.if" placeholder="always" /></label>
+                              <label title="Run the step again until its checks pass, for at most this many seconds"><input type="checkbox" [ngModel]="!!s.retry" (ngModelChange)="s.retry = $event ? { timeout: 60, interval: 5 } : undefined" /> Retry until it passes</label>
+                              @if (s.retry) { <label>for <input type="number" min="1" class="num2" [(ngModel)]="s.retry.timeout" /> s</label> }
                               @if (s.run) { <label title="Do not fail the step when the device answers with an error message"><input type="checkbox" [(ngModel)]="s.ignoreErrors" /> Ignore device errors</label>
                                 <label title="Turn the output into a table with a TextFSM template: auto (templates/index) or a file in templates/">Parse <input class="pin" [(ngModel)]="s.run.parse" placeholder="off" list="tw-parse" /></label> }</div>
                             <div class="chips">@for (e of s.expect ?? []; track $index; let j = $index) { <span class="chip">{{ label(e) }} <button type="button" class="x" (click)="removeCheck(s, j)" title="Remove the check">×</button></span> }
@@ -206,7 +226,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                           @for (s of listOf(t, ph.k); track $index; let i = $index) {
                             @let r = resOf(ph.k, i);
                             <div class="srow" [class.f]="r && !r.passed && !r.skipped" [class.open]="isOpen(ph.k, i)" (click)="toggleRow(ph.k, i)" (keydown.enter)="toggleRow(ph.k, i)" tabindex="0" role="button">
-                              <span class="mut">{{ i + 1 }}</span><span class="dev" [title]="target(s)">{{ shortDev(target(s)) }}</span><span class="cmd">{{ text(s) }}</span>
+                              <span class="mut">{{ i + 1 }}</span><span class="dev" [title]="target(s)">{{ s.loop ? 'loop' : shortDev(target(s)) }}</span><span class="cmd">{{ text(s) }}@if (logicText(s)) { <span class="logic">{{ logicText(s) }}</span> }</span>
                               <span class="chips">@for (e of s.expect ?? []; track $index; let j = $index) { <span class="chip" [class.b]="r?.checks?.[j]?.passed === false">{{ r?.checks?.[j]?.passed === false ? '✗' : r ? '✓' : '' }} {{ label(e) }}</span> }
                                 @if (!(s.expect?.length)) { <span class="chip w" title="Without checks the step passes when the device accepts the command">○ not checked</span> }</span>
                               <span [class]="r ? (r.skipped ? 'mut' : r.passed ? 'ok' : 'bad') : 'mut'">{{ r ? (r.skipped ? '– skipped' : r.passed ? '✓ passed' : '✗ failed') : '' }}</span>
@@ -215,6 +235,11 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                             @if (isOpen(ph.k, i)) {
                               <div class="exp">
                                 <div>
+                                  @if (s.loop) {
+                                    <h4>Each value</h4>
+                                    <div class="ev">@for (x of resList(ph.k)[i] ?? []; track $index) { <span [class]="x.skipped ? 'mut' : x.passed ? 'ok' : 'bad'">{{ x.skipped ? '–' : x.passed ? '✓' : '✗' }}</span><span>{{ x.name }}</span><span [class.bad]="!x.passed">{{ x.error || failedCheck(x) }}</span> } @empty { <span></span><span class="mut">not run yet</span><span></span> }</div>
+                                    <p class="mut">Change the loop in the YAML (Code → YAML).</p>
+                                  }
                                   <h4>Checks - expected vs got</h4>
                                   @if (r?.checks?.length) { <div class="ev">@for (c of r?.checks ?? []; track $index) { <span [class]="c.passed ? 'ok' : 'bad'">{{ c.passed ? '✓' : '✗' }}</span><span>{{ c.what }}</span><span [class.bad]="!c.passed">{{ c.got }}</span> }</div> }
                                   @else { <p class="mut">{{ s.expect?.length ? 'Run the test to see what came back.' : 'No checks: select text in the output and right-click to add one.' }}</p> }
@@ -294,6 +319,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .case:hover { background: var(--hover, rgba(255,255,255,.05)); } .case.sel { background: color-mix(in srgb, var(--accent) 18%, transparent); }
     .case input { margin: 0; } .cn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .n { color: var(--muted); font-size: 11px; }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--text) 25%, transparent); flex: none; } .dot.p { background: var(--ok, #3fbf75); } .dot.f { background: var(--danger, #ef6161); } .dot.e { background: var(--warn, #e0a030); }
+    .sui { color: var(--accent); font-size: 10px; width: 14px; text-align: center; }
     .empty-s { color: var(--muted); font-size: 12px; padding: 18px 8px; text-align: center; line-height: 1.6; }
     .selbar { display: flex; align-items: center; gap: 6px; margin: 8px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: color-mix(in srgb, var(--text) 4%, transparent); }
     .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -322,7 +348,8 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .trow { display: flex; gap: 8px; font-size: 12px; } .none { color: var(--muted); font-size: 12px; padding: 10px 12px; border-top: 1px solid var(--border); }
     .ed { padding: 9px 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px; } .num { width: 18px; color: var(--muted); font-weight: 500; }
     .ses { width: 160px; height: 27px; } .cmdi { flex: 1; min-width: 0; height: 27px; font-family: var(--mono, monospace); } .num2 { width: 60px; height: 24px; } .pin { width: 100px; height: 24px; }
-    .opts { font-size: 12px; color: var(--muted); gap: 16px; padding-left: 24px; } .opts label { display: flex; align-items: center; gap: 4px; } .ed .chips { padding-left: 24px; }
+    .logic { display: inline-block; margin-left: 8px; font: 11px var(--ui-font, inherit); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); padding: 0 6px; border-radius: 8px; }
+    .opts { flex-wrap: wrap; font-size: 12px; color: var(--muted); gap: 16px; padding-left: 24px; } .opts label { display: flex; align-items: center; gap: 4px; } .ed .chips { padding-left: 24px; }
     .addck { display: inline-flex; gap: 4px; } .addck select, .addck input { height: 24px; font-size: 12px; } .addck input { width: 220px; }
     .code { flex: 1; min-height: 260px; font: 12.5px/1.5 var(--mono, monospace); resize: none; white-space: pre; overflow: auto; margin: 0; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--term-bg, rgba(0,0,0,.25)); color: var(--text); }
     .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; } .kpi { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel); } .kpi b { display: block; font-size: 21px; font-weight: 600; } .kpi span { color: var(--muted); font-size: 12px; } .kok { color: var(--ok, #3fbf75); } .kbad { color: var(--danger, #ef6161); } .kwarn { color: var(--warn, #e0a030); }
@@ -530,7 +557,7 @@ export class TestsView implements OnInit, OnDestroy {
     this.schedWhat = s?.files?.length ? 'keep' : 'all';
   }
   async saveSchedule(s: TestSchedule) {
-    const files = this.schedWhat === 'sel' && this.sel() ? [this.sel()] : this.schedWhat === 'keep' ? s.files : undefined;
+    const w = this.schedWhat, files = w === 'sel' && this.sel() ? [this.sel()] : w === 'picked' ? this.picked() : w.startsWith('suite:') ? [w.slice(6)] : w === 'keep' ? s.files : undefined;
     const x: TestSchedule = { ...s, files, day: Number(s.day ?? 0), hours: Number(s.hours ?? 0) };
     if (x.production && !s.id && !(await this.ui.confirm(tr('Schedule on Production?'), tr('These tests then send their commands to production sessions without asking.'), tr('Schedule'), true))) return;
     try { this.sched.set(await this.backend.testSaveSchedule(x)); this.schedWhat = files?.length ? 'keep' : 'all'; this.ui.toast(tr('Saved'), 'success'); await this.load(); }
@@ -660,15 +687,67 @@ export class TestsView implements OnInit, OnDestroy {
     this.ui.showMenu(ev, [
       { label: 'Rename…', action: () => void this.rename(false) },
       { label: 'Duplicate…', action: () => void this.rename(true) },
+      { label: 'Tags…', action: () => void this.editTags() },
+      { label: 'Depends On…', action: () => void this.editDeps() },
       { label: 'Open in VS Code', action: () => void this.backend.testsOpenInEditor(this.sel()) },
       { label: 'Record a New Test', action: () => this.recordMore() },
       { separator: true },
       { label: 'Delete…', action: () => void this.remove() },
     ]);
   }
+  splitTags(v: string) { const l = v.split(',').map(x => x.trim()).filter(Boolean); return l.length ? l : undefined; }
+  filtering() { return !!this.q().trim() || this.tag() !== 'all'; }
+  shownFiles() { return this.filtered().map(c => c.file); }
+  editSuite(f: string) { this.section.set('library'); void this.openFile(f); }
+  async saveSuite() {
+    const name = await this.ui.input(tr('Save as Suite'), tr('Suite name (suites/<name>.yaml)'), '');
+    if (!name?.trim()) return;
+    try { const rel = await this.backend.testSaveSuite(name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-'), { name: name.trim(), tests: this.picked() }); this.ui.toast(tr('Wrote {0}', rel), 'success'); await this.load(); }
+    catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  private async saveCase(mod: (c: TestCase) => void) {
+    const t = this.test(); if (!t) return;
+    const c = structuredClone(t); mod(c);
+    try { await this.backend.testSave(this.sel(), c); await this.load(); } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  async editTags() {
+    const v = await this.ui.input(tr('Tags'), tr('Comma-separated, e.g. smoke, l2'), (this.test()?.tags ?? []).join(', '));
+    if (v === null || v === undefined) return;
+    const tags = v.split(',').map(x => x.trim()).filter(Boolean);
+    await this.saveCase(c => { if (tags.length) c.tags = tags; else delete c.tags; });
+  }
+  async editDeps() {
+    const v = await this.ui.input(tr('Depends On'), tr('Tests that must pass first (files or names, comma-separated); when one fails, this test is skipped'), (this.test()?.dependsOn ?? []).join(', '));
+    if (v === null || v === undefined) return;
+    const d = v.split(',').map(x => x.trim()).filter(Boolean);
+    await this.saveCase(c => { if (d.length) c.dependsOn = d; else delete c.dependsOn; });
+  }
   cleanupLabel() { return this.cleanupMode === 'off' ? 'no cleanup' : this.cleanupMode === 'auto' ? 'cleanup steps, else undo' : 'run the cleanup steps'; }
   /** A step's result in the last run. */
-  resOf(p: Phase, i: number) { return this.last()[this.sel()]?.steps?.filter(x => (x.phase ?? '') === (p === 'steps' ? '' : p))[i]; }
+  resOf(p: Phase, i: number): TestStepResult | undefined {
+    const l = this.resList(p)[i];
+    if (!l?.length) return undefined;
+    if (l.length === 1 && !this.listOf(this.test()!, p)[i]?.loop) return l[0];
+    const bad = l.find(x => !x.passed && !x.skipped);
+    return { ...(bad ?? l[0]), passed: !bad, skipped: l.every(x => x.skipped), ms: l.reduce((n, x) => n + x.ms, 0), checks: undefined, error: bad ? bad.name + ': ' + (bad.error || 'failed') : undefined };
+  }
+  /** The last run's results of each step of a section (a loop step has one per inner step and value). */
+  resList(p: Phase): TestStepResult[][] {
+    const t = this.test(), rs = this.last()[this.sel()]?.steps?.filter(x => (x.phase ?? '') === (p === 'steps' ? '' : p)) ?? [];
+    if (!t) return [];
+    const out: TestStepResult[][] = [];
+    let k = 0;
+    for (const st of this.listOf(t, p)) {
+      if (st.loop) {
+        const tag = '[' + st.loop.var + '=', mine: TestStepResult[] = [];
+        while (k < rs.length && rs[k].name.includes(tag)) mine.push(rs[k++]);
+        out.push(mine);
+      } else out.push(k < rs.length ? [rs[k++]] : []);
+    }
+    return out;
+  }
+  failedCheck(x: TestStepResult) { const c = x.checks?.find(y => !y.passed); return c ? c.what + ', got ' + (c.got ?? '') : ''; }
+  logicText(s: TestStep) { return [s.if ? 'if ' + s.if : '', s.retry ? 'retry ' + (s.retry.timeout ?? 60) + ' s' : '', s.wait && (s.run || s.http || s.snmp) ? 'wait ' + s.wait + ' s first' : ''].filter(Boolean).join(' · '); }
   secSummary(p: Phase) {
     const t = this.test(); if (!t) return '';
     const l = this.listOf(t, p), rs = l.map((_, i) => this.resOf(p, i));
@@ -706,6 +785,14 @@ export class TestsView implements OnInit, OnDestroy {
     this.listOf(d, p).push({ run: { session: ses, command: '' } });
     this.touch();
   }
+  addWait(p: Phase) { const d = this.draft(); if (!d) return; this.listOf(d, p).push({ wait: 5 }); this.touch(); }
+  addLoop(p: Phase) {
+    const d = this.draft(); if (!d) return;
+    const all = [...(d.setup ?? []), ...d.steps, ...(d.cleanup ?? [])], ses = [...all].reverse().find(s => s.run)?.run?.session ?? '';
+    this.listOf(d, p).push({ loop: { var: 'port', range: '1-4', steps: [{ run: { session: ses, command: 'show ports {{port}} information' } }] } });
+    this.touch();
+    this.ui.toast(tr('Loop added: change its values and steps in the YAML after saving'), 'info');
+  }
   moveStep(p: Phase, i: number, by: number) { const d = this.draft(); if (!d) return; const l = this.listOf(d, p); [l[i], l[i + by]] = [l[i + by], l[i]]; this.touch(); }
   removeStep(p: Phase, i: number) { const d = this.draft(); if (!d) return; this.listOf(d, p).splice(i, 1); this.touch(); }
   removeCheck(s: TestStep, j: number) { s.expect?.splice(j, 1); this.touch(); }
@@ -733,7 +820,7 @@ export class TestsView implements OnInit, OnDestroy {
     const d = this.draft(); if (!d) return;
     const all = [...(d.setup ?? []), ...d.steps, ...(d.cleanup ?? [])];
     if (all.some(s => s.run && (!s.run.session.trim() || !s.run.command.trim()))) return this.ui.toast(tr('Every command step needs a session and a command.'), 'error');
-    for (const s of all) { if (s.run && !s.run.parse) delete s.run.parse; if (!s.timeout) delete s.timeout; if (!s.continueOnFail) delete s.continueOnFail; if (!s.ignoreErrors) delete s.ignoreErrors; if (!s.expect?.length) delete s.expect; }
+    for (const s of all) { if (s.run && !s.run.parse) delete s.run.parse; if (!s.wait) delete s.wait; if (!s.if?.trim()) delete s.if; if (!s.retry) delete s.retry; if (!s.timeout) delete s.timeout; if (!s.continueOnFail) delete s.continueOnFail; if (!s.ignoreErrors) delete s.ignoreErrors; if (!s.expect?.length) delete s.expect; }
     const c: TestCase = { ...d, setup: d.setup?.length ? d.setup : undefined, cleanup: d.cleanup?.length ? d.cleanup : undefined };
     try { await this.backend.testSave(this.sel(), c); this.draft.set(null); this.ui.toast(tr('Saved'), 'success'); await this.load(); }
     catch (e) { this.ui.toast(errText(e), 'error'); }

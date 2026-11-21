@@ -274,7 +274,8 @@ func (c *T) Fill(s string) string {
 // Step is one step's subtest.
 type Step struct {
 	*testing.T
-	c *T
+	c     *T
+	retry map[string]any
 }
 
 // Request is an HTTP step.
@@ -378,6 +379,12 @@ func (s *Step) send(step map[string]any) *Answer {
 	api, key, err := Endpoint()
 	if err != nil {
 		s.Fatal(err)
+	}
+	if s.retry != nil { // Termwright repeats the step until these checks pass
+		for k, v := range s.retry {
+			step[k] = v
+		}
+		s.retry = nil
 	}
 	b, _ := json.Marshal(map[string]any{"action": "step", "step": step})
 	req, _ := http.NewRequest("POST", api+"/tools/tests", bytes.NewReader(b))
@@ -705,3 +712,82 @@ func hasText(out, t string) bool {
 	n := func(s string) string { return strings.TrimSpace(spaceRun.ReplaceAllString(s, " ")) }
 	return strings.Contains(n(out), n(t))
 }
+
+// Set gives a variable a value ({{name}} in later steps).
+func (c *T) Set(name, value string) { c.Vars[name] = value }
+
+// List fills the variables in a loop's values.
+func (c *T) List(values ...string) []string {
+	out := make([]string, len(values))
+	for i, v := range values {
+		out[i] = c.Fill(v)
+	}
+	return out
+}
+
+// Values splits a loop's "from" text (variables filled in): by commas, semicolons or lines, else by spaces.
+func (c *T) Values(src string) []string {
+	src = c.Fill(src)
+	sep := func(r rune) bool { return r == ',' || r == '\n' || r == ';' }
+	if !strings.ContainsAny(src, ",\n;") {
+		sep = func(r rune) bool { return r == ' ' || r == '\t' }
+	}
+	var out []string
+	for _, x := range strings.FieldsFunc(src, sep) {
+		if x = strings.TrimSpace(x); x != "" {
+			out = append(out, x)
+		}
+	}
+	return out
+}
+
+// Wait pauses for seconds.
+func (s *Step) Wait(seconds float64) { time.Sleep(time.Duration(seconds * float64(time.Second))) }
+
+// RetryUntil makes Termwright repeat the next step until these checks (JSON, as in the test file) pass.
+func (s *Step) RetryUntil(timeout, interval float64, expect string) {
+	var e any
+	json.Unmarshal([]byte(expect), &e)
+	s.retry = map[string]any{"retry": map[string]float64{"timeout": timeout, "interval": interval}, "expect": e}
+}
+
+// Cond: an if condition with the variables filled in - ==, !=, contains, !contains, ~, >, <, >=, <=;
+// a bare value is true unless empty, 0, false or no.
+func (s *Step) Cond(expr string) bool {
+	e := strings.TrimSpace(s.c.Fill(expr))
+	for _, op := range []string{" !contains ", " contains ", " != ", " == ", " >= ", " <= ", " ~ ", " > ", " < "} {
+		a, b, ok := strings.Cut(e, op)
+		if !ok {
+			continue
+		}
+		a, b = strings.Trim(strings.TrimSpace(a), `"'`), strings.Trim(strings.TrimSpace(b), `"'`)
+		fa, ea := strconv.ParseFloat(a, 64)
+		fb, eb := strconv.ParseFloat(b, 64)
+		num := ea == nil && eb == nil
+		switch strings.TrimSpace(op) {
+		case "==":
+			return a == b || num && fa == fb
+		case "!=":
+			return !(a == b || num && fa == fb)
+		case "contains":
+			return strings.Contains(a, b)
+		case "!contains":
+			return !strings.Contains(a, b)
+		case "~":
+			re, err := regexp.Compile(b)
+			return err == nil && re.MatchString(a)
+		case ">":
+			return num && fa > fb
+		case "<":
+			return num && fa < fb
+		case ">=":
+			return num && fa >= fb
+		}
+		return num && fa <= fb
+	}
+	l := strings.ToLower(strings.Trim(e, `"'`))
+	return l != "" && l != "0" && l != "false" && l != "no" && !strings.Contains(l, "{{")
+}
+
+// Cond: an if condition (see Step.Cond) outside a step, for loops.
+func (c *T) Cond(expr string) bool { return (&Step{c: c}).Cond(expr) }

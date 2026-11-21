@@ -13,6 +13,7 @@ import json
 import os
 import platform
 import re
+import time
 import unittest
 import urllib.error
 import urllib.request
@@ -126,6 +127,40 @@ class Run:
     def fill(self, s):
         return _VAR.sub(lambda m: self.vars.get(m.group(1), m.group(0)), s or "")
 
+    def values(self, src):
+        """A loop's values from text (variables filled in): split by commas, semicolons or lines, else by spaces."""
+        src = self.fill(src)
+        parts = re.split(r"[,;\n]", src) if re.search(r"[,;\n]", src) else src.split()
+        return [p.strip() for p in parts if p.strip()]
+
+    def cond(self, expr):
+        """An if condition: ==, !=, contains, !contains, ~, >, <, >=, <=; a bare value is true unless empty, 0, false or no."""
+        e = self.fill(expr).strip()
+        for op in (" !contains ", " contains ", " != ", " == ", " >= ", " <= ", " ~ ", " > ", " < "):
+            if op in e:
+                a, b = (x.strip().strip("\"'") for x in e.split(op, 1))
+                try:
+                    fa, fb, num = float(a), float(b), True
+                except ValueError:
+                    fa = fb = 0.0
+                    num = False
+                o = op.strip()
+                if o == "==":
+                    return a == b or (num and fa == fb)
+                if o == "!=":
+                    return not (a == b or (num and fa == fb))
+                if o == "contains":
+                    return b in a
+                if o == "!contains":
+                    return b not in a
+                if o == "~":
+                    return re.search(b, a) is not None
+                if not num:
+                    return False
+                return {">": fa > fb, "<": fa < fb, ">=": fa >= fb, "<=": fa <= fb}[o]
+        lo = e.strip("\"'").lower()
+        return lo not in ("", "0", "false", "no") and "{{" not in lo
+
     def restore(self, kinds, sessions):
         """Termwright saves the devices' state ("config", "lab"); finish() puts it back after the cleanup."""
         with self.tc.subTest(step="restore: save"):
@@ -166,7 +201,23 @@ class Run:
 
 class Step:
     def __init__(self, run, skip=False):
-        self.r, self.skip, self.errors = run, skip, []
+        self.r, self.skip, self.errors, self._retry = run, skip, [], None
+
+    def wait(self, seconds):
+        if not self.skip:
+            time.sleep(seconds)
+
+    def cond(self, expr):
+        return self.r.cond(expr)
+
+    def skip_unless(self, expr):
+        """Skips the step when the if condition is false."""
+        if not self.skip and not self.r.cond(expr):
+            raise unittest.SkipTest("if %s is false" % self.r.fill(expr))
+
+    def retry_until(self, timeout, interval, expect):
+        """Termwright repeats the next step until these checks (JSON, as in the test file) pass."""
+        self._retry = {"retry": {"timeout": timeout, "interval": interval}, "expect": json.loads(expect)}
 
     def run(self, session, command, prompt="", timeout=0, parse=""):
         run = {"session": self.r.fill(session), "command": self.r.fill(command), "prompt": prompt}
@@ -187,6 +238,9 @@ class Step:
         a = Answer(self)
         if self.skip:
             return a
+        if self._retry:
+            step.update(self._retry)
+            self._retry = None
         api, key = endpoint()
         req = urllib.request.Request(api + "/tools/tests", data=json.dumps({"action": "step", "step": step}).encode(),
                                      headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"}, method="POST")

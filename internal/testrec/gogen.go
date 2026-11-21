@@ -3,6 +3,7 @@ package testrec
 import (
 	"bytes"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"go/format"
 	"os"
@@ -78,88 +79,7 @@ func GenerateGo(c Case, caseFile string) ([]byte, error) {
 		fmt.Fprintf(&b, "\ttw.Restore([]string{%s}, %s)\n", strings.Join(ks, ", "), strings.Join(ss, ", "))
 	}
 	for _, ps := range phased(c) {
-		st, i := ps.st, ps.i
-		if ps.phase == "cleanup" {
-			fmt.Fprintf(&b, "\ttw.Cleanup(%s, func(s *twtest.Step) {\n", q(PhaseLabel(ps.phase)+stepName(st, i)))
-		} else {
-			fmt.Fprintf(&b, "\ttw.Step(%s, %v, func(s *twtest.Step) {\n", q(PhaseLabel(ps.phase)+stepName(st, i)), st.ContinueOnFail && ps.phase == "")
-		}
-		switch {
-		case st.Run != nil:
-			if st.Run.Parse != "" {
-				fmt.Fprintf(&b, "\t\ta := s.RunParsed(%s, %s, %s, %s, %d)\n", q(st.Run.Session), q(st.Run.Command), q(st.Run.Prompt), q(st.Run.Parse), st.Timeout)
-			} else {
-				fmt.Fprintf(&b, "\t\ta := s.Run(%s, %s, %s, %d)\n", q(st.Run.Session), q(st.Run.Command), q(st.Run.Prompt), st.Timeout)
-			}
-		case st.HTTP != nil:
-			h := st.HTTP
-			var f []string
-			add := func(k, v string) {
-				if v != "" {
-					f = append(f, k+": "+q(v))
-				}
-			}
-			add("Session", h.Session)
-			add("Environment", h.Environment)
-			add("Collection", h.Collection)
-			m := strings.ToUpper(h.Method)
-			if m == "" {
-				m = "GET"
-			}
-			add("Method", m)
-			add("URL", h.URL)
-			add("Body", h.Body)
-			if len(h.Headers) > 0 {
-				f = append(f, "Headers: "+goMap(h.Headers))
-			}
-			if st.Timeout > 0 {
-				f = append(f, "Timeout: "+strconv.Itoa(st.Timeout))
-			}
-			fmt.Fprintf(&b, "\t\ta := s.HTTP(twtest.Request{%s})\n", strings.Join(f, ", "))
-		case st.SNMP != nil:
-			sn := st.SNMP
-			op := strings.ToLower(sn.Op)
-			if op == "" {
-				op = "get"
-			}
-			f := []string{"Session: " + q(sn.Session), "Op: " + q(op)}
-			if len(sn.OIDs) > 0 {
-				var o []string
-				for _, x := range sn.OIDs {
-					o = append(o, q(x))
-				}
-				f = append(f, "OIDs: []string{"+strings.Join(o, ", ")+"}")
-			}
-			if len(sn.Values) > 0 {
-				var o []string
-				for _, x := range sn.Values {
-					o = append(o, fmt.Sprintf("{OID: %s, Type: %s, Value: %s}", q(x.OID), q(x.Type), q(x.Value)))
-				}
-				f = append(f, "Values: []twtest.SetValue{"+strings.Join(o, ", ")+"}")
-			}
-			if st.Timeout > 0 {
-				f = append(f, "Timeout: "+strconv.Itoa(st.Timeout))
-			}
-			fmt.Fprintf(&b, "\t\ta := s.SNMP(twtest.SNMP{%s})\n", strings.Join(f, ", "))
-		}
-		for _, e := range st.Expect {
-			fmt.Fprintf(&b, "\t\t%s\n", goExpect(e))
-		}
-		for _, s := range st.Save {
-			if s.OID != "" {
-				fmt.Fprintf(&b, "\t\ta.OID(%s).Save(%s)\n", q(s.OID), q(s.Var))
-			} else if s.Column != "" {
-				fmt.Fprintf(&b, "\t\ta.Cell(%s, %s).Save(%s)\n", goMap(s.Where), q(s.Column), q(s.Var))
-			} else if s.Field != "" {
-				fmt.Fprintf(&b, "\t\ta.Field(%s).Save(%s)\n", goStr(s.Field), q(s.Var))
-			} else if s.JSON != "" {
-				fmt.Fprintf(&b, "\t\ta.JSON(%s).Save(%s)\n", q(s.JSON), q(s.Var))
-			}
-		}
-		if len(st.Expect) == 0 && len(st.Save) == 0 {
-			b.WriteString("\t\t_ = a\n")
-		}
-		b.WriteString("\t})\n")
+		goStep(&b, ps.st, ps.i, ps.phase, q(PhaseLabel(ps.phase)+stepName(ps.st, ps.i)), "\t", 0)
 	}
 	if len(c.Restore) > 0 {
 		b.WriteString("\ttw.Finish()\n")
@@ -370,4 +290,159 @@ func goChain(e Expect) string {
 		c = append(c, ".IsFound()")
 	}
 	return strings.Join(c, "")
+}
+
+// goStep writes one step: tw.Step (or tw.Cleanup) with its action and checks; a loop becomes a Go loop
+// over its values with its steps inside. name is a Go expression.
+func goStep(b *bytes.Buffer, st Step, i int, phase, name, ind string, depth int) {
+	q := strconv.Quote
+	if st.Loop != nil {
+		x := fmt.Sprintf("x%d", depth)
+		var vals string
+		switch {
+		case len(st.Loop.Values) > 0:
+			var l []string
+			for _, v := range st.Loop.Values {
+				l = append(l, q(v))
+			}
+			vals = "tw.List(" + strings.Join(l, ", ") + ")"
+		case st.Loop.Range != "" && !strings.Contains(st.Loop.Range, "{{"):
+			r, _ := rangeValues(st.Loop.Range)
+			var l []string
+			for _, v := range r {
+				l = append(l, q(v))
+			}
+			vals = "[]string{" + strings.Join(l, ", ") + "}"
+		default:
+			src := st.Loop.From
+			if src == "" {
+				src = st.Loop.Range
+			}
+			vals = "tw.Values(" + q(src) + ")"
+		}
+		if st.If != "" {
+			fmt.Fprintf(b, "%sif tw.Cond(%s) {\n", ind, q(st.If))
+		}
+		fmt.Fprintf(b, "%sfor _, %s := range %s {\n%s\ttw.Set(%s, %s)\n", ind, x, vals, ind, q(st.Loop.Var), x)
+		for j, in := range st.Loop.Steps {
+			goStep(b, in, j, phase, q(PhaseLabel(phase)+stepName(in, j))+" + \" ["+st.Loop.Var+"=\" + "+x+" + \"]\"", ind+"\t", depth+1)
+		}
+		fmt.Fprintf(b, "%s}\n", ind)
+		if st.If != "" {
+			fmt.Fprintf(b, "%s}\n", ind)
+		}
+		return
+	}
+	if phase == "cleanup" {
+		fmt.Fprintf(b, "%stw.Cleanup(%s, func(s *twtest.Step) {\n", ind, name)
+	} else {
+		fmt.Fprintf(b, "%stw.Step(%s, %v, func(s *twtest.Step) {\n", ind, name, st.ContinueOnFail && phase == "")
+	}
+	var w bytes.Buffer
+	if st.If != "" {
+		fmt.Fprintf(&w, "\t\tif !s.Cond(%s) {\n\t\t\ts.Skip(%s)\n\t\t}\n", q(st.If), q("if "+st.If+" is false"))
+	}
+	if st.Wait > 0 {
+		fmt.Fprintf(&w, "\t\ts.Wait(%s)\n", strconv.FormatFloat(st.Wait, 'g', -1, 64))
+	}
+	if st.Retry != nil {
+		ej, _ := json.Marshal(st.Expect)
+		fmt.Fprintf(&w, "\t\ts.RetryUntil(%s, %s, %s)\n", strconv.FormatFloat(orF(st.Retry.Timeout, 60), 'g', -1, 64), strconv.FormatFloat(orF(st.Retry.Interval, 5), 'g', -1, 64), q(string(ej)))
+	}
+	if actions(st) > 0 {
+		goAction(&w, st)
+	}
+	for _, l := range strings.SplitAfter(w.String(), "\n") {
+		if l != "" {
+			b.WriteString(ind + strings.TrimPrefix(l, "\t"))
+		}
+	}
+	fmt.Fprintf(b, "%s})\n", ind)
+}
+
+func orF(x, d float64) float64 {
+	if x <= 0 {
+		return d
+	}
+	return x
+}
+
+// goAction writes a step's action, checks and saves (indented two tabs).
+func goAction(b *bytes.Buffer, st Step) {
+	q := strconv.Quote
+	switch {
+	case st.Run != nil:
+		if st.Run.Parse != "" {
+			fmt.Fprintf(b, "\t\ta := s.RunParsed(%s, %s, %s, %s, %d)\n", q(st.Run.Session), q(st.Run.Command), q(st.Run.Prompt), q(st.Run.Parse), st.Timeout)
+		} else {
+			fmt.Fprintf(b, "\t\ta := s.Run(%s, %s, %s, %d)\n", q(st.Run.Session), q(st.Run.Command), q(st.Run.Prompt), st.Timeout)
+		}
+	case st.HTTP != nil:
+		h := st.HTTP
+		var f []string
+		add := func(k, v string) {
+			if v != "" {
+				f = append(f, k+": "+q(v))
+			}
+		}
+		add("Session", h.Session)
+		add("Environment", h.Environment)
+		add("Collection", h.Collection)
+		m := strings.ToUpper(h.Method)
+		if m == "" {
+			m = "GET"
+		}
+		add("Method", m)
+		add("URL", h.URL)
+		add("Body", h.Body)
+		if len(h.Headers) > 0 {
+			f = append(f, "Headers: "+goMap(h.Headers))
+		}
+		if st.Timeout > 0 {
+			f = append(f, "Timeout: "+strconv.Itoa(st.Timeout))
+		}
+		fmt.Fprintf(b, "\t\ta := s.HTTP(twtest.Request{%s})\n", strings.Join(f, ", "))
+	case st.SNMP != nil:
+		sn := st.SNMP
+		op := strings.ToLower(sn.Op)
+		if op == "" {
+			op = "get"
+		}
+		f := []string{"Session: " + q(sn.Session), "Op: " + q(op)}
+		if len(sn.OIDs) > 0 {
+			var o []string
+			for _, x := range sn.OIDs {
+				o = append(o, q(x))
+			}
+			f = append(f, "OIDs: []string{"+strings.Join(o, ", ")+"}")
+		}
+		if len(sn.Values) > 0 {
+			var o []string
+			for _, x := range sn.Values {
+				o = append(o, fmt.Sprintf("{OID: %s, Type: %s, Value: %s}", q(x.OID), q(x.Type), q(x.Value)))
+			}
+			f = append(f, "Values: []twtest.SetValue{"+strings.Join(o, ", ")+"}")
+		}
+		if st.Timeout > 0 {
+			f = append(f, "Timeout: "+strconv.Itoa(st.Timeout))
+		}
+		fmt.Fprintf(b, "\t\ta := s.SNMP(twtest.SNMP{%s})\n", strings.Join(f, ", "))
+	}
+	for _, e := range st.Expect {
+		fmt.Fprintf(b, "\t\t%s\n", goExpect(e))
+	}
+	for _, s := range st.Save {
+		if s.OID != "" {
+			fmt.Fprintf(b, "\t\ta.OID(%s).Save(%s)\n", q(s.OID), q(s.Var))
+		} else if s.Column != "" {
+			fmt.Fprintf(b, "\t\ta.Cell(%s, %s).Save(%s)\n", goMap(s.Where), q(s.Column), q(s.Var))
+		} else if s.Field != "" {
+			fmt.Fprintf(b, "\t\ta.Field(%s).Save(%s)\n", goStr(s.Field), q(s.Var))
+		} else if s.JSON != "" {
+			fmt.Fprintf(b, "\t\ta.JSON(%s).Save(%s)\n", q(s.JSON), q(s.Var))
+		}
+	}
+	if len(st.Expect) == 0 && len(st.Save) == 0 {
+		b.WriteString("\t\t_ = a\n")
+	}
 }

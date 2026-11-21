@@ -374,3 +374,12 @@ func (a *App) TestRename(file, to string, copy bool) (string, error) {
 	}
 	return f.Rename(file, to, copy)
 }
+
+// TestSaveSuite writes a suite (suites/<name>.yaml) and returns its file.
+func (a *App) TestSaveSuite(rel string, s testrec.Suite) (string, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return "", err
+	}
+	return f.SaveSuite(rel, s)
+}

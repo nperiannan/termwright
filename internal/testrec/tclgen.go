@@ -2,6 +2,7 @@ package testrec
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -84,79 +85,7 @@ func GenerateTcl(c Case, caseFile string) ([]byte, error) {
 		fmt.Fprintf(&b, "    tw::restore [list %s] [list %s]\n", strings.Join(c.Restore, " "), strings.Join(ss, " "))
 	}
 	for _, ps := range phased(c) {
-		st, i := ps.st, ps.i
-		if ps.phase == "cleanup" {
-			fmt.Fprintf(&b, "    tw::cleanup %s {\n", tclStr(PhaseLabel(ps.phase)+stepName(st, i)))
-		} else {
-			fmt.Fprintf(&b, "    tw::step %s %d {\n", tclStr(PhaseLabel(ps.phase)+stepName(st, i)), map[bool]int{true: 1, false: 0}[st.ContinueOnFail && ps.phase == ""])
-		}
-		in := "        "
-		switch {
-		case st.Run != nil:
-			args := []string{tclStr(st.Run.Session), tclStr(st.Run.Command)}
-			if st.Run.Prompt != "" || st.Timeout > 0 || st.Run.Parse != "" {
-				args = append(args, tclStr(st.Run.Prompt), strconv.Itoa(st.Timeout))
-			}
-			if st.Run.Parse != "" {
-				args = append(args, tclStr(st.Run.Parse))
-			}
-			fmt.Fprintf(&b, "%stw::run %s\n", in, strings.Join(args, " "))
-		case st.HTTP != nil:
-			h := st.HTTP
-			args := []string{tclStr(h.URL)}
-			add := func(k, v string) {
-				if v != "" {
-					args = append(args, k, tclStr(v))
-				}
-			}
-			add("-session", h.Session)
-			if m := strings.ToUpper(h.Method); m != "" && m != "GET" {
-				args = append(args, "-method", m)
-			}
-			add("-environment", h.Environment)
-			add("-collection", h.Collection)
-			add("-body", h.Body)
-			if len(h.Headers) > 0 {
-				args = append(args, "-headers", tclDict(h.Headers))
-			}
-			if st.Timeout > 0 {
-				args = append(args, "-timeout", strconv.Itoa(st.Timeout))
-			}
-			fmt.Fprintf(&b, "%stw::http %s\n", in, strings.Join(args, " "))
-		case st.SNMP != nil:
-			sn := st.SNMP
-			op := strings.ToLower(sn.Op)
-			if op == "" {
-				op = "get"
-			}
-			var o []string
-			for _, x := range sn.OIDs {
-				o = append(o, tclStr(x))
-			}
-			var v []string
-			for _, x := range sn.Values {
-				v = append(v, "[list "+tclStr(x.OID)+" "+tclStr(x.Type)+" "+tclStr(x.Value)+"]")
-			}
-			fmt.Fprintf(&b, "%stw::snmp %s %s [list %s] [list %s] %d\n", in, tclStr(sn.Session), op, strings.Join(o, " "), strings.Join(v, " "), st.Timeout)
-		}
-		for _, e := range st.Expect {
-			for _, l := range tclExpect(e) {
-				fmt.Fprintf(&b, "%s%s\n", in, l)
-			}
-		}
-		for _, s := range st.Save {
-			switch {
-			case s.OID != "":
-				fmt.Fprintf(&b, "%stw::save %s oid %s\n", in, tclStr(s.Var), tclStr(s.OID))
-			case s.Column != "":
-				fmt.Fprintf(&b, "%stw::save_cell %s %s %s\n", in, tclStr(s.Var), tclDict(s.Where), tclStr(s.Column))
-			case s.Field != "":
-				fmt.Fprintf(&b, "%stw::save %s field %s\n", in, tclStr(s.Var), tclStr(s.Field))
-			case s.JSON != "":
-				fmt.Fprintf(&b, "%stw::save %s json %s\n", in, tclStr(s.Var), tclStr(s.JSON))
-			}
-		}
-		b.WriteString("    }\n")
+		tclStep(&b, ps.st, ps.i, ps.phase, "    ", "")
 	}
 	if len(c.Restore) > 0 {
 		b.WriteString("    tw::finish\n")
@@ -240,4 +169,131 @@ func tclExpect(e Expect) []string {
 		return out
 	}
 	return []string{"# empty check"}
+}
+
+// tclStep writes one step (a loop: a foreach over its values with its steps inside).
+func tclStep(b *bytes.Buffer, st Step, i int, phase, ind, suffix string) {
+	if st.Loop != nil {
+		var vals string
+		switch {
+		case len(st.Loop.Values) > 0:
+			var l []string
+			for _, v := range st.Loop.Values {
+				l = append(l, tclStr(v))
+			}
+			vals = "[tw::listof " + strings.Join(l, " ") + "]"
+		case st.Loop.Range != "" && !strings.Contains(st.Loop.Range, "{{"):
+			r, _ := rangeValues(st.Loop.Range)
+			var l []string
+			for _, v := range r {
+				l = append(l, tclStr(v))
+			}
+			vals = "[list " + strings.Join(l, " ") + "]"
+		default:
+			src := st.Loop.From
+			if src == "" {
+				src = st.Loop.Range
+			}
+			vals = "[tw::values " + tclStr(src) + "]"
+		}
+		if st.If != "" {
+			fmt.Fprintf(b, "%sif {[tw::cond %s]} {\n", ind, tclStr(st.If))
+		}
+		x := fmt.Sprintf("x%d", strings.Count(suffix, "["))
+		fmt.Fprintf(b, "%sforeach %s %s {\n%s    tw::setvar %s $%s\n", ind, x, vals, ind, tclStr(st.Loop.Var), x)
+		for j, in := range st.Loop.Steps {
+			tclStep(b, in, j, phase, ind+"    ", suffix+" ["+st.Loop.Var+"={{"+st.Loop.Var+"}}]")
+		}
+		fmt.Fprintf(b, "%s}\n", ind)
+		if st.If != "" {
+			fmt.Fprintf(b, "%s}\n", ind)
+		}
+		return
+	}
+	if phase == "cleanup" {
+		fmt.Fprintf(b, ind+"tw::cleanup %s {\n", tclStr(PhaseLabel(phase)+stepName(st, i)+suffix))
+	} else {
+		fmt.Fprintf(b, ind+"tw::step %s %d {\n", tclStr(PhaseLabel(phase)+stepName(st, i)+suffix), map[bool]int{true: 1, false: 0}[st.ContinueOnFail && phase == ""])
+	}
+	in := ind + "    "
+	if st.Wait > 0 {
+		fmt.Fprintf(b, "%safter %d\n", in, int(st.Wait*1000))
+	}
+	if st.Retry != nil {
+		ej, _ := json.Marshal(st.Expect)
+		fmt.Fprintf(b, "%stw::retry_until %s %s %s\n", in, strconv.FormatFloat(orF(st.Retry.Timeout, 60), 'g', -1, 64), strconv.FormatFloat(orF(st.Retry.Interval, 5), 'g', -1, 64), tclStr(string(ej)))
+	}
+	if st.If != "" {
+		fmt.Fprintf(b, "%sif {[tw::cond %s]} {\n", in, tclStr(st.If))
+		in += "    "
+	}
+	switch {
+	case st.Run != nil:
+		args := []string{tclStr(st.Run.Session), tclStr(st.Run.Command)}
+		if st.Run.Prompt != "" || st.Timeout > 0 || st.Run.Parse != "" {
+			args = append(args, tclStr(st.Run.Prompt), strconv.Itoa(st.Timeout))
+		}
+		if st.Run.Parse != "" {
+			args = append(args, tclStr(st.Run.Parse))
+		}
+		fmt.Fprintf(b, "%stw::run %s\n", in, strings.Join(args, " "))
+	case st.HTTP != nil:
+		h := st.HTTP
+		args := []string{tclStr(h.URL)}
+		add := func(k, v string) {
+			if v != "" {
+				args = append(args, k, tclStr(v))
+			}
+		}
+		add("-session", h.Session)
+		if m := strings.ToUpper(h.Method); m != "" && m != "GET" {
+			args = append(args, "-method", m)
+		}
+		add("-environment", h.Environment)
+		add("-collection", h.Collection)
+		add("-body", h.Body)
+		if len(h.Headers) > 0 {
+			args = append(args, "-headers", tclDict(h.Headers))
+		}
+		if st.Timeout > 0 {
+			args = append(args, "-timeout", strconv.Itoa(st.Timeout))
+		}
+		fmt.Fprintf(b, "%stw::http %s\n", in, strings.Join(args, " "))
+	case st.SNMP != nil:
+		sn := st.SNMP
+		op := strings.ToLower(sn.Op)
+		if op == "" {
+			op = "get"
+		}
+		var o []string
+		for _, x := range sn.OIDs {
+			o = append(o, tclStr(x))
+		}
+		var v []string
+		for _, x := range sn.Values {
+			v = append(v, "[list "+tclStr(x.OID)+" "+tclStr(x.Type)+" "+tclStr(x.Value)+"]")
+		}
+		fmt.Fprintf(b, "%stw::snmp %s %s [list %s] [list %s] %d\n", in, tclStr(sn.Session), op, strings.Join(o, " "), strings.Join(v, " "), st.Timeout)
+	}
+	for _, e := range st.Expect {
+		for _, l := range tclExpect(e) {
+			fmt.Fprintf(b, "%s%s\n", in, l)
+		}
+	}
+	for _, s := range st.Save {
+		switch {
+		case s.OID != "":
+			fmt.Fprintf(b, "%stw::save %s oid %s\n", in, tclStr(s.Var), tclStr(s.OID))
+		case s.Column != "":
+			fmt.Fprintf(b, "%stw::save_cell %s %s %s\n", in, tclStr(s.Var), tclDict(s.Where), tclStr(s.Column))
+		case s.Field != "":
+			fmt.Fprintf(b, "%stw::save %s field %s\n", in, tclStr(s.Var), tclStr(s.Field))
+		case s.JSON != "":
+			fmt.Fprintf(b, "%stw::save %s json %s\n", in, tclStr(s.Var), tclStr(s.JSON))
+		}
+	}
+	if st.If != "" {
+		fmt.Fprintf(b, "%s}\n", in[:len(in)-4])
+	}
+	b.WriteString(ind + "}\n")
 }

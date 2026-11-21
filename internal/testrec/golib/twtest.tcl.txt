@@ -316,6 +316,11 @@ proc tw::finish {} {
 
 proc tw::_send {stepjson} {
     variable ans
+    variable retry
+    if {[info exists retry] && $retry ne ""} {
+        set stepjson "[string range $stepjson 0 end-1],$retry\}"
+        set retry ""
+    }
     lassign [tw::endpoint] api key
     set tok [http::geturl "$api/tools/tests" -method POST -type application/json -timeout 900000 \
         -headers [list Authorization "Bearer $key"] -query "\{\"action\":\"step\",\"step\":$stepjson\}"]
@@ -527,4 +532,49 @@ proc tw::done {} {
     variable failed
     puts "1..$n"
     exit [expr {$failed > 0}]
+}
+
+# tw::setvar name value: a variable for later steps ({{name}}).
+proc tw::setvar {name value} { variable vars; dict set vars $name $value }
+
+# tw::listof values...: a loop's values with the variables filled in.
+proc tw::listof {args} { set out {}; foreach a $args { lappend out [tw::fill $a] }; return $out }
+
+# tw::values text: a loop's values - split by commas, semicolons or lines, else by spaces.
+proc tw::values {src} {
+    set src [tw::fill $src]
+    if {[regexp {[,;\n]} $src]} { set parts [split $src ",;\n"] } else { set parts [regexp -all -inline {\S+} $src] }
+    set out {}
+    foreach p $parts { set p [string trim $p]; if {$p ne ""} { lappend out $p } }
+    return $out
+}
+
+# tw::cond expr: an if condition (==, !=, contains, !contains, ~, >, <, >=, <=; a bare value is true unless empty, 0, false or no).
+proc tw::cond {expr} {
+    set e [string trim [tw::fill $expr]]
+    foreach op {" !contains " " contains " " != " " == " " >= " " <= " " ~ " " > " " < "} {
+        set i [string first $op $e]
+        if {$i < 0} { continue }
+        set a [string trim [string trim [string range $e 0 [expr {$i - 1}]]] "\"'"]
+        set b [string trim [string trim [string range $e [expr {$i + [string length $op]}] end]] "\"'"]
+        set num [expr {[string is double -strict $a] && [string is double -strict $b]}]
+        switch -- [string trim $op] {
+            == { return [expr {$a eq $b || ($num && $a == $b)}] }
+            != { return [expr {!($a eq $b || ($num && $a == $b))}] }
+            contains { return [expr {[string first $b $a] >= 0}] }
+            !contains { return [expr {[string first $b $a] < 0}] }
+            ~ { return [regexp -- $b $a] }
+            > { return [expr {$num && $a > $b}] }
+            < { return [expr {$num && $a < $b}] }
+            >= { return [expr {$num && $a >= $b}] }
+            <= { return [expr {$num && $a <= $b}] }
+        }
+    }
+    set l [string tolower [string trim $e "\"'"]]
+    return [expr {$l ni {"" 0 false no} && [string first "\{\{" $l] < 0}]
+}
+
+# tw::retry_until timeout interval expectjson: Termwright repeats the next step until these checks pass.
+proc tw::retry_until {timeout interval expect} {
+    variable retry "\"retry\":\{\"timeout\":$timeout,\"interval\":$interval\},\"expect\":$expect"
 }

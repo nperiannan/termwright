@@ -812,17 +812,16 @@ class Tests:
         return self._run(action="save", file=file, yaml=yaml_text)
 
     def run(self, *files: str, vars: Optional[dict] = None, testbed: Optional[str] = None, on_cleanup_fail: str = "",
-            cleanup: str = "", timeout: float = 1800) -> str:
+            cleanup: str = "", tags: Optional[list] = None, timeout: float = 1800) -> str:
         """Run tests (none: all), optionally on a testbed (a file in testbeds/). on_cleanup_fail: what happens
         when a test's cleanup fails - "stop" (default: the remaining tests are skipped), "restore" (put back the
         configuration saved before the run) or "factory" (factory default); both may reboot the devices.
         cleanup: "steps" (default), "off" (no cleanup - tests build on each other) or "auto" (the cleanup
-        steps, else the undo of the configuration commands that ran).
-        cleanup: "steps" (default), "off" (no cleanup - tests build on each other) or "auto" (the cleanup
-        steps, else the undo of the configuration commands that ran).
+        steps, else the undo of the configuration commands that ran). files may be tests, folders or suites/... files;
+        tags: only tests with one of these tags ("!slow" leaves those out).
         Returns pass/fail per step and the report's path (JUnit XML and HTML in reports/)."""
         return self._run(timeout=timeout, action="run", files=list(files) or None, vars=vars, testbed=testbed,
-                         on_cleanup_fail=on_cleanup_fail or None, cleanup=cleanup or None)
+                         on_cleanup_fail=on_cleanup_fail or None, cleanup=cleanup or None, tags=tags or None)
 
     def new_testbed(self, name: str, folder: str) -> str:
         """Write testbeds/<name>.yaml with a role for each saved session of a session folder (core-sw1 -> {{core_sw1}})."""

@@ -97,86 +97,7 @@ func GeneratePython(c Case, caseFile string) ([]byte, error) {
 		fmt.Fprintf(&b, "%stw.restore([%s], [%s])\n", ind, strings.Join(ks, ", "), strings.Join(ss, ", "))
 	}
 	for _, ps := range phased(c) {
-		st, i := ps.st, ps.i
-		cont := ""
-		if ps.phase == "cleanup" {
-			cont = ", cleanup=True"
-		} else if st.ContinueOnFail && ps.phase == "" {
-			cont = ", continue_on_fail=True"
-		}
-		fmt.Fprintf(&b, "%swith tw.step(%s%s) as s:\n", ind, pyStr(PhaseLabel(ps.phase)+stepName(st, i)), cont)
-		in := ind + "    "
-		to := ""
-		if st.Timeout > 0 {
-			to = ", timeout=" + strconv.Itoa(st.Timeout)
-		}
-		switch {
-		case st.Run != nil:
-			p := ""
-			if st.Run.Prompt != "" {
-				p = ", prompt=" + pyStr(st.Run.Prompt)
-			}
-			if st.Run.Parse != "" {
-				p += ", parse=" + pyStr(st.Run.Parse)
-			}
-			fmt.Fprintf(&b, "%sa = s.run(%s, %s%s%s)\n", in, pyStr(st.Run.Session), pyStr(st.Run.Command), p, to)
-		case st.HTTP != nil:
-			h := st.HTTP
-			args := []string{pyStr(h.URL)}
-			add := func(k, v string) {
-				if v != "" {
-					args = append(args, k+"="+pyStr(v))
-				}
-			}
-			add("session", h.Session)
-			if m := strings.ToUpper(h.Method); m != "" && m != "GET" {
-				args = append(args, "method="+pyStr(m))
-			}
-			add("environment", h.Environment)
-			add("collection", h.Collection)
-			add("body", h.Body)
-			if len(h.Headers) > 0 {
-				args = append(args, "headers="+pyDict(h.Headers))
-			}
-			fmt.Fprintf(&b, "%sa = s.http(%s%s)\n", in, strings.Join(args, ", "), to)
-		case st.SNMP != nil:
-			sn := st.SNMP
-			op := strings.ToLower(sn.Op)
-			if op == "" {
-				op = "get"
-			}
-			args := []string{pyStr(sn.Session), "op=" + pyStr(op)}
-			if len(sn.OIDs) > 0 {
-				var o []string
-				for _, x := range sn.OIDs {
-					o = append(o, pyStr(x))
-				}
-				args = append(args, "oids=["+strings.Join(o, ", ")+"]")
-			}
-			if len(sn.Values) > 0 {
-				var o []string
-				for _, x := range sn.Values {
-					o = append(o, "("+pyStr(x.OID)+", "+pyStr(x.Type)+", "+pyStr(x.Value)+")")
-				}
-				args = append(args, "values=["+strings.Join(o, ", ")+"]")
-			}
-			fmt.Fprintf(&b, "%sa = s.snmp(%s%s)\n", in, strings.Join(args, ", "), to)
-		}
-		for _, e := range st.Expect {
-			fmt.Fprintf(&b, "%s%s\n", in, pyExpect(e))
-		}
-		for _, s := range st.Save {
-			switch {
-			case s.OID != "":
-				fmt.Fprintf(&b, "%sa.oid(%s).save(%s)\n", in, pyStr(s.OID), pyStr(s.Var))
-			case s.Column != "":
-				fmt.Fprintf(&b, "%sa.cell(%s, %s).save(%s)\n", in, pyDict(s.Where), pyStr(s.Column), pyStr(s.Var))
-			case s.Field != "":
-				fmt.Fprintf(&b, "%sa.field(%s).save(%s)\n", in, pyStr(s.Field), pyStr(s.Var))
-			case s.JSON != "":
-				fmt.Fprintf(&b, "%sa.json(%s).save(%s)\n", in, pyStr(s.JSON), pyStr(s.Var))
-			}
-		}
+		pyStep(&b, ps.st, ps.i, ps.phase, ind, "")
 	}
 	if len(c.Restore) > 0 {
 		b.WriteString(ind + "tw.finish()\n")
@@ -243,4 +164,134 @@ func pyExpect(e Expect) string {
 		return v + strings.Join(c, "")
 	}
 	return "pass  # empty check"
+}
+
+// pyStep writes one step (a loop: a Python for over its values with its steps inside).
+func pyStep(b *bytes.Buffer, st Step, i int, phase, ind, suffix string) {
+	if st.Loop != nil {
+		var vals string
+		switch {
+		case len(st.Loop.Values) > 0:
+			var l []string
+			for _, v := range st.Loop.Values {
+				l = append(l, "tw.fill("+pyStr(v)+")")
+			}
+			vals = "[" + strings.Join(l, ", ") + "]"
+		case st.Loop.Range != "" && !strings.Contains(st.Loop.Range, "{{"):
+			r, _ := rangeValues(st.Loop.Range)
+			var l []string
+			for _, v := range r {
+				l = append(l, pyStr(v))
+			}
+			vals = "[" + strings.Join(l, ", ") + "]"
+		default:
+			src := st.Loop.From
+			if src == "" {
+				src = st.Loop.Range
+			}
+			vals = "tw.values(" + pyStr(src) + ")"
+		}
+		if st.If != "" {
+			fmt.Fprintf(b, "%sif tw.cond(%s):\n", ind, pyStr(st.If))
+			ind += "    "
+		}
+		x := fmt.Sprintf("x%d", strings.Count(suffix, "["))
+		fmt.Fprintf(b, "%sfor %s in %s:\n%s    tw.vars[%s] = %s\n", ind, x, vals, ind, pyStr(st.Loop.Var), x)
+		for j, in := range st.Loop.Steps {
+			pyStep(b, in, j, phase, ind+"    ", suffix+" ["+st.Loop.Var+"={{"+st.Loop.Var+"}}]")
+		}
+		return
+	}
+	cont := ""
+	if phase == "cleanup" {
+		cont = ", cleanup=True"
+	} else if st.ContinueOnFail && phase == "" {
+		cont = ", continue_on_fail=True"
+	}
+	fmt.Fprintf(b, "%swith tw.step(%s%s) as s:\n", ind, pyStr(PhaseLabel(phase)+stepName(st, i)+suffix), cont)
+	in := ind + "    "
+	if st.If != "" {
+		fmt.Fprintf(b, "%ss.skip_unless(%s)\n", in, pyStr(st.If))
+	}
+	if st.Wait > 0 {
+		fmt.Fprintf(b, "%ss.wait(%s)\n", in, strconv.FormatFloat(st.Wait, 'g', -1, 64))
+	}
+	if st.Retry != nil {
+		ej, _ := json.Marshal(st.Expect)
+		fmt.Fprintf(b, "%ss.retry_until(%s, %s, %s)\n", in, strconv.FormatFloat(orF(st.Retry.Timeout, 60), 'g', -1, 64), strconv.FormatFloat(orF(st.Retry.Interval, 5), 'g', -1, 64), pyStr(string(ej)))
+	}
+	if actions(st) == 0 {
+		fmt.Fprintf(b, "%spass\n", in)
+	}
+	to := ""
+	if st.Timeout > 0 {
+		to = ", timeout=" + strconv.Itoa(st.Timeout)
+	}
+	switch {
+	case st.Run != nil:
+		p := ""
+		if st.Run.Prompt != "" {
+			p = ", prompt=" + pyStr(st.Run.Prompt)
+		}
+		if st.Run.Parse != "" {
+			p += ", parse=" + pyStr(st.Run.Parse)
+		}
+		fmt.Fprintf(b, "%sa = s.run(%s, %s%s%s)\n", in, pyStr(st.Run.Session), pyStr(st.Run.Command), p, to)
+	case st.HTTP != nil:
+		h := st.HTTP
+		args := []string{pyStr(h.URL)}
+		add := func(k, v string) {
+			if v != "" {
+				args = append(args, k+"="+pyStr(v))
+			}
+		}
+		add("session", h.Session)
+		if m := strings.ToUpper(h.Method); m != "" && m != "GET" {
+			args = append(args, "method="+pyStr(m))
+		}
+		add("environment", h.Environment)
+		add("collection", h.Collection)
+		add("body", h.Body)
+		if len(h.Headers) > 0 {
+			args = append(args, "headers="+pyDict(h.Headers))
+		}
+		fmt.Fprintf(b, "%sa = s.http(%s%s)\n", in, strings.Join(args, ", "), to)
+	case st.SNMP != nil:
+		sn := st.SNMP
+		op := strings.ToLower(sn.Op)
+		if op == "" {
+			op = "get"
+		}
+		args := []string{pyStr(sn.Session), "op=" + pyStr(op)}
+		if len(sn.OIDs) > 0 {
+			var o []string
+			for _, x := range sn.OIDs {
+				o = append(o, pyStr(x))
+			}
+			args = append(args, "oids=["+strings.Join(o, ", ")+"]")
+		}
+		if len(sn.Values) > 0 {
+			var o []string
+			for _, x := range sn.Values {
+				o = append(o, "("+pyStr(x.OID)+", "+pyStr(x.Type)+", "+pyStr(x.Value)+")")
+			}
+			args = append(args, "values=["+strings.Join(o, ", ")+"]")
+		}
+		fmt.Fprintf(b, "%sa = s.snmp(%s%s)\n", in, strings.Join(args, ", "), to)
+	}
+	for _, e := range st.Expect {
+		fmt.Fprintf(b, "%s%s\n", in, pyExpect(e))
+	}
+	for _, s := range st.Save {
+		switch {
+		case s.OID != "":
+			fmt.Fprintf(b, "%sa.oid(%s).save(%s)\n", in, pyStr(s.OID), pyStr(s.Var))
+		case s.Column != "":
+			fmt.Fprintf(b, "%sa.cell(%s, %s).save(%s)\n", in, pyDict(s.Where), pyStr(s.Column), pyStr(s.Var))
+		case s.Field != "":
+			fmt.Fprintf(b, "%sa.field(%s).save(%s)\n", in, pyStr(s.Field), pyStr(s.Var))
+		case s.JSON != "":
+			fmt.Fprintf(b, "%sa.json(%s).save(%s)\n", in, pyStr(s.JSON), pyStr(s.Var))
+		}
+	}
 }

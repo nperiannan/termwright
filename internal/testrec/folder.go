@@ -32,7 +32,7 @@ var builtinTemplates embed.FS
 func (f Folder) TemplatesDir() string { return filepath.Join(f.Root, "templates") }
 
 // Dirs of a tests folder.
-var Dirs = []string{"cases", "lib", "testbeds", "reports", "templates"}
+var Dirs = []string{"cases", "lib", "testbeds", "reports", "templates", "suites"}
 
 // MaxCaseSize is the largest case file read (1 MB).
 const MaxCaseSize = 1 << 20
@@ -198,25 +198,49 @@ func Parse(b []byte) (Case, error) {
 		}
 	}
 	all := append(append(append([]Step{}, c.Setup...), c.Steps...), c.Cleanup...)
+	return c, checkSteps(all, "")
+}
+
+func checkSteps(all []Step, in string) error {
 	for i, s := range all {
+		if s.Loop != nil {
+			if s.Run != nil || s.HTTP != nil || s.SNMP != nil {
+				return fmt.Errorf("%sstep %d: a loop step has only its loop", in, i+1)
+			}
+			if s.Loop.Var == "" || len(s.Loop.Steps) == 0 || len(s.Loop.Values) == 0 && s.Loop.Range == "" && s.Loop.From == "" {
+				return fmt.Errorf("%sstep %d: loop needs var, values (or range or from) and steps", in, i+1)
+			}
+			if s.Loop.Range != "" {
+				if _, err := rangeValues(s.Loop.Range); err != nil {
+					return fmt.Errorf("%sstep %d: %v", in, i+1, err)
+				}
+			}
+			if err := checkSteps(s.Loop.Steps, fmt.Sprintf("%sloop of step %d: ", in, i+1)); err != nil {
+				return err
+			}
+			continue
+		}
+		if actions(s) == 0 && s.Wait > 0 {
+			continue
+		}
 		switch {
 		case actions(s) == 0:
-			return c, fmt.Errorf("step %d has none of run, http and snmp", i+1)
+			return fmt.Errorf("%sstep %d has none of run, http and snmp", in, i+1)
 		case actions(s) > 1:
-			return c, fmt.Errorf("step %d has more than one of run, http and snmp", i+1)
+			return fmt.Errorf("%sstep %d has more than one of run, http and snmp", in, i+1)
 		case s.SNMP != nil && s.SNMP.Session == "":
-			return c, fmt.Errorf("step %d: snmp needs a session", i+1)
+			return fmt.Errorf("%sstep %d: snmp needs a session", in, i+1)
 		case s.SNMP != nil && strings.EqualFold(s.SNMP.Op, "set") && len(s.SNMP.Values) == 0:
-			return c, fmt.Errorf("step %d: an snmp set needs values", i+1)
+			return fmt.Errorf("%sstep %d: an snmp set needs values", in, i+1)
 		case s.SNMP != nil && !strings.EqualFold(s.SNMP.Op, "set") && len(s.SNMP.OIDs) == 0:
-			return c, fmt.Errorf("step %d: snmp needs oids", i+1)
+			return fmt.Errorf("%sstep %d: snmp needs oids", in, i+1)
 		case s.Run != nil && (s.Run.Session == "" || s.Run.Command == ""):
-			return c, fmt.Errorf("step %d: run needs a session and a command", i+1)
+			return fmt.Errorf("%sstep %d: run needs a session and a command", in, i+1)
 		case s.HTTP != nil && s.HTTP.URL == "":
-			return c, fmt.Errorf("step %d: http needs a url", i+1)
+			return fmt.Errorf("%sstep %d: http needs a url", in, i+1)
 		}
 	}
-	return c, nil
+	return nil
 }
 
 // Marshal writes a case as YAML.
@@ -278,6 +302,8 @@ type RunOptions struct {
 	// Cleanup: "" (each test's cleanup steps and restore), "off" (none: tests build on what earlier
 	// ones configured) or "auto" (the cleanup steps; without them the undo of the commands that ran).
 	Cleanup string `json:"cleanup,omitempty"`
+	// Tags: only tests with one of these tags; a tag starting with ! leaves its tests out.
+	Tags []string `json:"tags,omitempty"`
 	// Testbed: shown in the report.
 	Testbed string `json:"testbed,omitempty"`
 }
@@ -298,14 +324,12 @@ func (f Folder) RunFiles(ctx context.Context, files []string, d Driver, vars map
 
 // RunFilesWith is RunFiles with options (what to do when a cleanup fails).
 func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars map[string]string, opt RunOptions, progress func(Result)) (RunReport, error) {
-	if len(files) == 0 || len(files) == 1 && (files[0] == "" || strings.EqualFold(files[0], "all")) {
-		files = nil
-		for _, c := range f.List() {
-			files = append(files, c.File)
-		}
-		if len(files) == 0 {
-			return RunReport{}, errors.New("no tests in " + filepath.Join(f.Root, "cases"))
-		}
+	files, err := f.ExpandFiles(files, opt.Tags)
+	if err != nil {
+		return RunReport{}, err
+	}
+	if len(files) == 0 {
+		return RunReport{}, errors.New("no tests to run in " + filepath.Join(f.Root, "cases"))
 	}
 	start := time.Now()
 	mode := opt.OnCleanupFail
@@ -345,7 +369,8 @@ func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars
 			}
 		}
 	}
-	stopped := "" // why the remaining cases are skipped
+	stopped := ""                 // why the remaining cases are skipped
+	status := map[string]string{} // file → passed, failed or skipped (for dependsOn)
 	for _, file := range files {
 		var rs []Result
 		c, loaded := cases[file]
@@ -359,11 +384,25 @@ func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars
 		case !loaded:
 			_, err := f.Load(file)
 			rs = []Result{{Case: file, File: file, Start: time.Now(), Error: err.Error()}}
+		case f.blockedBy(c, status) != "":
+			name := c.Name
+			if name == "" {
+				name = file
+			}
+			rs = []Result{{Case: name, File: file, Start: time.Now(), Skipped: true, Error: f.blockedBy(c, status)}}
 		default:
 			rs = RunParamsWith(ctx, c, d, vars, opt)
 		}
 		for _, r := range rs {
 			r.File = file
+			switch {
+			case r.Skipped && status[file] == "":
+				status[file] = "skipped"
+			case !r.Passed && !r.Skipped:
+				status[file] = "failed"
+			case status[file] == "":
+				status[file] = "passed"
+			}
 			switch {
 			case r.Skipped:
 				rep.Skipped++
@@ -454,6 +493,8 @@ type Tree struct {
 	Lib []string `json:"lib"`
 	// Templates: the TextFSM templates and their index in templates/.
 	Templates []string `json:"templates"`
+	// Suites: named sets of tests in suites/.
+	Suites []SuiteInfo `json:"suites"`
 }
 
 // ReportInfo is a past run.
@@ -473,7 +514,7 @@ type ReportInfo struct {
 
 // Tree lists the folder.
 func (f Folder) Tree() Tree {
-	t := Tree{Root: f.Root, Cases: f.List(), Testbeds: []string{}, Reports: []ReportInfo{}, Lib: f.LibFiles(), Templates: f.dirFiles("templates")}
+	t := Tree{Root: f.Root, Cases: f.List(), Testbeds: []string{}, Reports: []ReportInfo{}, Lib: f.LibFiles(), Templates: f.dirFiles("templates"), Suites: f.Suites()}
 	if t.Cases == nil {
 		t.Cases = []CaseInfo{}
 	}

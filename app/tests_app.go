@@ -95,6 +95,8 @@ func (a *App) TestGenerateGo(file string) (string, error) {
 type TestRunRequest struct {
 	// Files: tests relative to the tests folder (none: all of them).
 	Files []string `json:"files,omitempty"`
+	// Tags: only tests with one of these tags ("!tag" leaves its tests out).
+	Tags []string `json:"tags,omitempty"`
 	// Vars: values for {{variables}} that win over the tests' own.
 	Vars map[string]string `json:"vars,omitempty"`
 	// Testbed: a file in testbeds/ whose values are used as {{variables}} (Vars win).
@@ -156,7 +158,7 @@ func (a *App) runTests(ctx context.Context, r TestRunRequest, ask netAsker) (tes
 		return testrec.RunReport{}, errors.New("tests are already running")
 	}
 	defer testsRun.Unlock()
-	rep, err := f.RunFilesWith(ctx, r.Files, newTestDriver(a), r.Vars, testrec.RunOptions{OnCleanupFail: r.OnCleanupFail, Cleanup: r.Cleanup, Testbed: r.Testbed}, func(res testrec.Result) {
+	rep, err := f.RunFilesWith(ctx, r.Files, newTestDriver(a), r.Vars, testrec.RunOptions{OnCleanupFail: r.OnCleanupFail, Cleanup: r.Cleanup, Testbed: r.Testbed, Tags: r.Tags}, func(res testrec.Result) {
 		emitter{a}.Emit("tests:progress", res)
 	})
 	if err == nil || len(rep.Results) > 0 {
@@ -380,7 +382,7 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 		}
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 		defer cancel()
-		rep, err := a.runTests(ctx, TestRunRequest{Files: files, Vars: vars, Testbed: argStr(args, "testbed"), OnCleanupFail: argStr(args, "on_cleanup_fail"), Cleanup: argStr(args, "cleanup")}, ask)
+		rep, err := a.runTests(ctx, TestRunRequest{Files: files, Vars: vars, Testbed: argStr(args, "testbed"), OnCleanupFail: argStr(args, "on_cleanup_fail"), Cleanup: argStr(args, "cleanup"), Tags: argStrs(args, "tags")}, ask)
 		if err != nil && len(rep.Results) == 0 {
 			return "", err
 		}
