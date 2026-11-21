@@ -19,7 +19,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
   selector: 'app-tests-view',
   imports: [FormsModule, NgTemplateOutlet, Icon],
   template: `
-    <div class="tv">
+    <div class="tv" [style.grid-template-columns]="'64px ' + sideW() + 'px minmax(0, 1fr)'">
       <nav class="rail" aria-label="Tests sections">
         @for (r of rails; track r.k) {
           <button type="button" [class.on]="section() === r.k" (click)="go(r.k)" [title]="r.t"><app-icon [name]="r.i" [size]="18" />{{ r.l }}</button>
@@ -28,6 +28,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
         <button type="button" class="gitb" (click)="gitMenu($event)" [title]="git()?.repo ? 'Git: ' + git()?.changed + ' changed' : 'Git'"><app-icon name="tree" [size]="17" />{{ git()?.repo ? (git()?.branch || 'git') : 'Git' }}@if (git()?.ahead) { <i>↑{{ git()?.ahead }}</i> }@if (git()?.behind) { <i>↓{{ git()?.behind }}</i> }</button>
       </nav>
       <aside class="side">
+        <div class="sgrip" (mousedown)="dragSide($event)" (dblclick)="sideW.set(360); keepSide()" title="Drag to change the width (double-click: default)" role="separator" aria-orientation="vertical"></div>
         @switch (section()) {
           @case ('tests') {
             <div class="stop">
@@ -56,7 +57,20 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                       <span class="dot" [class]="dot(c)"></span><span class="cn">{{ caseName(c) }}</span><span class="n">{{ c.steps }}</span></div>
                   }
                 }
-              } @empty { <div class="empty-s">No tests yet.<br />Record one, or ⋯ → Write a Test with AI.</div> }
+              } @empty {
+                @if (!q() && tag() === 'all') {
+                  <div class="onb">
+                    <b>Automate a test in three steps</b>
+                    <ol><li><b>Record</b> - work on the device as you always do; commands, API requests and SNMP queries become steps, and the checks for what you configured are added for you.</li>
+                      <li><b>Run</b> - on the same devices or a testbed, with or without cleanup.</li>
+                      <li><b>Report</b> - results with expected vs got, history, qTest and Jira.</li></ol>
+                    <button type="button" class="pri" (click)="recordMore()">● Record a Test</button>
+                    <button type="button" (click)="importManual()">Import Manual Test Cases…</button>
+                    <button type="button" (click)="writeWithAI()">✦ Write a Test with AI</button>
+                    <span class="mut">Import reads your test case sheet (Excel or CSV): Suite, Test, Step, Device, Expected.</span>
+                  </div>
+                } @else { <div class="empty-s">No tests match.</div> }
+              }
             </div>
             @if (picked().length) {
               <div class="selbar col"><div class="row"><b>{{ picked().length }} selected</b><span class="sp"></span><button type="button" class="lnk" (click)="picked.set([])">Clear</button><button type="button" class="lnk" (click)="saveSuite()" title="Keep the selected tests as a plan (suites/…) to run them together again">Save as plan…</button></div>
@@ -106,6 +120,14 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
         }
       </aside>
       <section class="main">
+        @if (busy()) {
+          <div class="live" role="status">
+            <span class="spin"></span><b>Running</b>
+            @if (liveStep(); as ls) { <span class="fl">{{ ls.case }} · {{ ls.step.name }}</span><span [class]="ls.step.skipped ? 'mut' : ls.step.passed ? 'ok' : 'bad'">{{ ls.step.skipped ? 'skipped' : ls.step.passed ? '✓' : '✗' }}</span> } @else { <span class="mut">starting…</span> }
+            <span class="mut">{{ liveCount() }} steps done</span><span class="sp"></span>
+            <button type="button" (click)="stopRun()" title="Stop after the step that runs now (cleanups still run)">■ Stop</button>
+          </div>
+        }
         @switch (section()) {
           @case ('runs') {
             @if (runRep(); as rep) {
@@ -204,17 +226,19 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                       </div></div>
                     @for (ph of phases; track ph.k) {
                       <div class="sec">
-                        <div class="sh">{{ ph.l }}<span class="sp"></span><button type="button" class="lnk" (click)="addStep(ph.k)">+ Step</button><button type="button" class="lnk" (click)="addWait(ph.k)">+ Wait</button><button type="button" class="lnk" (click)="addUpgrade(ph.k)" title="Install a software image (the device type's upgrade commands) and wait for the device">+ Upgrade</button><button type="button" class="lnk" (click)="addTraffic(ph.k)" title="Run a saved traffic test of the emulated lab">+ Traffic</button><button type="button" class="lnk" (click)="addLoop(ph.k)" title="Run steps once per value">+ Loop</button></div>
+                        <div class="sh">{{ ph.l }}<span class="sp"></span><button type="button" class="lnk" (click)="addStep(ph.k)">+ Step</button><button type="button" class="lnk" (click)="addWait(ph.k)">+ Wait</button><button type="button" class="lnk" (click)="addManual(ph.k)" title="A step a person does or checks; the run asks Passed or Failed">+ Manual</button><button type="button" class="lnk" (click)="addUpgrade(ph.k)" title="Install a software image (the device type's upgrade commands) and wait for the device">+ Upgrade</button><button type="button" class="lnk" (click)="addTraffic(ph.k)" title="Run a saved traffic test of the emulated lab">+ Traffic</button><button type="button" class="lnk" (click)="addLoop(ph.k)" title="Run steps once per value">+ Loop</button></div>
                         @for (s of listOf(d, ph.k); track $index; let i = $index; let lastI = $last) {
                           <div class="ed">
                             <div class="row"><b class="num">{{ i + 1 }}</b>
                               @if (s.run) { <input class="ses" [(ngModel)]="s.run.session" placeholder="session" aria-label="Session" /><input class="cmdi" [(ngModel)]="s.run.command" placeholder="command" aria-label="Command" /> }
                               @else if (s.http) { <select [(ngModel)]="s.http.method" aria-label="Method">@for (m of methods; track m) { <option [value]="m">{{ m }}</option> }</select><input class="cmdi" [(ngModel)]="s.http.url" placeholder="URL" aria-label="URL" /> }
+                              @else if (s.manual) { <span class="mut">manual</span><input class="cmdi" [(ngModel)]="s.manual.instruction" placeholder="what the person does or checks" aria-label="Instruction" /> }
                               @else if (s.upgrade) { <span class="mut">upgrade</span><input class="ses" [(ngModel)]="s.upgrade.session" placeholder="session" aria-label="Session" /><input class="cmdi" [(ngModel)]="s.upgrade.image" placeholder="image file or URL" aria-label="Image" /> }
                               @else if (s.traffic) { <span class="mut">traffic test</span><input class="cmdi" [(ngModel)]="s.traffic.test" placeholder="saved lab traffic test" aria-label="Traffic test" /> }
                               @else { <span class="cmd fl">{{ text(s) }}</span><span class="sp"></span>@if (s.loop) { <span class="mut">edit loops in the YAML</span> } }
                               <button type="button" class="lnk" (click)="moveStep(ph.k, i, -1)" [disabled]="i === 0" title="Move up">↑</button><button type="button" class="lnk" (click)="moveStep(ph.k, i, 1)" [disabled]="lastI" title="Move down">↓</button><button type="button" class="lnk" (click)="removeStep(ph.k, i)" title="Remove the step">✕</button>
                             </div>
+                            <div class="row opts"><label class="wide" title="What should happen, in words - shown with the step and in the reports">Expected <input class="cmdi" [(ngModel)]="s.expected" placeholder="e.g. VLAN 200 lists port 1:2 tagged" /></label></div>
                             <div class="row opts"><label>Timeout <input type="number" min="0" class="num2" [(ngModel)]="s.timeout" /> s</label>
                               <label><input type="checkbox" [(ngModel)]="s.continueOnFail" /> Go on when it fails</label>
                               <label title="Seconds to wait before the step">Wait <input type="number" min="0" class="num2" [(ngModel)]="s.wait" /> s</label>
@@ -243,9 +267,9 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
                           @for (s of listOf(t, ph.k); track $index; let i = $index) {
                             @let r = resOf(ph.k, i);
                             <div class="srow" [class.f]="r && !r.passed && !r.skipped" [class.open]="isOpen(ph.k, i)" (click)="toggleRow(ph.k, i)" (keydown.enter)="toggleRow(ph.k, i)" tabindex="0" role="button">
-                              <span class="mut">{{ i + 1 }}</span><span class="dev" [title]="target(s)">{{ s.loop ? 'loop' : shortDev(target(s)) }}</span><span class="cmd">{{ text(s) }}@if (logicText(s)) { <span class="logic">{{ logicText(s) }}</span> }</span>
+                              <span class="mut">{{ i + 1 }}</span><span class="dev" [title]="target(s)">{{ s.loop ? 'loop' : s.manual ? 'you' : shortDev(target(s)) }}</span><span class="cmd" [class.manual]="!!s.manual">{{ text(s) }}@if (logicText(s)) { <span class="logic">{{ logicText(s) }}</span> }@if (s.expected) { <span class="expd">Expected: {{ s.expected }}</span> }</span>
                               <span class="chips">@for (e of s.expect ?? []; track $index; let j = $index) { <span class="chip" [class.b]="r?.checks?.[j]?.passed === false">{{ r?.checks?.[j]?.passed === false ? '✗' : r ? '✓' : '' }} {{ label(e) }}</span> }
-                                @if (!(s.expect?.length)) { <span class="chip w" title="Without checks the step passes when the device accepts the command">○ not checked</span> }</span>
+                                @if (!(s.expect?.length) && !s.manual) { <span class="chip w" title="Without checks the step passes when the device accepts the command">○ not checked</span> }@if (s.manual) { <span class="chip m">you decide</span> }</span>
                               <span [class]="r ? (r.skipped ? 'mut' : r.passed ? 'ok' : 'bad') : 'mut'">{{ r ? (r.skipped ? '– skipped' : r.passed ? '✓ passed' : '✗ failed') : '' }}</span>
                               <span class="r mut">{{ r && !r.skipped ? dur(r.ms) : '' }}</span>
                             </div>
@@ -314,6 +338,17 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
           } @else { <div class="empty mut">Select a file.</div> }
         </ng-template>
       </section>
+      @if (manual(); as m) {
+        <div class="scrim fixed" aria-hidden="true"></div>
+        <div class="mdlg" role="dialog" aria-label="Manual step">
+          <span class="mut">A test waits for you - manual step</span>
+          <h2>{{ m.name }}</h2>
+          <p class="inst">{{ m.instruction }}</p>
+          @if (m.expected) { <p><span class="mut">Expected:</span> {{ m.expected }}</p> }
+          <textarea [(ngModel)]="manualNote" rows="2" placeholder="Note (optional): what you saw"></textarea>
+          <div class="row"><button type="button" (click)="answer('skipped')">Skip</button><span class="sp"></span><button type="button" class="badbtn" (click)="answer('failed')">✗ Failed</button><button type="button" class="okbtn" (click)="answer('passed')">✓ Passed</button></div>
+        </div>
+      }
       @if (runFiles(); as rf) {
         <div class="scrim" (click)="runFiles.set(null)" aria-hidden="true"></div>
         <aside class="drawer" role="dialog" aria-label="Run tests">
@@ -345,7 +380,7 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
   styles: [`
     :host { display: block; height: 100%; min-height: 0; font-family: var(--ui-font, inherit); font-size: 13px; color: var(--text); }
     :host button { font-size: 12.5px; } :host button:not(.lnk):not(.case):not(.tag) { height: 28px; padding: 0 12px; border-radius: 7px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-    .tv { display: grid; grid-template-columns: 64px 272px 1fr; height: 100%; min-height: 0; position: relative; }
+    .tv { display: grid; grid-template-columns: 64px 360px minmax(0, 1fr); height: 100%; min-height: 0; position: relative; }
     button { font: inherit; } .sp { flex: 1; } .grow { flex: 1; } .grow2 { flex: 2; } .mut { color: var(--muted); font-size: 12px; } .ok { color: var(--ok, #3fbf75); } .bad { color: var(--danger, #ef6161); } .warn { color: var(--warn, #e0a030); }
     .row { display: flex; align-items: center; gap: 6px; } .r { text-align: right; } .fl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pri { background: var(--accent); color: #fff; border-color: transparent; } .ghost { background: none; border-color: transparent; color: var(--muted); }
@@ -354,7 +389,10 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .rail button { display: flex !important; flex-direction: column; align-items: center; justify-content: center; gap: 4px; height: auto !important; min-height: 52px; line-height: 1.15; padding: 6px 2px !important; font-size: 10.5px !important; border: 0; border-radius: 9px; background: none; color: var(--muted); font-size: 10.5px; cursor: pointer; }
     .rail button:hover { color: var(--text); } .rail button.on { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--text); } .ri { font-size: 16px; line-height: 1.1; }
     .rail .gitb { font-size: 10px; word-break: break-all; } .rail i { font-style: normal; color: var(--accent); }
-    .side { display: flex; flex-direction: column; min-height: 0; background: var(--panel); border-right: 1px solid var(--border); }
+    .side { position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--panel); border-right: 1px solid var(--border); }
+    .sgrip { position: absolute; right: -5px; top: 0; bottom: 0; width: 10px; cursor: col-resize; z-index: 20; display: flex; align-items: center; justify-content: center; }
+    .sgrip::after { content: ''; width: 4px; height: 44px; border-radius: 3px; background: color-mix(in srgb, var(--text) 28%, transparent); }
+    .sgrip:hover::after, .sgrip:active::after { background: var(--accent); height: 100%; border-radius: 0; width: 3px; }
     .stop { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-bottom: 1px solid var(--border); }
     .search { height: 30px; padding: 0 10px; border-radius: 7px; }
     .tags { display: flex; flex-wrap: wrap; gap: 5px; } .tag { font-size: 11px; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--border); background: color-mix(in srgb, var(--text) 5%, transparent); color: var(--muted); cursor: pointer; }
@@ -399,6 +437,15 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
     .opts .wide { flex: 1; } .opts .wide .cmdi { height: 26px; }
     .dots { display: flex; gap: 3px; flex-wrap: wrap; } .dots i { width: 10px; height: 18px; border-radius: 3px; } .dp { background: var(--ok, #3fbf75); } .df { background: var(--danger, #ef6161); } .dw { background: var(--warn, #e0a030); }
     .vrow { display: grid; grid-template-columns: minmax(160px, 1fr) 90px 90px 1.2fr; gap: 10px; padding: 7px 12px; border-top: 1px solid var(--border); font-size: 12.5px; align-items: center; } .bar2 { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--text) 8%, transparent); }
+    .live { display: flex; align-items: center; gap: 10px; padding: 7px 20px; background: color-mix(in srgb, var(--accent) 12%, var(--panel)); border-bottom: 1px solid var(--border); font-size: 12.5px; }
+    .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); border-top-color: var(--accent); animation: sp 0.9s linear infinite; } @keyframes sp { to { transform: rotate(360deg); } }
+    .scrim.fixed { position: fixed; z-index: 50; } .mdlg { position: fixed; z-index: 51; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(560px, 92vw); display: flex; flex-direction: column; gap: 10px; padding: 20px 22px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 24px 60px rgba(0,0,0,.45); }
+    .mdlg h2 { margin: 0; font-size: 16px; } .mdlg .inst { font-size: 15px; line-height: 1.5; margin: 0; } .mdlg p { margin: 0; } .mdlg textarea { resize: vertical; }
+    .okbtn { background: var(--ok, #3fbf75) !important; color: #fff !important; border-color: transparent !important; } .badbtn { background: var(--danger, #ef6161) !important; color: #fff !important; border-color: transparent !important; }
+    .expd { display: block; font: 11.5px var(--ui-font, inherit); color: var(--muted); margin-top: 2px; } .cmd.manual { font-family: var(--ui-font, inherit); font-style: italic; }
+    .chip.m { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+    .onb { margin: 8px 4px; padding: 14px; border: 1px dashed var(--border); border-radius: 10px; display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
+    .onb ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; color: var(--text); } .onb button { justify-content: center; }
     .logic { display: inline-block; margin-left: 8px; font: 11px var(--ui-font, inherit); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); padding: 0 6px; border-radius: 8px; }
     .opts { flex-wrap: wrap; font-size: 12px; color: var(--muted); gap: 16px; padding-left: 24px; } .opts label { display: flex; align-items: center; gap: 4px; } .ed .chips { padding-left: 24px; }
     .addck { display: inline-flex; gap: 4px; } .addck select, .addck input { height: 24px; font-size: 12px; } .addck input { width: 220px; }
@@ -442,6 +489,16 @@ export class TestsView implements OnInit, OnDestroy {
   private offs: (() => void)[] = [];
   readonly picked = signal<string[]>([]);
   readonly section = signal<Section>('tests');
+  /** The test list's width (drag its right edge; kept for next time). */
+  readonly sideW = signal((() => { try { return Number(localStorage.getItem('tw.tests.side')) || 360; } catch { return 360; } })());
+  keepSide() { try { localStorage.setItem('tw.tests.side', String(this.sideW())); } catch { /* not kept */ } }
+  dragSide(ev: MouseEvent) {
+    ev.preventDefault();
+    const x0 = ev.clientX, w0 = this.sideW();
+    const move = (e: MouseEvent) => this.sideW.set(Math.max(220, Math.min(Math.max(320, window.innerWidth - 420), w0 + e.clientX - x0)));
+    const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); this.keepSide(); };
+    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+  }
   readonly rails: { k: Section; l: string; i: string; t: string }[] = [
     { k: 'tests', l: 'Tests', i: 'checklist', t: 'Tests: record, edit and run' }, { k: 'runs', l: 'Runs', i: 'play', t: 'Past runs and their results' },
     { k: 'schedules', l: 'Schedules', i: 'clock', t: 'Scheduled runs' }, { k: 'testbeds', l: 'Testbeds', i: 'hosts', t: 'Which devices a run uses' }, { k: 'library', l: 'Library', i: 'file', t: 'Templates and code helpers' }];
@@ -496,6 +553,9 @@ export class TestsView implements OnInit, OnDestroy {
     void this.backend.testLastRun().then(r => { if (r) this.took(r); }).catch(() => {});
     this.offs.push(this.backend.on('tests:schedule', () => void this.load()));
     this.offs.push(this.backend.on('tests:progress', (r: TestResult) => { if (r.file) this.last.update(m => ({ ...m, [r.file!]: r })); }));
+    this.offs.push(this.backend.on('tests:step', (e: { case: string; step: TestStepResult }) => { this.liveStep.set(e); this.liveCount.update(n => n + 1); }));
+    this.offs.push(this.backend.on('tests:manual', (m: { id: string; name: string; instruction: string; expected: string }) => { this.manualNote = ''; this.manual.set(m); }));
+    this.offs.push(this.backend.on('tests:manual-done', (id: string) => { if (this.manual()?.id === id) this.manual.set(null); }));
     this.timer = setInterval(() => { if (this.visible()) void this.poll(); }, 4000);
   }
   ngOnDestroy() { clearInterval(this.timer); this.offs.forEach(f => f()); }
@@ -548,6 +608,7 @@ export class TestsView implements OnInit, OnDestroy {
   }
 
   async run(files: string[], confirmed = false, forceLock = false): Promise<void> {
+    this.liveStep.set(null); this.liveCount.set(0);
     if (!confirmed && this.cleanupMode !== 'off' && this.onCleanupFail === 'factory' && !(await this.ui.confirm(tr('Factory Default on a Failed Cleanup?'),
       tr('When a cleanup fails, the devices of that test are reset to factory default and rebooted, then the run goes on. A factory default may remove the management address: use console sessions. Production sessions are never reset.'), tr('Run'), true))) return;
     this.busy.set(true);
@@ -724,6 +785,7 @@ export class TestsView implements OnInit, OnDestroy {
   moreMenu(ev: MouseEvent) {
     this.ui.showMenu(ev, [
       { label: 'Write a Test with AI…', action: () => void this.writeWithAI() },
+      { label: 'Import Manual Test Cases (Excel, CSV)…', action: () => void this.importManual() },
       { separator: true },
       { label: 'Open a Tests Folder…', action: () => void this.openFolder() },
       { label: 'Clone a Git Repository…', action: () => void this.clone() },
@@ -904,6 +966,26 @@ export class TestsView implements OnInit, OnDestroy {
     const ses = [...all].reverse().find(s => s.run)?.run?.session ?? '';
     this.listOf(d, p).push({ run: { session: ses, command: '' } });
     this.touch();
+  }
+  addManual(p: Phase) { const d = this.draft(); if (!d) return; this.listOf(d, p).push({ manual: { instruction: '' } }); this.touch(); }
+  readonly manual = signal<{ id: string; name: string; instruction: string; expected: string } | null>(null);
+  manualNote = '';
+  async answer(r: 'passed' | 'failed' | 'skipped') {
+    const m = this.manual(); if (!m) return;
+    this.manual.set(null);
+    try { await this.backend.testManualAnswer(m.id, r, this.manualNote); } catch (e) { this.ui.toast(errText(e), 'error'); }
+    this.manualNote = '';
+  }
+  readonly liveStep = signal<{ case: string; step: TestStepResult } | null>(null);
+  readonly liveCount = signal(0);
+  async stopRun() { await this.backend.testStop().catch(() => {}); this.ui.toast(tr('Stopping after the step that runs now…'), 'info'); }
+  async importManual() {
+    const dev = await this.ui.input(tr('Import Manual Test Cases'), tr('Session for steps without a Device column (empty: such steps become manual steps). Then pick the Excel or CSV file.'), '');
+    if (dev === null || dev === undefined) return;
+    try {
+      const l = await this.backend.testImportManual(dev.trim());
+      if (l?.length) { this.ui.toast(tr('Imported {0} tests', l.length), 'success'); await this.load(); }
+    } catch (e) { this.ui.toast(errText(e), 'error'); }
   }
   addUpgrade(p: Phase) {
     const d = this.draft(); if (!d) return;

@@ -310,6 +310,9 @@ type RunOptions struct {
 	Cleanup string `json:"cleanup,omitempty"`
 	// Tags: only tests with one of these tags; a tag starting with ! leaves its tests out.
 	Tags []string `json:"tags,omitempty"`
+	// OnStep is called after each step (live progress).
+	OnStep func(file, caseName string, sr StepResult) `json:"-"`
+	file   string
 	// Testbed: shown in the report.
 	Testbed string `json:"testbed,omitempty"`
 }
@@ -400,7 +403,9 @@ func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars
 			}
 			rs = []Result{{Case: name, File: file, Start: time.Now(), Skipped: true, Error: f.blockedBy(c, status)}}
 		default:
-			rs = RunParamsWith(ctx, c, d, vars, opt)
+			o := opt
+			o.file = file
+			rs = RunParamsWith(ctx, c, d, vars, o)
 		}
 		for _, r := range rs {
 			r.File = file
@@ -490,7 +495,7 @@ func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars
 		return rep, err
 	}
 	j, _ := json.MarshalIndent(rep, "", "  ")
-	for name, b := range map[string][]byte{"result.json": j, "junit.xml": JUnit(rep), "report.html": HTML(rep)} {
+	for name, b := range map[string][]byte{"result.json": j, "junit.xml": JUnit(rep), "report.html": HTML(rep), "results.xlsx": XLSX(rep)} {
 		if err := os.WriteFile(filepath.Join(abs, name), b, 0o644); err != nil {
 			return rep, err
 		}

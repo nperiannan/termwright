@@ -18,6 +18,8 @@ Commands that may hold a password, secret, community or key are not recorded. Dr
 
 ![Recording: three commands, the recorder on the right](screenshots/tests-guide/20-recording.png)
 
+**Already have manual test cases?** ⋯ → **Import Manual Test Cases** reads a sheet (Excel or CSV) with the columns *Suite*, *Test*, *Step*, *Device*, *Expected* (and optionally *Type*: command, api, manual): each row becomes a step, rows of the same test become one test, a row without a device becomes a manual step, and quoted text in *Expected* (`"v200"`) becomes a check. Then run them, and add checks where the import could not.
+
 ## 2. Checks - mostly written for you
 
 A step passes when the device accepted the command **and every check holds**. Termwright writes most checks for you:
@@ -64,6 +66,8 @@ A test shows its setup, steps and cleanup as a table - device, command, its chec
 
 ![Editing a test](screenshots/tests-guide/25-edit.png)
 
+**Expected** (in the step editor) says in words what should happen, as a manual test case does - it is shown under the command and in the reports. **+ Manual** adds a step a person does or looks at ("pull the cable on port 1:2 and check the LED is off"): the run stops, shows it with *Passed*, *Failed* and *Skip* and a note, and goes on; runs with nobody to ask (schedules, the command line) skip it.
+
 **Loops** run steps once per value: `loop: {var: port, range: "1:1-1:8", steps: [...]}` (or `values: [...]`, or `from: "{{list}}"`); each result is named with its value. **+ Loop** adds one; change its values and steps in the YAML.
 
 ## 6. Run
@@ -84,7 +88,7 @@ A test whose dependency (**Depends On…**) failed is skipped with the reason; a
 
 ## 7. Runs and reports
 
-**Runs** lists past runs. A run shows passed, failed, skipped and *steps not checked*, each test's first problem in words, the testbed, the cleanup mode and the software versions of the devices; **HTML report**, **JUnit**, **Send to qTest**, **+ defect** on failed tests and **▶ Run failed again**. Reports are kept in `reports/` (one folder per run).
+While a run goes, a bar shows each step as it finishes, with **■ Stop** (the step that runs ends, the cleanups still run). **Runs** lists past runs. A run shows passed, failed, skipped and *steps not checked*, each test's first problem in words, the testbed, the cleanup mode and the software versions of the devices; **HTML report**, **JUnit**, **Send to qTest**, **+ defect** on failed tests and **▶ Run failed again**. Reports are kept in `reports/` (one folder per run): `report.html`, `junit.xml` and `results.xlsx` - an Excel workbook with a summary, a row per test and a row per step with expected vs got, for the people who keep results in spreadsheets.
 
 ![A run in the Runs view](screenshots/tests-guide/26-runs.png)
 

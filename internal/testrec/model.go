@@ -60,6 +60,12 @@ type Step struct {
 	Timeout int `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 	// ContinueOnFail: later steps run even when this one fails.
 	ContinueOnFail bool `yaml:"continueOnFail,omitempty" json:"continueOnFail,omitempty"`
+	// Expected: what should happen, in words, as a manual test case says it ("VLAN 200 lists port 1:2
+	// tagged") - shown with the step and in the reports; the checks are what is tested.
+	Expected string `yaml:"expected,omitempty" json:"expected,omitempty"`
+	// Manual: a step a person does or looks at; the run stops and asks Passed / Failed (runs without
+	// anyone to ask skip it).
+	Manual *ManualStep `yaml:"manual,omitempty" json:"manual,omitempty"`
 	// Wait: seconds to pause before the step (a step with only wait is a pause).
 	Wait float64 `yaml:"wait,omitempty" json:"wait,omitempty"`
 	// If: run the step only when the condition holds: "{{x}} == y", !=, contains, !contains,
@@ -239,4 +245,10 @@ type UpgradeStep struct {
 // QTestLink names a qTest test case (its id, or its PID such as TC-12).
 type QTestLink struct {
 	TestCase string `yaml:"testCase" json:"testCase"`
+}
+
+// ManualStep asks a person.
+type ManualStep struct {
+	// Instruction: what to do or check, e.g. "Pull the cable on port 1:2 and check the LED is off".
+	Instruction string `yaml:"instruction" json:"instruction"`
 }

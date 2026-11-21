@@ -91,7 +91,9 @@ type AddKind = 'contains' | 'notContains' | 'matches' | 'field' | 'json' | 'oid'
     </div>`,
   styles: [`
     :host { position: relative; flex: none; width: 640px; min-width: 320px; max-width: 70vw; display: flex; flex-direction: column; min-height: 0; background: var(--panel); border-left: 1px solid var(--border); color: var(--text); font-size: calc(13px * var(--ui-scale, 1)); }
-    .grip { position: absolute; left: -3px; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 3; } .grip:hover { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+    .grip { position: absolute; left: -5px; top: 0; bottom: 0; width: 10px; cursor: col-resize; z-index: 20; display: flex; align-items: center; justify-content: center; }
+    .grip::after { content: ''; width: 4px; height: 44px; border-radius: 3px; background: color-mix(in srgb, var(--text) 28%, transparent); }
+    .grip:hover::after, .grip:active::after { background: var(--accent); height: 100%; border-radius: 0; width: 3px; }
     .top, .row { display: flex; align-items: center; gap: 6px; } .sp, .grow { flex: 1; }
     .bar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: color-mix(in srgb, #ef5b5b 16%, var(--panel)); border-bottom: 1px solid color-mix(in srgb, #ef5b5b 40%, var(--border)); }
     .bar.pz { background: color-mix(in srgb, var(--text) 6%, var(--panel)); border-bottom-color: var(--border); } .bb { font-size: 12px; padding: 2px 9px; }
@@ -223,6 +225,7 @@ export function expectLabel(e: TestExpect): string {
 /** What a step sends, for lists: the command, "GET /path" or "walk IF-MIB::ifTable". */
 export function stepText(s: TestStep): string {
   if (s.loop) return `for each {{${s.loop.var}}} in ${s.loop.values?.join(', ') ?? s.loop.range ?? s.loop.from ?? ''}: ${s.loop.steps.map(stepText).join('; ')}`;
+  if (s.manual) return s.manual.instruction;
   if (s.traffic) return `traffic test ${s.traffic.test}`;
   if (s.upgrade) return `upgrade ${s.upgrade.session} to ${s.upgrade.image}`;
   if (!s.run && !s.http && !s.snmp) return s.wait ? `wait ${s.wait} s` : '';

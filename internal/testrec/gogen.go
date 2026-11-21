@@ -339,6 +339,10 @@ func goStep(b *bytes.Buffer, st Step, i int, phase, name, ind string, depth int)
 		fmt.Fprintf(b, "%stw.Step(%s, %v, func(s *twtest.Step) {\n", ind, name, st.ContinueOnFail && phase == "")
 	}
 	var w bytes.Buffer
+	if st.Manual != nil {
+		fmt.Fprintf(b, "%s\ts.Skip(%s)\n%s})\n", ind, q("manual step - runs in Termwright, where a person answers it: "+st.Manual.Instruction), ind)
+		return
+	}
 	if st.If != "" {
 		fmt.Fprintf(&w, "\t\tif !s.Cond(%s) {\n\t\t\ts.Skip(%s)\n\t\t}\n", q(st.If), q("if "+st.If+" is false"))
 	}

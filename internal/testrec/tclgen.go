@@ -216,6 +216,10 @@ func tclStep(b *bytes.Buffer, st Step, i int, phase, ind, suffix string) {
 		fmt.Fprintf(b, ind+"tw::step %s %d {\n", tclStr(PhaseLabel(phase)+stepName(st, i)+suffix), map[bool]int{true: 1, false: 0}[st.ContinueOnFail && phase == ""])
 	}
 	in := ind + "    "
+	if st.Manual != nil {
+		fmt.Fprintf(b, "%s# manual step - runs in Termwright, where a person answers it\n%s}\n", in, ind)
+		return
+	}
 	if st.Wait > 0 {
 		fmt.Fprintf(b, "%safter %d\n", in, int(st.Wait*1000))
 	}

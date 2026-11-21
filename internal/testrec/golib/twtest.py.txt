@@ -218,6 +218,11 @@ class Step:
     def cond(self, expr):
         return self.r.cond(expr)
 
+    def skip_step(self, why):
+        """Skips the step (a manual step runs only in Termwright)."""
+        if not self.skip:
+            raise unittest.SkipTest(why)
+
     def skip_unless(self, expr):
         """Skips the step when the if condition is false."""
         if not self.skip and not self.r.cond(expr):

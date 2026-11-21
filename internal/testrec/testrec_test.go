@@ -592,3 +592,25 @@ func TestRunHistory(t *testing.T) {
 		t.Fatal(h)
 	}
 }
+
+func TestImportManualAndXLSX(t *testing.T) {
+	cs, err := ImportManual(strings.NewReader("Suite,Test Case,Step,Device,Expected Result\nVLAN,Create VLAN,create vlan v200,Lab/sw1,\nVLAN,,show vlan v200,Lab/sw1,\"Shows \"\"v200\"\" created\"\nVLAN,,Check the port LED,,LED is green\nAPI,List,GET /rest/vlans,APIs/lab,\n"), "")
+	if err != nil || len(cs) != 2 || cs[0].File != "cases/vlan/create-vlan.yaml" || len(cs[0].Case.Steps) != 3 || cs[0].Case.Steps[2].Manual == nil || len(cs[0].Case.Steps[1].Expect) != 1 || cs[1].Case.Steps[0].HTTP == nil {
+		t.Fatalf("%+v %v", cs, err)
+	}
+	f := Folder{Root: t.TempDir()}
+	f.Init()
+	rel, _ := f.Save("x", Case{Name: "x", Steps: []Step{{Run: &RunStep{Session: "s", Command: "show version"}, Expected: "the version"}, {Manual: &ManualStep{Instruction: "look"}}}})
+	rep, err := f.RunFiles(context.Background(), []string{rel}, &fake{}, nil, nil)
+	if err != nil || !fileThere(f, rep.Dir+"/results.xlsx") || !rep.Results[0].Steps[1].Skipped || rep.Results[0].Steps[0].Expected != "the version" {
+		t.Fatal(rep, err)
+	}
+}
+
+func TestXLSXRoundTrip(t *testing.T) {
+	rep := RunReport{Dir: "reports/x", Results: []Result{{Case: "a", Passed: true}}}
+	rows, err := XLSXRows(XLSX(rep))
+	if err != nil || len(rows) < 2 || rows[0][0] != "Test run reports/x" {
+		t.Fatal(rows, err)
+	}
+}

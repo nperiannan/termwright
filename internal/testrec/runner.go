@@ -88,6 +88,8 @@ type StepResult struct {
 	Rows []SNMPValue `json:"rows,omitempty"`
 	// Unchecked: it passed without checks - it ran, nothing was checked.
 	Unchecked bool `json:"unchecked,omitempty"`
+	// Expected: the step's expected result in words.
+	Expected string `json:"expected,omitempty"`
 	// Table: the parsed output (steps with parse).
 	Table *textfsm.Table `json:"table,omitempty"`
 	// Checks: one per expect.
@@ -220,6 +222,9 @@ func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt 
 			for _, sr := range execStep(sctx, st, i, d, v) {
 				sr.Phase = phase
 				r.Steps = append(r.Steps, sr)
+				if opt.OnStep != nil {
+					opt.OnStep(opt.file, r.Case, sr)
+				}
 				if !sr.Passed && !sr.Skipped {
 					r.Passed = false
 					if phase == "cleanup" {
@@ -445,6 +450,9 @@ func stepKind(s Step) string {
 	if s.Upgrade != nil {
 		return "upgrade"
 	}
+	if s.Manual != nil {
+		return "manual"
+	}
 	return "run"
 }
 
@@ -458,6 +466,8 @@ func stepName(s Step, i int) string {
 		return "traffic test " + s.Traffic.Test
 	case s.Upgrade != nil:
 		return "upgrade to " + s.Upgrade.Image
+	case s.Manual != nil:
+		return "manual: " + s.Manual.Instruction
 	case actions(s) == 0 && s.Wait > 0:
 		return fmt.Sprintf("wait %g s", s.Wait)
 	case s.Run != nil:
@@ -475,10 +485,13 @@ func stepName(s Step, i int) string {
 }
 
 func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string) StepResult {
-	sr := StepResult{Name: Fill(stepName(st, i), v), Kind: stepKind(st)}
+	sr := StepResult{Name: Fill(stepName(st, i), v), Kind: stepKind(st), Expected: Fill(st.Expected, v)}
 	to := time.Duration(st.Timeout) * time.Second
 	if to <= 0 {
 		to = 60 * time.Second
+		if st.Manual != nil {
+			to = 24 * time.Hour
+		}
 		if st.Traffic != nil || st.Upgrade != nil {
 			to = 30 * time.Minute
 		}
@@ -521,6 +534,22 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 		sr.Target, sr.Sent = sn.Session, snmpText(sn)
 		rows, err = d.SNMP(sctx, sn)
 		sr.Rows, out = rows, SNMPOutput(rows)
+	case st.Manual != nil:
+		sr.Target, sr.Sent = "person", Fill(st.Manual.Instruction, v)
+		mk, ok := d.(ManualAsker)
+		if !ok || !mk.CanAsk() {
+			sr.Skipped, sr.Passed, sr.Error = true, true, "skipped: a manual step needs a person (run it from the Tests tab)"
+			sr.Ms = time.Since(start).Milliseconds()
+			return sr
+		}
+		passed, note, aerr := mk.AskManual(sctx, sr.Name, sr.Sent, Fill(st.Expected, v))
+		out = note
+		switch {
+		case aerr != nil:
+			err = aerr
+		case !passed:
+			err = errors.New("the person marked it failed" + map[bool]string{true: ": " + note, false: ""}[note != ""])
+		}
 	case st.Upgrade != nil:
 		sr.Target, sr.Sent = Fill(st.Upgrade.Session, v), "upgrade to "+Fill(st.Upgrade.Image, v)
 		if u, ok := d.(Upgrader); ok {
@@ -552,7 +581,7 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 		return sr
 	}
 	sr.Passed = true
-	sr.Unchecked = len(st.Expect) == 0
+	sr.Unchecked = len(st.Expect) == 0 && st.Manual == nil
 	for _, e := range st.Expect {
 		var c CheckResult
 		if e.Table != nil {
@@ -818,7 +847,7 @@ func RunOne(ctx context.Context, st Step, d Driver) StepAnswer {
 
 func actions(s Step) int {
 	n := 0
-	for _, b := range []bool{s.Run != nil, s.HTTP != nil, s.SNMP != nil, s.Traffic != nil, s.Upgrade != nil} {
+	for _, b := range []bool{s.Run != nil, s.HTTP != nil, s.SNMP != nil, s.Traffic != nil, s.Upgrade != nil, s.Manual != nil} {
 		if b {
 			n++
 		}
@@ -976,4 +1005,10 @@ type Upgrader interface {
 // Versioner tells which software the devices run (recorded with each result and in the history).
 type Versioner interface {
 	Versions(ctx context.Context, sessions []string) map[string]string
+}
+
+// ManualAsker asks a person for a manual step's result.
+type ManualAsker interface {
+	CanAsk() bool
+	AskManual(ctx context.Context, name, instruction, expected string) (passed bool, note string, err error)
 }

@@ -5019,6 +5019,10 @@ const ru: Record<string, string> = {
   '{0} is already there.': '{0} уже существует.',
   'Save as Plan': 'Сохранить как план',
   'Plan name (suites/<name>.yaml)': 'Имя плана (suites/<имя>.yaml)',
+  'Stopping after the step that runs now…': 'Остановка после текущего шага…',
+  'Import Manual Test Cases': 'Импорт ручных тестов',
+  'Session for steps without a Device column (empty: such steps become manual steps). Then pick the Excel or CSV file.': 'Сеанс для шагов без столбца Device (пусто: такие шаги станут ручными). Затем выберите файл Excel или CSV.',
+  'Imported {0} tests': 'Импортировано тестов: {0}',
 };
 
 export default ru;

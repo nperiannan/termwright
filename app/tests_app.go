@@ -99,9 +99,10 @@ type TestRunRequest struct {
 	Tags []string `json:"tags,omitempty"`
 	// Testbeds: run on these testbeds at the same time (RunTestsParallel); ForceLock takes over a
 	// testbed someone else has locked.
-	Testbeds  []string `json:"testbeds,omitempty"`
-	ForceLock bool     `json:"forceLock,omitempty"`
-	scheduled bool     // a schedule's run: afterRun is called by the scheduler
+	Testbeds    []string `json:"testbeds,omitempty"`
+	ForceLock   bool     `json:"forceLock,omitempty"`
+	scheduled   bool     // a schedule's run: afterRun is called by the scheduler
+	interactive bool     // started in the window: manual steps are asked
 	// Vars: values for {{variables}} that win over the tests' own.
 	Vars map[string]string `json:"vars,omitempty"`
 	// Testbed: a file in testbeds/ whose values are used as {{variables}} (Vars win).
@@ -121,21 +122,33 @@ type TestRunRequest struct {
 var errTestsProduction = errors.New("these tests use production sessions")
 
 var (
-	testsRun  sync.Mutex          // guards testsBusy
-	testsBusy = map[string]bool{} // testbeds ("" = the tests' own sessions) with a run going
-	testsMu   sync.Mutex          // guards testsLast
-	testsLast *testrec.RunReport
+	testsRun   sync.Mutex                        // guards testsBusy
+	testsBusy  = map[string]bool{}               // testbeds ("" = the tests' own sessions) with a run going
+	testsStops = map[string]context.CancelFunc{} // stops the run on a testbed
+	testsMu    sync.Mutex                        // guards testsLast
+	testsLast  *testrec.RunReport
 )
 
 // RunTests runs tests one after another; "tests:progress" is emitted after each test. A run that
 // uses production sessions needs Confirmed (the error lists them).
 func (a *App) RunTests(r TestRunRequest) (testrec.RunReport, error) {
+	r.interactive = true
 	return a.runTests(context.Background(), r, nil)
+}
+
+// TestStop stops the runs going (the step running ends, cleanups still run).
+func (a *App) TestStop() {
+	testsRun.Lock()
+	defer testsRun.Unlock()
+	for _, s := range testsStops {
+		s()
+	}
 }
 
 // RunTestsParallel runs the same tests on several testbeds at once (each locked for its run); it
 // returns one report per testbed, in order.
 func (a *App) RunTestsParallel(r TestRunRequest) ([]testrec.RunReport, error) {
+	r.interactive = true
 	return a.runParallel(context.Background(), r, nil)
 }
 
@@ -220,7 +233,19 @@ func (a *App) runTests(ctx context.Context, r TestRunRequest, ask netAsker) (tes
 		}
 		defer f.ReleaseLock(r.Testbed)
 	}
-	rep, err := f.RunFilesWith(ctx, r.Files, newTestDriver(a), r.Vars, testrec.RunOptions{OnCleanupFail: r.OnCleanupFail, Cleanup: r.Cleanup, Testbed: r.Testbed, Tags: r.Tags}, func(res testrec.Result) {
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
+	testsRun.Lock()
+	testsStops[r.Testbed] = stop
+	testsRun.Unlock()
+	defer func() { testsRun.Lock(); delete(testsStops, r.Testbed); testsRun.Unlock() }()
+	drv := newTestDriver(a)
+	drv.interactive = r.interactive
+	opt := testrec.RunOptions{OnCleanupFail: r.OnCleanupFail, Cleanup: r.Cleanup, Testbed: r.Testbed, Tags: r.Tags,
+		OnStep: func(file, name string, sr testrec.StepResult) {
+			emitter{a}.Emit("tests:step", map[string]any{"file": file, "case": name, "testbed": r.Testbed, "step": sr})
+		}}
+	rep, err := f.RunFilesWith(ctx, r.Files, drv, r.Vars, opt, func(res testrec.Result) {
 		emitter{a}.Emit("tests:progress", res)
 	})
 	if err == nil || len(rep.Results) > 0 {
@@ -298,6 +323,8 @@ type testDriver struct {
 	// baseline puts back the configuration saved before the run (on a failed cleanup: restore)
 	baseline         func(context.Context) []testrec.StepResult
 	baselineSessions []string
+	// interactive: a person started the run in the window (manual steps can be asked)
+	interactive bool
 }
 
 func newTestDriver(a *App) *testDriver { return &testDriver{a: a, own: map[string]*term.CaptureConn{}} }

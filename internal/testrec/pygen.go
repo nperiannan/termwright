@@ -210,6 +210,10 @@ func pyStep(b *bytes.Buffer, st Step, i int, phase, ind, suffix string) {
 	}
 	fmt.Fprintf(b, "%swith tw.step(%s%s) as s:\n", ind, pyStr(PhaseLabel(phase)+stepName(st, i)+suffix), cont)
 	in := ind + "    "
+	if st.Manual != nil {
+		fmt.Fprintf(b, "%ss.skip_step(%s)\n", in, pyStr("manual step - runs in Termwright, where a person answers it: "+st.Manual.Instruction))
+		return
+	}
 	if st.If != "" {
 		fmt.Fprintf(b, "%ss.skip_unless(%s)\n", in, pyStr(st.If))
 	}

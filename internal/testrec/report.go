@@ -154,6 +154,9 @@ pre{white-space:pre-wrap;background:#0b0f14;padding:8px;border-radius:6px;max-he
 		b.WriteString(`<details open><summary>Saving and bringing back the devices</summary><table>`)
 		for _, st := range rep.Recovery {
 			fmt.Fprintf(&b, `<tr><td class="%s">%s</td><td>%s<div class="mut">%s</div>`, map[bool]string{true: "ok", false: "bad"}[st.Passed], mark(st), e(st.Name), e(st.Target))
+			if st.Expected != "" {
+				fmt.Fprintf(&b, `<div class="mut">Expected: %s</div>`, e(st.Expected))
+			}
 			if st.Error != "" {
 				fmt.Fprintf(&b, `<div class="bad">%s</div>`, e(st.Error))
 			}
