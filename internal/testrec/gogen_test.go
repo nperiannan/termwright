@@ -22,6 +22,17 @@ func TestGenerateGoGolden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err, string(src))
 	}
+	py, _ := GeneratePython(c, "cases/vlan/vlan-42_up.yaml")
+	if PyFile("cases/vlan/vlan-42_up.yaml") != "cases/vlan/test_vlan_vlan_42_up.py" {
+		t.Fatal(PyFile("cases/vlan/vlan-42_up.yaml"))
+	}
+	pyGolden := filepath.Join("testdata", "vlan42_test.py.golden")
+	if os.Getenv("UPDATE_GOLDEN") != "" {
+		os.WriteFile(pyGolden, py, 0o644)
+	}
+	if want, err := os.ReadFile(pyGolden); err != nil || string(want) != string(py) {
+		t.Fatalf("generated Python differs from %s:\n%s", pyGolden, py)
+	}
 	golden := filepath.Join("testdata", "vlan42_test.go.golden")
 	if os.Getenv("UPDATE_GOLDEN") != "" {
 		os.MkdirAll("testdata", 0o755)
@@ -99,6 +110,25 @@ func TestGeneratedGoRuns(t *testing.T) {
 	out, err := run("test", "-count=1", "-v", "./cases/other/", "-args", "-tw.var=x=1")
 	if err == nil || !strings.Contains(out, `expected the output to contain "NOPE"`) || !strings.Contains(out, "an earlier step failed") {
 		t.Fatalf("bad: %v\n%s", err, out)
+	}
+	if py, err := exec.LookPath("python3"); err == nil {
+		prun := func(env []string, args ...string) (string, error) {
+			cmd := exec.Command(py, append([]string{"lib/python/run_tests.py"}, args...)...)
+			cmd.Dir = f.Root
+			cmd.Env = append(append(os.Environ(), "TERMWRIGHT_API="+srv.URL+"/api/v1", "TERMWRIGHT_KEY=k"), env...)
+			out, err := cmd.CombinedOutput()
+			return string(out), err
+		}
+		if out, err := prun([]string{"TW_TESTBED=testbeds/nested.yaml"}, "cases/vlan", "cases/snmp", "cases/params", "--junit", "py.xml"); err != nil {
+			t.Fatalf("python: %v\n%s", err, out)
+		}
+		if x, _ := os.ReadFile(filepath.Join(f.Root, "py.xml")); !strings.Contains(string(x), "<testsuite") || !strings.Contains(string(x), "params='vlan=42'") {
+			t.Fatalf("python junit: %s", x)
+		}
+		out, err := prun(nil, "cases/other")
+		if err == nil || !strings.Contains(out, `expected the output to contain 'NOPE'`) || !strings.Contains(out, "an earlier step failed") {
+			t.Fatalf("python bad: %v\n%s", err, out)
+		}
 	}
 	j, _ := run("test", "-count=1", "-json", "./cases/...")
 	cmd := exec.Command(gobin, "run", "./lib/junit")

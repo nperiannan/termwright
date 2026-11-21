@@ -2888,6 +2888,8 @@ const ru: Record<string, string> = {
   'Wireless AP': 'Точка доступа',
   'Cloud': 'Облако',
   'Import…': 'Импорт…',
+  'Python': 'Python',
+  'No generated code yet: save the test (YAML → Save) to write it.': 'Код ещё не создан: сохраните тест (YAML → Сохранить).',
   'Commit…': 'Зафиксировать…',
   'Push': 'Отправить',
   'Commit Tests': 'Зафиксировать тесты',

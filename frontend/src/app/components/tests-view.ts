@@ -7,7 +7,7 @@ import { Recorder } from '../core/recorder.service';
 import { TestCase, TestCaseInfo, TestResult, TestRunReport, TestsGitInfo, TestsTree } from '../core/models';
 import { expectLabel, stepText } from './recorder-panel';
 
-type View = 'steps' | 'yaml' | 'go';
+type View = 'steps' | 'yaml' | 'go' | 'py';
 
 /** The Tests tab: the tests folder's tree, the selected test (steps, YAML, generated Go) and the last run. */
 @Component({
@@ -84,6 +84,10 @@ type View = 'steps' | 'yaml' | 'go';
                 <pre class="code ro">{{ goSrc() }}</pre>
                 <div class="row"><span class="mut">Generated from the YAML - edit the YAML, not this file.@if (git()?.hasGo) { Run outside Termwright: go test ./cases/... in the tests folder. }</span><span class="sp"></span><button type="button" (click)="backend.testsOpenInEditor(goFile())">Open in VS Code</button></div>
               }
+              @case ('py') {
+                <pre class="code ro">{{ goSrc() }}</pre>
+                <div class="row"><span class="mut">Generated from the YAML - edit the YAML, not this file. Run: python lib/python/run_tests.py (or pytest cases) in the tests folder.</span><span class="sp"></span><button type="button" (click)="backend.testsOpenInEditor(pyFile())">Open in VS Code</button></div>
+              }
             }
           </div>
         } @else { <div class="empty mut">Select a test, or record one: Tests → Record a Test.</div> }
@@ -136,7 +140,7 @@ export class TestsView implements OnInit, OnDestroy {
   readonly goSrc = signal('');
   readonly report = signal<TestRunReport | null>(null);
   readonly busy = signal(false);
-  readonly views: { k: View; l: string }[] = [{ k: 'steps', l: 'Steps' }, { k: 'yaml', l: 'YAML' }, { k: 'go', l: 'Go' }];
+  readonly views: { k: View; l: string }[] = [{ k: 'steps', l: 'Steps' }, { k: 'yaml', l: 'YAML' }, { k: 'go', l: 'Go' }, { k: 'py', l: 'Python' }];
   yaml = '';
   testbed = '';
   private sig = '';
@@ -155,6 +159,12 @@ export class TestsView implements OnInit, OnDestroy {
   });
   readonly folderName = computed(() => (this.tree()?.root ?? '').split(/[\\/]/).pop() ?? '');
   readonly goFile = computed(() => this.sel().replace(/\.ya?ml$/, '') + '_test.go');
+  /** As Termwright names it: cases/vlan/add.yaml → cases/vlan/test_vlan_add.py. */
+  readonly pyFile = computed(() => {
+    const f = this.sel(), i = f.lastIndexOf('/'), dir = f.slice(0, i), id = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'case';
+    const sub = dir.replace(/^cases\/?/, ''), base = id(f.slice(i + 1).replace(/\.ya?ml$/, ''));
+    return dir + '/test_' + (sub ? id(sub.replace(/\//g, '_')) + '_' : '') + base + '.py';
+  });
 
   constructor() {
     effect(() => { if (this.visible()) void this.poll(); });
@@ -195,7 +205,7 @@ export class TestsView implements OnInit, OnDestroy {
     this.view.set(v);
     const f = this.sel();
     if (v === 'yaml') this.yaml = await this.backend.testFile(f).catch(e => '# ' + errText(e));
-    if (v === 'go') this.goSrc.set(await this.backend.testFile(this.goFile()).catch(() => tr('No Go test yet: save the test (YAML → Save) to write it.')));
+    if (v === 'go' || v === 'py') this.goSrc.set(await this.backend.testFile(v === 'go' ? this.goFile() : this.pyFile()).catch(() => tr('No generated code yet: save the test (YAML → Save) to write it.')));
   }
 
   async saveYaml() {
