@@ -346,7 +346,7 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 			}
 			fmt.Fprintf(&b, "%s → %s\n", file, g)
 		}
-		fmt.Fprintf(&b, "Each test is written as Go (_test.go) and Python (test_*.py). Run them in %s with: go test ./cases/...  (JUnit: go test -json ./cases/... | go run ./lib/junit > junit.xml)  or  python lib/python/run_tests.py --junit junit.xml  (or pytest cases)", f.Root)
+		fmt.Fprintf(&b, "Each test is written as Go (_test.go), Python (test_*.py) and TCL (.test.tcl). Run them in %s with: go test ./cases/...  (JUnit: go test -json ./cases/... | go run ./lib/junit > junit.xml)  or  python lib/python/run_tests.py --junit junit.xml  (or pytest cases)  or  tclsh lib/tcl/run_tests.tcl -junit junit.xml", f.Root)
 		return b.String(), nil
 	case "step":
 		// one step for the generated Go tests: they check the answer themselves

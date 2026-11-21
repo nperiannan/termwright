@@ -31,7 +31,8 @@ func generated(b []byte) bool {
 func GoLibFiles() map[string][]byte {
 	rd := func(n string) []byte { b, _ := golib.ReadFile("golib/" + n); return b }
 	return map[string][]byte{"go.mod": rd("go.mod.txt"), "lib/twtest/twtest.go": rd("twtest.go.txt"), "lib/junit/main.go": rd("junit.go.txt"),
-		"lib/python/twtest.py": rd("twtest.py.txt"), "lib/python/run_tests.py": rd("run_tests.py.txt")}
+		"lib/python/twtest.py": rd("twtest.py.txt"), "lib/python/run_tests.py": rd("run_tests.py.txt"),
+		"lib/tcl/twtest.tcl": rd("twtest.tcl.txt"), "lib/tcl/run_tests.tcl": rd("run_tests.tcl.txt")}
 }
 
 // GoFile is the generated Go test file of a case file: cases/vlan/add.yaml → cases/vlan/add_test.go.
@@ -282,7 +283,14 @@ func (f Folder) WriteGo(caseFile string) (string, error) {
 	if err != nil {
 		return out, err
 	}
-	return out, f.writeGenerated(PyFile(rel), py)
+	if err := f.writeGenerated(PyFile(rel), py); err != nil {
+		return out, err
+	}
+	tcl, err := GenerateTcl(c, rel)
+	if err != nil {
+		return out, err
+	}
+	return out, f.writeGenerated(TclFile(rel), tcl)
 }
 
 // WriteGoLib writes go.mod and lib/ (only files Termwright made are replaced).

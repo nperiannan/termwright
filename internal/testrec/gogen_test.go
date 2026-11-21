@@ -33,6 +33,14 @@ func TestGenerateGoGolden(t *testing.T) {
 	if want, err := os.ReadFile(pyGolden); err != nil || string(want) != string(py) {
 		t.Fatalf("generated Python differs from %s:\n%s", pyGolden, py)
 	}
+	tcl, _ := GenerateTcl(c, "cases/vlan/vlan-42_up.yaml")
+	tclGolden := filepath.Join("testdata", "vlan42.test.tcl.golden")
+	if os.Getenv("UPDATE_GOLDEN") != "" {
+		os.WriteFile(tclGolden, tcl, 0o644)
+	}
+	if want, err := os.ReadFile(tclGolden); err != nil || string(want) != string(tcl) {
+		t.Fatalf("generated TCL differs from %s:\n%s", tclGolden, tcl)
+	}
 	golden := filepath.Join("testdata", "vlan42_test.go.golden")
 	if os.Getenv("UPDATE_GOLDEN") != "" {
 		os.MkdirAll("testdata", 0o755)
@@ -128,6 +136,25 @@ func TestGeneratedGoRuns(t *testing.T) {
 		out, err := prun(nil, "cases/other")
 		if err == nil || !strings.Contains(out, `expected the output to contain 'NOPE'`) || !strings.Contains(out, "an earlier step failed") {
 			t.Fatalf("python bad: %v\n%s", err, out)
+		}
+	}
+	if tclsh, err := exec.LookPath("tclsh"); err == nil {
+		trun := func(env []string, args ...string) (string, error) {
+			cmd := exec.Command(tclsh, append([]string{"lib/tcl/run_tests.tcl"}, args...)...)
+			cmd.Dir = f.Root
+			cmd.Env = append(append(os.Environ(), "TERMWRIGHT_API="+srv.URL+"/api/v1", "TERMWRIGHT_KEY=k"), env...)
+			out, err := cmd.CombinedOutput()
+			return string(out), err
+		}
+		if out, err := trun([]string{"TW_TESTBED=testbeds/nested.yaml"}, "cases/vlan", "cases/snmp", "cases/params", "-junit", "tcl.xml"); err != nil || !strings.Contains(out, "ok 1 - show vlan 42") {
+			t.Fatalf("tcl: %v\n%s", err, out)
+		}
+		if x, _ := os.ReadFile(filepath.Join(f.Root, "tcl.xml")); !strings.Contains(string(x), `failures="0"`) {
+			t.Fatalf("tcl junit: %s", x)
+		}
+		out, err := trun(nil, "cases/other")
+		if err == nil || !strings.Contains(out, `expected the output to contain "NOPE"`) || !strings.Contains(out, "# SKIP an earlier step failed") {
+			t.Fatalf("tcl bad: %v\n%s", err, out)
 		}
 	}
 	j, _ := run("test", "-count=1", "-json", "./cases/...")
