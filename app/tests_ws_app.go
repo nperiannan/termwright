@@ -1,6 +1,8 @@
 package app
 
 import (
+	"io"
+	"net/http"
 	"regexp"
 
 	"context"
@@ -415,6 +417,12 @@ func (a *App) TestsExport(o testrec.ExportOptions) (string, error) {
 		return "", err
 	}
 	o.Device = a.inventoryDevice
+	if o.Lang == "runner" {
+		o.Version = teamImageTag()
+		ctx, cancel := context.WithTimeout(a.ctx, 3*time.Minute)
+		o.Runners = a.twrunBinaries(ctx, o.OS)
+		cancel()
+	}
 	b, name, err := f.Export(o)
 	if err != nil {
 		return "", err
@@ -581,8 +589,66 @@ func (a *App) inventoryDevice(path string) (testrec.InventoryDevice, bool) {
 	default:
 		d.Protocol = "ssh"
 	}
+	if s.DeviceType != "" {
+		if dt, ok := a.deviceTypeNamed(s.DeviceType); ok {
+			for _, re := range dt.Errors() {
+				d.Errors = append(d.Errors, re.String())
+			}
+		}
+	}
 	if s.SNMPVersion != "" || s.SNMPUser != "" {
 		d.SNMPVer, d.SNMPHost, d.SNMPPort, d.SNMPUser, d.SNMPAuth, d.SNMPPriv = s.SNMPVersion, s.SNMPHost, s.SNMPPort, s.SNMPUser, s.SNMPAuth, s.SNMPPriv
 	}
 	return d, true
+}
+
+// twrunBinaries gets the twrun programs of an operating system (both architectures): next to Termwright,
+// in the data folder's runners/, else from the GitHub release of this version (nightly for development
+// builds). The ones it cannot get are left out - the suite's run script downloads them on its first run.
+func (a *App) twrunBinaries(ctx context.Context, goos string) map[string][]byte {
+	if goos == "mac" {
+		goos = "darwin"
+	}
+	out := map[string][]byte{}
+	exe, _ := os.Executable()
+	repo := a.cfg.Get().UpdateRepo
+	if repo == "" {
+		repo = "nperiannan/termwright"
+	}
+	tag := teamImageTag()
+	for _, arch := range []string{"amd64", "arm64"} {
+		name := "twrun-" + goos + "-" + arch
+		if goos == "windows" {
+			name += ".exe"
+		}
+		var found []byte
+		for _, dir := range []string{filepath.Dir(exe), filepath.Join(a.cfg.DataDir(), "runners")} {
+			if b, err := os.ReadFile(filepath.Join(dir, name)); err == nil && len(b) > 1<<20 {
+				found = b
+				break
+			}
+		}
+		if found == nil {
+			u := "https://github.com/" + repo + "/releases/download/v" + tag + "/" + name
+			if tag == "nightly" {
+				u = "https://github.com/" + repo + "/releases/download/nightly/" + name
+			}
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+			if err != nil {
+				continue
+			}
+			res, err := (&http.Client{Timeout: 3 * time.Minute}).Do(req)
+			if err != nil {
+				continue
+			}
+			if res.StatusCode == http.StatusOK {
+				found, _ = io.ReadAll(io.LimitReader(res.Body, 64<<20))
+			}
+			res.Body.Close()
+		}
+		if len(found) > 1<<20 {
+			out[name] = found
+		}
+	}
+	return out
 }

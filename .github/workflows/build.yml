@@ -243,6 +243,11 @@ jobs:
             tar -C pkg -czf dist/termwright-team-linux-$a.tar.gz termwright-team
             cp pkg/termwright-team/termwright-team img/termwright-team-linux-$a
           done
+          # twrun: runs exported test suites without Termwright (Export Automation Suite → runner)
+          for t in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            o=${t%/*}; a=${t#*/}; x=""; [ "$o" = windows ] && x=.exe
+            CGO_ENABLED=0 GOOS=$o GOARCH=$a go build -trimpath -ldflags "-s -w -X main.Version=$V" -o dist/twrun-$o-$a$x ./cmd/twrun
+          done
           echo "TEAM_VERSION=$V" >> "$GITHUB_ENV"
       - uses: actions/upload-artifact@v7
         with:

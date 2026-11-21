@@ -209,7 +209,15 @@ network-tests/
 The library is also what you build on: besides run, http, snmp and the checks, it has `configure(session, commands)`, `wait_for(session, command, pattern, timeout, interval)`, `log(text)` and `session(role)` (Go: `Configure`, `WaitFor`, `Log`, `Session`; TCL: `tw::configure`, `tw::wait_for`, `tw::log`, `tw::session`).
 
 
-**Without Termwright.** Choose **On its own** (Python) in the export dialog. The suite then logs in to the devices itself and needs no Termwright on that computer:
+**Without Termwright.** The export dialog has three ways to run:
+
+- **On its own, as code** - Python or Go tests with a library that logs in to the devices itself. Procedures become functions (`twprocs.create_vlan(tw, vlan="200")` in Python, `twprocs.CreateVlan(tw, map[string]string{"vlan": "200"}, false, false)` in Go). Go: install Go 1.24 and run `./run.sh` (the first run downloads two modules) or `go test ./cases/...`.
+- **On its own, with the twrun program** - the YAML tests as they are, and `bin/twrun` for the chosen system. twrun runs them exactly like Termwright (checks, procedures, data, reruns, timeouts) and writes the same reports. `twrun check` tries every login; `twrun setup-web` installs Playwright for web steps.
+- **Through Termwright** - the steps go through the app or `termwright tests serve`.
+
+REST API steps use the API sessions of `inventory.yaml` (base URL, basic / bearer / API-key login; the password in `TW_PASSWORD_<NAME>`, a token in `TW_TOKEN_<NAME>`). Web steps need Playwright: in Python `pip install playwright && playwright install chromium`; in Go and twrun Node.js and `twrun setup-web` (or `npm install --prefix .playwright playwright`).
+
+For the Python suite: The suite then logs in to the devices itself and needs no Termwright on that computer:
 
 1. `python3 -m pip install -r requirements.txt` (paramiko, textfsm, PyYAML; ncclient, playwright and keyring are optional; SNMP steps use the net-snmp commands).
 2. `inventory.yaml` lists every session the tests use - host, protocol (ssh, telnet, api), port, user name, device type, API and SNMP settings, jump host. Change it to run on other devices.

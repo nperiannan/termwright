@@ -9,8 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/termwright/termwright/internal/testrec"
 )
 
 // TestRun drives a real browser when TW_PLAYWRIGHT points at an installed playwright package.
@@ -27,7 +25,7 @@ func TestRun(t *testing.T) {
 	}))
 	defer srv.Close()
 	r := Runner{Dir: dir}
-	w := testrec.WebStep{URL: srv.URL, Actions: []testrec.WebAction{
+	w := Step{URL: srv.URL, Actions: []Action{
 		{Do: "fill", Target: "#u", Value: "admin"}, {Do: "fill", Target: "#password", Value: "x"},
 		{Do: "click", Target: "text=Sign in"}, {Do: "expect", Value: "Welcome admin"}, {Do: "expect_not", Target: "#u"},
 	}}
@@ -35,7 +33,7 @@ func TestRun(t *testing.T) {
 	if err != nil || !strings.Contains(out, "Welcome admin") || strings.Contains(out, `"x"`) {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	w.Actions = append(w.Actions, testrec.WebAction{Do: "expect", Value: "Not there"})
+	w.Actions = append(w.Actions, Action{Do: "expect", Value: "Not there"})
 	out, err = r.Run(context.Background(), w, filepath.Join(dir, "shots"), 2)
 	if err == nil || !strings.Contains(out, "screenshot: ") {
 		t.Fatalf("no failure: %s", out)

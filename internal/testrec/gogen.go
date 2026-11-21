@@ -49,7 +49,11 @@ func GenerateGo(c Case, caseFile string) ([]byte, error) {
 	var b bytes.Buffer
 	q := strconv.Quote
 	fmt.Fprintf(&b, "%s from %s. DO NOT EDIT - change the YAML (or record it again) and save it.\n\n", genHeader, caseFile)
-	fmt.Fprintf(&b, "package %s\n\nimport (\n\t\"testing\"\n\n\t%q\n)\n\n", goPkg(dir), GoModule+"/lib/twtest")
+	if usesCalls(c) {
+		fmt.Fprintf(&b, "package %s\n\nimport (\n\t\"testing\"\n\n\t%q\n\t%q\n)\n\n", goPkg(dir), GoModule+"/lib/twprocs", GoModule+"/lib/twtest")
+	} else {
+		fmt.Fprintf(&b, "package %s\n\nimport (\n\t\"testing\"\n\n\t%q\n)\n\n", goPkg(dir), GoModule+"/lib/twtest")
+	}
 	name := c.Name
 	if name == "" {
 		name = strings.TrimSuffix(filepath.Base(caseFile), filepath.Ext(caseFile))
@@ -208,7 +212,7 @@ func (f Folder) WriteGo(caseFile string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	withCalls := c // Python calls the procedures as functions (lib/python/twprocs.py)
+	withCalls := c                         // Python calls the procedures as functions (lib/python/twprocs.py)
 	if c, err = f.Prepare(c); err != nil { // procedures inlined, data rows as params
 		return "", err
 	}
@@ -216,7 +220,7 @@ func (f Folder) WriteGo(caseFile string) (string, error) {
 	p, _ := f.find(caseFile)
 	rel, _ := filepath.Rel(f.Root, p)
 	rel = filepath.ToSlash(rel)
-	src, err := GenerateGo(c, rel)
+	src, err := GenerateGo(withCalls, rel)
 	if err != nil {
 		return "", err
 	}
@@ -233,6 +237,13 @@ func (f Folder) WriteGo(caseFile string) (string, error) {
 	}
 	if len(f.Procs()) > 0 {
 		if err := f.writeGenerated("lib/python/twprocs.py", f.GeneratePyProcs()); err != nil {
+			return out, err
+		}
+		gp, err := f.GenerateGoProcs()
+		if err != nil {
+			return out, err
+		}
+		if err := f.writeGenerated("lib/twprocs/twprocs.go", gp); err != nil {
 			return out, err
 		}
 	}
@@ -340,6 +351,25 @@ func goStep(b *bytes.Buffer, st Step, i int, phase, name, ind string, depth int)
 			goStep(b, in, j, phase, q(PhaseLabel(phase)+stepName(in, j))+" + \" ["+st.Loop.Var+"=\" + "+x+" + \"]\"", ind+"\t", depth+1)
 		}
 		fmt.Fprintf(b, "%s}\n", ind)
+		if st.If != "" {
+			fmt.Fprintf(b, "%s}\n", ind)
+		}
+		return
+	}
+	if st.Call != nil { // a procedure of lib/twprocs
+		if st.If != "" {
+			fmt.Fprintf(b, "%sif tw.Cond(%s) {\n", ind, q(st.If))
+		}
+		keys := make([]string, 0, len(st.Call.With))
+		for k := range st.Call.With {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		var args []string
+		for _, k := range keys {
+			args = append(args, q(k)+": tw.Fill("+q(st.Call.With[k])+")")
+		}
+		fmt.Fprintf(b, "%stwprocs.%s(tw, map[string]string{%s}, %v, %v)\n", ind, goProcName(st.Call.Proc), strings.Join(args, ", "), phase == "cleanup", st.ContinueOnFail && phase == "")
 		if st.If != "" {
 			fmt.Fprintf(b, "%s}\n", ind)
 		}
@@ -469,4 +499,63 @@ func goAction(b *bytes.Buffer, st Step) {
 	if len(st.Expect) == 0 && len(st.Save) == 0 {
 		b.WriteString("\t\t_ = a\n")
 	}
+}
+
+func goProcName(name string) string {
+	n := goIdent(strings.TrimSuffix(strings.TrimPrefix(filepath.ToSlash(name), "procs/"), ".yaml"))
+	if n == "" || (n[0] >= '0' && n[0] <= '9') {
+		n = "P" + n
+	}
+	return n
+}
+
+// GenerateGoProcs writes the procedures (procs/*.yaml) as Go functions - lib/twprocs - that the generated
+// tests call: twprocs.CreateVlan(tw, map[string]string{"vlan": "200"}, false, false).
+func (f Folder) GenerateGoProcs() ([]byte, error) {
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "%s from procs/*.yaml. DO NOT EDIT - change the procedures and save a test.\n\n", genHeader)
+	b.WriteString("// Package twprocs: the tests folder's procedures as functions. Each runs its steps with its parameters as\n// variables: twprocs.CreateVlan(tw, map[string]string{\"vlan\": \"200\"}, false, false) - the last two say\n// it is called from the cleanup and that a failed step does not stop the test.\n")
+	fmt.Fprintf(&b, "package twprocs\n\nimport %q\n\n", GoModule+"/lib/twtest")
+	q := strconv.Quote
+	for _, pi := range f.Procs() {
+		p, err := f.LoadProc(pi.Name)
+		if err != nil {
+			continue
+		}
+		defs := map[string]string{}
+		var names []string
+		for _, prm := range p.Params {
+			k, d, hasDef := strings.Cut(prm, "=")
+			k = strings.TrimSpace(k)
+			names = append(names, k)
+			if hasDef {
+				defs[k] = strings.TrimSpace(d)
+			}
+		}
+		fmt.Fprintf(&b, "// %s runs the procedure %s", goProcName(pi.Name), p.Name)
+		if p.Description != "" {
+			b.WriteString(": " + oneLine(p.Description))
+		}
+		if len(names) > 0 {
+			b.WriteString(". Parameters: " + strings.Join(p.Params, ", "))
+		}
+		fmt.Fprintf(&b, ".\nfunc %s(tw *twtest.T, args map[string]string, cleanup, goOn bool) {\n\tp := map[string]string{}\n\tfor k, v := range %s {\n\t\tp[k] = v\n\t}\n\tfor k, v := range args {\n\t\tp[k] = v\n\t}\n", goProcName(pi.Name), goMapOrEmpty(defs))
+		fmt.Fprintf(&b, "\ttw.Scope(%s, p, cleanup, goOn, func() {\n", q(p.Name))
+		for i, st := range p.Steps {
+			goStep(&b, st, i, "", q(stepName(st, i)), "\t\t", 0)
+		}
+		b.WriteString("\t})\n}\n\n")
+	}
+	out, err := format.Source(b.Bytes())
+	if err != nil {
+		return b.Bytes(), fmt.Errorf("generated Go procedures do not parse: %w", err)
+	}
+	return out, nil
+}
+
+func goMapOrEmpty(m map[string]string) string {
+	if len(m) == 0 {
+		return "map[string]string{}"
+	}
+	return goMap(m)
 }

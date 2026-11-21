@@ -16,8 +16,6 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
-	"github.com/termwright/termwright/internal/testrec"
 )
 
 //go:embed runner.js
@@ -146,7 +144,7 @@ type line struct {
 }
 
 // Run runs a web step; screenshots go to shots. The output is the action log and the page's text.
-func (r Runner) Run(ctx context.Context, w testrec.WebStep, shots string, timeout int) (string, error) {
+func (r Runner) Run(ctx context.Context, w Step, shots string, timeout int) (string, error) {
 	st := r.Status()
 	if st.Node == "" || !st.Ready {
 		return "", errors.New("web steps need Playwright: open a web step in the editor and click Set Up (" + st.Hint + ")")
@@ -170,7 +168,7 @@ func (r Runner) Run(ctx context.Context, w testrec.WebStep, shots string, timeou
 		}
 		what := "open " + w.URL
 		if l.I >= 0 && l.I < len(w.Actions) {
-			what = testrec.WebActionText(w.Actions[l.I])
+			what = ActionText(w.Actions[l.I])
 		}
 		switch {
 		case l.Done:
@@ -203,4 +201,52 @@ func (r Runner) Run(ctx context.Context, w testrec.WebStep, shots string, timeou
 		return "", fmt.Errorf("the browser runner stopped after %s: %v %s", time.Since(start).Round(time.Second), err, msg)
 	}
 	return log.String(), nil
+}
+
+// Step drives a browser with Playwright: it opens URL, then does the actions in order. The step's
+// output is the log of the actions and the page's text at the end, so expect checks can look at it.
+type Step struct {
+	// URL: the page to open first (may be empty when the first action is goto).
+	URL string `yaml:"url,omitempty" json:"url,omitempty"`
+	// Browser: chromium (default), firefox or webkit.
+	Browser string `yaml:"browser,omitempty" json:"browser,omitempty"`
+	// Show: show the browser window (default: headless).
+	Show bool `yaml:"show,omitempty" json:"show,omitempty"`
+	// Insecure: accept self-signed certificates (device web pages).
+	Insecure bool     `yaml:"insecure,omitempty" json:"insecure,omitempty"`
+	Actions  []Action `yaml:"actions,omitempty" json:"actions,omitempty"`
+}
+
+// Action is one thing to do on the page.
+type Action struct {
+	// Do: goto, click, fill, press, select, check, uncheck, hover, expect (the text or element is
+	// there), expect_not, wait (seconds, or until the target shows), screenshot.
+	Do string `yaml:"do" json:"do"`
+	// Target: what to act on - a CSS selector, text=Sign in, role=button[name="Save"], label=User name,
+	// placeholder=Search, or an XPath (//...). expect: the text to find when there is no target.
+	Target string `yaml:"target,omitempty" json:"target,omitempty"`
+	// Value: fill: the text; press: the key (Enter); select: the option; goto: the URL; wait: seconds;
+	// expect with a target: the text the element must contain; screenshot: the file name.
+	Value string `yaml:"value,omitempty" json:"value,omitempty"`
+}
+
+// ActionText is an action in a few words, as the log shows it.
+func ActionText(a Action) string {
+	parts := []string{strings.ToLower(a.Do)}
+	if a.Target != "" {
+		parts = append(parts, a.Target)
+	}
+	if a.Value != "" {
+		if a.Do == "fill" && looksSecret(a.Target) {
+			parts = append(parts, `"••••"`)
+		} else {
+			parts = append(parts, fmt.Sprintf("%q", a.Value))
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+func looksSecret(target string) bool {
+	t := strings.ToLower(target)
+	return strings.Contains(t, "password") || strings.Contains(t, "passwd") || strings.Contains(t, "secret") || strings.Contains(t, "token")
 }

@@ -4,6 +4,12 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Standalone Go suite**: Export Automation Suite → **On its own, as code** → Go. The zip is a Go module that logs in to the devices itself - SSH (jump hosts too) and Telnet with prompt learning and paging off, REST APIs, SNMP v1/v2c/v3 with the standard MIBs, NETCONF, web steps (Playwright) and TextFSM tables. Procedures become Go functions in `lib/twprocs` (`twprocs.CreateVlan(tw, map[string]string{"vlan": "200"}, false, false)`). `go test ./cases/...` or `run.sh` / `run.cmd`.
+
+- **twrun - run suites without Termwright, no code**: Export Automation Suite → **On its own, with the twrun program** packs the YAML tests, procedures, data, testbeds, templates, `inventory.yaml` and twrun for Linux, macOS or Windows (both CPU types; downloaded from the release when missing). twrun runs them the same way Termwright does - checks, saves, loops, procedures, data rows, reruns of flaky tests, timeouts, device error messages - and writes the same reports (HTML, PDF, JUnit XML, run logs). `twrun check` logs in to each device; `twrun setup-web` installs Playwright for web steps. The release now has twrun for six systems.
+
+- **REST API and web steps standalone**: API requests (basic, bearer and API-key logins from `TW_PASSWORD_` / `TW_TOKEN_`) and Playwright web steps run in the standalone Python and Go suites and in twrun. The inventory also carries each device type's error messages, so a refused command fails its step there too.
+
 - **Standalone Python suite - no Termwright needed**: ⋯ → Export Automation Suite → **On its own**. The zip logs in to the devices itself: SSH (paramiko, jump hosts too) and Telnet with prompt learning and paging turned off per device type, REST APIs, SNMP (net-snmp), NETCONF (ncclient), web steps (Playwright) and TextFSM tables. `inventory.yaml` is written from your saved sessions (host, protocol, port, user, device type, API and SNMP settings) - passwords are never in it: `TW_PASSWORD_<NAME>` / `TW_PASSWORD`, the system keyring or a prompt. `requirements.txt` lists the packages; `run.sh` / `run.ps1` writes JUnit XML and each test's run log as before.
 
 - **Procedures as Python functions**: the generated Python calls procedures as functions in `lib/python/twprocs.py` (`twprocs.create_vlan(tw, vlan="200")`) instead of copying their steps into each test, so hand-written tests reuse them too. The export includes `procs/` and `data/`.

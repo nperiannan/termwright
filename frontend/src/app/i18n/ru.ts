@@ -5238,6 +5238,9 @@ const ru: Record<string, string> = {
   'On its own - Termwright is not needed': 'Самостоятельно - Termwright не нужен',
   'Through Termwright': 'Через Termwright',
   'Python for now - Go comes next.': 'Пока Python - Go будет следующим.',
+  'How it runs': 'Как запускается',
+  'On its own, as code - Termwright is not needed': 'Самостоятельно, как код - Termwright не нужен',
+  'On its own, with the twrun program - no code': 'Самостоятельно, программой twrun - без кода',
 };
 
 export default ru;

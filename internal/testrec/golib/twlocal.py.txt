@@ -495,6 +495,11 @@ def _one(step, shots):
         r = step["run"]
         a["target"], a["sent"] = r["session"], r["command"]
         a["output"] = shell(r["session"]).command(r["command"], r.get("prompt", ""), step.get("timeout") or 60)
+        for p in device(r["session"]).get("errors") or []:  # the device refused the command
+            m = re.search(p, a["output"])
+            if m:
+                line = a["output"][a["output"].rfind("\n", 0, m.start()) + 1:].split("\n")[0].strip()
+                raise StepError("the device refused the command: " + line)
         if r.get("parse"):
             a["table"] = parse(r["session"], r["command"], a["output"], r["parse"])
     elif step.get("http"):

@@ -56,6 +56,37 @@ type T struct {
 	stopped bool
 	restore string
 	logf    *os.File
+	scopes  []scope
+}
+
+type scope struct {
+	proc          string
+	cleanup, goOn bool
+}
+
+// Scope runs a procedure's steps (lib/twprocs): its parameters are variables while they run, values the
+// steps save stay after it, and the step names start with the procedure's name.
+func (c *T) Scope(proc string, params map[string]string, cleanup, goOn bool, fn func()) {
+	old := c.Vars
+	nv := make(map[string]string, len(old)+len(params))
+	for k, x := range old {
+		nv[k] = x
+	}
+	for k, x := range params {
+		nv[k] = c.Fill(x)
+	}
+	c.Vars = nv
+	c.scopes = append(c.scopes, scope{proc, cleanup, goOn})
+	defer func() {
+		c.scopes = c.scopes[:len(c.scopes)-1]
+		for k, x := range nv {
+			if _, isParam := params[k]; !isParam {
+				old[k] = x
+			}
+		}
+		c.Vars = old
+	}()
+	fn()
 }
 
 func (c *T) log(text string) {
@@ -194,7 +225,9 @@ func readTestbed(sc *bufio.Scanner, v map[string]string) {
 // Cleanup runs a cleanup step: it runs even after a failed step (the device must be clean for the next
 // test), and its failure does not skip the rest of the cleanup.
 func (c *T) Cleanup(name string, fn func(s *Step)) {
-	c.t.Run(c.Fill(name), func(t *testing.T) { fn(&Step{T: t, c: c}) })
+	name = c.Fill(name)
+	c.log("\n=== " + name + " ===")
+	c.t.Run(name, func(t *testing.T) { fn(&Step{T: t, c: c}) })
 }
 
 // Restore asks Termwright to save the devices' state ("config": the device type's save commands, "lab":
@@ -255,7 +288,19 @@ func (c *T) Finish() {
 }
 
 // call sends a tests tool action to Termwright and decodes the JSON in its result.
+// LocalStep runs a step here instead of through Termwright (a standalone suite sets it in local.go:
+// its engine logs in to the devices of inventory.yaml). TW_ENGINE=termwright sends the steps to Termwright anyway.
+var LocalStep func(step map[string]any) ([]byte, error)
+
+func local() bool { return LocalStep != nil && os.Getenv("TW_ENGINE") != "termwright" }
+
 func call(body map[string]any, out any) error {
+	if local() {
+		if a, _ := body["action"].(string); a == "save_state" || a == "restore_state" {
+			return json.Unmarshal([]byte(`{"token":"","results":[]}`), out) // saving and restoring the state needs Termwright
+		}
+		return fmt.Errorf("%v needs Termwright", body["action"])
+	}
 	api, key, err := Endpoint()
 	if err != nil {
 		return err
@@ -284,6 +329,17 @@ func call(body map[string]any, out any) error {
 // Step runs one step as a subtest.
 func (c *T) Step(name string, continueOnFail bool, fn func(s *Step)) {
 	name = c.Fill(name)
+	cleanup := false
+	for i := len(c.scopes) - 1; i >= 0; i-- {
+		name = c.scopes[i].proc + " › " + name
+		cleanup = cleanup || c.scopes[i].cleanup
+		continueOnFail = continueOnFail || c.scopes[i].goOn
+	}
+	if cleanup { // a procedure called from the cleanup: runs even after a failed step
+		c.log("\n=== cleanup: " + name + " ===")
+		c.t.Run(name, func(t *testing.T) { fn(&Step{T: t, c: c}) })
+		return
+	}
 	c.log("\n=== " + name + " ===")
 	if c.stopped {
 		c.log("Result:   SKIPPED (an earlier step failed)")
@@ -516,15 +572,25 @@ func (a *Answer) OID(oid string) *Value {
 func (s *Step) send(step map[string]any) *Answer {
 	s.Helper()
 	a := &Answer{s: s}
-	api, key, err := Endpoint()
-	if err != nil {
-		s.Fatal(err)
-	}
 	if s.retry != nil { // Termwright repeats the step until these checks pass
 		for k, v := range s.retry {
 			step[k] = v
 		}
 		s.retry = nil
+	}
+	if local() {
+		res, err := LocalStep(step)
+		if err != nil {
+			s.Fatal(err)
+		}
+		if err := json.Unmarshal(res, a); err != nil {
+			s.Fatalf("step: %v", err)
+		}
+		return s.logAnswer(a)
+	}
+	api, key, err := Endpoint()
+	if err != nil {
+		s.Fatal(err)
 	}
 	b, _ := json.Marshal(map[string]any{"action": "step", "step": step})
 	req, _ := http.NewRequest("POST", api+"/tools/tests", bytes.NewReader(b))
@@ -547,6 +613,12 @@ func (s *Step) send(step map[string]any) *Answer {
 	if err := json.Unmarshal([]byte(out.Result), a); err != nil {
 		s.Fatalf("Termwright: %v", err)
 	}
+	return s.logAnswer(a)
+}
+
+// logAnswer writes a step's answer to the run log; an error fails the step.
+func (s *Step) logAnswer(a *Answer) *Answer {
+	s.Helper()
 	if a.Target != "" {
 		s.c.log("Device:   " + a.Target)
 	}

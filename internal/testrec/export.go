@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	libsrc "github.com/termwright/termwright/internal"
+	"github.com/termwright/termwright/internal/standalone"
 	"gopkg.in/yaml.v3"
 )
 
@@ -29,31 +31,17 @@ type ExportOptions struct {
 	// Standalone: the suite logs in to the devices itself (inventory.yaml, no Termwright needed); else the
 	// steps go through Termwright. Python and Go.
 	Standalone bool `json:"standalone,omitempty"`
+	// Runners: the twrun programs for a runner suite, by file name (twrun-linux-amd64…); missing ones are
+	// downloaded by the run script on its first run.
+	Runners map[string][]byte `json:"-"`
+	// Version: the Termwright release the run script downloads twrun from ("nightly" for development builds).
+	Version string `json:"-"`
 	// Device: the app's saved sessions for the inventory (session path → device; false when it is not one).
 	Device func(session string) (InventoryDevice, bool) `json:"-"`
 }
 
 // InventoryDevice is a device of a standalone suite's inventory.yaml - how to reach it, never a password.
-type InventoryDevice struct {
-	Session    string `yaml:"session"`
-	Host       string `yaml:"host,omitempty"`
-	Protocol   string `yaml:"protocol,omitempty"` // ssh, telnet or api
-	Port       int    `yaml:"port,omitempty"`
-	Username   string `yaml:"username,omitempty"`
-	DeviceType string `yaml:"device_type,omitempty"`
-	KeyFile    string `yaml:"key_file,omitempty"`
-	BaseURL    string `yaml:"base_url,omitempty"`
-	Auth       string `yaml:"auth,omitempty"`
-	KeyName    string `yaml:"key_name,omitempty"`
-	Insecure   bool   `yaml:"insecure,omitempty"`
-	SNMPVer    string `yaml:"snmp_version,omitempty"`
-	SNMPHost   string `yaml:"snmp_host,omitempty"`
-	SNMPPort   int    `yaml:"snmp_port,omitempty"`
-	SNMPUser   string `yaml:"snmp_user,omitempty"`
-	SNMPAuth   string `yaml:"snmp_auth,omitempty"`
-	SNMPPriv   string `yaml:"snmp_priv,omitempty"`
-	Jump       string `yaml:"jump_host,omitempty"`
-}
+type InventoryDevice = standalone.Device
 
 // Export packs a suite that runs without the Tests tab: the tests (YAML and their Go, Python or TCL code),
 // the library, the testbeds, the templates, a plan (plan.txt) and a run script for the OS that writes
@@ -62,8 +50,10 @@ type InventoryDevice struct {
 func (f Folder) Export(o ExportOptions) ([]byte, string, error) {
 	switch o.Lang {
 	case "go", "python", "tcl":
+	case "runner": // the test files and the twrun program
+		o.Standalone = true
 	default:
-		return nil, "", fmt.Errorf("language %q: go, python or tcl", o.Lang)
+		return nil, "", fmt.Errorf("language %q: go, python, tcl or runner", o.Lang)
 	}
 	switch o.OS {
 	case "linux", "mac", "windows":
@@ -97,8 +87,8 @@ func (f Folder) Export(o ExportOptions) ([]byte, string, error) {
 		_, err = w.Write(b)
 		return err
 	}
-	if o.Standalone && o.Lang != "python" {
-		return nil, "", fmt.Errorf("a standalone suite is Python for now (Go comes next)")
+	if o.Standalone && o.Lang == "tcl" {
+		return nil, "", fmt.Errorf("a standalone suite is Python, Go or the runner program (TCL goes through Termwright)")
 	}
 	var plan []string
 	sessions := map[string]bool{}
@@ -109,6 +99,17 @@ func (f Folder) Export(o ExportOptions) ([]byte, string, error) {
 					sessions[x] = true
 				}
 			}
+		}
+		if o.Lang == "runner" {
+			b, err := os.ReadFile(filepath.Join(f.Root, c))
+			if err != nil {
+				return nil, "", err
+			}
+			if err := put(c, b, false); err != nil {
+				return nil, "", err
+			}
+			plan = append(plan, c)
+			continue
 		}
 		if _, err := f.WriteGo(c); err != nil {
 			return nil, "", fmt.Errorf("%s: %v", c, err)
@@ -133,6 +134,9 @@ func (f Folder) Export(o ExportOptions) ([]byte, string, error) {
 		keep := map[string]bool{"go": rel == "go.mod" || strings.HasPrefix(rel, "lib/twtest/") || strings.HasPrefix(rel, "lib/junit/"),
 			"python": strings.HasPrefix(rel, "lib/python/"), "tcl": strings.HasPrefix(rel, "lib/tcl/")}[o.Lang]
 		if keep {
+			if o.Standalone && rel == "go.mod" {
+				continue // written with its requirements below
+			}
 			if p := filepath.Join(f.Root, rel); rel == "go.mod" {
 				if own, err := os.ReadFile(p); err == nil {
 					b = own
@@ -145,6 +149,15 @@ func (f Folder) Export(o ExportOptions) ([]byte, string, error) {
 	}
 	if o.Lang == "python" && len(f.Procs()) > 0 {
 		if err := put("lib/python/twprocs.py", f.GeneratePyProcs(), false); err != nil {
+			return nil, "", err
+		}
+	}
+	if o.Lang == "go" && len(f.Procs()) > 0 {
+		gp, err := f.GenerateGoProcs()
+		if err != nil {
+			return nil, "", err
+		}
+		if err := put("lib/twprocs/twprocs.go", gp, false); err != nil {
 			return nil, "", err
 		}
 	}
@@ -180,11 +193,36 @@ func (f Folder) Export(o ExportOptions) ([]byte, string, error) {
 		if err := put("inventory.yaml", inv, false); err != nil {
 			return nil, "", err
 		}
-		if err := put("requirements.txt", []byte(standaloneReqs(o.Lang)), false); err != nil {
-			return nil, "", err
+		if o.Lang == "python" {
+			if err := put("requirements.txt", []byte(standaloneReqs(o.Lang)), false); err != nil {
+				return nil, "", err
+			}
+		}
+		if o.Lang == "go" {
+			for rel, b := range libsrc.Files(GoModule) {
+				if err := put("lib/"+rel, b, false); err != nil {
+					return nil, "", err
+				}
+			}
+			if err := put("lib/twtest/local.go", golibFile("twlocal.go.txt"), false); err != nil {
+				return nil, "", err
+			}
+			if err := put("go.mod", []byte(standaloneGoMod), false); err != nil {
+				return nil, "", err
+			}
+			if err := put("go.sum", golibFile("go.sum.txt"), false); err != nil {
+				return nil, "", err
+			}
 		}
 		if len(missing) > 0 {
 			_ = put("MISSING-DEVICES.txt", []byte("These sessions are used by the tests but are not saved sessions in Termwright; add them to inventory.yaml:\n"+strings.Join(missing, "\n")+"\n"), false)
+		}
+	}
+	if o.Lang == "runner" {
+		for name, b := range o.Runners {
+			if err := put("bin/"+name, b, true); err != nil {
+				return nil, "", err
+			}
 		}
 	}
 	if err := put("plan.txt", []byte("# the tests this suite runs, in order (one per line)\n"+strings.Join(plan, "\n")+"\n"), false); err != nil {
@@ -308,6 +346,17 @@ func inventoryOf(sessions map[string]bool, dev func(string) (InventoryDevice, bo
 	return append([]byte(head), b...), missing
 }
 
+// standaloneGoMod: the module of a standalone Go suite (the engine needs x/crypto/ssh and yaml).
+const standaloneGoMod = "module " + GoModule + "\n\ngo 1.24.0\n\nrequire (\n\tgolang.org/x/crypto " + xCryptoVersion + "\n\tgopkg.in/yaml.v3 v3.0.1\n)\n\nrequire golang.org/x/sys " + xSysVersion + " // indirect\n"
+
+// the versions Termwright builds with (TestStandaloneGoModVersions keeps them equal to go.mod)
+const (
+	xCryptoVersion = "v0.43.0"
+	xSysVersion    = "v0.37.0"
+)
+
+func golibFile(n string) []byte { b, _ := golib.ReadFile("golib/" + n); return b }
+
 func standaloneReqs(lang string) string {
 	if lang == "go" {
 		return "# Go modules are in go.mod (go mod download fetches them). For SNMP steps install net-snmp; for web steps Playwright for Go is used.\n"
@@ -337,6 +386,9 @@ func uniq(l []string) []string {
 }
 
 func runScripts(o ExportOptions) map[string]string {
+	if o.Lang == "runner" {
+		return runnerScripts(o)
+	}
 	tb := o.Testbed
 	need := map[string]string{"go": "go", "python": "python3", "tcl": "tclsh"}[o.Lang]
 	if o.OS == "windows" {
@@ -360,6 +412,11 @@ Write-Host "reports: $out"`,
 			local = `$env:TW_ENGINE = "local"
 & ` + py + ` -c "import paramiko, yaml, textfsm" 2>$null; if ($LASTEXITCODE) { Write-Error "Install the packages first: ` + py + ` -m pip install -r requirements.txt"; exit 2 }
 `
+			if o.Lang == "go" {
+				needs = ` 1.24 or later (the first run downloads its modules); the devices are in inventory.yaml and
+# passwords come from TW_PASSWORD_<NAME> / TW_PASSWORD`
+				local = "go mod download; if ($LASTEXITCODE) { Write-Error \"go mod download failed: the first run needs the Go module proxy\"; exit 2 }\n"
+			}
 		}
 		ps := `# Runs this Termwright suite. Needs ` + exe + needs + `. Usage: .\run.ps1 [-Testbed testbeds\lab.yaml]
 param([string]$Testbed = "` + strings.ReplaceAll(tb, "/", `\`) + `")
@@ -392,6 +449,11 @@ exit $rc`,
 		local = `export TW_ENGINE=local
 python3 -c "import paramiko, yaml, textfsm" 2>/dev/null || { echo "Install the packages first: python3 -m pip install -r requirements.txt" >&2; exit 2; }
 `
+		if o.Lang == "go" {
+			needs = ` 1.24 or later (the first run downloads its modules); the devices are in inventory.yaml and
+# passwords come from TW_PASSWORD_<NAME> / TW_PASSWORD`
+			local = "go mod download || { echo \"go mod download failed: the first run needs the Go module proxy\" >&2; exit 2; }\n"
+		}
 	}
 	return map[string]string{"run.sh": `#!/usr/bin/env bash
 # Runs this Termwright suite. Needs ` + need + needs + `. Usage: ./run.sh [testbeds/lab.yaml]
@@ -418,6 +480,30 @@ func exportReadme(o ExportOptions, name string, n int) string {
 		files = append(files, d)
 	}
 	sort.Strings(files)
+	if o.Lang == "runner" {
+		return "# " + name + "\n\n" + fmt.Sprintf("%d Termwright tests with the twrun program - Termwright is not needed.\n\n", n) +
+			"## Run\n\n1. Check `inventory.yaml`: each session the tests use, with its host, protocol, port, user name and device type.\n" +
+			"2. Give the passwords - never written in this folder: `TW_PASSWORD` for all devices or `TW_PASSWORD_<NAME>` per device\n   (the session's last part in capitals, other characters as `_`); API tokens `TW_TOKEN_<NAME>`; else twrun asks.\n" +
+			"3. Run `" + run + "` - or `" + run + " testbeds/<other>.yaml`. Options after it go to twrun: `--tags smoke`, `--rerun 2`,\n   `--test-timeout 300`, `--junit out.xml`. `bin/twrun-… check` logs in to each device; `bin/twrun-… setup-web` installs\n   Playwright for web steps (Node.js needed).\n\n" +
+			"`bin/` holds twrun for this operating system (the run script downloads it from the Termwright release if it is missing).\n" +
+			"Each run writes `reports/<date-time>/` - report.html, report.pdf, junit.xml and each test's run log - the same as Termwright's runs.\n\n" +
+			"## What is here\n\n- `cases/` - the tests (YAML); `procs/` - the procedures they call; `data/` - test data\n" +
+			"- `inventory.yaml` - the devices; `testbeds/` - which device plays each role; `templates/` - TextFSM templates\n" +
+			"- `plan.txt` - the tests to run, in order; `run.*` - the run script; `bin/` - twrun\n\n" +
+			"Edit the YAML to change a test, or record more in Termwright and export again. Steps that need Termwright itself\n(software upgrades, lab traffic tests, manual steps, saving and restoring the configuration) fail with a note here.\n"
+	}
+	if o.Standalone && o.Lang == "go" {
+		return "# " + name + "\n\n" + fmt.Sprintf("%d Termwright tests as a Go suite that runs on its own - Termwright is not needed.\n\n", n) +
+			"## Run\n\n1. Install Go 1.24 or later. The first run downloads the modules (golang.org/x/crypto, gopkg.in/yaml.v3).\n" +
+			"2. Check `inventory.yaml`: each session the tests use, with its host, protocol, port, user name and device type.\n" +
+			"3. Give the passwords - never written in this folder: `TW_PASSWORD` for all devices or `TW_PASSWORD_<NAME>` per device;\n   API tokens `TW_TOKEN_<NAME>`; SNMP communities `TW_COMMUNITY_<NAME>`.\n" +
+			"4. Run `" + run + "` - or `go test ./cases/...` yourself (`-args -tw.testbed=testbeds/lab.yaml -tw.var name=value`).\n\n" +
+			"Web steps need Node.js and Playwright: `npm install --prefix .playwright playwright && npx --prefix .playwright playwright install chromium`.\n\n" +
+			"## What is here\n\n- `cases/` - the tests: the YAML and the generated Go tests (`go test`)\n" +
+			"- `lib/twtest` - the test library; `lib/twprocs` - the procedures as Go functions your tests can call\n" +
+			"- `lib/standalone` - logs in to the devices (SSH, Telnet), REST, SNMP, NETCONF, web pages, TextFSM tables;\n  `lib/snmp`, `lib/netconf`, `lib/textfsm`, `lib/webrun` - what it uses\n" +
+			"- `inventory.yaml`, `testbeds/`, `templates/`, `plan.txt`, `run.*`\n"
+	}
 	if o.Standalone {
 		return "# " + name + "\n\n" + fmt.Sprintf("%d Termwright tests as a %s suite that runs on its own - Termwright is not needed.\n\n", n, lang) +
 			"## Run\n\n1. Install Python 3.8 or later, then `python3 -m pip install -r requirements.txt` (paramiko, textfsm, PyYAML;\n   ncclient, playwright and keyring are optional; SNMP steps use the net-snmp commands).\n" +
@@ -445,4 +531,49 @@ func exportReadme(o ExportOptions, name string, n int) string {
 		"- `plan.txt` - the tests the run script runs, in order; edit it to run fewer or more\n" +
 		"- `run.*` - the run script for " + map[string]string{"linux": "Linux", "mac": "macOS", "windows": "Windows"}[o.OS] + "\n\n" +
 		"## Write more\n\nCopy a test and change it, or record new ones in Termwright and export again. The library's own\nhelpers (`configure`, `wait_for`, `log`, `session(role)`) are documented at the top of the library file.\n"
+}
+
+// runnerScripts run the suite with bin/twrun (downloaded from the Termwright release when it is not there).
+func runnerScripts(o ExportOptions) map[string]string {
+	tag := o.Version
+	if tag == "" {
+		tag = "nightly"
+	}
+	base := "https://github.com/nperiannan/termwright/releases/download/" + map[bool]string{true: "nightly", false: "v" + tag}[tag == "nightly"]
+	if o.OS == "windows" {
+		ps := `# Runs this Termwright suite with twrun - Termwright is not needed. Usage: .\run.ps1 [-Testbed testbeds\lab.yaml] [twrun options]
+# The devices are in inventory.yaml; passwords come from TW_PASSWORD_<NAME> / TW_PASSWORD, or are asked.
+param([string]$Testbed = "` + strings.ReplaceAll(o.Testbed, "/", `\`) + `")
+Set-Location $PSScriptRoot
+$arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "amd64" }
+$tw = "bin\twrun-windows-$arch.exe"
+if (-not (Test-Path $tw)) {
+  New-Item -ItemType Directory -Force bin | Out-Null
+  Write-Host "Downloading twrun ($arch)…"
+  Invoke-WebRequest -UseBasicParsing "` + base + `/twrun-windows-$arch.exe" -OutFile $tw
+}
+$files = Get-Content plan.txt | Where-Object { $_ -and -not $_.StartsWith("#") }
+$tb = @(); if ($Testbed) { $tb = @("--testbed", $Testbed) }
+& $tw run @files @tb @args
+exit $LASTEXITCODE
+`
+		return map[string]string{"run.ps1": ps, "run.cmd": "@echo off\r\npowershell -NoProfile -ExecutionPolicy Bypass -File \"%~dp0run.ps1\" %*\r\n"}
+	}
+	osName := map[string]string{"linux": "linux", "mac": "darwin"}[o.OS]
+	return map[string]string{"run.sh": `#!/usr/bin/env bash
+# Runs this Termwright suite with twrun - Termwright is not needed. Usage: ./run.sh [testbeds/lab.yaml] [twrun options]
+# The devices are in inventory.yaml; passwords come from TW_PASSWORD_<NAME> / TW_PASSWORD, or are asked.
+cd "$(dirname "$0")" || exit 2
+TESTBED=` + o.Testbed + `
+case "$1" in testbeds/*) TESTBED=$1; shift ;; esac
+case "$(uname -m)" in arm64|aarch64) ARCH=arm64 ;; *) ARCH=amd64 ;; esac
+TW="bin/twrun-` + osName + `-$ARCH"
+if [ ! -x "$TW" ]; then
+  mkdir -p bin
+  echo "Downloading twrun ($ARCH)…"
+  curl -fsSL -o "$TW" "` + base + `/twrun-` + osName + `-$ARCH" || { echo "Download failed: put twrun-` + osName + `-$ARCH from the Termwright release into bin/" >&2; exit 2; }
+  chmod +x "$TW"
+fi
+exec "$TW" run $(grep -v '^#' plan.txt) ${TESTBED:+--testbed "$TESTBED"} "$@"
+`}
 }

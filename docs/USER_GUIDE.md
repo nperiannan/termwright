@@ -1586,7 +1586,7 @@ site:
 - **📅 Calendar** in Testbeds: book a testbed for a time; other people's runs ask first and their schedules are refused. Bookings are in `bookings.yaml` (share it with Git).
 - **Web steps**: + More → **Web Page (Playwright)** - click, type, check text and take screenshots on a web page; **Set Up Playwright** installs it once (Node.js needed).
 
-- **Export without Termwright**: ⋯ → Export Automation Suite → **On its own** gives a Python suite that logs in to the devices itself (inventory.yaml from your sessions; passwords from `TW_PASSWORD…`, the keyring or a prompt). Procedures become functions in `lib/python/twprocs.py`.
+- **Export without Termwright**: ⋯ → Export Automation Suite → **On its own, as code** (Python or Go) or **with the twrun program** (the YAML tests and a runner for Linux, macOS or Windows) gives a suite that logs in to the devices itself (inventory.yaml from your sessions; passwords from `TW_PASSWORD…`, the keyring or a prompt). Procedures become functions in `lib/python/twprocs.py`.
 
 ### Go tests
 

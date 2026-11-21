@@ -605,16 +605,18 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
         <div class="mdlg wide" role="dialog" aria-label="Export automation suite">
           <h3>Export Automation Suite</h3>
           <span class="mut">A zip with the tests and their code, the procedures, the library, the testbeds, a plan and a run script that writes JUnit XML and each test's run log.</span>
-          <div class="fld"><span>How it reaches the devices</span>
-            <label class="radio" [class.on]="x.standalone" [class.dis]="x.lang !== 'python'"><input type="radio" name="twsa" [value]="true" [(ngModel)]="x.standalone" [disabled]="x.lang !== 'python'" /><span>On its own - Termwright is not needed<small>{{ x.lang === 'python' ? 'The suite logs in itself (SSH, Telnet, APIs, SNMP) with inventory.yaml made from your sessions. Passwords are never in the zip: environment variables, the system keyring or a prompt.' : 'Python for now - Go comes next.' }}</small></span></label>
-            <label class="radio" [class.on]="!x.standalone"><input type="radio" name="twsa" [value]="false" [(ngModel)]="x.standalone" /><span>Through Termwright<small>The steps go through the app, or <code>termwright tests serve</code> on a server, which logs in with the saved sessions.</small></span></label>
+          <div class="fld"><span>How it runs</span>
+            <label class="radio" [class.on]="x.standalone && x.lang !== 'runner'"><input type="radio" name="twsa" [checked]="x.standalone && x.lang !== 'runner'" (change)="expMode(x, 'code')" /><span>On its own, as code - Termwright is not needed<small>Python or Go tests with a library that logs in to the devices itself (SSH, Telnet, REST APIs, SNMP, NETCONF, web pages). Procedures become functions you can call.</small></span></label>
+            <label class="radio" [class.on]="x.lang === 'runner'"><input type="radio" name="twsa" [checked]="x.lang === 'runner'" (change)="expMode(x, 'runner')" /><span>On its own, with the twrun program - no code<small>The YAML tests and twrun for the chosen system: the same runs, reports, procedures, reruns and timeouts as in Termwright.</small></span></label>
+            <label class="radio" [class.on]="!x.standalone"><input type="radio" name="twsa" [checked]="!x.standalone" (change)="expMode(x, 'termwright')" /><span>Through Termwright<small>Python, Go or TCL whose steps go through the app, or <code>termwright tests serve</code> on a server, which logs in with the saved sessions.</small></span></label>
+            <small class="mut">Devices come from your sessions as inventory.yaml; passwords are never in the zip - environment variables (TW_PASSWORD…), the system keyring or a prompt.</small>
           </div>
           <label class="fld"><span>Tests</span><select [(ngModel)]="x.what">
             @if (picked().length) { <option value="picked">The {{ picked().length }} selected {{ picked().length === 1 ? 'test' : 'tests' }}</option> }
             @if (sel()) { <option value="sel">This test ({{ base(sel()) }})</option> }
             @for (p of tree()?.suites ?? []; track p.file) { <option [value]="p.file">Plan: {{ p.name }}</option> }
             <option value="all">Every test in the folder</option></select></label>
-          <div class="segs"><span class="mut">Language</span>@for (l of ['python', 'go', 'tcl']; track l) { <button type="button" [class.on]="x.lang === l" (click)="x.lang = l; x.standalone = x.standalone && l === 'python'">{{ l === 'python' ? 'Python' : l === 'go' ? 'Go' : 'TCL' }}</button> }</div>
+          @if (x.lang !== 'runner') { <div class="segs"><span class="mut">Language</span>@for (l of (x.standalone ? ['python', 'go'] : ['python', 'go', 'tcl']); track l) { <button type="button" [class.on]="x.lang === l" (click)="x.lang = l">{{ l === 'python' ? 'Python' : l === 'go' ? 'Go' : 'TCL' }}</button> }</div> }
           <div class="segs"><span class="mut">Runs on</span>@for (o of ['linux', 'mac', 'windows']; track o) { <button type="button" [class.on]="x.os === o" (click)="x.os = o">{{ o === 'mac' ? 'macOS' : o === 'linux' ? 'Linux' : 'Windows' }}</button> }</div>
           <label class="fld"><span>Testbed - the devices it runs on by default</span><select [(ngModel)]="x.testbed"><option value="">The tests' own sessions</option>@for (b of tree()?.testbeds ?? []; track b) { <option [value]="b">{{ base(b) }}</option> }</select></label>
           <label class="fld"><span>Suite name</span><input [(ngModel)]="x.name" /></label>
@@ -1184,6 +1186,11 @@ export class TestsView implements OnInit, OnDestroy {
     try { const rel = await this.backend.testsNewTestbed(this.tbName.trim(), this.tbFolder); this.ui.toast(tr('Wrote {0}', rel), 'success'); await this.load(); void this.openFile(rel); this.section.set('testbeds'); }
     catch (e) { this.ui.toast(errText(e), 'error'); }
   }
+  expMode(x: { lang: string; standalone: boolean }, m: 'code' | 'runner' | 'termwright') {
+    x.standalone = m !== 'termwright';
+    if (m === 'runner') x.lang = 'runner';
+    else if (x.lang === 'runner' || (m === 'code' && x.lang === 'tcl')) x.lang = 'python';
+  }
   readonly exp = signal<{ what: string; lang: string; os: string; testbed: string; name: string; standalone: boolean } | null>(null);
   openExport() {
     const plat = navigator.platform.toLowerCase(), os = plat.includes('win') ? 'windows' : plat.includes('mac') ? 'mac' : 'linux';
@@ -1193,7 +1200,7 @@ export class TestsView implements OnInit, OnDestroy {
   async doExport() {
     const x = this.exp(); if (!x) return;
     const files = x.what === 'picked' ? this.picked() : x.what === 'sel' ? [this.sel()] : x.what === 'all' ? [] : [x.what];
-    try { const p = await this.backend.testsExport({ files, lang: x.lang, os: x.os, testbed: x.testbed, name: x.name, standalone: x.standalone && x.lang === 'python' }); if (p) { this.exp.set(null); this.ui.toast(tr('Exported {0}', p), 'success'); } }
+    try { const p = await this.backend.testsExport({ files, lang: x.lang, os: x.os, testbed: x.testbed, name: x.name, standalone: x.standalone || x.lang === 'runner' }); if (p) { this.exp.set(null); this.ui.toast(tr('Exported {0}', p), 'success'); } }
     catch (e) { this.ui.toast(errText(e), 'error'); }
   }
   async newTestbed() {
