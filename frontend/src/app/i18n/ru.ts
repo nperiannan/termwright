@@ -5247,7 +5247,6 @@ const ru: Record<string, string> = {
   'virtual labs of EXOS, VOSS, Linux, servers and microcontrollers; traffic tests, TRex': 'виртуальные лаборатории EXOS, VOSS, Linux, серверов и микроконтроллеров; тесты трафика, TRex',
   'Add Devices': 'Добавить устройства',
   '+ Add Devices': '+ Добавить устройства',
-  'Edit YAML': 'Изменить YAML',
   'Back to the device list': 'Назад к списку устройств',
   'Choose a folder on the left.': 'Выберите папку слева.',
   'Added {0} devices': 'Добавлено устройств: {0}',
