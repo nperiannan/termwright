@@ -124,6 +124,7 @@ And much more - see the [feature list](docs/FEATURES.md).
 - **Plain files**: tests are YAML in a folder that can be a Git repository (Pull, Commit, Push in the Tests tab), and each is also written as **Go**, **Python** and **TCL** test code (`go test ./cases/...`, `python lib/python/run_tests.py`, `tclsh lib/tcl/run_tests.tcl`) - no passwords in any of them, Termwright logs in with the saved logins
 - **Scheduled runs** with a notification when one fails, and the AI assistant to **write a test** from a description or **explain why one failed**
 - **Procedures** (shared steps with parameters), **CSV/Excel test data**, **NETCONF** steps, **breakpoints** and step-through, **checks over time** (average, max, rate) and a **table maker** that turns output into a table by clicking - no TextFSM to write
+- **Spirent TestCenter and IxNetwork** traffic runs as test steps (REST API: load a configuration, run, check loss and latency per stream)
 - **Web steps** with Playwright, **reruns** of flaky tests and **timeouts**, a **testbed calendar**, **Teams / e-mail notifications**, a **PDF report** and **trends** per run, test and software version
 - **Export a standalone suite** for Linux, macOS or Windows (Go, Python or TCL, with the library, testbeds, a plan and a run script that writes JUnit XML and run logs), and **debug** a failing test: pause at the failed step, retry it, run one step or from a step
 - **Import and teams**: Excel/CSV manual test cases, Postman collections and OpenAPI descriptions become tests; `roles.yaml` says who edits, runs and approves, and runs on production can wait for an approval
@@ -131,6 +132,10 @@ And much more - see the [feature list](docs/FEATURES.md).
 - Usable from the AI assistant, MCP apps, the local REST API and Python
 
 ![Tests tab](docs/screenshots/tests.png)
+
+| ![Trends](docs/screenshots/tests-guide/28-trends.png) <br/>*Trends: pass rate per run, the tests that fail most, per software version* | ![Testbed](docs/screenshots/tests-guide/30-testbed.png) <br/>*A testbed: its devices under their folders, with type and model* |
+|---|---|
+| ![Testbed calendar](docs/screenshots/tests-guide/29-calendar.png) <br/>*Testbed calendar: who has which testbed when* | ![Export](docs/screenshots/tests-guide/32-export.png) <br/>*Export a suite that runs without Termwright: Python, Go or twrun* |
 
 Step by step with pictures: [Testing with Termwright](docs/TESTS_GUIDE.md).
 
@@ -457,7 +462,7 @@ flowchart TB
     Rec["Test recorder<br/>commands, API requests and SNMP<br/>become steps; checks verified"]
     Ed["Tests tab<br/>steps · YAML · code · procedures<br/>testbeds · calendar · breakpoints"]
     Run["Test runner<br/>setup · steps · cleanup · loops · data<br/>reruns · timeouts · restore"]
-    Drv["Step drivers<br/>SSH / Telnet · REST · SNMP · NETCONF"]
+    Drv["Step drivers<br/>SSH / Telnet · REST · SNMP · NETCONF<br/>traffic generators"]
     Web["Playwright runner<br/>Node.js + Chromium"]
     Out[("Reports<br/>HTML · PDF · JUnit · run logs · trends")]
     Rec --> Ed --> Run
@@ -470,6 +475,7 @@ flowchart TB
     Dev["Devices<br/>switches, routers, servers"]
     Api["REST APIs"]
     Pages["Web pages<br/>device GUIs, portals"]
+    TG["Spirent TestCenter / IxNetwork<br/>chassis via REST API"]
   end
   subgraph Std["Exported suite - no Termwright needed"]
     Py["Python suite<br/>unittest · twlocal · twprocs"]
@@ -487,6 +493,7 @@ flowchart TB
   Folder -- "Export Automation Suite<br/>inventory.yaml, no passwords" --> Std
   Std --> DUT
   CI -- "run.sh · twrun · go test" --> Std
+  Drv -- "REST API" --> TG
   classDef tw fill:#1f3a5f,stroke:#58a6ff,stroke-width:2px,color:#eaf3ff
   classDef ai fill:#4a1d3f,stroke:#db61a2,stroke-width:2px,color:#ffeaf6
   classDef store fill:#4d3b0b,stroke:#e3b341,stroke-width:2px,color:#fff6dc
@@ -498,7 +505,7 @@ flowchart TB
   class Web qemu
   class Out,Folder store
   class Py,GoS,TwR engine
-  class Dev,Api,Pages dut
+  class Dev,Api,Pages,TG dut
   class Int,CI ext
   class AIx ai
   style PC fill:#58a6ff14,stroke:#58a6ff,stroke-width:2px,stroke-dasharray:6 4
@@ -510,6 +517,7 @@ flowchart TB
   linkStyle 3,9 stroke:#a371f7,stroke-width:2px
   linkStyle 10,13 stroke:#8b949e,stroke-width:2px
   linkStyle 11,12 stroke:#3fb950,stroke-width:2px
+  linkStyle 14 stroke:#f0883e,stroke-width:2px
 ```
 
 - **Record, then run.** Commands typed in terminal tabs, API Client requests and SNMP queries become steps; each check is tried on what the device showed before the test is saved. The **test runner** sends the steps through the same logins as the terminals, drives web pages with **Playwright** (Node.js and Chromium on this computer) and writes HTML, PDF and JUnit reports with each step's expected and found values.

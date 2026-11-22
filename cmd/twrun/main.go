@@ -290,3 +290,7 @@ func (d *driver) ParseOutput(session, command, template, output string) (*textfs
 }
 
 func (d *driver) DeviceError(session, output string) string { return d.e.DeviceError(session, output) }
+
+func (d *driver) TGen(ctx context.Context, t testrec.TGenStep) (string, error) {
+	return d.e.TGen(ctx, standalone.TGenStep{Kind: t.Kind, Server: t.Server, Config: t.Config, Ports: t.Ports, Duration: t.Duration, Protocols: t.Protocols, Settle: t.Settle, Session: t.Session})
+}

@@ -594,6 +594,7 @@ export interface TestTable { header: string[]; rows: string[][]; }
 export interface TestStep {
   call?: { proc: string; with?: Record<string, string> };
   web?: TestWeb;
+  tgen?: { kind: string; server: string; config?: string; ports?: string[]; duration?: number; protocols?: boolean; settle?: number; session?: string };
   netconf?: { session: string; op?: string; source?: string; target?: string; filter?: string; config?: string; rpc?: string; port?: number };
   sample?: { count: number; interval?: number };
   name?: string; run?: { session: string; command: string; prompt?: string; parse?: string };

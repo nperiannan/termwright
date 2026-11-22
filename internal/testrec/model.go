@@ -90,6 +90,8 @@ type Step struct {
 	Call *CallStep `yaml:"call,omitempty" json:"call,omitempty"`
 	// Netconf: a NETCONF operation over SSH (get, get-config, edit-config or any rpc).
 	Netconf *NetconfStep `yaml:"netconf,omitempty" json:"netconf,omitempty"`
+	// TGen: a traffic run on Spirent TestCenter or IxNetwork (load a configuration, run, read the counters).
+	TGen *TGenStep `yaml:"tgen,omitempty" json:"tgen,omitempty"`
 	// Web: drive a browser with Playwright (open a page, click, fill, check text, screenshot).
 	Web *WebStep `yaml:"web,omitempty" json:"web,omitempty"`
 	// Sample: run the step several times; checks with agg (min, max, avg, delta, rate) look at all the

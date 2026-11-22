@@ -557,6 +557,9 @@ func stepKind(s Step) string {
 	if s.Web != nil {
 		return "web"
 	}
+	if s.TGen != nil {
+		return "tgen"
+	}
 	if s.Call != nil {
 		return "call"
 	}
@@ -587,6 +590,8 @@ func stepName(s Step, i int) string {
 		return NetconfText(*s.Netconf)
 	case s.Web != nil:
 		return WebText(*s.Web)
+	case s.TGen != nil:
+		return TGenText(*s.TGen)
 	case actions(s) == 0 && s.Wait > 0:
 		return fmt.Sprintf("wait %g s", s.Wait)
 	case s.Run != nil:
@@ -683,6 +688,14 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 			out, err = nd.Netconf(sctx, nc)
 		} else {
 			err = errors.New("this runner cannot send NETCONF")
+		}
+	case st.TGen != nil:
+		tg := fillTGen(*st.TGen, v)
+		sr.Target, sr.Sent = tg.Server, TGenText(tg)
+		if td, ok := d.(TGenDriver); ok {
+			out, err = td.TGen(sctx, tg)
+		} else {
+			err = errors.New("this runner cannot drive Spirent TestCenter or IxNetwork")
 		}
 	case st.Web != nil:
 		w := fillWeb(*st.Web, v)
@@ -987,7 +1000,7 @@ type StepAnswer struct {
 // RunOne runs one step's action (variables already filled in) without its checks - for the
 // generated tests, which send their steps to Termwright one by one.
 func RunOne(ctx context.Context, st Step, d Driver) StepAnswer {
-	one := Step{Run: st.Run, HTTP: st.HTTP, SNMP: st.SNMP, Traffic: st.Traffic, Upgrade: st.Upgrade, Netconf: st.Netconf, Web: st.Web, Timeout: st.Timeout}
+	one := Step{Run: st.Run, HTTP: st.HTTP, SNMP: st.SNMP, Traffic: st.Traffic, Upgrade: st.Upgrade, Netconf: st.Netconf, Web: st.Web, TGen: st.TGen, Timeout: st.Timeout}
 	var sr StepResult
 	if st.Sample != nil && st.Sample.Count > 1 { // the checks over all samples are made here
 		one.Sample, one.Expect = st.Sample, st.Expect
@@ -1001,7 +1014,7 @@ func RunOne(ctx context.Context, st Step, d Driver) StepAnswer {
 			sr.Error = "" // the generated test checks again and says what was wrong
 		}
 	} else {
-		if st.Netconf != nil || st.Web != nil { // XML answers and pages are checked here
+		if st.Netconf != nil || st.Web != nil || st.TGen != nil { // XML answers, pages and traffic runs are checked here
 			one.Expect = st.Expect
 		}
 		sr = runStep(ctx, one, 0, d, map[string]string{})
@@ -1011,7 +1024,7 @@ func RunOne(ctx context.Context, st Step, d Driver) StepAnswer {
 
 func actions(s Step) int {
 	n := 0
-	for _, b := range []bool{s.Run != nil, s.HTTP != nil, s.SNMP != nil, s.Traffic != nil, s.Upgrade != nil, s.Manual != nil, s.Netconf != nil, s.Web != nil} {
+	for _, b := range []bool{s.Run != nil, s.HTTP != nil, s.SNMP != nil, s.Traffic != nil, s.Upgrade != nil, s.Manual != nil, s.Netconf != nil, s.Web != nil, s.TGen != nil} {
 		if b {
 			n++
 		}
@@ -1202,10 +1215,10 @@ func stepVars(st Step, v map[string]string) map[string]string {
 // rawStep is a step for the generated code's Raw call: Termwright runs it and makes its checks
 // (NETCONF answers, samples over time).
 func rawStep(st Step) (string, bool) {
-	if st.Netconf == nil && st.Sample == nil && st.Web == nil {
+	if st.Netconf == nil && st.Sample == nil && st.Web == nil && st.TGen == nil {
 		return "", false
 	}
-	r := Step{Run: st.Run, HTTP: st.HTTP, SNMP: st.SNMP, Netconf: st.Netconf, Web: st.Web, Sample: st.Sample, Expect: st.Expect, Timeout: st.Timeout}
+	r := Step{Run: st.Run, HTTP: st.HTTP, SNMP: st.SNMP, Netconf: st.Netconf, Web: st.Web, TGen: st.TGen, Sample: st.Sample, Expect: st.Expect, Timeout: st.Timeout}
 	b, _ := json.Marshal(r)
 	return string(b), true
 }

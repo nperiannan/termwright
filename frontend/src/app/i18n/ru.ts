@@ -5251,6 +5251,8 @@ const ru: Record<string, string> = {
   'Choose a folder on the left.': 'Выберите папку слева.',
   'Added {0} devices': 'Добавлено устройств: {0}',
   'Other values': 'Другие значения',
+  'traffic generator: streams, RFC 2544, convergence; TRex, Spirent TestCenter and IxNetwork': 'генератор трафика: потоки, RFC 2544, сходимость; TRex, Spirent TestCenter и IxNetwork',
+  'Spirent / IxNetwork Traffic Run': 'Прогон трафика Spirent / IxNetwork',
 };
 
 export default ru;

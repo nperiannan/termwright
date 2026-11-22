@@ -528,6 +528,8 @@ def _one(step, shots):
     elif step.get("web"):
         a["target"], a["sent"] = "browser", "web " + (step["web"].get("url") or "")
         a["output"] = web(step["web"], shots)
+    elif step.get("tgen"):
+        raise StepError("Spirent TestCenter / IxNetwork steps run in Termwright, twrun and the Go suite, not in the Python suite")
     elif step.get("upgrade") or step.get("traffic") or step.get("manual"):
         raise StepError("this step needs Termwright (software upgrades, lab traffic tests and manual steps are not run standalone)")
     else:

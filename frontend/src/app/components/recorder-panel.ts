@@ -231,6 +231,7 @@ export function expectLabel(e: TestExpect): string {
 /** What a step sends, for lists: the command, "GET /path" or "walk IF-MIB::ifTable". */
 export function stepText(s: TestStep): string {
   if (s.call) return `${s.call.proc}(${Object.entries(s.call.with ?? {}).map(([k, v]) => `${k}=${v}`).join(', ')})`;
+  if (s.tgen) return `${s.tgen.kind === 'ixnetwork' ? 'IxNetwork' : 'Spirent TestCenter'} traffic ${s.tgen.duration || 10} s${s.tgen.config ? ' · ' + s.tgen.config : ''}`;
   if (s.web) return `web ${s.web.url ?? ''}${s.web.actions?.length ? ' (' + s.web.actions.length + ' actions)' : ''}`.trim();
   if (s.netconf) return `netconf ${s.netconf.op || 'get'}${s.netconf.op === 'edit-config' ? ' ' + (s.netconf.target || 'running') : s.netconf.op === 'get-config' ? ' ' + (s.netconf.source || 'running') : ''}`;
   if (s.loop) return `for each {{${s.loop.var}}} in ${s.loop.values?.join(', ') ?? s.loop.range ?? s.loop.from ?? ''}: ${s.loop.steps.map(stepText).join('; ')}`;

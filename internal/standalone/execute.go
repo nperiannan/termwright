@@ -32,6 +32,7 @@ type Step struct {
 	} `json:"snmp,omitempty"`
 	Netconf *Netconf     `json:"netconf,omitempty"`
 	Web     *webrun.Step `json:"web,omitempty"`
+	TGen    *TGenStep    `json:"tgen,omitempty"`
 	Upgrade any          `json:"upgrade,omitempty"`
 	Traffic any          `json:"traffic,omitempty"`
 	Manual  any          `json:"manual,omitempty"`
@@ -128,6 +129,9 @@ func (e *Engine) One(ctx context.Context, st Step) (Answer, error) {
 	case st.Netconf != nil:
 		a.Target, a.Sent = st.Netconf.Session, "netconf "+orStr(st.Netconf.Op, "get")
 		a.Output, err = e.Netconf(ctx, *st.Netconf)
+	case st.TGen != nil:
+		a.Target, a.Sent = st.TGen.Server, st.TGen.Kind+" traffic"
+		a.Output, err = e.TGen(ctx, *st.TGen)
 	case st.Web != nil:
 		a.Target, a.Sent = "browser", "web "+st.Web.URL
 		a.Output, err = e.Web(ctx, *st.Web, st.Timeout)
@@ -209,7 +213,7 @@ func (e *Engine) Execute(ctx context.Context, stepJSON []byte) Answer {
 		a.Error = err.Error()
 		return a
 	}
-	if st.Netconf != nil || st.Web != nil {
+	if st.Netconf != nil || st.Web != nil || st.TGen != nil {
 		for _, x := range st.Expect {
 			a.Checks = append(a.Checks, CheckOne(x, a))
 		}

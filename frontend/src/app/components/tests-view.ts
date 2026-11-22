@@ -416,6 +416,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                               @else if (s.netconf) { <span class="mut">netconf</span><input class="ses" [(ngModel)]="s.netconf.session" placeholder="SSH session" aria-label="Session" /><select [(ngModel)]="s.netconf.op" aria-label="Operation"><option value="get">get</option><option value="get-config">get-config</option><option value="edit-config">edit-config</option><option value="rpc">rpc</option></select>
                                 @if (s.netconf.op === 'get-config') { <select [(ngModel)]="s.netconf.source" aria-label="Source"><option [ngValue]="undefined">running</option><option value="candidate">candidate</option><option value="startup">startup</option></select> }
                                 @if (s.netconf.op === 'edit-config') { <select [(ngModel)]="s.netconf.target" aria-label="Target"><option [ngValue]="undefined">running</option><option value="candidate">candidate (then commit)</option></select> }<span class="sp"></span> }
+                              @else if (s.tgen) { <span class="mut">traffic</span><select [(ngModel)]="s.tgen.kind" aria-label="Traffic generator"><option value="stc">Spirent TestCenter</option><option value="ixnetwork">IxNetwork</option></select><input class="cmdi" [(ngModel)]="s.tgen.server" placeholder="API session or https://api-server" aria-label="Server" list="tw-api-sessions" /><label class="mut">for <input type="number" class="num2" [(ngModel)]="s.tgen.duration" placeholder="10" /> s</label> }
                               @else if (s.web) { <span class="mut">web</span><input class="cmdi" [(ngModel)]="s.web.url" placeholder="https://device-or-app/login" aria-label="Page address" /><select [(ngModel)]="s.web.browser" aria-label="Browser"><option [ngValue]="undefined">Chromium</option><option value="firefox">Firefox</option><option value="webkit">WebKit (Safari)</option></select> }
                               @else if (s.traffic) { <span class="mut">traffic test</span><input class="cmdi" [(ngModel)]="s.traffic.test" placeholder="saved lab traffic test" aria-label="Traffic test" /> }
                               @else { <span class="cmd fl">{{ s.loop ? 'loop' : text(s) }}</span><span class="sp"></span> }
@@ -423,6 +424,13 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                             </div>
                             @if (s.call) {
                               <div class="row opts">@for (pn of procParams(s.call.proc); track pn.k) { <label>{{ pn.k }} <input class="pin" [ngModel]="s.call.with?.[pn.k] ?? ''" (ngModelChange)="setCallArg(s, pn.k, $event)" [placeholder]="pn.d || varHint" /></label> } @empty { <span class="mut">{{ s.call.proc ? 'no parameters' : 'Choose a procedure (Procedures in the left bar).' }}</span> }</div>
+                            }
+                            @if (s.tgen; as tg) {
+                              <div class="row opts"><label class="wide" title="The saved configuration in the tests folder: STC .xml or .tcc, IxNetwork .ixncfg or .json (empty: what the server has loaded)">Configuration <input class="cmdi" [(ngModel)]="tg.config" placeholder="tgen/l3-traffic.xml" /></label></div>
+                              <div class="row opts"><label class="wide" title="Chassis ports in the order of the configuration's ports (empty: the configuration's own)">Chassis ports <input class="cmdi" [ngModel]="(tg.ports ?? []).join(', ')" (ngModelChange)="tg.ports = splitPorts($event); touch()" placeholder="10.1.1.5/1/1, 10.1.1.5/1/2" /></label>
+                                <label title="Start the configuration's protocols (devices, BGP…) before the traffic"><input type="checkbox" [(ngModel)]="tg.protocols" /> Start protocols</label>
+                                @if (tg.kind === 'ixnetwork') { <label title="An existing session (Windows API servers: 1); empty makes one">Session <input class="pin" [(ngModel)]="tg.session" placeholder="new" /></label> }</div>
+                              <div class="row opts"><span class="mut">The result is JSON: check <b>loss &lt; 0.01</b>, <b>streams[0].loss &lt; 0.1</b>, <b>streams[1].latencyUs &lt; 50</b> or <b>rx &gt; 0</b> (Result checks below). The API session holds the server's address and login.</span></div>
                             }
                             @if (s.web; as w) {
                               @if (webSt(); as ws) { @if (!ws.ready) { <div class="row opts webst"><span>🌐 {{ ws.node ? 'Playwright is not set up on this computer.' : 'Node.js is not installed.' }} <small class="mut">{{ ws.hint }}</small></span><span class="sp"></span>@if (ws.node) { <button type="button" class="pri" (click)="webSetup()" [disabled]="webBusy()">{{ webBusy() ? 'Setting up…' : 'Set Up Playwright' }}</button> }</div>@if (webBusy()) { <div class="row opts"><code class="mut">{{ webLine() }}</code></div> } } }
@@ -643,6 +651,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
           </div>
         </div>
       }
+      <datalist id="tw-api-sessions">@for (a of apiSessions(); track a) { <option [value]="a"></option> }</datalist>
       @if (exp(); as x) {
         <div class="scrim fixed" (click)="exp.set(null)" aria-hidden="true"></div>
         <div class="mdlg wide" role="dialog" aria-label="Export automation suite">
@@ -1728,6 +1737,7 @@ export class TestsView implements OnInit, OnDestroy {
       { label: 'Call a Procedure', action: () => this.addCall(p) },
       { label: 'NETCONF Request', action: () => this.addNetconf(p) },
       { label: 'Web Page (Playwright)', action: () => this.addWeb(p) },
+      { label: 'Spirent / IxNetwork Traffic Run', action: () => this.addTGen(p) },
       { separator: true },
       { label: 'API Request', action: () => this.addApi(p) },
       { label: 'From a curl Command…', action: () => void this.addCurl(p) },
@@ -1755,6 +1765,9 @@ export class TestsView implements OnInit, OnDestroy {
     catch (e) { this.ui.toast(errText(e), 'error'); }
     finally { this.webBusy.set(false); await this.loadWebSt(); }
   }
+  splitPorts(v: string) { return v.split(/[,\s]+/).map(x => x.trim()).filter(Boolean); }
+  addTGen(p: Phase) { const d = this.draft(); if (!d) return; this.listOf(d, p).push({ tgen: { kind: 'stc', server: '', duration: 30 }, expect: [{ json: 'loss', less: 0.01 }] }); this.touch(); }
+  apiSessions() { const out: string[] = []; const w = (l: SessionNode[]) => { for (const n of l) { if (n.isFolder) w(n.children ?? []); else if ((n.protocol ?? '').toUpperCase() === 'API') out.push(n.path); } }; w(this.ui.tree()?.children ?? []); return out; }
   addWeb(p: Phase) { const d = this.draft(); if (!d) return; this.listOf(d, p).push({ web: { url: '', actions: [{ do: 'expect', value: '' }] } }); this.touch(); void this.loadWebSt(); }
   addNetconf(p: Phase) { const d = this.draft(); if (!d) return; this.listOf(d, p).push({ netconf: { session: this.lastSession(), op: 'get-config' } }); this.touch(); }
   setCallProc(s: TestStep, name: string) { if (!s.call) return; s.call.proc = name; const keep: Record<string, string> = {}; for (const p of this.procParams(name)) keep[p.k] = s.call.with?.[p.k] ?? ''; s.call.with = keep; this.touch(); }
@@ -1940,10 +1953,11 @@ export class TestsView implements OnInit, OnDestroy {
     const k = [{ k: 'contains', l: 'contains' }, { k: 'notContains', l: 'does not contain' }, { k: 'matches', l: 'matches' }];
     const agg = s.sample ? [{ k: 'avg', l: 'average of' }, { k: 'max', l: 'maximum of' }, { k: 'min', l: 'minimum of' }, { k: 'delta', l: 'change of' }, { k: 'rate', l: 'rate/s of' }] : [];
     if (s.netconf) return [...agg, { k: 'json', l: 'XML path =' }, ...k];
+    if (s.tgen) return [{ k: 'json', l: 'result' }, ...k];
     if (agg.length) return [...agg, ...(s.http ? [{ k: 'status', l: 'status' }, { k: 'json', l: 'JSON path =' }] : s.snmp ? [{ k: 'oid', l: 'OID =' }] : []), ...k];
     return s.http ? [{ k: 'status', l: 'status' }, { k: 'json', l: 'JSON path =' }, ...k, { k: 'maxMs', l: 'within ms' }] : s.snmp ? [{ k: 'oid', l: 'OID =' }, ...k] : [...k, { k: 'table', l: 'table value' }];
   }
-  checkHint(k: string) { if (['avg', 'max', 'min', 'delta', 'rate'].includes(k)) return 'CPU:\\s+(\\d+) < 80   (a field pattern, JSON path or OID, then < > or =)'; return k === 'json' ? 'data.items[0].name = v42' : k === 'oid' ? 'ifOperStatus.4 = up' : k === 'status' ? '200' : k === 'maxMs' ? '500' : k === 'matches' ? 'v42\\s+42' : k === 'table' ? 'VLAN_ID=200: STATUS = active' : 'text'; }
+  checkHint(k: string) { if (['avg', 'max', 'min', 'delta', 'rate'].includes(k)) return 'CPU:\\s+(\\d+) < 80   (a field pattern, JSON path or OID, then < > or =)'; return k === 'json' ? 'data.items[0].name = v42   or   loss < 0.01' : k === 'oid' ? 'ifOperStatus.4 = up' : k === 'status' ? '200' : k === 'maxMs' ? '500' : k === 'matches' ? 'v42\\s+42' : k === 'table' ? 'VLAN_ID=200: STATUS = active' : 'text'; }
   addCheck(s: TestStep, c: { k: string; v: string }) {
     const v = c.v.trim(); if (!v) return;
     let e: TestExpect;
@@ -1962,7 +1976,11 @@ export class TestsView implements OnInit, OnDestroy {
       if (s.snmp) e.oid = subj; else if (s.http || (s.netconf && !subj.includes('('))) e.json = subj; else e.field = subj.includes('(') ? subj : escapeRe(subj) + '\\s*:?\\s*([\\d.]+)';
       if (m[2] === '<') e.less = n; else if (m[2] === '>') e.greater = n; else e.equals = String(n);
     }
-    else if (c.k === 'json' || c.k === 'oid') { const i = v.indexOf('='); e = i > 0 ? { [c.k]: v.slice(0, i).trim(), equals: v.slice(i + 1).trim() } : { [c.k]: v, exists: true }; }
+    else if (c.k === 'json' || c.k === 'oid') {
+      const m = v.match(/^(.+?)\s*(<|>)\s*(-?[\d.]+)$/);
+      if (m) e = { [c.k]: m[1].trim(), ...(m[2] === '<' ? { less: Number(m[3]) } : { greater: Number(m[3]) }) };
+      else { const i = v.indexOf('='); e = i > 0 ? { [c.k]: v.slice(0, i).trim(), equals: v.slice(i + 1).trim() } : { [c.k]: v, exists: true }; }
+    }
     else e = { [c.k]: v };
     (s.expect ??= []).push(e); c.v = ''; this.touch();
   }

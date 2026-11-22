@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Spirent TestCenter and IxNetwork**: + More → **Spirent / IxNetwork Traffic Run** - a test step that loads a saved configuration (STC .xml / .tcc, IxNetwork .ixncfg / .json), connects its ports to the chassis ports, starts the protocols if asked, sends traffic for N seconds and reads each stream's frames, loss and latency through the generator's REST API (STC REST API of a LabServer / REST server; IxNetwork API server, Linux or Windows). The result is JSON for checks such as `loss < 0.01` or `streams[0].latencyUs < 50`. Also in twrun and the standalone Go suite. JSON path checks take `<` and `>` too. Built from the documented REST APIs and tested against simulated servers - not yet against a real chassis.
+
+- **About**: the Test, Traffic and Syslog tiles; new screenshots for About, the Tests tab, trends, testbeds, the calendar and the export in the README and the guides.
+
 - **Standalone suites and twrun on a real switch**: tested end to end on an EXOS stack. Devices with **no password** now work: the export marks them (`no_password` in inventory.yaml) when Termwright saved "no password" for the session or its device type; an empty `TW_PASSWORD` or pressing Enter at the prompt also means none. twrun reads the passwords Termwright saved in this computer's keychain (the session's, then its device type's; password-manager references are resolved). The Python suite needs `paramiko<5`: paramiko 5 dropped the ssh-rsa host keys many switches still use (requirements.txt pins it and the error says so).
 
 - **Testbeds: pick the devices**: **+ New** testbed shows the chosen folder's devices - grouped by their full folder path, with address, device type, model and the role each becomes - to tick one by one, or All / None, with a filter. Only the ticked devices go in (it used to take every session of the folder).

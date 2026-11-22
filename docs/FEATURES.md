@@ -129,6 +129,7 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **PDF report and trends**: `report.pdf` per run; Trends with pass rate per run, most failing and flaky tests, pass rate per software version.
 - **Testbed calendar**: book testbeds for a time (shared `bookings.yaml`); other people's runs and schedules respect it.
 - **Standalone export**: Python or Go code, or the twrun program with the YAML tests - runs without Termwright - SSH/Telnet/API/SNMP/NETCONF/web itself, inventory from your sessions, passwords from the environment or keyring; procedures as reusable functions.
+- **Spirent TestCenter / IxNetwork**: traffic runs as test steps through their REST APIs - configuration, chassis ports, protocols, per-stream loss and latency.
 - **Web steps (Playwright)**: open pages, click, type, check text, screenshot - set up from the step editor.
 ## AI assistant and connector
 

@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//go:embed standalone/*.go textfsm/*.go netconf/*.go snmp/*.go snmp/mibs webrun/webrun.go webrun/runner.js
+//go:embed standalone/*.go tgen/*.go textfsm/*.go netconf/*.go snmp/*.go snmp/mibs webrun/webrun.go webrun/runner.js
 var src embed.FS
 
 // Module is Termwright's module path; the copies import each other under the suite's module instead.

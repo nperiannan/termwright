@@ -102,6 +102,10 @@ Every run is kept in `reports/history.jsonl`. A test's **History** tab shows its
 
 ## 9. Testbeds, suites and tags
 
+![New testbed: tick the devices of a folder](screenshots/tests-guide/31-new-testbed.png)
+
+![A testbed: its devices under their folders](screenshots/tests-guide/30-testbed.png)
+
 **+ New** (Testbeds) asks for a session folder, then lists its devices under their full folder paths with address, device type and model: tick the ones the tests may use (All / None, or filter). A testbed opens as that device list; **+ Add Devices** adds more from any folder, ✕ takes one out, **Edit YAML** shows the file.
 
 A **testbed** maps the roles to sessions: the recorder saves sessions as roles (`access-sw7` → `{{access_sw7}}`), and a testbed points them at other devices. **Testbeds → + New** writes one from a session folder (the emulated lab's, another site's); testbeds open and save in place and show their lock with *Release*.
@@ -186,11 +190,32 @@ In a test: **+ More → Call a Procedure**, choose it and fill the parameters (`
 
 **PDF report.** Every run writes `report.pdf` next to the HTML report and JUnit XML; **PDF** in the run opens it.
 
+![Trends: pass rate per run, the tests that fail most, per software version](screenshots/tests-guide/28-trends.png)
+
 **Trends.** Runs → **📈 Trends**: the pass rate of each run (oldest left), the tests that fail most with their flips and last problem, and the pass rate per software version. Choose a plan or a testbed to narrow it.
+
+![The testbed calendar](screenshots/tests-guide/29-calendar.png)
 
 **Booking a testbed.** Testbeds → **📅 Calendar** shows the week, one row per testbed. Double-click a row (or **+ Book**), pick the times and say why. While it is booked, other people's runs ask before taking it and their schedules are refused. Commit `bookings.yaml` so the team sees the bookings.
 
 **Web pages (Playwright).** + More → **Web Page (Playwright)**. Give the address, then actions: *Click*, *Type into*, *Press key*, *Choose option*, *Tick*, *Check it shows*, *Check it is gone*, *Wait for*, *Go to address*, *Screenshot*. Targets: `text=Sign in`, `#user`, `role=button[name="Save"]`, `label=Password`, `placeholder=Search` or an XPath. The first time, **Set Up Playwright** installs Playwright and its Chromium (Node.js is needed). Tick *Self-signed certificate OK* for device web pages. The output is the action log and the page's text, so a *contains* check works on what the page shows; a failed action saves a screenshot in `reports/web-shots`.
+
+**Spirent TestCenter and IxNetwork.** + More → **Spirent / IxNetwork Traffic Run** runs traffic on a commercial traffic generator through its REST API: it loads a saved configuration from the tests folder (STC `.xml` / `.tcc`, IxNetwork `.ixncfg` / `.json`), connects its ports to the chassis ports you list (`10.1.1.5/1/1`), optionally starts the protocols, sends the traffic for the seconds you choose and reads every stream's counters. The server is an **API session** (its base URL - an STC LabServer / REST server, or the IxNetwork API server - with the user name and password) or an address. The result is JSON, so checks read like `loss < 0.01`, `streams[0].loss < 0.1`, `streams[1].latencyUs < 50` or `rx > 0`:
+
+```yaml
+- tgen:
+    kind: ixnetwork          # or stc
+    server: Lab/ixia-api     # an API session, or https://10.1.1.30
+    config: tgen/l3-two-ports.ixncfg
+    ports: [10.1.1.6/1/1, 10.1.1.6/1/2]
+    duration: 30
+    protocols: true
+  expect:
+    - json: loss
+      less: 0.01
+```
+
+It runs in Termwright, in twrun and in the standalone Go suite (not the Python one). The session it makes on the server is removed afterwards (IxNetwork: `session: 1` uses the open session of a Windows API server instead).
 
 ## 16. Export a standalone suite
 
@@ -210,6 +235,8 @@ network-tests/
 
 The library is also what you build on: besides run, http, snmp and the checks, it has `configure(session, commands)`, `wait_for(session, command, pattern, timeout, interval)`, `log(text)` and `session(role)` (Go: `Configure`, `WaitFor`, `Log`, `Session`; TCL: `tw::configure`, `tw::wait_for`, `tw::log`, `tw::session`).
 
+
+![Export Automation Suite: how it runs](screenshots/tests-guide/32-export.png)
 
 **Without Termwright.** The export dialog has three ways to run:
 
