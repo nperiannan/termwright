@@ -391,6 +391,26 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                   </div>
                   @for (r of restoreRes(); track $index) { <div class="trow" [class.bad]="!r.passed"><span>{{ r.passed ? '✓' : '✗' }}</span><span>{{ r.name }}</span><span class="mut">{{ r.target }} {{ r.error }}</span></div> }
                   @if (draft(); as d) {
+                    <div class="sec devsec"><div class="sh">Devices <span class="mut norm">where the steps run - a testbed or the Run panel can put them on other devices</span></div>
+                      <div class="ed">
+                        @for (r of testRoles(d); track r) {
+                          <div class="row devrow"><code class="rolec">{{ '{{' }}{{ r }}{{ '}}' }}</code><span class="mut">→</span><input class="cmdi" [ngModel]="d.vars?.[r] ?? ''" (ngModelChange)="d.vars![r] = $event; touch()" [attr.list]="'twsesslist'" aria-label="Session" />
+                            <span class="mut sm">{{ portsHint(r) }}</span><button type="button" class="lnk" (click)="renameTestRole(d, r)" title="Rename it in every step of the test">Rename</button></div>
+                        } @empty { <div class="mut">The steps name their sessions themselves.</div> }
+                        @if (testRoles(d).length === 1) { <div class="mut sm">One device: the steps use it without naming it. Steps on another session show it.</div> }
+                      </div>
+                      <datalist id="twroles">@for (r of testRoles(d); track r) { <option [value]="'{{' + r + '}}'"></option> }</datalist>
+                      <datalist id="twsesslist">@for (p of allSessions(); track p) { <option [value]="p"></option> }</datalist>
+                    </div>
+                    <div class="sec devsec"><div class="sh">Step options <span class="mut norm">for the steps set to Default</span></div>
+                      <div class="ed"><div class="row opts">
+                        <label>Timeout <input type="number" min="0" class="num2" [ngModel]="d.defaults?.timeout" (ngModelChange)="setDef(d, 'timeout', $event)" placeholder="60" /> s</label>
+                        <label title="Seconds to wait before each step">Wait <input type="number" min="0" class="num2" [ngModel]="d.defaults?.wait" (ngModelChange)="setDef(d, 'wait', $event)" /> s</label>
+                        <label title="Run a step again until its checks pass"><input type="checkbox" [ngModel]="!!d.defaults?.retry" (ngModelChange)="setDef(d, 'retry', $event ? { timeout: 60, interval: 5 } : undefined)" /> Retry until it passes</label>
+                        @if (d.defaults?.retry; as rt) { <label>for <input type="number" min="1" class="num2" [(ngModel)]="rt.timeout" /> s</label> }
+                        <label><input type="checkbox" [ngModel]="!!d.defaults?.continueOnFail" (ngModelChange)="setDef(d, 'continueOnFail', $event || undefined)" /> Go on when a step fails</label>
+                        <label><input type="checkbox" [ngModel]="!!d.defaults?.ignoreErrors" (ngModelChange)="setDef(d, 'ignoreErrors', $event || undefined)" /> Ignore device errors</label>
+                      </div></div></div>
                     <div class="sec"><div class="sh">Test data</div>
                       <div class="ed"><div class="row opts"><span class="mut">Run the test once per row of a CSV or Excel file - its column names are variables ({{ '{{' }}vlan{{ '}}' }}).</span><span class="sp"></span>
                         @if (d.data) { <span class="tag">{{ d.data }}</span><button type="button" class="lnk" (click)="d.data = undefined; touch()">Remove</button> }
@@ -403,12 +423,12 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                           @if (d.configDiff) { <label class="wide">ignore lines <input class="cmdi" [ngModel]="(d.configIgnore ?? []).join(', ')" (ngModelChange)="d.configIgnore = splitTags($event)" placeholder="regular expressions, e.g. ^! Last configuration change" /></label> }</div>
                       </div></div>
                     @for (ph of phases; track ph.k) {
-                      <div class="sec">
-                        <div class="sh">{{ ph.l }}<span class="sp"></span><button type="button" class="lnk" (click)="addStep(ph.k)">+ Command</button><button type="button" class="lnk" (click)="addMenu($event, ph.k)" title="An API request, a curl command, a manual step, a wait, a loop, an upgrade or a traffic test">+ More ▾</button></div>
+                      <div class="sec ph" [class]="'ph-' + ph.k">
+                        <div class="sh"><span class="pht">{{ ph.l }}</span><span class="cnt">{{ listOf(d, ph.k).length }}</span><span class="mut norm">{{ phDesc(ph.k) }}</span><span class="sp"></span><button type="button" class="lnk" (click)="addStep(ph.k)">+ Command</button><button type="button" class="lnk" (click)="addMenu($event, ph.k)" title="An API request, a curl command, a manual step, a wait, a loop, an upgrade or a traffic test">+ More ▾</button></div>
                         @for (s of listOf(d, ph.k); track $index; let i = $index; let lastI = $last) {
                           <div class="ed">
                             <div class="row"><b class="num">{{ i + 1 }}</b>
-                              @if (s.run) { <input class="ses" [(ngModel)]="s.run.session" placeholder="session" aria-label="Session" /><input class="cmdi" [(ngModel)]="s.run.command" placeholder="command" aria-label="Command" (contextmenu)="varMenu($event, s)" title="Right-click: insert a variable ({{ '{{' }}port1{{ '}}' }}…), or select a part and make it a variable" /> }
+                              @if (s.run) { @if (!oneDevice(d, s)) { <input class="ses" [(ngModel)]="s.run.session" placeholder="device" aria-label="Device" list="twroles" title="The device: {{ '{{' }}role{{ '}}' }} from Devices above, or a saved session" /> }<input class="cmdi" [(ngModel)]="s.run.command" placeholder="command" aria-label="Command" (contextmenu)="varMenu($event, s)" title="Right-click: insert a variable ({{ '{{' }}port1{{ '}}' }}…), or select a part and make it a variable" /> }
                               @else if (s.http) { <input class="ses" [(ngModel)]="s.http.session" placeholder="API session (or a full URL)" aria-label="API session" /><select [(ngModel)]="s.http.method" aria-label="Method">@for (m of methods; track m) { <option [value]="m">{{ m }}</option> }</select><input class="cmdi" [(ngModel)]="s.http.url" placeholder="URL or /path" aria-label="URL" /> }
                               @else if (s.manual) { <span class="mut">manual</span><input class="cmdi" [(ngModel)]="s.manual.instruction" placeholder="what the person does or checks" aria-label="Instruction" /> }
                               @else if (s.upgrade) { <span class="mut">upgrade</span><input class="ses" [(ngModel)]="s.upgrade.session" placeholder="session" aria-label="Session" /><input class="cmdi" [(ngModel)]="s.upgrade.image" placeholder="image file or URL" aria-label="Image" /> }
@@ -492,22 +512,36 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                               <div class="row opts inner"><button type="button" class="lnk" (click)="lp.steps.push({ run: { session: lastSession(), command: '' } }); touch()">+ Step in the loop</button></div>
                             }
                             @if (!s.call) {
-                            <div class="row opts"><label class="wide" title="What should happen, in words - shown with the step and in the reports">Expected <input class="cmdi" [(ngModel)]="s.expected" placeholder="e.g. VLAN 200 lists port 1:2 tagged" /></label></div>
-                            <div class="row opts"><label>Timeout <input type="number" min="0" class="num2" [(ngModel)]="s.timeout" /> s</label>
-                              <label><input type="checkbox" [(ngModel)]="s.continueOnFail" /> Go on when it fails</label>
-                              <label title="Seconds to wait before the step">Wait <input type="number" min="0" class="num2" [(ngModel)]="s.wait" /> s</label>
-                              <label title="Run the step only when this holds, e.g. {{ '{{' }}vlan{{ '}}' }} != 1 (==, !=, contains, ~, >, <)">If <input class="pin" [(ngModel)]="s.if" placeholder="always" /></label>
-                              <label title="Run the step again until its checks pass, for at most this many seconds"><input type="checkbox" [ngModel]="!!s.retry" (ngModelChange)="s.retry = $event ? { timeout: 60, interval: 5 } : undefined" /> Retry until it passes</label>
-                              @if (s.retry) { <label>for <input type="number" min="1" class="num2" [(ngModel)]="s.retry.timeout" /> s</label> }
-                              @if (s.run || s.http || s.snmp || s.netconf) { <label title="Run the step several times and check the minimum, maximum, average, change or rate of a value (CPU, counters, errors)"><input type="checkbox" [ngModel]="!!s.sample" (ngModelChange)="s.sample = $event ? { count: 5, interval: 10 } : undefined; touch()" /> Sample over time</label>
-                                @if (s.sample) { <label><input type="number" min="2" class="num2" [(ngModel)]="s.sample.count" /> times, every <input type="number" min="0" class="num2" [(ngModel)]="s.sample.interval" /> s</label> } }
-                              @if (s.run) { <label title="Do not fail the step when the device answers with an error message"><input type="checkbox" [(ngModel)]="s.ignoreErrors" /> Ignore device errors</label>
-                                <label title="Turn the output into a table with a TextFSM template: auto (templates/index) or a file in templates/">Parse <input class="pin" [(ngModel)]="s.run.parse" placeholder="off" list="tw-parse" /></label> }</div>
-                            <div class="chips">@for (e of s.expect ?? []; track $index; let j = $index) { <span class="chip"><button type="button" class="lnk ckedit" (click)="editCheck(s, j, ck(ph.k, i))" title="Change the check (it moves to the box on the right; + Check puts it back)">{{ label(e) }}</button> <button type="button" class="x" (click)="removeCheck(s, j)" title="Remove the check">×</button></span> }
-                              @if (!s.loop && !s.manual && ck(ph.k, i); as c) {
+                            @let om = optMode(s);
+                            <div class="row opts optbar">
+                              <span class="seg sm" role="radiogroup" aria-label="Step options">
+                                <button type="button" [class.on]="om === 'default'" (click)="setOptMode(s, 'default')" [title]="'Step options of the test: ' + defaultsText(d)">Default</button>
+                                <button type="button" [class.on]="om === 'custom'" (click)="setOptMode(s, 'custom')" title="Its own timeout, wait, retry…">Custom</button>
+                                <button type="button" [class.on]="om === 'none'" (click)="setOptMode(s, 'none')" title="No step options: run it once, stop the test when it fails">None</button></span>
+                              <span class="mut ell">{{ om === 'default' ? defaultsText(d) : om === 'custom' ? stepOptText(s) : 'runs once; a failure stops the test' }}</span><span class="sp"></span>
+                              <button type="button" class="lnk sm" [class.on]="isMore(ph.k, i) || moreSet(s)" (click)="toggleMore(ph.k, i)" title="Run only if…, parse into a table, sample over time, what is expected in words">⚙ {{ moreText(s) || 'More' }}</button>
+                            </div>
+                            @if (om === 'custom') {
+                              <div class="row opts optpanel"><label>Timeout <input type="number" min="0" class="num2" [(ngModel)]="s.timeout" /> s</label>
+                                <label title="Seconds to wait before the step">Wait <input type="number" min="0" class="num2" [(ngModel)]="s.wait" /> s</label>
+                                <label title="Run the step again until its checks pass, for at most this many seconds"><input type="checkbox" [ngModel]="!!s.retry" (ngModelChange)="s.retry = $event ? { timeout: 60, interval: 5 } : undefined" /> Retry until it passes</label>
+                                @if (s.retry) { <label>for <input type="number" min="1" class="num2" [(ngModel)]="s.retry.timeout" /> s</label> }
+                                <label><input type="checkbox" [(ngModel)]="s.continueOnFail" /> Go on when it fails</label>
+                                @if (s.run) { <label title="Do not fail the step when the device answers with an error message"><input type="checkbox" [(ngModel)]="$any(s.run).ignoreErrors" /> Ignore device errors</label> }</div>
+                            }
+                            @if (isMore(ph.k, i)) {
+                              <div class="row opts optpanel">
+                                <label title="Run the step only when this holds, e.g. {{ '{{' }}dut.device_type{{ '}}' }} == VOSS (==, !=, contains, ~, >, <)">If <input class="pin" [(ngModel)]="s.if" placeholder="always" /></label>
+                                @if (s.run || s.http || s.snmp || s.netconf) { <label title="Run the step several times and check the minimum, maximum, average, change or rate of a value (CPU, counters, errors)"><input type="checkbox" [ngModel]="!!s.sample" (ngModelChange)="s.sample = $event ? { count: 5, interval: 10 } : undefined; touch()" /> Sample over time</label>
+                                  @if (s.sample) { <label><input type="number" min="2" class="num2" [(ngModel)]="s.sample.count" /> times, every <input type="number" min="0" class="num2" [(ngModel)]="s.sample.interval" /> s</label> } }
+                                @if (s.run) { <label title="Turn the output into a table with a TextFSM template: auto (templates/index) or a file in templates/">Parse <input class="pin" [(ngModel)]="s.run.parse" placeholder="off" list="tw-parse" /></label> }
+                                <label class="wide" title="What should happen, in words - shown with the step and in the reports">Expected <input class="cmdi exp" [(ngModel)]="s.expected" placeholder="in words, optional - e.g. VLAN 200 lists port 1:2 tagged" /></label></div>
+                            }
+                            <div class="chips">@for (e of s.expect ?? []; track $index; let j = $index) { <span class="chip"><button type="button" class="lnk ckedit" (click)="openCk(ph.k, i); editCheck(s, j, ck(ph.k, i))" title="Change the check (it moves to the box on the right; + Check puts it back)">{{ label(e) }}</button> <button type="button" class="x" (click)="removeCheck(s, j)" title="Remove the check">×</button></span> }
+                              @if (!s.loop && !s.manual && ck(ph.k, i); as c) { @if (!ckOpen().has(ph.k + i) && !c.v) { <button type="button" class="addchip" (click)="openCk(ph.k, i)" title="Add a check: the output contains, does not contain, matches…">+ check</button> } @else {
                                 <span class="addck"><select [(ngModel)]="c.k" aria-label="Check">@for (k of checkKinds(s); track k.k) { <option [value]="k.k">{{ k.l }}</option> }</select>
                                   <input [(ngModel)]="c.v" [placeholder]="checkHint(c.k)" aria-label="Value" (keydown.enter)="addCheck(s, c)" (contextmenu)="varMenu($event, s)" title="Right-click: insert a variable" /><button type="button" (click)="addCheck(s, c)" [disabled]="!c.v.trim()">+ Check</button></span>
-                              }</div>
+                              } }</div>
                             } @else { <div class="row opts"><label><input type="checkbox" [(ngModel)]="s.continueOnFail" /> Go on when it fails</label><label title="Run the procedure only when this holds">If <input class="pin" [(ngModel)]="s.if" placeholder="always" /></label><span class="mut">The procedure's own steps have their checks.</span></div> }
                           </div>
                         } @empty { <div class="none">no {{ ph.l.toLowerCase() }} steps</div> }
@@ -927,6 +961,14 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
     .pg4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; } .pg4 label { display: flex; flex-direction: column; gap: 2px; font-size: 10.5px; color: var(--muted); min-width: 0; } .pg4 input { width: 100%; min-width: 0; font-family: var(--mono, monospace); color: var(--muted); } .pg4 input.set { color: inherit; border-color: var(--accent); }
     .rmap .row { display: flex; gap: 6px; align-items: center; } .rmap code { max-width: 45%; } .rmap select { flex: 1; min-width: 0; } .rmap select.miss { border-color: #d29922; }
     .ckedit { color: inherit; padding: 0; font: inherit; cursor: text; } .ckedit:hover { text-decoration: underline dotted; }
+    .devsec .sh .norm, .ph .sh .norm { font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 12px; } .devrow { gap: 8px; } .rolec { color: var(--accent); font-size: 12px; white-space: nowrap; } .sm { font-size: 11.5px; }
+    .ph > .sh { white-space: nowrap; } .ph > .sh .norm { overflow: hidden; text-overflow: ellipsis; } .devrow .cmdi { flex: 1 1 auto !important; min-width: 200px; width: auto; } .devrow .sm { white-space: nowrap; }
+    .addchip { background: none; border: 1px dashed var(--border); color: var(--muted); border-radius: 10px; padding: 1px 9px; font-size: 12px; cursor: pointer; }
+    .ph { border-left: 3px solid var(--border); } .ph-steps { border-left-color: var(--accent); } .ph-cleanup { border-left-color: #d29922; } .ph-cleanup > .sh { background: color-mix(in srgb, #d29922 8%, transparent); }
+    .ph .pht { font-size: 13.5px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--text); } .ph .cnt { font-size: 11px; border: 1px solid var(--border); border-radius: 9px; padding: 0 7px; color: var(--muted); font-weight: 400; }
+    .optbar { gap: 10px; align-items: center; } .optbar .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; } .optbar .seg button { border: 0; border-radius: 0; padding: 2px 10px; font-size: 11.5px; background: none; color: var(--muted); }
+    .optbar .seg button.on { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--text); } .optbar .lnk.on { color: var(--accent); } .optbar > .lnk { max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .optbar { flex-wrap: nowrap !important; } .optpanel { border: 1px dashed var(--border); border-radius: 8px; padding: 6px 10px; margin-left: 24px; }
+    input.exp, input.exp::placeholder { color: var(--muted); opacity: .75; }
     .tcard { border: 1px solid var(--border); border-radius: 8px; margin: 8px 0 12px; background: color-mix(in srgb, var(--bg) 60%, transparent); }
     .tch { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 13px; } .tcard.val .tch { border: 0; }
     .tch .mono, .vals .mono, .pg .mono { font-family: var(--mono, monospace); font-size: 12px; } .tg { font-size: 11px; border: 1px solid var(--border); border-radius: 10px; padding: 1px 7px; color: var(--muted); white-space: nowrap; }
@@ -1121,7 +1163,7 @@ export class TestsView implements OnInit, OnDestroy {
     { k: 'auto', l: 'Cleanup steps, else undo the configuration', d: "from the device type's undo rules, the last change first" }];
   /** The test being edited in the Steps view (a copy; Save writes it). */
   readonly draft = signal<TestCase | null>(null);
-  readonly phases: { k: Phase; l: string }[] = [{ k: 'setup', l: 'Setup' }, { k: 'steps', l: 'Steps' }, { k: 'cleanup', l: 'Cleanup - runs when the run cleans up' }];
+  readonly phases: { k: Phase; l: string }[] = [{ k: 'setup', l: 'Setup' }, { k: 'steps', l: 'Steps' }, { k: 'cleanup', l: 'Cleanup' }];
   readonly methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
   private cks = new Map<string, { k: string; v: string }>();
   cleanupMode: CleanupMode = (() => { try { const v = localStorage.getItem('tw.tests.cleanup'); return (v === null ? 'off' : v) as CleanupMode; } catch { return 'off'; } })();
@@ -1619,6 +1661,53 @@ export class TestsView implements OnInit, OnDestroy {
     for (const d of this.tbDevs()) by.set(d.session ? d.folder ?? '' : '', [...(by.get(d.session ? d.folder ?? '' : '') ?? []), d]);
     return [...by.entries()].sort((a, b) => (a[0] === '' ? 1 : b[0] === '' ? -1 : a[0].localeCompare(b[0]))).map(([folder, items]) => ({ folder, items }));
   }
+  phDesc(p: Phase) { return p === 'setup' ? 'before the steps: a known state' : p === 'steps' ? 'in order; a failed step stops the test' : 'after the steps, also when one failed - only what the test configured is undone'; }
+  oneDevice(d: TestCase, s: TestStep) { const r = this.testRoles(d); return r.length === 1 && (s.run?.session ?? '').replace(/\s/g, '') === '{{' + r[0] + '}}'; }
+  portsHint(r: string) { const p = this.rolePorts()[r] ?? []; return p.length ? 'ports ' + p[0] + ' … ' + p[p.length - 1] : ''; }
+  async renameTestRole(d: TestCase, from: string) {
+    const to = (await this.ui.input(tr('Rename the Device'), tr('Steps use {{name}} for it - e.g. dut or core. A testbed maps the same name to its own device.'), from))?.trim();
+    if (!to || to === from || !/^[A-Za-z_][\w-]*$/.test(to)) return;
+    const re = new RegExp('\\{\\{\\s*' + from.replace(/[-]/g, '\\-') + '(\\.[\\w-]+)?\\s*\\}\\}', 'g');
+    const sub = (x?: string) => x?.replace(re, (_m, p) => '{{' + to + (p ?? '') + '}}');
+    const walk = (o: unknown): unknown => typeof o === 'string' ? sub(o) : Array.isArray(o) ? o.map(walk) : o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, walk(v)])) : o;
+    for (const ph of ['setup', 'steps', 'cleanup'] as const) (d as unknown as Record<string, unknown>)[ph] = walk(this.listOf(d, ph));
+    const vars: Record<string, string> = {};
+    for (const [k, v] of Object.entries(d.vars ?? {})) vars[k === from ? to : k.startsWith(from + '.') ? to + k.slice(from.length) : k] = v;
+    d.vars = vars; this.draft.set({ ...d }); this.touch(); void this.loadRolePorts(d);
+  }
+  optMode(s: TestStep): 'default' | 'custom' | 'none' {
+    const o = (s as { options?: string }).options;
+    if (o === 'none' || o === 'custom') return o;
+    return s.timeout || s.wait || s.retry || s.continueOnFail || (s.run as { ignoreErrors?: boolean } | undefined)?.ignoreErrors ? 'custom' : 'default';
+  }
+  setOptMode(s: TestStep, m: 'default' | 'custom' | 'none') {
+    const x = s as TestStep & { options?: string };
+    if (m !== 'custom') { delete x.timeout; delete x.wait; delete x.retry; delete x.continueOnFail; if (x.run) delete (x.run as { ignoreErrors?: boolean }).ignoreErrors; }
+    if (m === 'default') delete x.options; else x.options = m;
+    this.touch();
+  }
+  defaultsText(d: TestCase) {
+    const o = (d as { defaults?: { timeout?: number; wait?: number; retry?: { timeout?: number }; continueOnFail?: boolean; ignoreErrors?: boolean } }).defaults ?? {};
+    const p = [o.timeout ? 'timeout ' + o.timeout + ' s' : '', o.wait ? 'wait ' + o.wait + ' s' : '', o.retry ? 'retry ' + (o.retry.timeout ?? 60) + ' s' : '', o.continueOnFail ? 'go on when it fails' : '', o.ignoreErrors ? 'ignore device errors' : ''].filter(Boolean);
+    return p.length ? p.join(' · ') : 'the test\'s step options (none set)';
+  }
+  stepOptText(s: TestStep) {
+    const p = [s.timeout ? 'timeout ' + s.timeout + ' s' : '', s.wait ? 'wait ' + s.wait + ' s' : '', s.retry ? 'retry ' + (s.retry.timeout ?? 60) + ' s' : '', s.continueOnFail ? 'go on when it fails' : '', (s.run as { ignoreErrors?: boolean } | undefined)?.ignoreErrors ? 'ignore device errors' : ''].filter(Boolean);
+    return p.join(' · ');
+  }
+  setDef(d: TestCase, k: string, v: unknown) {
+    const x = d as TestCase & { defaults?: Record<string, unknown> };
+    const o = { ...(x.defaults ?? {}) };
+    if (v === undefined || v === null || v === '' || v === 0) delete o[k]; else o[k] = v;
+    x.defaults = Object.keys(o).length ? o : undefined; this.touch();
+  }
+  readonly ckOpen = signal(new Set<string>());
+  openCk(p: Phase, i: number) { const x = new Set(this.ckOpen()); x.add(p + i); this.ckOpen.set(x); }
+  private readonly moreOpen = signal(new Set<string>());
+  isMore(p: Phase, i: number) { return this.moreOpen().has(p + i); }
+  toggleMore(p: Phase, i: number) { const x = new Set(this.moreOpen()); if (x.has(p + i)) x.delete(p + i); else x.add(p + i); this.moreOpen.set(x); }
+  moreSet(s: TestStep) { return !!(s.if?.trim() || s.sample || s.run?.parse || s.expected); }
+  moreText(s: TestStep) { return [s.if?.trim() ? 'if ' + s.if : '', s.sample ? 'sampled' : '', s.run?.parse ? 'parsed' : '', s.expected ? 'expected' : ''].filter(Boolean).join(' · '); }
   /** The test's port numbers (1:2, 2, 1/1…) become its devices' port variables {{role.port1}}…. */
   async usePortVars() {
     const d = this.draft(), t = d ?? this.test(); if (!t) return;

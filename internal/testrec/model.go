@@ -25,6 +25,9 @@ type Case struct {
 	// difference fails the test (lines matching ConfigIgnore do not count).
 	ConfigDiff   bool     `yaml:"configDiff,omitempty" json:"configDiff,omitempty"`
 	ConfigIgnore []string `yaml:"configIgnore,omitempty" json:"configIgnore,omitempty"`
+	// Defaults: the step options most steps share (timeout, wait, retry, go on when it fails, ignore
+	// device errors), set once; a step uses them unless it has its own (options: custom) or none.
+	Defaults *StepOptions `yaml:"defaults,omitempty" json:"defaults,omitempty"`
 	// Vars: values used as {{name}} in the steps; a run's own values win.
 	Vars map[string]string `yaml:"vars,omitempty" json:"vars,omitempty"`
 	// Params: the test runs once per entry, with its values as {{variables}} (data-driven tests);
@@ -94,6 +97,9 @@ type Step struct {
 	TGen *TGenStep `yaml:"tgen,omitempty" json:"tgen,omitempty"`
 	// Web: drive a browser with Playwright (open a page, click, fill, check text, screenshot).
 	Web *WebStep `yaml:"web,omitempty" json:"web,omitempty"`
+	// Options: which step options apply - "" the test's Defaults (a step with options of its own keeps
+	// them), "custom" only its own, "none" neither.
+	Options string `yaml:"options,omitempty" json:"options,omitempty"`
 	// Sample: run the step several times; checks with agg (min, max, avg, delta, rate) look at all the
 	// values, the others at the last answer.
 	Sample *Sample `yaml:"sample,omitempty" json:"sample,omitempty"`
@@ -222,6 +228,15 @@ type Save struct {
 	// Where + Column: a value from the parsed output (the first row whose columns match).
 	Where  map[string]string `yaml:"where,omitempty" json:"where,omitempty"`
 	Column string            `yaml:"column,omitempty" json:"column,omitempty"`
+}
+
+// StepOptions are the step options a test sets once for its steps (Case.Defaults).
+type StepOptions struct {
+	Timeout        int     `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	Wait           float64 `yaml:"wait,omitempty" json:"wait,omitempty"`
+	Retry          *Retry  `yaml:"retry,omitempty" json:"retry,omitempty"`
+	ContinueOnFail bool    `yaml:"continueOnFail,omitempty" json:"continueOnFail,omitempty"`
+	IgnoreErrors   bool    `yaml:"ignoreErrors,omitempty" json:"ignoreErrors,omitempty"`
 }
 
 // Retry repeats a step until its checks pass.

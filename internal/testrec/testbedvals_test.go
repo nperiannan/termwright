@@ -113,3 +113,18 @@ func TestCleanupOnlyWhatRan(t *testing.T) {
 		}
 	}
 }
+
+func TestStepDefaults(t *testing.T) {
+	f := Folder{Root: t.TempDir()}
+	c := Case{Defaults: &StepOptions{Timeout: 20, Retry: &Retry{Timeout: 30}}, Steps: []Step{
+		{Run: &RunStep{Session: "s", Command: "a"}},
+		{Run: &RunStep{Session: "s", Command: "b"}, Options: "none"},
+		{Run: &RunStep{Session: "s", Command: "c"}, Timeout: 5},
+		{Run: &RunStep{Session: "s", Command: "d"}, Options: "custom"},
+	}}
+	pc, _ := f.Prepare(c)
+	s := pc.Steps
+	if s[0].Timeout != 20 || s[0].Retry == nil || s[1].Timeout != 0 || s[2].Timeout != 5 || s[2].Retry != nil || s[3].Timeout != 0 || c.Steps[0].Timeout != 0 {
+		t.Fatalf("%+v", s)
+	}
+}

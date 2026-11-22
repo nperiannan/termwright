@@ -136,6 +136,7 @@ func (f Folder) ExpandCalls(c Case) (Case, error) {
 		if err := f.expandStepBlocks(l); err != nil {
 			return c, err
 		}
+		applyDefaults(l, c.Defaults)
 	}
 	return c, nil
 }
@@ -258,4 +259,36 @@ func (f Folder) Prepare(c Case) (Case, error) {
 		c.Params = append(c.Params, rows...)
 	}
 	return c, nil
+}
+
+// ownOptions says whether a step sets step options itself.
+func ownOptions(st Step) bool {
+	return st.Timeout != 0 || st.Wait != 0 || st.Retry != nil || st.ContinueOnFail || st.Run != nil && st.Run.IgnoreErrors
+}
+
+// applyDefaults gives the steps that use the test's defaults (options "" without options of their own,
+// or "default") the test's step options.
+func applyDefaults(l []Step, d *StepOptions) {
+	if d == nil {
+		return
+	}
+	for i := range l {
+		st := &l[i]
+		if st.Loop != nil {
+			applyDefaults(st.Loop.Steps, d)
+		}
+		if st.Options == "none" || st.Options == "custom" || st.Options == "" && ownOptions(*st) || st.Manual != nil || st.Loop != nil {
+			continue
+		}
+		st.Timeout, st.Wait, st.ContinueOnFail = d.Timeout, d.Wait, d.ContinueOnFail
+		if d.Retry != nil {
+			r := *d.Retry
+			st.Retry = &r
+		}
+		if st.Run != nil && d.IgnoreErrors {
+			r := *st.Run
+			r.IgnoreErrors = true
+			st.Run = &r
+		}
+	}
 }

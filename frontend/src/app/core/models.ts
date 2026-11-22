@@ -594,6 +594,8 @@ export interface TestExpect { agg?: 'min' | 'max' | 'avg' | 'delta' | 'rate'; sc
 export interface TestTableExpect { where?: Record<string, string>; column?: string; rows?: number; equals?: string; notEquals?: string; matches?: string; greater?: number; less?: number; exists?: boolean; }
 export interface TestTable { header: string[]; rows: string[][]; }
 export interface TestStep {
+  /** '' = the test's defaults, 'custom' = its own options only, 'none' = no options. */
+  options?: string;
   call?: { proc: string; with?: Record<string, string> };
   web?: TestWeb;
   tgen?: { kind: string; server: string; config?: string; ports?: string[]; duration?: number; protocols?: boolean; settle?: number; session?: string };
@@ -605,7 +607,8 @@ export interface TestStep {
   expect?: TestExpect[]; save?: { var: string; field?: string; json?: string; oid?: string; where?: Record<string, string>; column?: string }[]; timeout?: number; continueOnFail?: boolean; ignoreErrors?: boolean;
   expected?: string; manual?: { instruction: string }; traffic?: { test: string }; upgrade?: { session: string; image: string }; wait?: number; if?: string; retry?: { timeout?: number; interval?: number }; loop?: { var: string; values?: string[]; range?: string; from?: string; steps: TestStep[] };
 }
-export interface TestCase { data?: string; qtest?: { testCase: string }; name?: string; description?: string; tags?: string[]; dependsOn?: string[]; watch?: { syslog?: string[]; traps?: string[]; devices?: string[] }; configDiff?: boolean; configIgnore?: string[]; vars?: Record<string, string>; params?: Record<string, string>[]; restore?: ('config' | 'lab')[]; setup?: TestStep[]; steps: TestStep[]; cleanup?: TestStep[]; }
+export interface TestStepOptions { timeout?: number; wait?: number; retry?: { timeout?: number; interval?: number }; continueOnFail?: boolean; ignoreErrors?: boolean; }
+export interface TestCase { defaults?: TestStepOptions; data?: string; qtest?: { testCase: string }; name?: string; description?: string; tags?: string[]; dependsOn?: string[]; watch?: { syslog?: string[]; traps?: string[]; devices?: string[] }; configDiff?: boolean; configIgnore?: string[]; vars?: Record<string, string>; params?: Record<string, string>[]; restore?: ('config' | 'lab')[]; setup?: TestStep[]; steps: TestStep[]; cleanup?: TestStep[]; }
 export interface TestCaseInfo { file: string; name: string; description?: string; tags?: string[]; steps: number; error?: string; }
 export interface TestCheckResult { what: string; passed: boolean; got?: string; }
 export interface TestStepResult { vars?: Record<string, string>; name: string; kind: string; phase?: '' | 'setup' | 'cleanup' | 'restore'; target?: string; sent?: string; status?: number; output?: string; ms: number; passed: boolean; skipped?: boolean; unchecked?: boolean; error?: string; checks?: TestCheckResult[]; table?: TestTable; expected?: string; }
