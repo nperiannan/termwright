@@ -19,6 +19,7 @@ import (
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"github.com/termwright/termwright/internal/secrets"
 	"github.com/termwright/termwright/internal/testrec"
 )
 
@@ -679,6 +680,14 @@ func (a *App) inventoryDevice(path string) (testrec.InventoryDevice, bool) {
 		d.Protocol = "telnet"
 	default:
 		d.Protocol = "ssh"
+	}
+	// "no password" saved for the session or its device type: the suite then never asks for one
+	if pw, ok := secrets.Lookup(path); ok && pw == "" {
+		d.NoPassword = true
+	} else if !ok && s.DeviceType != "" {
+		if pw, ok := secrets.Lookup("devicetype:" + strings.ToLower(s.DeviceType)); ok && pw == "" {
+			d.NoPassword = true
+		}
 	}
 	if s.DeviceType != "" {
 		if dt, ok := a.deviceTypeNamed(s.DeviceType); ok {

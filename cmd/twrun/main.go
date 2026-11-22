@@ -22,6 +22,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/termwright/termwright/internal/secretref"
+	"github.com/termwright/termwright/internal/secrets"
 	"github.com/termwright/termwright/internal/standalone"
 	"github.com/termwright/termwright/internal/testrec"
 	"github.com/termwright/termwright/internal/textfsm"
@@ -46,7 +48,8 @@ const help = `twrun - runs Termwright tests without Termwright
   twrun version
 
 Passwords are never in the suite: TW_PASSWORD_<NAME> (the session's last part in capitals, other
-characters as _) or TW_PASSWORD for every device, else typed when asked. API tokens: TW_TOKEN_<NAME>;
+characters as _) or TW_PASSWORD for every device (set but empty: no password), else the passwords
+Termwright saved in this computer's keychain (TW_NO_KEYCHAIN=1 turns that off), else typed when asked. API tokens: TW_TOKEN_<NAME>;
 SNMP communities: TW_COMMUNITY_<NAME>. TW_KNOWN_HOSTS=file checks SSH host keys.
 `
 
@@ -118,6 +121,21 @@ func run(args []string) int {
 		return 1
 	}
 	e.Ask = standalone.AskTerminal
+	if os.Getenv("TW_NO_KEYCHAIN") == "" {
+		res := &secretref.Resolver{}
+		e.Keychain = func(key string) (string, bool) {
+			v, ok := secrets.Lookup(key)
+			if !ok || !secretref.IsRef(v) {
+				return v, ok
+			}
+			pw, err := res.Resolve(ctx, v, func(title, msg string) (string, error) { return standalone.AskTerminal(title + " - " + msg) })
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "password manager:", err)
+				return "", false
+			}
+			return pw, true
+		}
+	}
 	defer e.Close()
 	switch cmd {
 	case "check":

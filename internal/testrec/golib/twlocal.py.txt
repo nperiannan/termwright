@@ -4,7 +4,8 @@
 The devices are in inventory.yaml (written by Termwright's export from the saved sessions); passwords are
 never in it. Each one comes from, in order:
   TW_PASSWORD_<SESSION> (the session's name in capitals, other characters as _), the device's password_env,
-  TW_PASSWORD, the system keyring (pip install keyring; service "termwright", user = the session), or a prompt.
+  TW_PASSWORD (set but empty: no password), Termwright's saved passwords in this computer's keychain
+  (pip install keyring; service "Termwright", account = the session), or a prompt.
 API tokens: TW_TOKEN_<SESSION> or token_env; SNMP communities: TW_COMMUNITY_<SESSION>, community_env, else public.
 
 Needs: paramiko (SSH), textfsm (parse), PyYAML. Optional: ncclient (NETCONF), playwright (web steps),
@@ -74,20 +75,26 @@ def secret(d, kind="password"):
     """A device's password (or token / community) from the environment, the keyring or a prompt."""
     s = d.get("session", "")
     pre = {"password": "TW_PASSWORD_", "token": "TW_TOKEN_", "community": "TW_COMMUNITY_"}[kind]
+    if kind == "password" and d.get("no_password"):
+        return ""
     for k in (_env_name(pre, s), d.get(kind + "_env") or "", pre.rstrip("_") if kind != "community" else ""):
-        if k and os.environ.get(k):
+        if k and k in os.environ:  # set, even empty (a device without a password)
             return os.environ[k]
-    if kind == "community":
-        return "public"
-    try:
+    try:  # Termwright's saved passwords on this computer (pip install keyring)
         import keyring
-        v = keyring.get_password("termwright", s)
-        if v:
-            return v
+        keys = [{"password": s, "token": "api-secret:" + s, "community": "snmp-community:" + s}[kind]]
+        if kind == "password" and d.get("device_type"):  # the device type's password ("no password" counts)
+            keys.append("devicetype:" + d["device_type"].lower())
+        for key in keys:
+            v = keyring.get_password("Termwright", key)
+            if v is not None and not re.match(r"^(op|bw|vault|cmd)://", v):
+                return "" if v == "\x00termwright-empty-password" else v
     except Exception:
         pass
+    if kind == "community":
+        return "public"
     if sys.stdin and sys.stdin.isatty():
-        v = getpass.getpass("%s for %s (%s@%s): " % (kind.capitalize(), s, d.get("username", ""), d.get("host", "")))
+        v = getpass.getpass("%s for %s (%s@%s) - Enter for none: " % (kind.capitalize(), s, d.get("username", ""), d.get("host", "")))
         os.environ[_env_name(pre, s)] = v
         return v
     raise StepError("no %s for %s: set %s (or %s)" % (kind, s, _env_name(pre, s), pre.rstrip("_")))
@@ -193,7 +200,10 @@ class _SSH(_Shell):
         try:
             self.cli.connect(**kw)
         except Exception as e:
-            raise StepError("SSH to %s (%s): %s" % (d.get("session"), d["host"], e))
+            hint = ""
+            if "no acceptable host key" in str(e) and int(paramiko.__version__.split(".")[0]) >= 5:
+                hint = " - the device has only ssh-rsa host keys, which paramiko 5 dropped: pip install 'paramiko<5'"
+            raise StepError("SSH to %s (%s): %s%s" % (d.get("session"), d["host"], e, hint))
         self.ch = self.cli.invoke_shell(width=511, height=1000)
         self.ch.settimeout(0.2)
         self.learn_prompt()

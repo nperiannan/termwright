@@ -340,7 +340,7 @@ func inventoryOf(sessions map[string]bool, dev func(string) (InventoryDevice, bo
 	b, _ := yaml.Marshal(map[string]any{"devices": devs})
 	head := `# The devices of this suite, written by Termwright from its saved sessions. No passwords are here:
 # set TW_PASSWORD_<NAME> (the session's last part in capitals, other characters as _), or TW_PASSWORD for all,
-# or keep them in the system keyring (service "termwright", user = the session). API tokens: TW_TOKEN_<NAME>;
+# or the passwords Termwright saved in the keychain (service "Termwright"). API tokens: TW_TOKEN_<NAME>;
 # SNMP communities: TW_COMMUNITY_<NAME> (default public). To run on other devices, change host and the rest.
 `
 	return append([]byte(head), b...), missing
@@ -363,7 +363,7 @@ func standaloneReqs(lang string) string {
 		return "# Go modules are in go.mod (go mod download fetches them). For SNMP steps install net-snmp; for web steps Playwright for Go is used.\n"
 	}
 	return `# pip install -r requirements.txt
-paramiko>=3.0
+paramiko>=3.0,<5   # paramiko 5 dropped ssh-rsa host keys, which many switches still use
 textfsm>=1.1
 PyYAML>=6.0
 # optional:

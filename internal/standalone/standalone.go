@@ -47,6 +47,8 @@ type Device struct {
 	// Errors: regular expressions of the device's error messages ("Invalid input"); a command whose
 	// output matches fails its step.
 	Errors []string `yaml:"errors,omitempty" json:"errors,omitempty"`
+	// NoPassword: the device logs in without a password (Termwright's session or device type says so).
+	NoPassword bool `yaml:"no_password,omitempty" json:"no_password,omitempty"`
 	// PasswordEnv / TokenEnv / CommunityEnv: other environment variables that hold its secrets.
 	PasswordEnv  string `yaml:"password_env,omitempty" json:"password_env,omitempty"`
 	TokenEnv     string `yaml:"token_env,omitempty" json:"token_env,omitempty"`
@@ -60,6 +62,8 @@ type Engine struct {
 	devs map[string]Device
 	// Ask asks for a secret when none is set (nil: no asking; the step fails with what to set).
 	Ask func(label string) (string, error)
+	// Keychain looks a secret up in the computer's credential store (twrun: Termwright's saved passwords).
+	Keychain func(key string) (string, bool)
 
 	mu     sync.Mutex
 	shells map[string]*shell
@@ -128,9 +132,23 @@ func (e *Engine) Secret(d Device, kind string) (string, error) {
 	case "community":
 		pre, own = "TW_COMMUNITY_", d.CommunityEnv
 	}
+	if kind == "password" && d.NoPassword {
+		return "", nil
+	}
 	for _, k := range []string{EnvName(pre, d.Session), own, strings.TrimSuffix(pre, "_")} {
-		if k != "" && os.Getenv(k) != "" {
-			return os.Getenv(k), nil
+		if v, ok := os.LookupEnv(k); k != "" && ok { // set, even empty (a device without a password)
+			return v, nil
+		}
+	}
+	if e.Keychain != nil { // Termwright's saved passwords on this computer (service "Termwright")
+		keys := map[string][]string{"password": {d.Session}, "token": {"api-secret:" + d.Session}, "community": {"snmp-community:" + d.Session}}[kind]
+		if kind == "password" && d.DeviceType != "" { // the device type's password ("no password" counts)
+			keys = append(keys, "devicetype:"+strings.ToLower(d.DeviceType))
+		}
+		for _, key := range keys {
+			if v, ok := e.Keychain(key); ok {
+				return v, nil
+			}
 		}
 	}
 	if kind == "community" {
@@ -143,8 +161,8 @@ func (e *Engine) Secret(d Device, kind string) (string, error) {
 		return v, nil
 	}
 	if e.Ask != nil {
-		v, err := e.Ask(fmt.Sprintf("%s for %s (%s@%s)", kind, d.Session, d.Username, d.Host))
-		if err == nil && v != "" {
+		v, err := e.Ask(fmt.Sprintf("%s for %s (%s@%s) - Enter for none", kind, d.Session, d.Username, d.Host))
+		if err == nil {
 			e.mu.Lock()
 			e.asked[kind+"\x00"+d.Session] = v
 			e.mu.Unlock()
