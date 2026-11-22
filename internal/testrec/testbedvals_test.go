@@ -1,6 +1,7 @@
 package testrec
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,5 +85,31 @@ func TestUsePortVars(t *testing.T) {
 	addPorts("d", v, map[string]string{"d.port2": "x"})
 	if v["d.port1"] != "2" || v["d.port3"] != "4" || v["d.port4"] != "" || v["d.ports"] != "2,x,4" || v["d.port2"] != "x" {
 		t.Fatal(v)
+	}
+}
+
+type undoDrv struct{ *fake }
+
+func (undoDrv) UndoOf(_, cmd string) string {
+	if f := strings.Fields(cmd); len(f) > 2 && f[0] == "create" {
+		return "delete " + f[1] + " " + f[2]
+	}
+	return ""
+}
+
+func TestCleanupOnlyWhatRan(t *testing.T) {
+	c := Case{Name: "x", Steps: []Step{
+		{Run: &RunStep{Session: "sw", Command: "show vlan"}, Expect: []Expect{{Contains: "not there"}}},
+		{Run: &RunStep{Session: "sw", Command: "create vlan v1000 tag 1000"}},
+	}, Cleanup: []Step{{Run: &RunStep{Session: "sw", Command: "delete vlan v1000"}}, {Run: &RunStep{Session: "sw", Command: "show version"}}}}
+	f := &fake{}
+	r := Run(context.Background(), c, undoDrv{f}, nil)
+	if len(r.Steps) != 4 || !r.Steps[2].Skipped || !strings.Contains(r.Steps[2].Error, "not needed") || r.Steps[3].Skipped {
+		t.Fatalf("%+v", r.Steps)
+	}
+	for _, s := range f.sent {
+		if strings.Contains(s, "delete") {
+			t.Fatal("ran", s)
+		}
 	}
 }

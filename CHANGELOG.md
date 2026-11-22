@@ -4,6 +4,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Cleanup undoes only what was configured**: a cleanup step that undoes a configuration command (by the device type's undo rules: `delete vlan v1000` for `create vlan v1000 …`) is skipped - "not needed" - when that command never took effect: the test failed before it, or the device refused it. Cleanup steps that match no configuration command still run.
+- A command with a variable that has no value (`{{port1}}`) is no longer sent: the step fails and says where to set it.
+
 - **Variables in the editor**: right-click a command or a check's box to insert a variable (the test's own, and each device's ports and facts, with their values) or make a **New Variable…**; click a check to change it. A test with one device uses `{{port1}}`… and `{{ports}}` (several devices: `{{role.port1}}`); **Use Port Variables** also mends `{port1}` typed with one brace.
 - **Playwright 1.64**: Set Up updates an older Playwright, checks that its Chromium starts and downloads it again when it does not (macOS *spawn Unknown system error -88*); when Chromium still does not start, web steps use the installed Google Chrome or Edge.
 

@@ -42,6 +42,8 @@ A step **without checks** only proves that the device accepted the command - als
 
 ## 3. Clean up
 
+The cleanup only undoes what the test configured: a cleanup step that undoes a configuration command (by the device type's undo rules - `delete vlan v1000` for `create vlan v1000 tag 1000`) is skipped as *not needed* when that command never took effect, because the test failed before it or the device refused it. Cleanup steps that undo nothing the test did (or that the rules do not know) always run.
+
 For every change the recorder puts its undo into the **Cleanup** as you record - from the device type's **Undo rules** (`create vlan v42` → `delete vlan v42`), the DELETE of a POST, or the old value of an SNMP set - the last change first (*Options → Add the undo of each change to the cleanup* turns it off; then **↩ cleanup: … + add** suggests it instead). A change without an undo rule shows no undo: add the rule in Global Options → Device Types, or record the undo in **Cleanup**; **✦ Cleanup with AI** asks the assistant. Record more in **Cleanup**, ideally a show with *does not contain* at the end.
 
 Whether a run cleans up is chosen **per run** (section 6): with *No cleanup*, tests build on what earlier ones configured. *Options → Afterwards put back* adds a safety net: the **configuration** (the device type's *Test save / restore* commands, built in for NX-OS, Cisco IOS and EXOS) or a **lab snapshot** of emulated lab switches.
