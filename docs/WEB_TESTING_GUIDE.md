@@ -498,6 +498,7 @@ web:
 | Problem | Fix |
 |---|---|
 | *web steps need Playwright* | Click **Set Up Playwright** in a web step (Node.js needed). |
+| *browserType.launch: spawn Unknown system error -88* (macOS) | The Chromium of an older Playwright does not start on newer macOS. Click **Set Up Playwright** again: it updates Playwright and checks that its Chromium starts (downloading it again if needed). Web steps also fall back to an installed Google Chrome or Edge. |
 | `net::ERR_CERT_AUTHORITY_INVALID` | Tick **Self-signed certificate OK**. |
 | *Timeout 30000ms exceeded* waiting for a target | The target does not match: check the spelling, use `text=`/`role=`, or the element is in a frame (`frame=… >>`) or another tab (`tab last`). |
 | A click does nothing | Something covers it (cookie banner, overlay): click that away first, or `wait_gone` it. |

@@ -408,7 +408,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                         @for (s of listOf(d, ph.k); track $index; let i = $index; let lastI = $last) {
                           <div class="ed">
                             <div class="row"><b class="num">{{ i + 1 }}</b>
-                              @if (s.run) { <input class="ses" [(ngModel)]="s.run.session" placeholder="session" aria-label="Session" /><input class="cmdi" [(ngModel)]="s.run.command" placeholder="command" aria-label="Command" (contextmenu)="varMenu($event, s)" title="Select a part (a port, a VLAN…) and right-click: Make a Variable" /> }
+                              @if (s.run) { <input class="ses" [(ngModel)]="s.run.session" placeholder="session" aria-label="Session" /><input class="cmdi" [(ngModel)]="s.run.command" placeholder="command" aria-label="Command" (contextmenu)="varMenu($event, s)" title="Right-click: insert a variable ({{ '{{' }}port1{{ '}}' }}…), or select a part and make it a variable" /> }
                               @else if (s.http) { <input class="ses" [(ngModel)]="s.http.session" placeholder="API session (or a full URL)" aria-label="API session" /><select [(ngModel)]="s.http.method" aria-label="Method">@for (m of methods; track m) { <option [value]="m">{{ m }}</option> }</select><input class="cmdi" [(ngModel)]="s.http.url" placeholder="URL or /path" aria-label="URL" /> }
                               @else if (s.manual) { <span class="mut">manual</span><input class="cmdi" [(ngModel)]="s.manual.instruction" placeholder="what the person does or checks" aria-label="Instruction" /> }
                               @else if (s.upgrade) { <span class="mut">upgrade</span><input class="ses" [(ngModel)]="s.upgrade.session" placeholder="session" aria-label="Session" /><input class="cmdi" [(ngModel)]="s.upgrade.image" placeholder="image file or URL" aria-label="Image" /> }
@@ -503,10 +503,10 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                                 @if (s.sample) { <label><input type="number" min="2" class="num2" [(ngModel)]="s.sample.count" /> times, every <input type="number" min="0" class="num2" [(ngModel)]="s.sample.interval" /> s</label> } }
                               @if (s.run) { <label title="Do not fail the step when the device answers with an error message"><input type="checkbox" [(ngModel)]="s.ignoreErrors" /> Ignore device errors</label>
                                 <label title="Turn the output into a table with a TextFSM template: auto (templates/index) or a file in templates/">Parse <input class="pin" [(ngModel)]="s.run.parse" placeholder="off" list="tw-parse" /></label> }</div>
-                            <div class="chips">@for (e of s.expect ?? []; track $index; let j = $index) { <span class="chip">{{ label(e) }} <button type="button" class="x" (click)="removeCheck(s, j)" title="Remove the check">×</button></span> }
+                            <div class="chips">@for (e of s.expect ?? []; track $index; let j = $index) { <span class="chip"><button type="button" class="lnk ckedit" (click)="editCheck(s, j, ck(ph.k, i))" title="Change the check (it moves to the box on the right; + Check puts it back)">{{ label(e) }}</button> <button type="button" class="x" (click)="removeCheck(s, j)" title="Remove the check">×</button></span> }
                               @if (!s.loop && !s.manual && ck(ph.k, i); as c) {
                                 <span class="addck"><select [(ngModel)]="c.k" aria-label="Check">@for (k of checkKinds(s); track k.k) { <option [value]="k.k">{{ k.l }}</option> }</select>
-                                  <input [(ngModel)]="c.v" [placeholder]="checkHint(c.k)" aria-label="Value" (keydown.enter)="addCheck(s, c)" /><button type="button" (click)="addCheck(s, c)" [disabled]="!c.v.trim()">+ Check</button></span>
+                                  <input [(ngModel)]="c.v" [placeholder]="checkHint(c.k)" aria-label="Value" (keydown.enter)="addCheck(s, c)" (contextmenu)="varMenu($event, s)" title="Right-click: insert a variable" /><button type="button" (click)="addCheck(s, c)" [disabled]="!c.v.trim()">+ Check</button></span>
                               }</div>
                             } @else { <div class="row opts"><label><input type="checkbox" [(ngModel)]="s.continueOnFail" /> Go on when it fails</label><label title="Run the procedure only when this holds">If <input class="pin" [(ngModel)]="s.if" placeholder="always" /></label><span class="mut">The procedure's own steps have their checks.</span></div> }
                           </div>
@@ -926,6 +926,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
     .rdev .row { display: flex; gap: 8px; align-items: center; min-width: 0; } .rdev select { flex: 1; min-width: 0; } .rdev select.miss { border-color: #d29922; } .rdev .pc { font-size: 12px; }
     .pg4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; } .pg4 label { display: flex; flex-direction: column; gap: 2px; font-size: 10.5px; color: var(--muted); min-width: 0; } .pg4 input { width: 100%; min-width: 0; font-family: var(--mono, monospace); color: var(--muted); } .pg4 input.set { color: inherit; border-color: var(--accent); }
     .rmap .row { display: flex; gap: 6px; align-items: center; } .rmap code { max-width: 45%; } .rmap select { flex: 1; min-width: 0; } .rmap select.miss { border-color: #d29922; }
+    .ckedit { color: inherit; padding: 0; font: inherit; cursor: text; } .ckedit:hover { text-decoration: underline dotted; }
     .tcard { border: 1px solid var(--border); border-radius: 8px; margin: 8px 0 12px; background: color-mix(in srgb, var(--bg) 60%, transparent); }
     .tch { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 13px; } .tcard.val .tch { border: 0; }
     .tch .mono, .vals .mono, .pg .mono { font-family: var(--mono, monospace); font-size: 12px; } .tg { font-size: 11px; border: 1px solid var(--border); border-radius: 10px; padding: 1px 7px; color: var(--muted); white-space: nowrap; }
@@ -1633,9 +1634,68 @@ export class TestsView implements OnInit, OnDestroy {
   varMenu(ev: MouseEvent, s: TestStep) {
     const el = ev.target as HTMLInputElement;
     const text = (el.value ?? '').slice(el.selectionStart ?? 0, el.selectionEnd ?? 0).trim();
-    if (!text || text.includes('{{')) return;
     ev.preventDefault();
-    this.ui.showMenu(ev, [{ label: tr('Make a Variable from "{0}"…', text.length > 30 ? text.slice(0, 30) + '…' : text), action: () => void this.makeVar(s, text) }]);
+    const put = (name: string) => {
+      let a = el.selectionStart ?? el.value.length, b = el.selectionEnd ?? a;
+      const open = el.value.lastIndexOf('{{', a - 1), close = el.value.lastIndexOf('}}', a - 1);
+      if (a === b && open > close) { const end = el.value.indexOf('}}', a); if (end >= 0) a = b = end + 2; } // not inside another {{…}}
+      el.focus(); el.setRangeText('{{' + name + '}}', a, b, 'end');
+      el.dispatchEvent(new Event('input', { bubbles: true })); this.touch();
+    };
+    const items: { label?: string; action?: () => void; separator?: boolean; disabled?: boolean; hint?: string; icon?: string }[] = [];
+    if (text && !text.includes('{{')) items.push({ label: tr('Make a Variable from "{0}"…', text.length > 30 ? text.slice(0, 30) + '…' : text), icon: 'add', action: () => void this.makeVar(s, text) }, { separator: true });
+    const vs = this.varChoices();
+    if (vs.length) items.push({ label: tr('Insert a variable:'), disabled: true, icon: '' });
+    for (const v of vs) items.push({ label: '{{' + v.name + '}}', hint: v.value, icon: '', action: () => put(v.name) });
+    items.push({ separator: true }, { label: tr('New Variable…'), icon: 'add', action: () => void this.newVar(put) });
+    this.ui.showMenu(ev, items);
+  }
+  /** The variables a step can use: the test's own, and each device's ports and facts. */
+  varChoices(): { name: string; value: string }[] {
+    const d = this.draft(); if (!d) return [];
+    const roles = this.testRoles(d), out: { name: string; value: string }[] = [];
+    for (const [k, v] of Object.entries(d.vars ?? {})) if (!roles.includes(k)) out.push({ name: k, value: v });
+    for (const r of roles) {
+      const pre = roles.length === 1 ? '' : r + '.', ps = this.rolePorts()[r] ?? [];
+      ps.forEach((p, i) => out.push({ name: pre + 'port' + (i + 1), value: p }));
+      if (ps.length) out.push({ name: pre + 'ports', value: tr('all ports') });
+      out.push({ name: r + '.device_type', value: '' }, { name: r + '.host', value: '' });
+    }
+    return out;
+  }
+  /** The test's device roles: variables used as a step's session ({{role}}) that are saved sessions. */
+  testRoles(d: TestCase) {
+    const out: string[] = [];
+    for (const st of [...(d.setup ?? []), ...(d.steps ?? []), ...(d.cleanup ?? [])]) {
+      const m = /^\{\{\s*([\w-]+)\s*\}\}$/.exec(st.run?.session ?? st.snmp?.session ?? '');
+      if (m && d.vars?.[m[1]] && !out.includes(m[1])) out.push(m[1]);
+    }
+    return out;
+  }
+  readonly rolePorts = signal<Record<string, string[]>>({});
+  private async loadRolePorts(d: TestCase) {
+    const m: Record<string, string[]> = {};
+    for (const r of this.testRoles(d)) m[r] = await this.backend.testsPorts(d.vars![r]).catch(() => []) ?? [];
+    this.rolePorts.set(m);
+  }
+  async newVar(put: (name: string) => void) {
+    const d = this.draft(); if (!d) return;
+    const kv = (await this.ui.input(tr('New Variable'), tr('name = value, e.g. vlan = 1000. The value is the default; a testbed or the Run panel can change it.'), ''))?.trim();
+    if (!kv) return;
+    const i = kv.indexOf('='), name = (i > 0 ? kv.slice(0, i) : kv).trim(), value = i > 0 ? kv.slice(i + 1).trim() : '';
+    if (!/^[A-Za-z_][\w.-]*$/.test(name)) { this.ui.toast(tr('A name is letters, digits, _ and .'), 'error'); return; }
+    d.vars = { ...(d.vars ?? {}), [name]: value };
+    put(name);
+  }
+  /** Moves a check into the box where checks are added, to change it. */
+  editCheck(s: TestStep, j: number, c: { k: string; v: string }) {
+    const e = s.expect?.[j]; if (!e) return;
+    const simple: [keyof TestExpect, string][] = [['contains', 'contains'], ['notContains', 'notContains'], ['matches', 'matches']];
+    for (const [k, kind] of simple) {
+      if (typeof e[k] === 'string' && Object.keys(e).length === 1) { c.k = kind; c.v = e[k] as string; s.expect!.splice(j, 1); this.touch(); return; }
+    }
+    if (e.status !== undefined && Object.keys(e).length === 1) { c.k = 'status'; c.v = String(e.status); s.expect!.splice(j, 1); this.touch(); return; }
+    this.ui.toast(tr('This check is changed in the YAML (Code tab) - or remove it and add it again'), 'info');
   }
   async makeVar(s: TestStep, text: string) {
     const d = this.draft(); if (!d) return;
@@ -1975,7 +2035,7 @@ export class TestsView implements OnInit, OnDestroy {
     try { await this.backend.testRemove(f); this.picked.update(l => l.filter(x => x !== f)); this.sel.set(''); this.draft.set(null); await this.load(); }
     catch (e) { this.ui.toast(errText(e), 'error'); }
   }
-  edit() { void this.loadBlocks(); const t = this.test(); if (t) { this.cks.clear(); const d = structuredClone({ ...t, setup: t.setup ?? [], steps: t.steps ?? [], cleanup: t.cleanup ?? [] }); for (const x of [...d.setup, ...d.steps, ...d.cleanup]) if (x.http) x.http.method ||= 'GET'; this.draft.set(d); } }
+  edit() { void this.loadBlocks(); const t = this.test(); if (t) { void this.loadRolePorts(t); this.cks.clear(); const d = structuredClone({ ...t, setup: t.setup ?? [], steps: t.steps ?? [], cleanup: t.cleanup ?? [] }); for (const x of [...d.setup, ...d.steps, ...d.cleanup]) if (x.http) x.http.method ||= 'GET'; this.draft.set(d); } }
   listOf(d: TestCase, p: Phase): TestStep[] { return (p === 'steps' ? d.steps : p === 'setup' ? d.setup : d.cleanup) ?? []; }
   touch() { const d = this.draft(); if (d) this.draft.set({ ...d }); this.cks.clear(); }
   addStep(p: Phase) {

@@ -128,6 +128,12 @@ testbed has **port variables**, and tests use those instead of numbers:
   stack) become `{{role.port1}}`, `{{role.port2}}` … in the commands and checks. For older tests:
   ⋯ → **Use Port Variables**. Plain numbers are only taken after `port`/`ports` in a command, so a VLAN tag
   is never mistaken for a port.
+- **One device, short names**: a test with one device uses `{{port1}}` … `{{port8}}` and `{{ports}}`; with
+  several, `{{core.port1}}`, `{{access.port1}}`. (Type two braces: `{port1}` is plain text - ⋯ → **Use Port
+  Variables** also mends those.)
+- **Insert, don't type**: right-click a command or the check box → the variables the step can use, with
+  their values (`{{port1}}  1:2`), and **New Variable…** (name = value). Click a check to change it: it moves
+  to the box on the right; **+ Check** puts it back.
 - **Each testbed sets its own**: a testbed shows each device as a card with its **Test ports** - grey
   boxes are the defaults of the device type, blue ones are set in the testbed. Type `1:11` in port1 and it
   is used from then on; **Reset** goes back. **＋ / −** add or remove ports (8 by default) - e.g. 48 for a

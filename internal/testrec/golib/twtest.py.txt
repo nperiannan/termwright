@@ -130,7 +130,8 @@ def _add_ports(v, explicit):
         inv = twlocal.inventory()
     except Exception:
         return
-    for k in [k for k in v if "." not in k]:
+    with_ports = []
+    for k in sorted(k for k in v if "." not in k):
         d = inv.get(v[k])
         if not d:
             continue
@@ -150,6 +151,14 @@ def _add_ports(v, explicit):
                 all_.append(v[key])
         if all_ and k + ".ports" not in explicit:
             v[k + ".ports"] = ",".join(all_)
+        if all_:
+            with_ports.append(k)
+    if len(with_ports) == 1:  # one device: {{port1}} ... and {{ports}} are its ports too
+        k = with_ports[0]
+        for key in list(v):
+            p = key[len(k) + 1:]
+            if key.startswith(k + ".") and (p == "ports" or (p.startswith("port") and p[4:].isdigit())) and p not in explicit:
+                v[p] = v[key]
 
 
 class _Fatal(Exception):

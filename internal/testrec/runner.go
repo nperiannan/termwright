@@ -1264,6 +1264,8 @@ func addFacts(d Driver, v, explicit map[string]string) {
 	for k := range v {
 		keys = append(keys, k)
 	}
+	sort.Strings(keys)
+	var withPorts []string
 	for _, k := range keys {
 		x := v[k]
 		if strings.Contains(k, ".") || x == "" || strings.Contains(x, "{{") {
@@ -1279,5 +1281,22 @@ func addFacts(d Driver, v, explicit map[string]string) {
 			}
 		}
 		addPorts(k, v, explicit)
+		if v[k+".port1"] != "" {
+			withPorts = append(withPorts, k)
+		}
+	}
+	if len(withPorts) == 1 { // one device: {{port1}} … and {{ports}} are its ports too
+		aliasPorts(withPorts[0], v, explicit)
+	}
+}
+
+// aliasPorts makes a role's port variables also {{port1}}…, {{ports}} (a test with one device).
+func aliasPorts(k string, v, explicit map[string]string) {
+	for key, x := range v {
+		if p, ok := strings.CutPrefix(key, k+"."); ok && (p == "ports" || strings.HasPrefix(p, "port") && strings.Trim(p[4:], "0123456789") == "" && p != "port") {
+			if explicit[p] == "" {
+				v[p] = x
+			}
+		}
 	}
 }

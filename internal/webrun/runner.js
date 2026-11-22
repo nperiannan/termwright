@@ -30,7 +30,12 @@ function viewport(v) {
 
 async function context(req, w, show) {
   const type = { firefox, webkit }[w.browser] || chromium;
-  const browser = await type.launch({ headless: !show });
+  let browser;
+  try { browser = await type.launch({ headless: !show }); }
+  catch (e) { // Playwright's own browser does not start (e.g. a broken download): the installed Google Chrome or Edge
+    if (type !== chromium) throw e;
+    browser = await chromium.launch({ headless: !show, channel: 'chrome' }).catch(() => chromium.launch({ headless: !show, channel: 'msedge' })).catch(() => { throw e; });
+  }
   const opts = { ignoreHTTPSErrors: !!w.insecure, viewport: viewport(w.viewport) };
   if (req.httpUser) opts.httpCredentials = { username: req.httpUser, password: req.httpPassword || '' };
   const statePath = w.state && req.stateDir ? path.join(req.stateDir, w.state.replace(/[^\w.-]+/g, '_') + '.json') : '';

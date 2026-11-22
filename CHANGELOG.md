@@ -4,6 +4,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Variables in the editor**: right-click a command or a check's box to insert a variable (the test's own, and each device's ports and facts, with their values) or make a **New Variable…**; click a check to change it. A test with one device uses `{{port1}}`… and `{{ports}}` (several devices: `{{role.port1}}`); **Use Port Variables** also mends `{port1}` typed with one brace.
+- **Playwright 1.64**: Set Up updates an older Playwright, checks that its Chromium starts and downloads it again when it does not (macOS *spawn Unknown system error -88*); when Chromium still does not start, web steps use the installed Google Chrome or Edge.
+
 - **Port variables**: every device of a testbed has port1…port8 (more or fewer with ＋/−) and `{{role.ports}}` - by default EXOS standalone 2-9, EXOS stack 1:2-1:9 (the first operational slot, going on to the next slot), VOSS 1/1-1/8. Stacks and their slots are read from `show switch` and `show slot`. A saved recording's port numbers become `{{role.port1}}`…; older tests: ⋯ → **Use Port Variables**. Testbeds show each device as a card with its ports (defaults grey, set ones blue), other values and Rename; the Run panel shows each device of the test with where it runs and its ports. twrun and exported Python and Go suites give the same defaults.
 
 - **Values per device**: select part of a command (a port such as `1:2`) and right-click → **Make a Variable** - it becomes `{{role.port}}` in every command and check of the test, with its default. Testbeds set it per device (**+ Value** on each device; `role: {session: …, port: …}` in the YAML) and show the values the tests use that a device does not set. Every session role also has `{{role.device_type}}`, `.host`, `.model`, `.version` and `.name`, so steps can say **If** `{{dut.device_type}} == VOSS`. Roles can be renamed in the testbed.

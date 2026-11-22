@@ -1040,7 +1040,7 @@ func addPorts(v map[string]string, explicit map[string]bool) {
 	if DeviceFacts == nil {
 		return
 	}
-	var roles []string
+	var roles, withPorts []string
 	for k := range v {
 		if !strings.Contains(k, ".") {
 			roles = append(roles, k)
@@ -1073,6 +1073,17 @@ func addPorts(v map[string]string, explicit map[string]bool) {
 		}
 		if !explicit[k+".ports"] && len(all) > 0 {
 			v[k+".ports"] = strings.Join(all, ",")
+		}
+		if len(all) > 0 {
+			withPorts = append(withPorts, k)
+		}
+	}
+	if len(withPorts) == 1 { // one device: {{port1}} … and {{ports}} are its ports too
+		k := withPorts[0]
+		for key, x := range v {
+			if p, ok := strings.CutPrefix(key, k+"."); ok && (p == "ports" || strings.HasPrefix(p, "port") && len(p) > 4 && strings.Trim(p[4:], "0123456789") == "") && !explicit[p] {
+				v[p] = x
+			}
 		}
 	}
 }

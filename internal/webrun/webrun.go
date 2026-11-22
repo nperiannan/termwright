@@ -21,8 +21,30 @@ import (
 //go:embed runner.js
 var runnerJS []byte
 
+// minPlaywright: an installed Playwright older than this is set up again (its browsers may not start on
+// newer systems).
+const minPlaywright = "1.55.0"
+
+// older says whether version a is older than b (x.y.z).
+func older(a, b string) bool {
+	pa, pb := strings.Split(a, "."), strings.Split(b, ".")
+	for i := 0; i < 3; i++ {
+		var x, y int
+		if i < len(pa) {
+			fmt.Sscanf(pa[i], "%d", &x)
+		}
+		if i < len(pb) {
+			fmt.Sscanf(pb[i], "%d", &y)
+		}
+		if x != y {
+			return x < y
+		}
+	}
+	return false
+}
+
 // PlaywrightVersion is the version installed by Setup.
-const PlaywrightVersion = "1.48.2"
+const PlaywrightVersion = "1.64.1"
 
 // Status says whether web steps can run.
 type Status struct {
@@ -82,6 +104,14 @@ func (r Runner) Status() Status {
 		st.Version = strings.TrimSpace(string(b))
 	}
 	st.Ready = fileExists(filepath.Join(r.Dir, "node_modules", "playwright", "package.json"))
+	if st.Ready { // an older Playwright: its Chromium may not start on newer systems (macOS: spawn error -88)
+		var pj struct{ Version string }
+		if b, err := os.ReadFile(filepath.Join(r.Dir, "node_modules", "playwright", "package.json")); err == nil && json.Unmarshal(b, &pj) == nil && older(pj.Version, minPlaywright) {
+			st.Ready = false
+			st.Hint = "Set Up updates Playwright " + pj.Version + " to " + PlaywrightVersion + " and its Chromium."
+			return st
+		}
+	}
 	if !st.Ready {
 		st.Hint = "Set Up installs Playwright " + PlaywrightVersion + " and its Chromium in " + r.Dir + " (about 150 MB)."
 	}
@@ -125,10 +155,48 @@ func (r Runner) Setup(ctx context.Context, log func(string)) error {
 	if log != nil {
 		log("playwright install chromium")
 	}
-	if err := run(node, filepath.Join(r.Dir, "node_modules", "playwright", "cli.js"), "install", "chromium"); err != nil {
+	cli := filepath.Join(r.Dir, "node_modules", "playwright", "cli.js")
+	if err := run(node, cli, "install", "chromium"); err != nil {
 		return fmt.Errorf("playwright install chromium: %v", err)
 	}
+	// check that the browser starts; a broken download is fetched again
+	check := func() error {
+		c := exec.CommandContext(ctx, node, "-e", checkJS)
+		c.Dir, c.Env = r.Dir, r.env(node)
+		out, err := c.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("%s", strings.TrimSpace(firstLine(string(out))))
+		}
+		return nil
+	}
+	if log != nil {
+		log("checking that Chromium starts")
+	}
+	if err := check(); err != nil {
+		if log != nil {
+			log("Chromium did not start (" + err.Error() + "): downloading it again")
+		}
+		if err := run(node, cli, "install", "--force", "chromium"); err != nil {
+			return fmt.Errorf("playwright install chromium: %v", err)
+		}
+		if err := check(); err != nil {
+			return fmt.Errorf("Chromium does not start on this computer: %v. Web steps then use Google Chrome when it is installed", err)
+		}
+	}
+	if log != nil {
+		log("Chromium starts: ready")
+	}
 	return nil
+}
+
+// checkJS starts and closes a hidden Chromium.
+const checkJS = `require('playwright').chromium.launch().then(b => b.close()).then(() => process.exit(0), e => { console.error(String(e.message || e).split('\n')[0]); process.exit(1); })`
+
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
 }
 
 type line struct {

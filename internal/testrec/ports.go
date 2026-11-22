@@ -104,11 +104,26 @@ var (
 	portList = regexp.MustCompile(`(?i)\b(ports?)(\s+)([\d,\- ]*\d)`)
 )
 
+var singleBrace = regexp.MustCompile(`\{+((?:[\w-]+\.)?ports?\d*)\}+`)
+
+// fixBraces turns {port1} (one brace, as people type it) into {{port1}}.
+func fixBraces(s string) (string, int) {
+	n := 0
+	out := singleBrace.ReplaceAllStringFunc(s, func(m string) string {
+		if strings.HasPrefix(m, "{{") && strings.HasSuffix(m, "}}") {
+			return m
+		}
+		n++
+		return "{{" + strings.Trim(m, "{}") + "}}"
+	})
+	return out, n
+}
+
 func isPortEdge(b byte) bool {
 	return b >= '0' && b <= '9' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b == '_' || b == ':' || b == '/' || b == '.'
 }
 
-// replacePorts puts {{role.portN}} for the device's ports in s: slot:port and slot/port anywhere, plain
+// replacePorts puts {{<prefix>portN}} (prefix "role." or "" for a test with one device) for the device's ports in s: slot:port and slot/port anywhere, plain
 // port numbers (a standalone switch) only in commands, after "port" or "ports".
 func replacePorts(s, role string, ports []string, command bool) (string, int) {
 	idx := map[string]int{}
@@ -129,7 +144,7 @@ func replacePorts(s, role string, ports []string, command bool) (string, int) {
 				continue
 			}
 			b.WriteString(txt[last:m[0]])
-			b.WriteString("{{" + role + ".port" + strconv.Itoa(k) + "}}")
+			b.WriteString("{{" + role + "port" + strconv.Itoa(k) + "}}")
 			last, n = m[1], n+1
 		}
 		b.WriteString(txt[last:])
@@ -149,10 +164,36 @@ func replacePorts(s, role string, ports []string, command bool) (string, int) {
 
 // UsePortVars replaces a test's port numbers by its devices' port variables: for each step on a device role
 // ({{role}}), the ports of that device (ports gives them for its saved session: port1…port8, e.g. 1:2…1:9)
-// become {{role.port1}}… in the command and the checks. It returns how many it replaced.
+// become {{role.port1}}… in the command and the checks - {{port1}}… when the test has one device. It
+// returns how many it replaced.
 func UsePortVars(c Case, ports func(session string) []string) (Case, int) {
 	cache := map[string][]string{}
 	total := 0
+	roleOf := func(st *Step) string {
+		if st.Run == nil {
+			return ""
+		}
+		m := varRef.FindStringSubmatch(strings.TrimSpace(st.Run.Session))
+		if m == nil || m[0] != strings.TrimSpace(st.Run.Session) {
+			return ""
+		}
+		return m[1]
+	}
+	roles := map[string]bool{}
+	var count func(l []Step)
+	count = func(l []Step) {
+		for i := range l {
+			if l[i].Loop != nil {
+				count(l[i].Loop.Steps)
+			}
+			if r := roleOf(&l[i]); r != "" && c.Vars[r] != "" && len(ports(c.Vars[r])) > 0 {
+				roles[r] = true
+			}
+		}
+	}
+	count(c.Setup)
+	count(c.Steps)
+	count(c.Cleanup)
 	var walk func(l []Step)
 	walk = func(l []Step) {
 		for i := range l {
@@ -160,14 +201,14 @@ func UsePortVars(c Case, ports func(session string) []string) (Case, int) {
 			if st.Loop != nil {
 				walk(st.Loop.Steps)
 			}
-			if st.Run == nil {
+			role := roleOf(st)
+			if role == "" {
 				continue
 			}
-			m := varRef.FindStringSubmatch(strings.TrimSpace(st.Run.Session))
-			if m == nil || m[0] != strings.TrimSpace(st.Run.Session) {
-				continue
+			prefix := role + "."
+			if len(roles) == 1 { // one device: {{port1}}
+				prefix = ""
 			}
-			role := m[1]
 			ps, ok := cache[role]
 			if !ok {
 				if sess := c.Vars[role]; sess != "" {
@@ -179,13 +220,17 @@ func UsePortVars(c Case, ports func(session string) []string) (Case, int) {
 				continue
 			}
 			var n int
-			st.Run.Command, n = replacePorts(st.Run.Command, role, ps, true)
+			st.Run.Command, n = fixBraces(st.Run.Command)
+			total += n
+			st.Run.Command, n = replacePorts(st.Run.Command, prefix, ps, true)
 			total += n
 			for j := range st.Expect {
 				e := &st.Expect[j]
 				for _, p := range []*string{&e.Contains, &e.NotContains, e.Equals, e.NotEquals} {
 					if p != nil {
-						*p, n = replacePorts(*p, role, ps, false)
+						*p, n = fixBraces(*p)
+						total += n
+						*p, n = replacePorts(*p, prefix, ps, false)
 						total += n
 					}
 				}

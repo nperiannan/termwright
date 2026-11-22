@@ -46,7 +46,7 @@ func (factDrv) Facts(s string) map[string]string {
 func TestFacts(t *testing.T) {
 	v := map[string]string{"dut": "Lab/sw1", "dut.device_type": "kept", "x": "Lab/sw1"}
 	addFacts(factDrv{&fake{}}, v, nil)
-	if v["dut.device_type"] != "kept" || v["x.device_type"] != "VOSS" {
+	if v["dut.device_type"] != "kept" || v["x.device_type"] != "VOSS" || v["x.port1"] != "1/1" || v["port1"] != "1/1" || v["ports"] == "" {
 		t.Fatal(v)
 	}
 }
@@ -63,6 +63,10 @@ func TestUsePortVars(t *testing.T) {
 		c2.Steps[0].Expect[0].Contains != "Tag: {{stk.port1}}" || c2.Steps[0].Expect[1].Contains != "11:2" || *c2.Steps[0].Expect[2].Equals != "{{stk.port1}}" ||
 		c2.Steps[1].Run.Command != "configure vlan v1 add ports {{sa.port1}}-{{sa.port3}} untagged vlan 2" || c2.Steps[1].Expect[0].Contains != "port 2" {
 		t.Fatalf("%d %+v %+v", n, c2.Steps[0], c2.Steps[1].Run)
+	}
+	one := Case{Vars: map[string]string{"stk": "Lab/stack1"}, Steps: []Step{{Run: &RunStep{Session: "{{stk}}", Command: "configure vlan v1 delete ports 1:2"}, Expect: []Expect{{Contains: "Tag: {port1} {{port2}}"}}}}}
+	if c3, n := UsePortVars(one, ports); n != 2 || c3.Steps[0].Run.Command != "configure vlan v1 delete ports {{port1}}" || c3.Steps[0].Expect[0].Contains != "Tag: {{port1}} {{port2}}" {
+		t.Fatal(c3.Steps[0].Run.Command)
 	}
 	if p := DefaultPorts("VOSS", false, "", 0, ""); p[0] != "1/1" || p[7] != "1/8" {
 		t.Fatal(p)
