@@ -82,12 +82,74 @@ def read_testbed(path, out):
 
 def _vars(base):
     v = dict(base or {})
+    explicit = {}
     if os.environ.get("TW_TESTBED"):
-        read_testbed(os.environ["TW_TESTBED"], v)
+        read_testbed(os.environ["TW_TESTBED"], explicit)
     for k, x in os.environ.items():
         if k.startswith("TW_VAR_"):
-            v[k[7:]] = x
+            explicit[k[7:]] = x
+    v.update(explicit)
+    _add_ports(v, explicit)
     return v
+
+
+def _default_ports(device_type, stack, slot, n, slots):
+    """A device's test ports by default, as Termwright gives them: a VOSS switch slot/1..., an EXOS stack
+    slot:2... (then the next operational slot from port 1), a standalone EXOS switch 2...."""
+    sl, per = [], {}
+    for x in (slots or "").split(","):
+        a, _, b = x.strip().partition(":")
+        if b.isdigit():
+            sl.append(a)
+            per[a] = int(b)
+    slot = slot or (sl[0] if sl else "1")
+    dt = (device_type or "").lower()
+    if "voss" in dt or "fabric engine" in dt:
+        return ["%s/%d" % (slot, i) for i in range(1, n + 1)]
+    if "exos" not in dt and "switch engine" not in dt:
+        return []
+    if not stack:
+        return [str(i + 1) for i in range(1, n + 1)]
+    out, cur, p = [], slot, 2
+    while len(out) < n:
+        if per.get(cur) and p > per[cur]:
+            i = sl.index(cur) if cur in sl else -1
+            if i < 0 or i + 1 >= len(sl):
+                break
+            cur, p = sl[i + 1], 1
+        out.append("%s:%d" % (cur, p))
+        p += 1
+    return out
+
+
+def _add_ports(v, explicit):
+    """{{role.port1}}...{{role.portN}} (N: role.port_count, else 8) and {{role.ports}} for each device role
+    of inventory.yaml, by its device type - unless the testbed or TW_VAR_ sets them."""
+    try:
+        import twlocal
+        inv = twlocal.inventory()
+    except Exception:
+        return
+    for k in [k for k in v if "." not in k]:
+        d = inv.get(v[k])
+        if not d:
+            continue
+        for fk in ("device_type", "host", "slots"):
+            v.setdefault(k + "." + fk, str(d.get(fk) or ""))
+        if d.get("stack"):
+            v.setdefault(k + ".stack", "true")
+        n = int(v.get(k + ".port_count") or 8)
+        ps = _default_ports(v.get(k + ".device_type"), v.get(k + ".stack") == "true" or bool(v.get(k + ".slot")),
+                            v.get(k + ".slot"), n, v.get(k + ".slots"))
+        all_ = []
+        for i in range(1, n + 1):
+            key = "%s.port%d" % (k, i)
+            if key not in explicit and i <= len(ps):
+                v[key] = ps[i - 1]
+            if v.get(key):
+                all_.append(v[key])
+        if all_ and k + ".ports" not in explicit:
+            v[k + ".ports"] = ",".join(all_)
 
 
 class _Fatal(Exception):

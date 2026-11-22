@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 
 	"context"
 	"errors"
@@ -399,6 +400,37 @@ type TestbedDevice struct {
 	// Values: the role's own values ({{role.port}}); Wanted: the ones the tests use that it does not set.
 	Values map[string]string `json:"values,omitempty"`
 	Wanted []string          `json:"wanted,omitempty"`
+	// Ports: port1…port8 - the testbed's when it sets them, else the device type's (Set false).
+	Ports []TestbedPort `json:"ports,omitempty"`
+}
+
+// TestbedPort is one of a device's port variables.
+type TestbedPort struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+	Set   bool   `json:"set,omitempty"`
+}
+
+// portsOf: a device's port1…portN (N: role.port_count, else 8), the role's own values first, else the defaults of its device type.
+func (a *App) portsOf(path, deviceType string, values map[string]string) []TestbedPort {
+	stack := values["stack"] == "true" || values["slot"] != "" || a.isStack(path)
+	count, _ := strconv.Atoi(values["port_count"])
+	if count <= 0 {
+		count = testrec.PortCount
+	}
+	def := testrec.DefaultPorts(deviceType, stack, values["slot"], count, a.slotsOf(path))
+	var out []TestbedPort
+	for i := 1; i <= count; i++ {
+		n := "port" + strconv.Itoa(i)
+		p := TestbedPort{Name: n}
+		if v := values[n]; v != "" {
+			p.Value, p.Set = v, true
+		} else if i <= len(def) {
+			p.Value = def[i-1]
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 // TestbedDevices lists a testbed's roles with their sessions (folder, name, address, device type, model).
@@ -438,8 +470,16 @@ func (a *App) TestbedDevices(file string) ([]TestbedDevice, error) {
 		} else {
 			d.Value = v
 		}
+		if d.Session != "" {
+			d.Ports = a.portsOf(d.Session, d.DeviceType, d.Values)
+			for k := range d.Values {
+				if portVar.MatchString(k) || k == "port_count" || k == "ports" {
+					delete(d.Values, k)
+				}
+			}
+		}
 		for _, k := range used {
-			if r, key, _ := strings.Cut(k, "."); d.Session != "" && (r == role || r == "*") && d.Values[key] == "" && !slices.Contains(d.Wanted, key) {
+			if r, key, _ := strings.Cut(k, "."); d.Session != "" && r == role && d.Values[key] == "" && !portVar.MatchString(key) && !slices.Contains(d.Wanted, key) {
 				d.Wanted = append(d.Wanted, key)
 			}
 		}
@@ -725,6 +765,7 @@ func (a *App) inventoryDevice(path string) (testrec.InventoryDevice, bool) {
 			}
 		}
 	}
+	d.Stack, d.Slots = a.isStack(path), a.slotsOf(path)
 	if s.SNMPVersion != "" || s.SNMPUser != "" {
 		d.SNMPVer, d.SNMPHost, d.SNMPPort, d.SNMPUser, d.SNMPAuth, d.SNMPPriv = s.SNMPVersion, s.SNMPHost, s.SNMPPort, s.SNMPUser, s.SNMPAuth, s.SNMPPriv
 	}
@@ -781,6 +822,8 @@ func (a *App) twrunBinaries(ctx context.Context, goos string) map[string][]byte 
 	}
 	return out
 }
+
+var portVar = regexp.MustCompile(`^port[0-9]+$`)
 
 var roleValueRe = regexp.MustCompile(`\{\{\s*([A-Za-z_][\w-]*)\.([A-Za-z_][\w-]*)\s*\}\}`)
 

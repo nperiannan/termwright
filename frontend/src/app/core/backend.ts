@@ -370,6 +370,8 @@ export class Backend {
   testbedSetValue(file: string, role: string, key: string, value: string) { return this.call<void>('TestbedSetValue', file, role, key, value); }
   testbedRenameRole(file: string, from: string, to: string) { return this.call<void>('TestbedRenameRole', file, from, to); }
   testsRoles(files: string[]) { return this.call<{ role: string; session: string; deviceType?: string }[]>('TestsRoles', files); }
+  testsUsePortVars(c: TestCase) { return this.call<{ case: TestCase; changed: number }>('TestsUsePortVars', c); }
+  testsPorts(session: string) { return this.call<string[]>('TestsPorts', session); }
   testsImage(p: string) { return this.call<string>('TestsImage', p); }
   testsWebBlocks() { return this.call<TestProcInfo[]>('TestsWebBlocks'); }
   testStop() { return this.call<void>('TestStop'); }

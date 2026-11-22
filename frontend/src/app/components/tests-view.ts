@@ -613,19 +613,28 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                   @for (g of tbDevGroups(); track g.folder) {
                     <div class="tbg"><span class="fi"></span>{{ g.folder || 'Other values' }}<span class="mut">{{ g.items.length }}</span></div>
                     @for (d of g.items; track d.role) {
-                      <div class="tbd" [class.val]="!d.session">
-                        <button type="button" class="lnk dr" (click)="renameRole(fp, d.role)" title="Rename the role - tests use {{ '{{' }}{{ d.role }}{{ '}}' }}"><code>{{ d.role }}</code></button>
-                        @if (d.session) { <span class="dn ell" [title]="d.session">{{ d.name }}</span><span class="dh mut">{{ d.host }}</span><span class="dt">{{ d.deviceType || '-' }}</span><span class="dm mut ell">{{ d.model || '' }}</span> }
-                        @else { <span class="dn ell">{{ d.value || '(empty)' }}</span><span class="dh mut">{{ d.value?.includes('/') ? 'not a saved session' : 'value' }}</span><span></span><span></span> }
-                        <button type="button" class="lnk" (click)="removeRole(fp, d.role)" title="Take it out of the testbed">✕</button>
-                      </div>
                       @if (d.session) {
-                        <div class="tbvals">
-                          @for (kv of valuesOf(d); track kv.k) { <button type="button" class="chip" (click)="editValue(fp, d.role, kv.k, kv.v)" [title]="'Tests use {{' + d.role + '.' + kv.k + '}} - click to change'"><code>{{ kv.k }}</code> {{ kv.v }}</button> }
-                          @for (k of d.wanted ?? []; track k) { <button type="button" class="chip want" (click)="editValue(fp, d.role, k, '')" [title]="'The tests use {{' + d.role + '.' + k + '}} - set it for this device (else the default of the test is used)'"><code>{{ k }}</code> not set</button> }
-                          <button type="button" class="lnk" (click)="editValue(fp, d.role, '', '')" title="A value of this device for the tests, e.g. port = 1:2 or 1">+ Value</button>
-                          <span class="mut">also {{ '{{' }}{{ d.role }}.device_type{{ '}}' }}, .host, .model by themselves</span>
+                        <div class="tcard">
+                          <div class="tch"><b class="ell" [title]="d.session">{{ d.name }}</b><span class="mono mut">{{ d.host }}</span>@if (d.deviceType) { <span class="tg">{{ d.deviceType }}</span> }@if (d.model) { <span class="tg">{{ d.model }}</span> }@if (kindOf(d); as k) { <span class="tg">{{ k }}</span> }<span class="sp"></span>
+                            <button type="button" class="ibtn" (click)="removeRole(fp, d.role)" title="Remove this device from the testbed (the saved session stays)"><app-icon name="trash" [size]="13" /></button></div>
+                          <div class="trole">Tests use it as <code>{{ '{{' }}{{ d.role }}{{ '}}' }}</code><button type="button" class="lnk" (click)="renameRole(fp, d.role)" title="Give it the name the tests use, e.g. dut or core">Rename</button><span class="mut">also .device_type .host .model by themselves</span></div>
+                          <div class="tsec">
+                            <div class="th">Test ports <span class="mut" [title]="'Tests use {{' + d.role + '.port1}} … and {{' + d.role + '.ports}} for all of them (a snake test)'">port1 … port{{ d.ports?.length || 0 }}</span><span class="sp"></span><span class="mut">{{ portRule(d) }}</span>
+                              @if (anyPortSet(d)) { <button type="button" class="lnk" (click)="resetPorts(fp, d)" title="Back to the defaults of the device type">Reset</button> }</div>
+                            <div class="pg">
+                              @for (p of d.ports ?? []; track p.name) { <label [title]="p.set ? 'Set in this testbed' : 'The default of the device type - type to change it'"><span>{{ p.name }}</span><input class="mono" [class.set]="p.set" [value]="p.value" (change)="setPort(fp, d, p.name, $any($event.target).value)" /></label> }
+                              <div class="padd"><button type="button" class="ibtn" (click)="portCount(fp, d, 1)" title="Add a port (e.g. for a snake test over all ports)">＋</button><button type="button" class="ibtn" (click)="portCount(fp, d, -1)" [disabled]="(d.ports?.length ?? 0) <= 1" title="Remove the last port">−</button></div>
+                            </div>
+                            <div class="th">Other values <span class="mut">{{ '{{' }}{{ d.role }}.name{{ '}}' }} - e.g. a slot, a VLAN or an uplink of this device</span></div>
+                            <div class="vals">
+                              @for (kv of valuesOf(d); track kv.k) { <code>{{ kv.k }}</code><input class="mono" [value]="kv.v" (change)="setVal(fp, d.role, kv.k, $any($event.target).value)" /><button type="button" class="ibtn" (click)="setVal(fp, d.role, kv.k, '')" title="Remove the value">✕</button> }
+                              @for (k of d.wanted ?? []; track k) { <code title="The tests use it">{{ k }}</code><input class="mono" placeholder="used by the tests - not set (the test's default)" (change)="setVal(fp, d.role, k, $any($event.target).value)" /><span></span> }
+                              <input #nk class="mono" placeholder="name, e.g. slot" /><input #nv class="mono" placeholder="value" (keydown.enter)="addVal(fp, d.role, nk, nv)" /><button type="button" class="ibtn add" (click)="addVal(fp, d.role, nk, nv)" title="Add the value">＋</button>
+                            </div>
+                          </div>
                         </div>
+                      } @else {
+                        <div class="tcard val"><div class="tch"><code>{{ d.role }}</code><span class="mono">{{ d.value || '(empty)' }}</span><span class="mut">{{ d.value?.includes('/') ? 'not a saved session' : 'a value tests use as ' }}{{ d.value?.includes('/') ? '' : '{{' + d.role + '}}' }}</span><span class="sp"></span><button type="button" class="ibtn" (click)="removeRole(fp, d.role)" title="Remove it from the testbed"><app-icon name="trash" [size]="13" /></button></div></div>
                       }
                     }
                   } @empty { <div class="empty mut">No roles yet: + Add Devices.</div> }
@@ -786,16 +795,29 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
           @if (!multi()) {
             <label class="fld"><span>Testbed - which devices</span><select [(ngModel)]="testbed" (ngModelChange)="loadRunMap()">@for (b of tree()?.testbeds ?? []; track b) { <option [value]="b">{{ base(b) }}{{ lockText(b) }}</option> }<option value="">The tests' own sessions</option></select>
               @if (testbed) { <small class="mut">{{ lockOf(testbed) && !lockOf(testbed)!.mine ? '🔒 in use by ' + lockOf(testbed)!.user + ' on ' + lockOf(testbed)!.host + ' - Run takes it over after asking' : '🔒 free - locked to you while the run lasts' }}</small> }</label>
-            @if (testbed && runRoles().length) {
-              <div class="fld rmap"><span>The test's devices on {{ base(testbed) }}</span>
+            @if (runRoles().length) {
+              <div class="fld"><span>Devices of the test</span>
                 @for (r of runRoles(); track r.role) {
-                  <div class="row"><code class="ell" [title]="'{{' + r.role + '}} - ' + r.session">{{ r.role }}</code><span class="mut">→</span>
-                    <select [ngModel]="runMapOf(r.role)" (ngModelChange)="mapRole(r.role, $event)" [class.miss]="!runMapOf(r.role)">
-                      <option value="">its own: {{ r.session.split('/').pop() }}</option>
-                      @for (d of runTbDevs(); track d.role) { @if (d.session) { <option [value]="d.session">{{ d.name }} ({{ d.role }}{{ d.deviceType ? ', ' + d.deviceType : '' }})</option> } }
-                    </select></div>
+                  @let ps = runPortsOf(r.role);
+                  <div class="rdev">
+                    <code class="rr">{{ '{{' }}{{ r.role }}{{ '}}' }}</code>
+                    <div class="row"><span class="mut">Runs on</span>
+                      @if (testbed) {
+                        <select [ngModel]="runMapOf(r.role)" (ngModelChange)="mapRole(r.role, $event)" [class.miss]="!runMapOf(r.role)" title="A device of the testbed; it is added to the testbed under the test's name">
+                          <option value="">its own session: {{ r.session.split('/').pop() }}</option>
+                          @for (d of runTbDevs(); track d.role) { @if (d.session) { <option [value]="d.session">{{ d.name }}{{ d.deviceType ? ' (' + d.deviceType + (kindOf(d) ? ' ' + kindOf(d) : '') + ')' : '' }}</option> } }
+                        </select>
+                      } @else { <span class="ell">{{ r.session }}</span> }
+                    </div>
+                    @if (ps.length) {
+                      <div class="row pc"><span class="mut ell">Ports {{ portsLine(ps) }}</span><span class="sp"></span><button type="button" class="lnk" (click)="togglePorts(r.role)">{{ portsOpen().has(r.role) ? 'Done' : 'Change' }}</button></div>
+                      @if (portsOpen().has(r.role)) {
+                        <div class="pg4">@for (p of ps; track p.name) { <label><span>{{ p.name }}</span><input class="mono" [class.set]="p.set" [value]="p.value" (change)="setRunPort(r.role, p.name, $any($event.target).value)" /></label> }</div>
+                        <small class="mut">{{ testbed && runMapOf(r.role) ? 'Changes are saved in the testbed (more ports: the testbed page).' : 'Changes are for this run.' }}</small>
+                      }
+                    }
+                  </div>
                 }
-                <small class="mut">A test's device not in the testbed runs on its own session. Choosing a device here adds it to the testbed under the test's name.</small>
               </div>
             }
             @if ((tree()?.testbeds?.length ?? 0) > 1) { <button type="button" class="lnk sm" (click)="multi.set(true); multiPick = testbed ? [testbed] : []">Run on several testbeds at the same time…</button> }
@@ -897,13 +919,26 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
     .wn { min-width: 22px; text-align: right; }
     .mdlg.tbdlg { width: min(1180px, 96vw); height: min(84vh, 820px); } .tbcols { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px 1fr; gap: 12px; } .tbcol { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
     .tbcol .fpick { flex: 1; max-height: none; } .tbbar { gap: 6px; } .tbname { display: flex !important; flex-direction: row !important; align-items: center; gap: 8px; max-width: 380px; } .tbname span { white-space: nowrap; }
-    .dg, .tbg { display: flex; align-items: center; gap: 8px; padding: 7px 10px 4px; font-weight: 600; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .tbg { color: var(--text); font-size: 12.5px; padding-top: 12px; } .tbg .mut { font-weight: 400; }
+    .dg, .tbg { display: flex; align-items: center; gap: 8px; padding: 7px 10px 4px; font-weight: 600; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .tbg { color: var(--text); font-size: 12.5px; padding: 12px 0 2px; } .tbg .mut { font-weight: 400; }
     .dv, .tbd { display: grid; grid-template-columns: 18px minmax(120px, 1.4fr) 120px 90px minmax(80px, 1fr) minmax(110px, auto); align-items: center; gap: 10px; padding: 5px 10px 5px 28px; font-size: 12.5px; border-radius: 6px; cursor: pointer; }
+    .pgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; } .pgrid label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--muted); } .pgrid input { width: 100%; font-family: var(--mono, monospace); } .pgrid label.set input { border-color: var(--accent); }
+    .rdev { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 6px 0; display: flex; flex-direction: column; gap: 6px; } .rdev .rr { font-size: 11.5px; color: var(--accent); word-break: break-all; }
+    .rdev .row { display: flex; gap: 8px; align-items: center; min-width: 0; } .rdev select { flex: 1; min-width: 0; } .rdev select.miss { border-color: #d29922; } .rdev .pc { font-size: 12px; }
+    .pg4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; } .pg4 label { display: flex; flex-direction: column; gap: 2px; font-size: 10.5px; color: var(--muted); min-width: 0; } .pg4 input { width: 100%; min-width: 0; font-family: var(--mono, monospace); color: var(--muted); } .pg4 input.set { color: inherit; border-color: var(--accent); }
     .rmap .row { display: flex; gap: 6px; align-items: center; } .rmap code { max-width: 45%; } .rmap select { flex: 1; min-width: 0; } .rmap select.miss { border-color: #d29922; }
+    .tcard { border: 1px solid var(--border); border-radius: 8px; margin: 8px 0 12px; background: color-mix(in srgb, var(--bg) 60%, transparent); }
+    .tch { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 13px; } .tcard.val .tch { border: 0; }
+    .tch .mono, .vals .mono, .pg .mono { font-family: var(--mono, monospace); font-size: 12px; } .tg { font-size: 11px; border: 1px solid var(--border); border-radius: 10px; padding: 1px 7px; color: var(--muted); white-space: nowrap; }
+    .ibtn { width: 28px; height: 26px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); } .ibtn.add { color: var(--accent); }
+    .trole { display: flex; align-items: center; gap: 8px; padding: 8px 12px 0; font-size: 12.5px; flex-wrap: wrap; } .trole code { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); border-radius: 4px; padding: 1px 6px; }
+    .tsec { padding: 4px 12px 12px; } .th { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 10px 0 6px; } .th .mut { font-size: 11.5px; }
+    .pg { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; align-items: end; } .pg label { display: flex; flex-direction: column; gap: 2px; font-size: 10.5px; color: var(--muted); min-width: 0; }
+    .pg input { width: 100%; min-width: 0; color: var(--muted); } .pg input.set { color: inherit; border-color: var(--accent); } .padd { display: flex; gap: 4px; }
+    .vals { display: grid; grid-template-columns: minmax(120px, 200px) 1fr 28px; gap: 6px; align-items: center; } .vals code { font-size: 12px; } .vals input { min-width: 0; }
     .tbvals { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 0 10px 8px 46px; font-size: 12px; } .tbvals .chip { border: 1px solid var(--border); background: none; border-radius: 10px; padding: 1px 8px; cursor: pointer; } .tbvals .chip.want { border-style: dashed; color: var(--muted); } button.dr { text-align: left; padding: 0; }
     .tbd { grid-template-columns: minmax(130px, auto) minmax(120px, 1.4fr) 120px 90px minmax(80px, 1fr) 24px; cursor: default; } .dv:hover, .tbd:hover { background: var(--hover); } .dv.on { background: color-mix(in srgb, var(--accent) 12%, transparent); } .dv.had { opacity: .6; }
     .dr { font: 11.5px var(--mono, monospace) !important; color: var(--muted) !important; background: none !important; padding: 0 !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .dt { font-size: 11.5px; } .tbd.val .dn { font-family: var(--mono, monospace); }
-    .tbv { border: 1px solid var(--border); border-radius: 8px; padding: 4px 0 8px; overflow: auto; } .tbvbar { margin-bottom: 8px; gap: 6px; }
+    .tbv { overflow: auto; } .tbvbar { margin-bottom: 8px; gap: 6px; }
     .rc3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .rc3 label { display: flex; flex-direction: column; gap: 3px; } .rc3 small { color: var(--muted); font-size: 11px; } .rc3 input, .rc3 select { width: 100%; }
     .pill.w { background: color-mix(in srgb, var(--warn, #e0a030) 18%, transparent); color: var(--warn, #b07a10); }
     .trbars { display: flex; align-items: flex-end; gap: 4px; height: 120px; padding: 10px 12px; }
@@ -1195,7 +1230,7 @@ export class TestsView implements OnInit, OnDestroy {
     this.busy.set(true);
     try {
       const cleanup = extra.only ? 'off' : this.cleanupMode || undefined;
-      this.took(await this.backend.runTests({ files, testbed: this.testbed || undefined, confirmed, forceLock, onCleanupFail: cleanup === 'off' ? undefined : this.onCleanupFail, cleanup, from: extra.from, only: extra.only, pauseOnFail: this.pauseOnFail, rerun: this.rerun || undefined, caseTimeout: this.caseMin && this.caseMin > 0 ? Math.round(this.caseMin * 60) : undefined, runTimeout: this.runMin && this.runMin > 0 ? Math.round(this.runMin * 60) : undefined, breaks: files.length === 1 ? this.breaksFor(files[0]) : undefined, stepMode: this.stepMode || undefined }));
+      this.took(await this.backend.runTests({ files, testbed: this.testbed || undefined, vars: Object.keys(this.runVars).length ? { ...this.runVars } : undefined, confirmed, forceLock, onCleanupFail: cleanup === 'off' ? undefined : this.onCleanupFail, cleanup, from: extra.from, only: extra.only, pauseOnFail: this.pauseOnFail, rerun: this.rerun || undefined, caseTimeout: this.caseMin && this.caseMin > 0 ? Math.round(this.caseMin * 60) : undefined, runTimeout: this.runMin && this.runMin > 0 ? Math.round(this.runMin * 60) : undefined, breaks: files.length === 1 ? this.breaksFor(files[0]) : undefined, stepMode: this.stepMode || undefined }));
       this.stepMode = false;
       await this.load();
     } catch (e) {
@@ -1583,6 +1618,17 @@ export class TestsView implements OnInit, OnDestroy {
     for (const d of this.tbDevs()) by.set(d.session ? d.folder ?? '' : '', [...(by.get(d.session ? d.folder ?? '' : '') ?? []), d]);
     return [...by.entries()].sort((a, b) => (a[0] === '' ? 1 : b[0] === '' ? -1 : a[0].localeCompare(b[0]))).map(([folder, items]) => ({ folder, items }));
   }
+  /** The test's port numbers (1:2, 2, 1/1…) become its devices' port variables {{role.port1}}…. */
+  async usePortVars() {
+    const d = this.draft(), t = d ?? this.test(); if (!t) return;
+    try {
+      const r = await this.backend.testsUsePortVars(structuredClone(t));
+      if (!r.changed) { this.ui.toast(tr('No port numbers of the devices\' port1…port8 found in the test'), 'info'); return; }
+      if (d) { this.draft.set({ ...r.case, setup: r.case.setup ?? [], steps: r.case.steps ?? [], cleanup: r.case.cleanup ?? [] }); this.touch(); }
+      else await this.saveCase(c => { c.setup = r.case.setup; c.steps = r.case.steps; c.cleanup = r.case.cleanup; });
+      this.ui.toast(tr('{0} port numbers are now port variables ({{role.port1}}…) - each testbed sets its own', r.changed), 'success');
+    } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
   // ---- Make a Variable: a selected part of a command becomes {{name}} everywhere in the test ----
   varMenu(ev: MouseEvent, s: TestStep) {
     const el = ev.target as HTMLInputElement;
@@ -1609,6 +1655,33 @@ export class TestsView implements OnInit, OnDestroy {
     d.vars = { ...(d.vars ?? {}), [name]: text };
     this.touch();
     this.ui.toast(tr('{{{0}}} in {1} places - default "{2}". Set it per device in the testbed.', name, n, text), 'success');
+  }
+  kindOf(d: TestbedDevice) { const p = d.ports?.[0]?.value ?? ''; return /^\d+:\d+$/.test(p) ? 'stack' : /^\d+$/.test(p) && /exos|switch engine/i.test(d.deviceType ?? '') ? 'standalone' : ''; }
+  portRule(d: TestbedDevice) {
+    const dt = (d.deviceType ?? '').toLowerCase(), k = this.kindOf(d);
+    return /voss|fabric/.test(dt) ? 'VOSS: slot/1 … by default' : k === 'stack' ? 'EXOS stack: slot:2 … by default (port 1 left for the uplink)' : k === 'standalone' ? 'EXOS standalone: 2 … by default' : 'no defaults for this device type - type them';
+  }
+  anyPortSet(d: TestbedDevice) { return (d.ports ?? []).some(p => p.set) || !!d.values?.['port_count']; }
+  async tbSet(fp: string, role: string, key: string, value: string) {
+    try { await this.backend.testbedSetValue(fp, role, key, value); } catch (e) { this.ui.toast(errText(e), 'error'); }
+    this.tbDevs.set(await this.backend.testbedDevices(fp).catch(() => []) ?? []);
+  }
+  async setPort(fp: string, d: TestbedDevice, name: string, value: string) {
+    value = value.trim();
+    const def = (await this.backend.testsPorts(d.session!).catch(() => []))[+name.slice(4) - 1] ?? '';
+    await this.tbSet(fp, d.role, name, value === def && +name.slice(4) <= 8 ? '' : value);
+  }
+  async resetPorts(fp: string, d: TestbedDevice) { for (const p of d.ports ?? []) if (p.set) await this.backend.testbedSetValue(fp, d.role, p.name, '').catch(() => {}); await this.tbSet(fp, d.role, 'port_count', ''); }
+  async portCount(fp: string, d: TestbedDevice, by: number) {
+    const n = Math.max(1, (d.ports?.length ?? 8) + by);
+    if (by < 0) await this.backend.testbedSetValue(fp, d.role, 'port' + (n + 1), '').catch(() => {});
+    await this.tbSet(fp, d.role, 'port_count', n === 8 ? '' : String(n));
+  }
+  setVal(fp: string, role: string, k: string, v: string) { void this.tbSet(fp, role, k, v.trim()); }
+  addVal(fp: string, role: string, nk: HTMLInputElement, nv: HTMLInputElement) {
+    const k = nk.value.trim(), v = nv.value.trim();
+    if (!k || !v) { this.ui.toast(tr('Type a name and a value'), 'error'); return; }
+    nk.value = ''; nv.value = ''; void this.tbSet(fp, role, k, v);
   }
   valuesOf(d: TestbedDevice) { return Object.entries(d.values ?? {}).sort().map(([k, v]) => ({ k, v })); }
   async renameRole(fp: string, role: string) {
@@ -1656,6 +1729,7 @@ export class TestsView implements OnInit, OnDestroy {
     this.ui.showMenu(ev, [
       { label: 'Rename…', action: () => void this.rename(false) },
       { label: 'Duplicate…', action: () => void this.rename(true) },
+      { label: 'Use Port Variables (port1…port8)', action: () => void this.usePortVars() },
       { label: 'Make a Procedure from This Test…', action: () => void this.procFromTest() },
       { label: 'Tags…', action: () => void this.editTags() },
       { label: 'Depends On…', action: () => void this.editDeps() },
@@ -1803,10 +1877,40 @@ export class TestsView implements OnInit, OnDestroy {
     let last = ''; try { last = localStorage.getItem('tw.tests.testbed') ?? ''; } catch { /* none */ }
     if (!tbs.includes(this.testbed)) this.testbed = tbs.includes(last) ? last : (tbs[0] ?? '');
     this.runRoles.set([]);
-    if (files.length) void this.backend.testsRoles(files).then(r => this.runRoles.set(r ?? [])).catch(() => {});
+    this.runVars = {}; this.runOwnPorts.set({});
+    if (files.length) void this.backend.testsRoles(files).then(async r => {
+      this.runRoles.set(r ?? []);
+      const m: Record<string, string[]> = {};
+      for (const x of r ?? []) m[x.role] = await this.backend.testsPorts(x.session).catch(() => []) ?? [];
+      this.runOwnPorts.set(m);
+    }).catch(() => {});
     void this.loadRunMap();
   }
   readonly runRoles = signal<{ role: string; session: string; deviceType?: string }[]>([]);
+  readonly runOwnPorts = signal<Record<string, string[]>>({});
+  runVars: Record<string, string> = {};
+  readonly portsOpen = signal(new Set<string>());
+  togglePorts(role: string) { const x = new Set(this.portsOpen()); if (x.has(role)) x.delete(role); else x.add(role); this.portsOpen.set(x); }
+  portsLine(ps: { value: string }[]) { const v = ps.map(p => p.value); return v.length > 4 ? v.slice(0, 3).join(', ') + ' … ' + v[v.length - 1] : v.join(', '); }
+  runDevName(r: { role: string; session: string }) { const d = this.runTbDevs().find(x => x.role === r.role && x.session); return (d?.session ?? r.session).split('/').pop() ?? ''; }
+  runPortsOf(role: string): { name: string; value: string; set?: boolean }[] {
+    const d = this.testbed ? this.runTbDevs().find(x => x.role === role && x.session) : undefined;
+    if (d?.ports?.length) return d.ports.filter(p => p.value || p.set);
+    const def = this.runOwnPorts()[role] ?? [];
+    return def.map((v, i) => { const n = 'port' + (i + 1), o = this.runVars[role + '.' + n]; return { name: n, value: o ?? v, set: o !== undefined }; });
+  }
+  async setRunPort(role: string, name: string, value: string) {
+    value = value.trim();
+    const d = this.testbed ? this.runTbDevs().find(x => x.role === role && x.session) : undefined;
+    if (d) {
+      const def = (await this.backend.testsPorts(d.session!).catch(() => []))[+name.slice(4) - 1] ?? '';
+      try { await this.backend.testbedSetValue(this.testbed, role, name, value === def ? '' : value); } catch (e) { this.ui.toast(errText(e), 'error'); }
+      await this.loadRunMap(); return;
+    }
+    const def = this.runOwnPorts()[role]?.[+name.slice(4) - 1];
+    if (!value || value === def) delete this.runVars[role + '.' + name]; else this.runVars[role + '.' + name] = value;
+    this.runOwnPorts.update(m => ({ ...m }));
+  }
   readonly runTbDevs = signal<TestbedDevice[]>([]);
   async loadRunMap() {
     try { localStorage.setItem('tw.tests.testbed', this.testbed); } catch { /* not kept */ }

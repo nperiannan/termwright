@@ -202,6 +202,16 @@ func ApplyFactRules(rules []session.FactRule, cmds, outs []string) map[string]st
 		if err != nil {
 			continue
 		}
+		if r.All { // every match: "g1:g2,g1:g2"
+			var all []string
+			for _, m := range re.FindAllStringSubmatch(strings.ReplaceAll(outs[i], "\r", ""), -1) {
+				all = append(all, strings.Join(m[1:], ":"))
+			}
+			if len(all) > 0 {
+				got[r.Name] = strings.Join(all, ",")
+			}
+			continue
+		}
 		if m := re.FindStringSubmatch(strings.ReplaceAll(outs[i], "\r", "")); m != nil {
 			v := m[0]
 			if len(m) > 1 { // the first group that matched (a rule may have alternatives, each with its group)

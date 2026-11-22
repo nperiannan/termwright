@@ -648,4 +648,4 @@ export interface WebResult { i: number; ok: boolean; note?: string; error?: stri
 export interface WebPick { target: string; alt?: string[]; text?: string; tag?: string; }
 export interface TestWeb { url?: string; browser?: string; show?: boolean; insecure?: boolean; state?: string; login?: string; viewport?: string; trace?: boolean; pictures?: string; actions?: TestWebAction[]; }
 export interface WebStatus { node?: string; version?: string; ready: boolean; dir: string; hint?: string; }
-export interface TestbedDevice { role: string; session?: string; folder?: string; name?: string; host?: string; deviceType?: string; model?: string; protocol?: string; value?: string; values?: Record<string, string>; wanted?: string[]; }
+export interface TestbedDevice { role: string; session?: string; folder?: string; name?: string; host?: string; deviceType?: string; model?: string; protocol?: string; value?: string; values?: Record<string, string>; wanted?: string[]; ports?: { name: string; value: string; set?: boolean }[]; }

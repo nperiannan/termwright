@@ -185,7 +185,7 @@ func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt 
 	for k, x := range vars {
 		v[k] = x
 	}
-	addFacts(d, v)
+	addFacts(d, v, vars)
 	// restore: save the devices' state first; put it back after the cleanup
 	var restore func(context.Context) []StepResult
 	if len(c.Restore) > 0 {
@@ -1253,8 +1253,9 @@ type Facter interface {
 }
 
 // addFacts gives each variable that is a saved session its facts as {{role.device_type}}, {{role.host}},
-// {{role.model}}, {{role.name}} - unless the test or the testbed sets them.
-func addFacts(d Driver, v map[string]string) {
+// {{role.model}}, {{role.name}} and its ports {{role.port1}}…{{role.port8}} - unless the test, the
+// testbed or the run sets them.
+func addFacts(d Driver, v, explicit map[string]string) {
 	f, ok := d.(Facter)
 	if !ok {
 		return
@@ -1268,10 +1269,15 @@ func addFacts(d Driver, v map[string]string) {
 		if strings.Contains(k, ".") || x == "" || strings.Contains(x, "{{") {
 			continue
 		}
-		for fk, fv := range f.Facts(x) {
+		fs := f.Facts(x)
+		if fs == nil {
+			continue
+		}
+		for fk, fv := range fs {
 			if _, set := v[k+"."+fk]; !set {
 				v[k+"."+fk] = fv
 			}
 		}
+		addPorts(k, v, explicit)
 	}
 }

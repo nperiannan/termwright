@@ -309,5 +309,12 @@ func (d *driver) Facts(session string) map[string]string {
 	if dv.WebURL != "" {
 		h = dv.WebURL
 	}
-	return map[string]string{"device_type": dv.DeviceType, "host": h, "name": session[strings.LastIndex(session, "/")+1:]}
+	out := map[string]string{"device_type": dv.DeviceType, "host": h, "name": session[strings.LastIndex(session, "/")+1:]}
+	if dv.Stack || strings.Contains(strings.ToLower(session), "stack") {
+		out["stack"] = "true"
+	}
+	if dv.Slots != "" {
+		out["slots"] = dv.Slots
+	}
+	return out
 }

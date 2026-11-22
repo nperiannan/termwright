@@ -344,5 +344,54 @@ func (d *testDriver) Facts(path string) map[string]string {
 	if st := d.a.cfg.Get().DeviceFacts[path]; st != nil {
 		out["model"], out["version"] = st["Model"], st["Version"]
 	}
+	if d.a.isStack(path) {
+		out["stack"] = "true"
+	}
+	if sl := d.a.slotsOf(path); sl != "" {
+		out["slots"] = sl
+	}
 	return out
+}
+
+// slotsOf: a stack's operational slots with their port counts ("1:28,2:28"), from show slot.
+func (a *App) slotsOf(path string) string {
+	if st := a.cfg.Get().DeviceFacts[path]; st != nil {
+		return st["Slots"]
+	}
+	return ""
+}
+
+// isStack says whether a saved switch is a stack: its name, folder or model says so.
+func (a *App) isStack(path string) bool {
+	if strings.Contains(strings.ToLower(path), "stack") {
+		return true
+	}
+	if st := a.cfg.Get().DeviceFacts[path]; st != nil {
+		return strings.Contains(strings.ToLower(st["Model"]), "stack") || strings.Contains(st["Slots"], ",")
+	}
+	return false
+}
+
+// TestsPorts are the port variables of a saved session (port1…port8) by default: from its device type
+// and whether it is a stack.
+func (a *App) TestsPorts(path string) []string {
+	s, err := a.store.Get(path)
+	if err != nil {
+		return nil
+	}
+	return testrec.DefaultPorts(s.DeviceType, a.isStack(path), "", 0, a.slotsOf(path))
+}
+
+// TestsUsePortVars replaces a test's port numbers by its devices' port variables ({{role.port1}}…): the
+// ports of a stack (1:2…), a standalone switch (2…) or a VOSS switch (1/1…). It returns the test and how
+// many places changed.
+func (a *App) TestsUsePortVars(c testrec.Case) PortVarsResult {
+	c2, n := testrec.UsePortVars(c, a.TestsPorts)
+	return PortVarsResult{Case: c2, Changed: n}
+}
+
+// PortVarsResult is a test with port variables and how many places changed.
+type PortVarsResult struct {
+	Case    testrec.Case `json:"case"`
+	Changed int          `json:"changed"`
 }

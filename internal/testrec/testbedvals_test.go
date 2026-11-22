@@ -45,8 +45,40 @@ func (factDrv) Facts(s string) map[string]string {
 
 func TestFacts(t *testing.T) {
 	v := map[string]string{"dut": "Lab/sw1", "dut.device_type": "kept", "x": "Lab/sw1"}
-	addFacts(factDrv{&fake{}}, v)
+	addFacts(factDrv{&fake{}}, v, nil)
 	if v["dut.device_type"] != "kept" || v["x.device_type"] != "VOSS" {
+		t.Fatal(v)
+	}
+}
+
+func TestUsePortVars(t *testing.T) {
+	eq := "1:2"
+	c := Case{Vars: map[string]string{"stk": "Lab/stack1", "sa": "Lab/sw2"}, Steps: []Step{
+		{Run: &RunStep{Session: "{{stk}}", Command: "configure vlan v1000 add ports 1:2,1:3 tagged"}, Expect: []Expect{{Contains: "Tag: 1:2"}, {Contains: "11:2"}, {Equals: &eq}}},
+		{Run: &RunStep{Session: "{{sa}}", Command: "configure vlan v1 add ports 2-4 untagged vlan 2"}, Expect: []Expect{{Contains: "port 2"}}},
+	}}
+	ports := func(s string) []string { return DefaultPorts("EXOS", s == "Lab/stack1", "", 0, "") }
+	c2, n := UsePortVars(c, ports)
+	if n != 6 || c2.Steps[0].Run.Command != "configure vlan v1000 add ports {{stk.port1}},{{stk.port2}} tagged" ||
+		c2.Steps[0].Expect[0].Contains != "Tag: {{stk.port1}}" || c2.Steps[0].Expect[1].Contains != "11:2" || *c2.Steps[0].Expect[2].Equals != "{{stk.port1}}" ||
+		c2.Steps[1].Run.Command != "configure vlan v1 add ports {{sa.port1}}-{{sa.port3}} untagged vlan 2" || c2.Steps[1].Expect[0].Contains != "port 2" {
+		t.Fatalf("%d %+v %+v", n, c2.Steps[0], c2.Steps[1].Run)
+	}
+	if p := DefaultPorts("VOSS", false, "", 0, ""); p[0] != "1/1" || p[7] != "1/8" {
+		t.Fatal(p)
+	}
+	if p := DefaultPorts("EXOS", true, "3", 0, ""); p[0] != "3:2" || p[7] != "3:9" {
+		t.Fatal(p)
+	}
+	if p := DefaultPorts("EXOS", true, "", 30, "1:28,2:28,3:28"); len(p) != 30 || p[26] != "1:28" || p[27] != "2:1" || p[29] != "2:3" {
+		t.Fatal(p)
+	}
+	if p := DefaultPorts("EXOS", true, "", 90, "1:28,2:28"); len(p) != 55 {
+		t.Fatal(len(p))
+	}
+	v := map[string]string{"d.device_type": "EXOS", "d.port_count": "3", "d.port2": "x"}
+	addPorts("d", v, map[string]string{"d.port2": "x"})
+	if v["d.port1"] != "2" || v["d.port3"] != "4" || v["d.port4"] != "" || v["d.ports"] != "2,x,4" || v["d.port2"] != "x" {
 		t.Fatal(v)
 	}
 }

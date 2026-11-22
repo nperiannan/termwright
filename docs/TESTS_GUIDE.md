@@ -112,37 +112,45 @@ A **testbed** maps the roles to sessions: the recorder saves sessions as roles (
 
 **Tags** (⋯ → Tags…) group tests across suites; the tag chips filter the list and *Run shown…* runs what is shown. A **plan** (`suites/<name>.yaml`: tests as files, suite folders or other plans, narrowed by tags) is a named set to run together; select tests and **Save as plan…**, then run it from **Plans** at the top of the list. `params: [{vlan: "42"}, {vlan: "100"}]` runs a test once per entry.
 
-### Values that differ per device (ports, slots, device types)
+### Ports and values that differ per device
 
-A recorded test has the device's values in plain text: `configure vlan v1000 add ports 1:2 tagged` is right
-for a stack (slot:port, slots 1-8) but not for a standalone switch (port `2`) or a VOSS switch (`1/2`). Make
-them variables, set them per device in each testbed, and the same test runs on all of them:
+A recorded test has the device's ports in plain text: `configure vlan v1000 add ports 1:2 tagged` is right
+for a stack (slot:port) but not for a standalone switch (`2`) or a VOSS switch (`1/2`). So every device of a
+testbed has **port variables**, and tests use those instead of numbers:
 
-1. **Make a Variable**: in the test editor select `1:2` in a command and right-click → **Make a Variable
-   from "1:2"…**. Termwright suggests `stack_sw.port` (the step's role + `port`); it replaces `1:2` with
-   `{{stack_sw.port}}` in every command and check of the test, and keeps `1:2` as the test's default.
-2. **Set it per device**: open the testbed. Each device shows the values the tests use - `port not set`
-   (dashed) - and **+ Value**: click and type `2` for the standalone switch, `1:2` for the stack. In the file:
+| Device | port1 … port8 by default |
+|---|---|
+| EXOS standalone | 2 … 9 |
+| EXOS stack | 1:2 … 1:9 (the first operational slot; port 1 is left for the uplink) |
+| VOSS | 1/1 … 1/8 |
 
-   ```yaml
-   dut:
-     session: Discovered/10.127.34.176
-     port: "1:2"
-     slot: "1"
-   ```
+- **Recording maps them for you**: when a recording is saved, the device's ports in it (`1:2`, `1:3` on a
+  stack) become `{{role.port1}}`, `{{role.port2}}` … in the commands and checks. For older tests:
+  ⋯ → **Use Port Variables**. Plain numbers are only taken after `port`/`ports` in a command, so a VLAN tag
+  is never mistaken for a port.
+- **Each testbed sets its own**: a testbed shows each device as a card with its **Test ports** - grey
+  boxes are the defaults of the device type, blue ones are set in the testbed. Type `1:11` in port1 and it
+  is used from then on; **Reset** goes back. **＋ / −** add or remove ports (8 by default) - e.g. 48 for a
+  snake test, which uses `{{role.ports}}` (all of them, comma-separated). On a stack the defaults go on to
+  the next slot past the last port of a slot.
+- **Stack or standalone** comes from the device: `show switch` (*System Type … (Stack)*) and `show slot`
+  (the operational slots and their ports), read with the device facts; a `slot` value on the device
+  starts the ports in that slot.
+- **Before a run** the Run panel shows each device of the test, where it runs and its ports (**Change**):
+  with a testbed, a change is saved in the testbed; with the tests' own sessions it is for this run.
+- **Exported suites** (twrun, Python, Go) give the same defaults: `inventory.yaml` carries the device type,
+  `stack` and `slots`.
 
-   A device without the value uses the test's default.
-3. **Facts come free**: every role that is a saved session also has `{{dut.device_type}}` (EXOS, VOSS…),
-   `{{dut.host}}`, `{{dut.model}}`, `{{dut.version}}` and `{{dut.name}}`.
-4. **Different commands per OS**: give the steps an **If**: `{{dut.device_type}} == VOSS` on the VOSS
-   commands, `{{dut.device_type}} == EXOS` on the EXOS ones (`!=`, `contains`, `~` regular expressions also
-   work). A stack-only step can use `{{dut.port}} contains :`.
+**Other values** of a device (a slot, a VLAN, an uplink) are name/value rows on its card; tests use
+`{{role.name}}`, and the card lists the ones the tests use that the device does not set. Every device also
+has `{{role.device_type}}`, `{{role.host}}`, `{{role.model}}`, `{{role.version}}` and `{{role.name}}`, so
+steps can say **If** `{{dut.device_type}} == VOSS`. **Make a Variable** (select text in a command,
+right-click) turns any other value into a variable.
 
-**Roles**: tests use the names they were recorded with (`{{stack_x440g2_24x_10g4_stack}}`), testbeds the
-ones they were made with (`dev_10_127_34_176`). Click a role in the testbed to rename it, or let the Run
-panel do it: with a testbed chosen it lists the test's devices and where each runs - choose a device of the
-testbed for each, and it is added to the testbed under the test's name. Testbeds are listed first in Run,
-and the last one used is chosen.
+**Roles**: tests use the names they were recorded with (`{{stack_x440g2_24x_10g4_stack}}`); a testbed's
+devices can be renamed to match, or the Run panel maps them: choose a device of the testbed for each of the
+test's devices and it is added to the testbed under the test's name. Testbeds are listed first in Run, and
+the last one used is chosen.
 
 ## 10. Tables from command output
 

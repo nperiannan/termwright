@@ -125,9 +125,17 @@ func New(t *testing.T, vars map[string]string) *T {
 		readTestbed(bufio.NewScanner(f), v)
 		f.Close()
 	}
+	explicit := map[string]bool{}
+	for k := range v {
+		if _, own := vars[k]; !own {
+			explicit[k] = true
+		}
+	}
 	for k, x := range flagVars {
 		v[k] = x
+		explicit[k] = true
 	}
+	addPorts(v, explicit)
 	c := &T{t: t, Vars: v}
 	if d := os.Getenv("TW_LOG_DIR"); d != "" {
 		_ = os.MkdirAll(d, 0o755)
@@ -1019,3 +1027,102 @@ func (s *Step) Cond(expr string) bool {
 
 // Cond: an if condition (see Step.Cond) outside a step, for loops.
 func (c *T) Cond(expr string) bool { return (&Step{c: c}).Cond(expr) }
+
+// DeviceFacts gives a saved session's facts for its default ports: device_type, stack ("true") and slots
+// ("1:28,2:28" - a stack's operational slots and their ports). A standalone suite sets it from inventory.yaml.
+var DeviceFacts func(session string) map[string]string
+
+// addPorts gives each device role its port variables {{role.port1}}…{{role.portN}} (N: role.port_count,
+// else 8) and {{role.ports}} (all of them) by its device type, as Termwright does - unless the testbed or
+// -tw.var sets them: a VOSS switch slot/1…, an EXOS stack slot:2… (then the next slot from port 1), a
+// standalone EXOS switch 2….
+func addPorts(v map[string]string, explicit map[string]bool) {
+	if DeviceFacts == nil {
+		return
+	}
+	var roles []string
+	for k := range v {
+		if !strings.Contains(k, ".") {
+			roles = append(roles, k)
+		}
+	}
+	for _, k := range roles {
+		f := DeviceFacts(v[k])
+		if f == nil {
+			continue
+		}
+		for fk, fx := range f {
+			if _, set := v[k+"."+fk]; !set {
+				v[k+"."+fk] = fx
+			}
+		}
+		n, _ := strconv.Atoi(v[k+".port_count"])
+		if n <= 0 {
+			n = 8
+		}
+		ps := defaultPorts(v[k+".device_type"], v[k+".stack"] == "true" || v[k+".slot"] != "", v[k+".slot"], n, v[k+".slots"])
+		var all []string
+		for i := 1; i <= n; i++ {
+			key := k + ".port" + strconv.Itoa(i)
+			if !explicit[key] && i <= len(ps) {
+				v[key] = ps[i-1]
+			}
+			if v[key] != "" {
+				all = append(all, v[key])
+			}
+		}
+		if !explicit[k+".ports"] && len(all) > 0 {
+			v[k+".ports"] = strings.Join(all, ",")
+		}
+	}
+}
+
+func defaultPorts(deviceType string, stack bool, slot string, n int, slots string) []string {
+	var sl []string
+	per := map[string]int{}
+	for _, x := range strings.Split(slots, ",") {
+		a, b, ok := strings.Cut(strings.TrimSpace(x), ":")
+		if c, err := strconv.Atoi(b); ok && err == nil {
+			sl, per[a] = append(sl, a), c
+		}
+	}
+	if slot == "" {
+		slot = "1"
+		if len(sl) > 0 {
+			slot = sl[0]
+		}
+	}
+	dt := strings.ToLower(deviceType)
+	var out []string
+	switch {
+	case strings.Contains(dt, "voss") || strings.Contains(dt, "fabric engine"):
+		for i := 1; i <= n; i++ {
+			out = append(out, slot+"/"+strconv.Itoa(i))
+		}
+	case strings.Contains(dt, "exos") || strings.Contains(dt, "switch engine"):
+		if !stack {
+			for i := 1; i <= n; i++ {
+				out = append(out, strconv.Itoa(i+1))
+			}
+			return out
+		}
+		cur, p := slot, 2
+		for len(out) < n {
+			if m := per[cur]; m > 0 && p > m {
+				moved := false
+				for i, x := range sl {
+					if x == cur && i+1 < len(sl) {
+						cur, p, moved = sl[i+1], 1, true
+						break
+					}
+				}
+				if !moved {
+					break
+				}
+			}
+			out = append(out, cur+":"+strconv.Itoa(p))
+			p++
+		}
+	}
+	return out
+}

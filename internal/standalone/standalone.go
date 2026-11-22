@@ -54,6 +54,9 @@ type Device struct {
 	PasswordEnv  string `yaml:"password_env,omitempty" json:"password_env,omitempty"`
 	TokenEnv     string `yaml:"token_env,omitempty" json:"token_env,omitempty"`
 	CommunityEnv string `yaml:"community_env,omitempty" json:"community_env,omitempty"`
+	// Stack: an EXOS stack (its ports are slot:port); Slots: its operational slots and their ports, "1:28,2:28".
+	Stack bool   `yaml:"stack,omitempty" json:"stack,omitempty"`
+	Slots string `yaml:"slots,omitempty" json:"slots,omitempty"`
 	// A web app (protocol web): its address, browser settings and recorded login ({{username}} and
 	// {{password}} in the values).
 	WebURL   string          `yaml:"web_url,omitempty" json:"web_url,omitempty"`
