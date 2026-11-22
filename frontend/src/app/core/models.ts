@@ -641,7 +641,7 @@ export interface TemplateSpec { kind: 'table' | 'fields'; header?: string; colum
 
 export interface TestTrends { runs: { dir: string; at: string; passed: number; failed: number; skipped: number; flaky: number; ms: number; testbed?: string; version?: string }[]; tests: { file: string; case: string; runs: number; failures: number; flips: number; flaky: number; last?: string }[]; versions: { version: string; passed: number; total: number }[]; }
 export interface TestBooking { id: string; testbed: string; from: string; to: string; who: string; why?: string; mine?: boolean; }
-export interface TestWebAction { do: string; target?: string; value?: string; }
-export interface TestWeb { url?: string; browser?: string; show?: boolean; insecure?: boolean; actions?: TestWebAction[]; }
+export interface TestWebAction { do: string; target?: string; value?: string; secret?: boolean; }
+export interface TestWeb { url?: string; browser?: string; show?: boolean; insecure?: boolean; state?: string; login?: string; viewport?: string; trace?: boolean; actions?: TestWebAction[]; }
 export interface WebStatus { node?: string; version?: string; ready: boolean; dir: string; hint?: string; }
 export interface TestbedDevice { role: string; session?: string; folder?: string; name?: string; host?: string; deviceType?: string; model?: string; protocol?: string; value?: string; }

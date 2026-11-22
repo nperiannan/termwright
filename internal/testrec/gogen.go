@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/termwright/termwright/internal/webrun"
 )
 
 //go:embed golib/*.txt
@@ -33,7 +35,8 @@ func GoLibFiles() map[string][]byte {
 	rd := func(n string) []byte { b, _ := golib.ReadFile("golib/" + n); return b }
 	return map[string][]byte{"go.mod": rd("go.mod.txt"), "lib/twtest/twtest.go": rd("twtest.go.txt"), "lib/junit/main.go": rd("junit.go.txt"),
 		"lib/python/twtest.py": rd("twtest.py.txt"), "lib/python/twlocal.py": rd("twlocal.py.txt"), "lib/python/run_tests.py": rd("run_tests.py.txt"),
-		"lib/tcl/twtest.tcl": rd("twtest.tcl.txt"), "lib/tcl/run_tests.tcl": rd("run_tests.tcl.txt")}
+		"lib/python/web_runner.js": webrun.RunnerJS(),
+		"lib/tcl/twtest.tcl":       rd("twtest.tcl.txt"), "lib/tcl/run_tests.tcl": rd("run_tests.tcl.txt")}
 }
 
 // GoFile is the generated Go test file of a case file: cases/vlan/add.yaml → cases/vlan/add_test.go.

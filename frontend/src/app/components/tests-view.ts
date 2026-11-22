@@ -6,7 +6,7 @@ import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { Recorder, escapeRe, fieldPattern, isRead } from '../core/recorder.service';
 import { Tabs } from '../core/tabs.service';
-import { TestbedDevice, WebStatus, TestBooking, TestTrends, TestTable, TestProc, TestProcInfo, TemplateSpec, SessionNode, TestApproval, CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestHistory, TestStepResult, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
+import { TestWeb, TestWebAction, TestbedDevice, WebStatus, TestBooking, TestTrends, TestTable, TestProc, TestProcInfo, TemplateSpec, SessionNode, TestApproval, CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestHistory, TestStepResult, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
 import { expectLabel, parseTableCheck, stepText } from './recorder-panel';
 import { AIChat } from '../core/ai-chat.service';
 import { Icon } from './icon';
@@ -435,15 +435,23 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                             @if (s.web; as w) {
                               @if (webSt(); as ws) { @if (!ws.ready) { <div class="row opts webst"><span>🌐 {{ ws.node ? 'Playwright is not set up on this computer.' : 'Node.js is not installed.' }} <small class="mut">{{ ws.hint }}</small></span><span class="sp"></span>@if (ws.node) { <button type="button" class="pri" (click)="webSetup()" [disabled]="webBusy()">{{ webBusy() ? 'Setting up…' : 'Set Up Playwright' }}</button> }</div>@if (webBusy()) { <div class="row opts"><code class="mut">{{ webLine() }}</code></div> } } }
                               @for (a of w.actions ?? []; track $index; let k = $index) {
-                                <div class="row opts inner"><span class="mut">{{ k + 1 }}</span>
-                                  <select [(ngModel)]="a.do" aria-label="Action">@for (o of webActs; track o.k) { <option [value]="o.k">{{ o.l }}</option> }</select>
-                                  @if (a.do !== 'goto' && a.do !== 'screenshot' && !(a.do === 'wait' && !a.target && a.value)) { <input class="cmdi" [(ngModel)]="a.target" [placeholder]="a.do === 'expect' || a.do === 'expect_not' ? 'text=Welcome  or  #status  (empty: the text below anywhere)' : 'text=Sign in   #user   role=button[name=&quot;Save&quot;]   label=Password'" aria-label="Target" /> }
-                                  @if (a.do !== 'click' && a.do !== 'check' && a.do !== 'uncheck' && a.do !== 'hover') { <input class="pin" [(ngModel)]="a.value" [type]="a.do === 'fill' && isSecretTarget(a.target) ? 'password' : 'text'" [placeholder]="webValHint(a.do)" aria-label="Value" /> }
+                                <div class="row opts inner"><span class="mut wn">{{ k + 1 }}</span>
+                                  <select [(ngModel)]="a.do" aria-label="Action" [title]="webAct(a.do)?.t ?? ''">@for (g of webGroups; track g.g) { <optgroup [label]="g.g">@for (o of g.a; track o.k) { <option [value]="o.k">{{ o.l }}</option> }</optgroup> }</select>
+                                  @if (webAct(a.do)?.tg !== false) { <input class="cmdi" [(ngModel)]="a.target" [attr.list]="'twtgt'" [placeholder]="webTgtHint(a.do)" aria-label="Target" /> }
+                                  @if (webAct(a.do)?.v !== false) { <input class="pin" [(ngModel)]="a.value" [type]="a.secret || ((a.do === 'fill' || a.do === 'type') && isSecretTarget(a.target) && a.value !== '{{password}}') ? 'password' : 'text'" [placeholder]="webValHint(a.do)" aria-label="Value" /> }
+                                  <button type="button" class="lnk" [disabled]="k === 0" (click)="mvWeb(w, k, -1)" title="Move up">↑</button>
                                   <button type="button" class="lnk" (click)="w.actions!.splice(k, 1); touch()" title="Remove the action">✕</button></div>
                               }
-                              <div class="row opts"><button type="button" class="lnk" (click)="(w.actions ??= []).push({ do: 'click', target: '' }); touch()">+ Action</button><span class="sp"></span>
-                                <label title="Accept self-signed certificates (device web pages)"><input type="checkbox" [(ngModel)]="w.insecure" /> Self-signed certificate OK</label><label title="Show the browser window while it runs (default: hidden)"><input type="checkbox" [(ngModel)]="w.show" /> Show the browser</label></div>
-                              <div class="row opts"><span class="mut">The step's output is the action log and the page's text, so <b>contains</b> checks work on it. A failed action saves a screenshot in reports/web-shots.</span></div>
+                              <div class="row opts"><button type="button" class="lnk" (click)="(w.actions ??= []).push({ do: 'click', target: '' }); touch()">+ Action</button>
+                                <button type="button" class="rec" (click)="webRecord(w)" [disabled]="webRec() || !webSt()?.ready" title="Opens the page in a browser: click, type and choose as usual (Alt+click a text to check it shows), then close the window - the actions are added here">{{ webRec() ? '● Recording… close the browser to finish' : '● Record in Browser' }}</button><span class="sp"></span>
+                                <label title="Accept self-signed certificates (device web pages)"><input type="checkbox" [(ngModel)]="w.insecure" /> Self-signed certificate OK</label><label title="Show the browser window while it runs (default: hidden)"><input type="checkbox" [(ngModel)]="w.show" /> Show the browser</label><label title="Record a Playwright trace (every action with the page before and after) - open it with npx playwright show-trace"><input type="checkbox" [(ngModel)]="w.trace" /> Trace</label></div>
+                              <div class="row opts">
+                                <label title="A saved session: its user name and password fill {{ '{{' }}username}} and {{ '{{' }}password}} and answer the site's HTTP login. Passwords never go in the test.">Login <input class="pin lg" [(ngModel)]="w.login" list="twsess" placeholder="session (optional)" /></label>
+                                <label title="Keep the login (cookies) under this name: the next web steps with the same name start logged in">Keep login as <input class="pin" [(ngModel)]="w.state" placeholder="e.g. xiq (optional)" /></label>
+                                <label title="The page size, e.g. 1280x800 or 390x844 for a phone">Size <input class="pin sm" [(ngModel)]="w.viewport" placeholder="1280x800" /></label></div>
+                              <datalist id="twsess">@for (p of allSessions(); track p) { <option [value]="p"></option> }</datalist>
+                              <datalist id="twtgt"><option value="text="></option><option value="label="></option><option value="placeholder="></option><option value="role=button[name=&quot;&quot;]"></option><option value="testid="></option><option value="title="></option><option value="frame=iframe >> "></option></datalist>
+                              <div class="row opts"><span class="mut">The step's output is the action log, the values read and the page's text, so <b>contains</b> checks work on it. A failed action saves a screenshot in reports/web-shots. <button type="button" class="lnk" (click)="backend.openURL(webGuide)">Web testing guide</button></span></div>
                             }
                             @if (s.netconf; as nc) {
                               @if (nc.op === 'get' || nc.op === 'get-config' || !nc.op) { <div class="row opts"><label class="wide" title="A subtree filter: only these parts of the data come back">Filter <textarea class="cmdi body" [(ngModel)]="nc.filter" rows="2" placeholder="<vlans xmlns=&quot;http://openconfig.net/yang/vlan&quot;/>"></textarea></label></div> }
@@ -824,6 +832,11 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
     .calb.mine { background: color-mix(in srgb, var(--accent) 20%, var(--bg)); border-color: color-mix(in srgb, var(--accent) 55%, transparent); } .calb:hover { filter: brightness(1.08); }
     .calnote { margin: 10px 2px; font-size: 12px; } .bkl { margin-top: 12px; } b.accent { color: var(--accent); } .bkf { margin-top: 12px; } .bkf .form { padding: 12px; }
     .webst { background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 6px; padding: 8px 10px; align-items: center; }
+    button.rec { color: #f85149; border-color: color-mix(in srgb, #f85149 50%, transparent); font-weight: 600; }
+    button.rec:disabled { opacity: .7; }
+    input.pin.sm { width: 90px; }
+    input.pin.lg { width: 220px; }
+    .wn { min-width: 22px; text-align: right; }
     .mdlg.tbdlg { width: min(1180px, 96vw); height: min(84vh, 820px); } .tbcols { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px 1fr; gap: 12px; } .tbcol { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
     .tbcol .fpick { flex: 1; max-height: none; } .tbbar { gap: 6px; } .tbname { display: flex !important; flex-direction: row !important; align-items: center; gap: 8px; max-width: 380px; } .tbname span { white-space: nowrap; }
     .dg, .tbg { display: flex; align-items: center; gap: 8px; padding: 7px 10px 4px; font-weight: 600; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .tbg { color: var(--text); font-size: 12.5px; padding-top: 12px; } .tbg .mut { font-weight: 400; }
@@ -1749,13 +1762,48 @@ export class TestsView implements OnInit, OnDestroy {
     ]);
   }
   addCall(p: Phase) { const d = this.draft(); if (!d) return; void this.loadProcs(); this.listOf(d, p).push({ call: { proc: '', with: {} } }); this.touch(); }
-  readonly webActs = [{ k: 'click', l: 'Click' }, { k: 'fill', l: 'Type into' }, { k: 'press', l: 'Press key' }, { k: 'select', l: 'Choose option' }, { k: 'check', l: 'Tick' }, { k: 'uncheck', l: 'Untick' }, { k: 'hover', l: 'Hover' },
-    { k: 'expect', l: 'Check it shows' }, { k: 'expect_not', l: 'Check it is gone' }, { k: 'wait', l: 'Wait for' }, { k: 'goto', l: 'Go to address' }, { k: 'screenshot', l: 'Screenshot' }];
+  // the web actions: tg/v false = no target / value box
+  readonly webGroups: { g: string; a: { k: string; l: string; t: string; tg?: boolean; v?: boolean }[] }[] = [
+    { g: 'Do', a: [{ k: 'click', l: 'Click', t: 'Click it', v: false }, { k: 'fill', l: 'Type into', t: 'Replace the field\'s text' }, { k: 'select', l: 'Choose option', t: 'The option\'s text (or value)' },
+      { k: 'check', l: 'Tick', t: 'Tick a checkbox or radio', v: false }, { k: 'uncheck', l: 'Untick', t: 'Untick a checkbox', v: false }, { k: 'press', l: 'Press key', t: 'Enter, Tab, Escape, Control+A… (no target: the page)' },
+      { k: 'type', l: 'Type key by key', t: 'For fields that react to each key (search boxes)' }, { k: 'clear', l: 'Empty field', t: 'Empty a field', v: false },
+      { k: 'dblclick', l: 'Double-click', t: '', v: false }, { k: 'rightclick', l: 'Right-click', t: '', v: false }, { k: 'hover', l: 'Hover', t: 'Move the mouse over it (menus)', v: false },
+      { k: 'focus', l: 'Focus', t: '', v: false }, { k: 'scroll', l: 'Scroll to', t: 'No target: one screen down', v: false }] },
+    { g: 'Files and windows', a: [{ k: 'upload', l: 'Upload files', t: 'Files of the tests folder, comma-separated' }, { k: 'download', l: 'Download', t: 'Click it and save the file in reports/web-shots (value: a file name)' },
+      { k: 'dialog', l: 'Answer pop-ups', t: 'accept, dismiss or a text to type - for the alerts and confirms that come next', tg: false }, { k: 'tab', l: 'Switch tab', t: 'last, 1, 2… or a part of its address', tg: false },
+      { k: 'close_tab', l: 'Close tab', t: '', tg: false, v: false }, { k: 'goto', l: 'Go to address', t: '', tg: false }, { k: 'reload', l: 'Reload', t: '', tg: false, v: false }, { k: 'back', l: 'Back', t: '', tg: false, v: false }] },
+    { g: 'Wait', a: [{ k: 'wait', l: 'Wait for', t: 'A target to show, or seconds, or a part of the address' }, { k: 'wait_gone', l: 'Wait until gone', t: 'Spinners, "Loading…"', v: false }] },
+    { g: 'Check', a: [{ k: 'expect', l: 'Check it shows', t: 'No target: the text anywhere. Target and text: it contains the text' }, { k: 'expect_not', l: 'Check it is gone', t: '' },
+      { k: 'expect_value', l: 'Check field value', t: '' }, { k: 'expect_count', l: 'Check how many', t: 'e.g. table rows: tr' }, { k: 'expect_checked', l: 'Check ticked', t: '', v: false },
+      { k: 'expect_enabled', l: 'Check enabled', t: '', v: false }, { k: 'expect_url', l: 'Check address', t: 'A part of the address', tg: false }, { k: 'expect_title', l: 'Check title', t: 'A part of the title', tg: false }] },
+    { g: 'Keep', a: [{ k: 'read', l: 'Read into variable', t: 'The text becomes {{name}} for later steps' }, { k: 'screenshot', l: 'Screenshot', t: 'A target: only it. Value: the file name', }] },
+  ];
+  private readonly webActMap = new Map(this.webGroups.flatMap(g => g.a.map(a => [a.k, a] as const)));
+  webAct(k: string) { return this.webActMap.get(k); }
+  webTgtHint(d: string) {
+    return ({ expect: 'text=Welcome  or  #status  (empty: the text anywhere)', expect_not: 'empty: the text anywhere', wait: 'what to wait for (empty: the value)', press: 'field (empty: the page)',
+      scroll: 'empty: one screen down', screenshot: 'empty: the whole page', expect_count: 'tr  or  .alarm-row', upload: 'input[type=file]  or  label=Firmware' } as Record<string, string>)[d]
+      ?? 'text=Sign in   label=Password   role=button[name="Save"]   #id';
+  }
+  mvWeb(w: { actions?: unknown[] }, k: number, d: number) { const l = w.actions!; [l[k + d], l[k]] = [l[k], l[k + d]]; this.touch(); }
+  allSessions() { const out: string[] = []; const w = (l: SessionNode[]) => { for (const n of l) { if (n.isFolder) w(n.children ?? []); else out.push(n.path); } }; w(this.ui.tree()?.children ?? []); return out; }
+  readonly webGuide = 'https://github.com/nperiannan/termwright/blob/main/docs/WEB_TESTING_GUIDE.md';
+  readonly webRec = signal(false);
+  async webRecord(w: TestWeb) {
+    if (!w.url) { this.ui.toast(tr('Type the page address first'), 'error'); return; }
+    this.webRec.set(true);
+    const acts = (w.actions ??= []);
+    if (acts.length === 1 && acts[0].do === 'expect' && !acts[0].value && !acts[0].target) acts.pop();
+    const off = this.backend.on('web:rec', (a: TestWebAction) => { acts.push({ do: a.do, target: a.target, value: a.value }); this.touch(); });
+    try { await this.backend.webRecord({ ...w, actions: [] }); this.ui.toast(tr('Recording added'), 'success'); }
+    catch (e) { this.ui.toast(errText(e), 'error'); }
+    finally { off(); this.webRec.set(false); }
+  }
   readonly webSt = signal<WebStatus | null>(null);
   readonly webBusy = signal(false);
   readonly webLine = signal('');
   private webOff?: () => void;
-  webValHint(d: string) { return ({ fill: 'text to type', press: 'Enter', select: 'option', goto: 'https://…', wait: 'seconds', screenshot: 'file name', expect: 'text', expect_not: 'text' } as Record<string, string>)[d] ?? ''; }
+  webValHint(d: string) { return ({ fill: 'text, {{var}} or {{password}}', type: 'text', press: 'Enter', select: 'option text', goto: 'https://…', wait: 'seconds or address part', screenshot: 'file name', expect: 'text', expect_not: 'text', expect_value: 'value', expect_count: '3', expect_url: '/dashboard', expect_title: 'title', read: 'variable name', upload: 'files/fw.bin', download: 'file name (optional)', dialog: 'accept', tab: 'last' } as Record<string, string>)[d] ?? ''; }
   isSecretTarget(t?: string) { return /pass|secret|token/i.test(t ?? ''); }
   async loadWebSt() { try { this.webSt.set(await this.backend.webStatus()); } catch { /* not in this build */ } }
   async webSetup() {

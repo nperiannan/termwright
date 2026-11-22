@@ -132,31 +132,54 @@ func (r Runner) Setup(ctx context.Context, log func(string)) error {
 }
 
 type line struct {
-	I     int    `json:"i"`
-	OK    bool   `json:"ok"`
-	Note  string `json:"note"`
-	Error string `json:"error"`
-	Shot  string `json:"shot"`
-	Done  bool   `json:"done"`
-	URL   string `json:"url"`
-	Title string `json:"title"`
-	Text  string `json:"text"`
+	I       int    `json:"i"`
+	OK      bool   `json:"ok"`
+	Note    string `json:"note"`
+	Error   string `json:"error"`
+	Shot    string `json:"shot"`
+	Trace   string `json:"trace"`
+	Done    bool   `json:"done"`
+	URL     string `json:"url"`
+	Title   string `json:"title"`
+	Text    string `json:"text"`
+	Dialogs []string
+	Reads   []struct{ Name, Value string }
+	Rec     *Action `json:"rec"`
 }
 
-// Run runs a web step; screenshots go to shots. The output is the action log and the page's text.
-func (r Runner) Run(ctx context.Context, w Step, shots string, timeout int) (string, error) {
+func (r Runner) start(ctx context.Context, job map[string]any) (*exec.Cmd, *bytes.Buffer, error) {
 	st := r.Status()
 	if st.Node == "" || !st.Ready {
-		return "", errors.New("web steps need Playwright: open a web step in the editor and click Set Up (" + st.Hint + ")")
+		return nil, nil, errors.New("web steps need Playwright: open a web step in the editor and click Set Up (" + st.Hint + ")")
 	}
 	if err := os.WriteFile(filepath.Join(r.Dir, "runner.js"), runnerJS, 0o644); err != nil {
-		return "", err
+		return nil, nil, err
 	}
-	in, _ := json.Marshal(map[string]any{"step": w, "shots": shots, "timeout": timeout})
+	in, _ := json.Marshal(job)
 	c := exec.CommandContext(ctx, st.Node, filepath.Join(r.Dir, "runner.js"))
 	c.Dir, c.Env, c.Stdin = r.Dir, r.env(st.Node), bytes.NewReader(in)
 	var stderr bytes.Buffer
 	c.Stderr = &stderr
+	return c, &stderr, nil
+}
+
+// Run runs a web step; screenshots, downloads and traces go to shots. The output is the action log,
+// the values read ("read name = value") and the page's text.
+func (r Runner) Run(ctx context.Context, w Step, shots string, timeout int, x ...Extra) (string, error) {
+	var ex Extra
+	if len(x) > 0 {
+		ex = x[0]
+	}
+	for _, a := range w.Actions {
+		if strings.Contains(a.Value, "{{password}}") || strings.Contains(a.Value, "{{username}}") {
+			return "", errors.New(ActionText(a) + ": {{password}} and {{username}} come from the step's Login session - choose one")
+		}
+	}
+	c, stderr, err := r.start(ctx, map[string]any{"step": w, "shots": shots, "timeout": timeout, "root": ex.Root, "stateDir": ex.StateDir,
+		"httpUser": ex.HTTPUser, "httpPassword": ex.HTTPPassword})
+	if err != nil {
+		return "", err
+	}
 	start := time.Now()
 	b, err := c.Output()
 	var log strings.Builder
@@ -170,12 +193,18 @@ func (r Runner) Run(ctx context.Context, w Step, shots string, timeout int) (str
 		if l.I >= 0 && l.I < len(w.Actions) {
 			what = ActionText(w.Actions[l.I])
 		}
+		for _, d := range l.Dialogs {
+			fmt.Fprintf(&log, "dialog: %s\n", d)
+		}
 		switch {
 		case l.Done:
+			for _, rd := range l.Reads {
+				fmt.Fprintf(&log, "read %s = %s\n", rd.Name, rd.Value)
+			}
 			fmt.Fprintf(&log, "page: %s  %s\n--- page text ---\n%s\n", l.Title, l.URL, l.Text)
 		case l.OK:
 			fmt.Fprintf(&log, "✓ %s", what)
-			if l.Note != "" {
+			if l.Note != "" && !(l.I >= 0 && l.I < len(w.Actions) && w.Actions[l.I].Secret) {
 				fmt.Fprintf(&log, "  → %s", l.Note)
 			}
 			log.WriteByte('\n')
@@ -183,6 +212,9 @@ func (r Runner) Run(ctx context.Context, w Step, shots string, timeout int) (str
 			fmt.Fprintf(&log, "✗ %s: %s\n", what, l.Error)
 			if l.Shot != "" {
 				fmt.Fprintf(&log, "screenshot: %s\n", l.Shot)
+			}
+			if l.Trace != "" {
+				fmt.Fprintf(&log, "trace: %s  (npx playwright show-trace <file>)\n", l.Trace)
 			}
 			if l.URL != "" {
 				fmt.Fprintf(&log, "page: %s\n", l.URL)
@@ -203,6 +235,60 @@ func (r Runner) Run(ctx context.Context, w Step, shots string, timeout int) (str
 	return log.String(), nil
 }
 
+// Drive is what a recording test does in the page (click, fill, select, altclick).
+type Drive struct {
+	Do     string `json:"do"`
+	Target string `json:"target"`
+	Value  string `json:"value,omitempty"`
+}
+
+// Record opens the step's page in a visible browser and returns the actions the person does there, as
+// they happen (each also goes to onAction), until the window is closed. drive is for tests.
+func (r Runner) Record(ctx context.Context, w Step, onAction func(Action), x Extra, drive ...Drive) ([]Action, error) {
+	job := map[string]any{"step": w, "record": true, "root": x.Root, "stateDir": x.StateDir, "httpUser": x.HTTPUser, "httpPassword": x.HTTPPassword}
+	if len(drive) > 0 {
+		job["drive"] = drive
+	}
+	c, stderr, err := r.start(ctx, job)
+	if err != nil {
+		return nil, err
+	}
+	pipe, err := c.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	if err := c.Start(); err != nil {
+		return nil, err
+	}
+	var acts []Action
+	sc := bufio.NewScanner(pipe)
+	sc.Buffer(make([]byte, 1<<20), 1<<22)
+	var failed string
+	for sc.Scan() {
+		var l line
+		if json.Unmarshal(sc.Bytes(), &l) != nil {
+			continue
+		}
+		if l.Rec != nil {
+			acts = append(acts, *l.Rec)
+			if onAction != nil {
+				onAction(*l.Rec)
+			}
+		}
+		if l.Error != "" {
+			failed = l.Error
+		}
+	}
+	werr := c.Wait()
+	if failed != "" {
+		return acts, errors.New(failed)
+	}
+	if werr != nil && len(acts) == 0 && ctx.Err() == nil {
+		return acts, fmt.Errorf("the browser stopped: %v %s", werr, strings.TrimSpace(stderr.String()))
+	}
+	return acts, nil
+}
+
 // Step drives a browser with Playwright: it opens URL, then does the actions in order. The step's
 // output is the log of the actions and the page's text at the end, so expect checks can look at it.
 type Step struct {
@@ -213,21 +299,55 @@ type Step struct {
 	// Show: show the browser window (default: headless).
 	Show bool `yaml:"show,omitempty" json:"show,omitempty"`
 	// Insecure: accept self-signed certificates (device web pages).
-	Insecure bool     `yaml:"insecure,omitempty" json:"insecure,omitempty"`
-	Actions  []Action `yaml:"actions,omitempty" json:"actions,omitempty"`
+	Insecure bool `yaml:"insecure,omitempty" json:"insecure,omitempty"`
+	// State: keep the login (cookies and storage) under this name - the next web steps with the same
+	// state start logged in.
+	State string `yaml:"state,omitempty" json:"state,omitempty"`
+	// Login: a saved session whose user name and password answer the site's HTTP login (basic auth).
+	Login string `yaml:"login,omitempty" json:"login,omitempty"`
+	// Viewport: the page size, e.g. 1280x800.
+	Viewport string `yaml:"viewport,omitempty" json:"viewport,omitempty"`
+	// Trace: record a Playwright trace (reports/web-shots/trace-….zip: npx playwright show-trace).
+	Trace   bool     `yaml:"trace,omitempty" json:"trace,omitempty"`
+	Actions []Action `yaml:"actions,omitempty" json:"actions,omitempty"`
+}
+
+// Extra is what the runner gets besides the step: where files and states are, the HTTP login.
+type Extra struct {
+	Root, StateDir         string
+	HTTPUser, HTTPPassword string
 }
 
 // Action is one thing to do on the page.
 type Action struct {
-	// Do: goto, click, fill, press, select, check, uncheck, hover, expect (the text or element is
-	// there), expect_not, wait (seconds, or until the target shows), screenshot.
+	// Do: what to do - see Actions.
 	Do string `yaml:"do" json:"do"`
 	// Target: what to act on - a CSS selector, text=Sign in, role=button[name="Save"], label=User name,
-	// placeholder=Search, or an XPath (//...). expect: the text to find when there is no target.
+	// placeholder=Search, testid=save, title=…, alt=…, an XPath (//...); frame=#main >> … looks in a frame.
+	// expect / expect_not without a target: the text anywhere on the page.
 	Target string `yaml:"target,omitempty" json:"target,omitempty"`
-	// Value: fill: the text; press: the key (Enter); select: the option; goto: the URL; wait: seconds;
-	// expect with a target: the text the element must contain; screenshot: the file name.
+	// Value: fill / type: the text; press: the key (Enter, Tab, Control+A); select: the option; goto: the
+	// address; wait: seconds or a part of the address; expect with a target: the text it must contain;
+	// expect_value / expect_count / expect_url / expect_title: what it must be; read: the variable name;
+	// upload: files of the tests folder; tab: 1, 2… or last or a part of the address; screenshot: a name.
 	Value string `yaml:"value,omitempty" json:"value,omitempty"`
+	// Secret: the value is a password (from {{secret:Session}}): it is never logged.
+	Secret bool `yaml:"-" json:"secret,omitempty"`
+}
+
+// Actions are what a web step can do, with what each needs.
+var Actions = []struct{ Do, Needs, Says string }{
+	{"goto", "value", "open an address"}, {"click", "target", "click"}, {"dblclick", "target", "double-click"}, {"rightclick", "target", "right-click"},
+	{"fill", "target value", "type into a field (replaces its text)"}, {"type", "target value", "type key by key"}, {"clear", "target", "empty a field"},
+	{"press", "value", "press a key, on a target or the page"}, {"select", "target value", "choose an option"},
+	{"check", "target", "tick"}, {"uncheck", "target", "untick"}, {"hover", "target", "move the mouse over"}, {"focus", "target", "focus"},
+	{"scroll", "", "scroll to a target, or down"}, {"upload", "target value", "choose files to upload"}, {"download", "target", "click and save the download"},
+	{"dialog", "value", "accept, dismiss or answer alerts and confirms"}, {"tab", "value", "switch to another tab or popup"}, {"close_tab", "", "close the tab"},
+	{"reload", "", "reload"}, {"back", "", "go back"}, {"wait", "", "wait seconds, for a target, or for an address"}, {"wait_gone", "target", "wait until it is gone"},
+	{"expect", "", "check it shows"}, {"expect_not", "", "check it is gone"}, {"expect_value", "target value", "check a field's value"},
+	{"expect_count", "target value", "check how many there are"}, {"expect_checked", "target", "check it is ticked"}, {"expect_enabled", "target", "check it is enabled"},
+	{"expect_url", "value", "check the address"}, {"expect_title", "value", "check the title"}, {"read", "target value", "read a text into a variable"},
+	{"screenshot", "", "save a screenshot"},
 }
 
 // ActionText is an action in a few words, as the log shows it.
@@ -237,7 +357,7 @@ func ActionText(a Action) string {
 		parts = append(parts, a.Target)
 	}
 	if a.Value != "" {
-		if a.Do == "fill" && looksSecret(a.Target) {
+		if a.Secret || (a.Do == "fill" || a.Do == "type") && looksSecret(a.Target) {
 			parts = append(parts, `"••••"`)
 		} else {
 			parts = append(parts, fmt.Sprintf("%q", a.Value))
@@ -250,3 +370,21 @@ func looksSecret(target string) bool {
 	t := strings.ToLower(target)
 	return strings.Contains(t, "password") || strings.Contains(t, "passwd") || strings.Contains(t, "secret") || strings.Contains(t, "token")
 }
+
+// WithLogin fills {{username}} and {{password}} in the actions' values with a login (the password marked
+// secret, so it is never logged) - the step's Login session gives them.
+func WithLogin(w Step, user, password string) Step {
+	acts := make([]Action, len(w.Actions))
+	for i, a := range w.Actions {
+		if strings.Contains(a.Value, "{{password}}") {
+			a.Value, a.Secret = strings.ReplaceAll(a.Value, "{{password}}", password), true
+		}
+		a.Value = strings.ReplaceAll(a.Value, "{{username}}", user)
+		acts[i] = a
+	}
+	w.Actions = acts
+	return w
+}
+
+// RunnerJS is the Node.js script that runs web steps (exported suites carry it).
+func RunnerJS() []byte { return runnerJS }

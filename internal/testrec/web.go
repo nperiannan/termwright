@@ -19,13 +19,19 @@ type WebDriver interface {
 }
 
 // WebActions lists the actions a web step can do.
-var WebActions = []string{"goto", "click", "fill", "press", "select", "check", "uncheck", "hover", "expect", "expect_not", "wait", "screenshot"}
+var WebActions = func() []string {
+	var out []string
+	for _, a := range webrun.Actions {
+		out = append(out, a.Do)
+	}
+	return out
+}()
 
 func fillWeb(w WebStep, v map[string]string) WebStep {
-	w.URL = Fill(w.URL, v)
+	w.URL, w.Login, w.State = Fill(w.URL, v), Fill(w.Login, v), Fill(w.State, v)
 	acts := make([]WebAction, len(w.Actions))
 	for i, a := range w.Actions {
-		acts[i] = WebAction{Do: a.Do, Target: Fill(a.Target, v), Value: Fill(a.Value, v)}
+		acts[i] = WebAction{Do: a.Do, Target: Fill(a.Target, v), Value: Fill(a.Value, v), Secret: a.Secret}
 	}
 	w.Actions = acts
 	return w

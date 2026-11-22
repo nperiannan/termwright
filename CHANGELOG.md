@@ -2,6 +2,10 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## Unreleased
+
+- **Web GUI testing without code**: a web step now has **● Record in Browser** - use the site as usual and each click, typed text, chosen option, ticked box and file upload becomes an action (Alt+click a text adds a check; password fields become `{{password}}`). 32 actions in groups (double/right-click, type key by key, clear, focus, scroll, upload, download, answer pop-ups, switch and close tabs, reload, back, wait until gone, check field value / count / ticked / enabled / address / title, read into a variable, screenshot of an element). Targets also take `testid=`, `title=`, `alt=`, `>> nth=N` and `frame=… >>` for iframes. New step options: **Login** (a saved session's user name and password fill `{{username}}` / `{{password}}` and answer HTTP logins, never logged), **Keep login as** (log in once, later web steps start logged in), **Size** and **Trace** (Playwright trace on failure or always). *Read into variable* passes page values to later steps. Actions can be moved up. The Python standalone suite runs web steps through the same runner as Termwright and twrun (Node.js and Playwright, no playwright-python). New [Web GUI Testing Guide](docs/WEB_TESTING_GUIDE.md) with step-by-step examples.
+
 ## 0.44.0 (2026-11-22)
 
 - **Spirent TestCenter and IxNetwork**: + More → **Spirent / IxNetwork Traffic Run** - a test step that loads a saved configuration (STC .xml / .tcc, IxNetwork .ixncfg / .json), connects its ports to the chassis ports, starts the protocols if asked, sends traffic for N seconds and reads each stream's frames, loss and latency through the generator's REST API (STC REST API of a LabServer / REST server; IxNetwork API server, Linux or Windows). The result is JSON for checks such as `loss < 0.01` or `streams[0].latencyUs < 50`. Also in twrun and the standalone Go suite. JSON path checks take `<` and `>` too. Built from the documented REST APIs and tested against simulated servers - not yet against a real chassis.

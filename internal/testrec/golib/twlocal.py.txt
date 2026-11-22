@@ -423,75 +423,71 @@ def netconf(n):
         return r.xml if hasattr(r, "xml") else str(r)
 
 
-def web(w, shots):
-    try:
-        from playwright.sync_api import sync_playwright
-    except ImportError:
-        raise StepError("playwright is not installed: pip install playwright && playwright install chromium")
-    log = []
-    with sync_playwright() as p:
-        b = getattr(p, w.get("browser") or "chromium").launch(headless=not w.get("show"))
-        page = b.new_context(ignore_https_errors=bool(w.get("insecure"))).new_page()
-        page.set_default_timeout(30000)
+ROOT = os.environ.get("TW_SUITE") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-        def loc(t):
-            if t.startswith("label="):
-                return page.get_by_label(t[6:]).first
-            if t.startswith("placeholder="):
-                return page.get_by_placeholder(t[12:]).first
-            return page.locator(("xpath=" + t) if t.startswith("//") else t).first
+
+def _web_label(a):
+    do, t, v = a.get("do") or "", a.get("target") or "", a.get("value") or ""
+    return " ".join(x for x in (do, t, '"••••"' if a.get("secret") else (repr(v) if v else "")) if x)
+
+
+def web(w, shots):
+    """Runs a web step with Playwright through Node.js (lib/python/web_runner.js - the runner Termwright uses,
+    so every action, target and option works the same). Playwright goes in .playwright of the suite
+    (TW_PLAYWRIGHT_DIR elsewhere): npm install --prefix .playwright playwright && npx --prefix .playwright playwright install chromium"""
+    node = shutil.which("node")
+    pw = os.environ.get("TW_PLAYWRIGHT_DIR") or os.path.join(ROOT, ".playwright")
+    if not node:
+        raise StepError("web steps need Node.js (nodejs.org)")
+    if not os.path.exists(os.path.join(pw, "node_modules", "playwright", "package.json")):
+        raise StepError("web steps need Playwright: npm install --prefix %s playwright && npx --prefix %s playwright install chromium" % (pw, pw))
+    w = dict(w)
+    req = {"shots": os.path.abspath(shots), "timeout": 30, "root": ROOT, "stateDir": os.path.join(ROOT, ".web-state")}
+    if w.get("login"):
+        d = device(w["login"])
+        pw_ = secret(d, "password")
+        req["httpUser"], req["httpPassword"] = d.get("username", ""), pw_
+        acts = []
+        for a in w.get("actions") or []:
+            a = dict(a)
+            v = a.get("value") or ""
+            if "{{password}}" in v:
+                a["value"], a["secret"] = v.replace("{{password}}", pw_), True
+            a["value"] = (a.get("value") or "").replace("{{username}}", d.get("username", ""))
+            acts.append(a)
+        w["actions"] = acts
+    req["step"] = w
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web_runner.js")
+    shutil.copyfile(script, os.path.join(pw, "runner.js"))
+    p = subprocess.run([node, "runner.js"], cwd=pw, input=json.dumps(req), capture_output=True, text=True)
+    acts = w.get("actions") or []
+    log, failed = [], ""
+    for ln in p.stdout.splitlines():
         try:
-            if w.get("url"):
-                page.goto(w["url"])
-                log.append("✓ open %s  → %s" % (w["url"], page.title()))
-            for a in w.get("actions") or []:
-                do, t, v = (a.get("do") or "").lower(), a.get("target") or "", a.get("value") or ""
-                what = " ".join(x for x in (do, t, '"••••"' if do == "fill" and re.search("pass|secret|token", t, re.I) else (repr(v) if v else "")) if x)
-                if do == "goto":
-                    page.goto(v or t)
-                elif do == "click":
-                    loc(t).click()
-                elif do == "fill":
-                    loc(t).fill(v)
-                elif do == "press":
-                    (loc(t).press(v or "Enter") if t else page.keyboard.press(v or "Enter"))
-                elif do == "select":
-                    loc(t).select_option(v)
-                elif do in ("check", "uncheck", "hover"):
-                    getattr(loc(t), do)()
-                elif do == "wait":
-                    (loc(t).wait_for(state="visible") if t else page.wait_for_timeout(float(v or 1) * 1000))
-                elif do == "expect":
-                    if t and v:
-                        txt = loc(t).inner_text()
-                        if v not in txt:
-                            raise StepError('found "%s"' % txt[:200])
-                    else:
-                        (loc(t) if t else page.get_by_text(v).first).wait_for(state="visible")
-                elif do == "expect_not":
-                    l = loc(t) if t else page.get_by_text(v)
-                    end = time.time() + 5
-                    while l.count() and time.time() < end:
-                        page.wait_for_timeout(250)
-                    if l.count():
-                        raise StepError("it is still there")
-                elif do == "screenshot":
-                    os.makedirs(shots, exist_ok=True)
-                    page.screenshot(path=os.path.join(shots, (v or "step-%d" % time.time()) + ("" if v.endswith(".png") else ".png")), full_page=True)
-                else:
-                    raise StepError("unknown action " + do)
-                log.append("✓ " + what)
-            log.append("page: %s  %s\n--- page text ---\n%s" % (page.title(), page.url, page.inner_text("body")[:20000]))
-        except Exception as e:
-            os.makedirs(shots, exist_ok=True)
-            p2 = os.path.join(shots, "failed-%d.png" % (time.time() * 1000))
-            try:
-                page.screenshot(path=p2, full_page=True)
-            except Exception:
-                p2 = ""
-            raise StepError("%s\nscreenshot: %s\n%s" % (str(e).split("\n")[0], p2, "\n".join(log)))
-        finally:
-            b.close()
+            l = json.loads(ln)
+        except ValueError:
+            continue
+        i = l.get("i", -1)
+        what = _web_label(acts[i]) if 0 <= i < len(acts) else "open " + (w.get("url") or "")
+        for d in l.get("dialogs") or []:
+            log.append("dialog: " + d)
+        if l.get("done"):
+            for r in l.get("reads") or []:
+                log.append("read %s = %s" % (r.get("name"), r.get("value")))
+            log.append("page: %s  %s\n--- page text ---\n%s" % (l.get("title", ""), l.get("url", ""), l.get("text", "")))
+        elif l.get("ok"):
+            note = l.get("note") if l.get("note") and not (0 <= i < len(acts) and acts[i].get("secret")) else ""
+            log.append("✓ " + what + ("  → " + note if note else ""))
+        else:
+            log.append("✗ %s: %s" % (what, l.get("error", "")))
+            for k in ("shot", "trace"):
+                if l.get(k):
+                    log.append("%s: %s" % ({"shot": "screenshot"}.get(k, k), l[k]))
+            failed = "%s: %s" % (what, l.get("error", ""))
+    if failed:
+        raise StepError(failed + "\n" + "\n".join(log))
+    if p.returncode and not log:
+        raise StepError("the browser runner stopped: " + (p.stderr.strip().splitlines() or [""])[0])
     return "\n".join(log)
 
 

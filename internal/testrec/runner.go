@@ -759,6 +759,15 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 			v[s.Var] = val
 		}
 	}
+	if st.Web != nil && sr.Passed { // web "read" actions: variables for later steps
+		for _, ln := range strings.Split(out, "\n") {
+			if rest, ok := strings.CutPrefix(ln, "read "); ok {
+				if k, val, ok := strings.Cut(rest, " = "); ok && !strings.Contains(k, " ") {
+					v[k] = val
+				}
+			}
+		}
+	}
 	return sr
 }
 

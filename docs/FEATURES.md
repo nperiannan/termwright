@@ -130,7 +130,7 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **Testbed calendar**: book testbeds for a time (shared `bookings.yaml`); other people's runs and schedules respect it.
 - **Standalone export**: Python or Go code, or the twrun program with the YAML tests - runs without Termwright - SSH/Telnet/API/SNMP/NETCONF/web itself, inventory from your sessions, passwords from the environment or keyring; procedures as reusable functions.
 - **Spirent TestCenter / IxNetwork**: traffic runs as test steps through their REST APIs - configuration, chassis ports, protocols, per-stream loss and latency.
-- **Web steps (Playwright)**: open pages, click, type, check text, screenshot - set up from the step editor.
+- **Web steps (Playwright)**: record in the browser or pick from 32 actions - forms, uploads, downloads, pop-ups, tabs, iframes, waits, checks, read into variables, screenshots and traces; logins from saved sessions, kept between steps - set up from the step editor. [Guide](WEB_TESTING_GUIDE.md).
 ## AI assistant and connector
 
 - **AI assistant** (optional, off by default): a chat panel docked right or left or floating, with chat history, pasted pictures and *Add context* (selection, clipboard, whole terminal, other tabs, files) and a token warning; **Agent mode** runs commands in your tabs to debug or fix - read-only commands by themselves, changes after you allow them, production always asks; *Explain with AI* for output and errors and *Ask AI for a Command* for the tab's device type, with Claude, an OpenAI-compatible service, a local Ollama or **Claude Code** (your own Claude login, no API key); secrets removed before sending, commands pasted without Enter, *Save* to the Command Library.
