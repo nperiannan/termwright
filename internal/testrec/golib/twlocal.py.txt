@@ -22,6 +22,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -320,9 +321,21 @@ def parse(session, command, output, template="auto"):
 def http(h):
     d = inventory().get(h.get("session") or "") if h.get("session") else None
     url = h.get("url", "")
-    if d and not re.match(r"^[a-z]+://", url):
-        url = (d.get("base_url") or "").rstrip("/") + "/" + url.lstrip("/")
     hdr = dict(h.get("headers") or {})
+    if d and (d.get("protocol") or "").lower() == "web":  # a web app: as the user its web steps logged in
+        if not re.match(r"^[a-z]+://", url):
+            url = (d.get("web_url") or "").rstrip("/") + "/" + url.lstrip("/")
+        try:
+            with open(os.path.join(ROOT, ".web-state", re.sub(r"[^\w.-]+", "_", "app-" + d["session"]) + ".json"), encoding="utf-8") as f:
+                host = urllib.parse.urlparse(url).hostname or ""
+                ck = [c["name"] + "=" + c["value"] for c in json.load(f).get("cookies", [])
+                      if host == c.get("domain", "").lstrip(".") or host.endswith("." + c.get("domain", "").lstrip("."))]
+            if ck:
+                hdr.setdefault("Cookie", "; ".join(ck))
+        except (OSError, ValueError):
+            pass
+    elif d and not re.match(r"^[a-z]+://", url):
+        url = (d.get("base_url") or "").rstrip("/") + "/" + url.lstrip("/")
     if d:
         auth = (d.get("auth") or "").lower()
         if auth == "basic":
@@ -442,24 +455,47 @@ def web(w, shots):
     if not os.path.exists(os.path.join(pw, "node_modules", "playwright", "package.json")):
         raise StepError("web steps need Playwright: npm install --prefix %s playwright && npx --prefix %s playwright install chromium" % (pw, pw))
     w = dict(w)
-    req = {"shots": os.path.abspath(shots), "timeout": 30, "root": ROOT, "stateDir": os.path.join(ROOT, ".web-state")}
-    if w.get("login"):
-        d = device(w["login"])
-        pw_ = secret(d, "password")
-        req["httpUser"], req["httpPassword"] = d.get("username", ""), pw_
-        acts = []
-        for a in w.get("actions") or []:
+    req = {"shots": os.path.abspath(shots), "timeout": 30, "root": ROOT, "stateDir": os.path.join(ROOT, ".web-state"),
+           "pictures": w.get("pictures") != "off", "video": not w.get("show"), "prefix": "web-%d" % (time.time() * 1000)}
+    def with_login(acts, user, pw_):
+        out = []
+        for a in acts or []:
             a = dict(a)
             v = a.get("value") or ""
             if "{{password}}" in v:
                 a["value"], a["secret"] = v.replace("{{password}}", pw_), True
-            a["value"] = (a.get("value") or "").replace("{{username}}", d.get("username", ""))
-            acts.append(a)
-        w["actions"] = acts
+            a["value"] = (a.get("value") or "").replace("{{username}}", user)
+            out.append(a)
+        return out
+
+    def join(base, p):
+        if not p:
+            return base
+        if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", p) or not base:
+            return p
+        return base.rstrip("/") + "/" + p.lstrip("/")
+
+    if w.get("login"):
+        d = device(w["login"])
+        pw_ = secret(d, "password")
+        user = d.get("username", "")
+        req["httpUser"], req["httpPassword"] = user, pw_
+        if (d.get("protocol") or "").lower() == "web":  # a web app: its address, settings and recorded login
+            base = d.get("web_url", "")
+            w["url"] = join(base, w.get("url", ""))
+            for k, dk in (("browser", "browser"), ("viewport", "viewport")):
+                w[k] = w.get(k) or d.get(dk, "")
+            w["insecure"] = bool(w.get("insecure") or d.get("insecure"))
+            w["state"] = w.get("state") or "app-" + w["login"]
+            for a in w.get("actions") or []:
+                if (a.get("do") or "").lower() == "goto" and a.get("value"):
+                    a["value"] = join(base, a["value"])
+            req["login"] = with_login(d.get("web_login"), user, pw_)
+        w["actions"] = with_login(w.get("actions"), user, pw_)
     req["step"] = w
     script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web_runner.js")
     shutil.copyfile(script, os.path.join(pw, "runner.js"))
-    p = subprocess.run([node, "runner.js"], cwd=pw, input=json.dumps(req), capture_output=True, text=True)
+    p = subprocess.run([node, "runner.js"], cwd=pw, input=json.dumps(req) + "\n", capture_output=True, text=True)
     acts = w.get("actions") or []
     log, failed = [], ""
     for ln in p.stdout.splitlines():
@@ -478,9 +514,13 @@ def web(w, shots):
         elif l.get("ok"):
             note = l.get("note") if l.get("note") and not (0 <= i < len(acts) and acts[i].get("secret")) else ""
             log.append("✓ " + what + ("  → " + note if note else ""))
+            if l.get("healed") and 0 <= i < len(acts):
+                log.append("healed %d: %s → %s" % (i + 1, acts[i].get("target", ""), l["healed"]))
+            if l.get("pic"):
+                log.append("picture: " + l["pic"])
         else:
             log.append("✗ %s: %s" % (what, l.get("error", "")))
-            for k in ("shot", "trace"):
+            for k in ("shot", "trace", "video"):
                 if l.get(k):
                     log.append("%s: %s" % ({"shot": "screenshot"}.get(k, k), l[k]))
             failed = "%s: %s" % (what, l.get("error", ""))

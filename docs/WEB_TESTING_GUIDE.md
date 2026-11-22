@@ -1,28 +1,33 @@
 # Web GUI Testing Guide
 
-Termwright tests can drive a web browser with [Playwright](https://playwright.dev): log in to a device's or
-a controller's web GUI, click through it, fill forms, upload firmware, and check what the page shows -
-next to CLI, REST, SNMP and NETCONF steps in the same test. You record or pick the actions; you do not
-write code.
-
-This guide goes step by step from setting up to running web tests in CI.
+Termwright tests can drive a web browser with [Playwright](https://playwright.dev) - for **any web
+application**, not only device GUIs: a CRM, a portal, a controller, your own product. You record or pick
+the actions; you do not write code. Compared with plain Playwright you get a saved login per app, a
+recorder, element picking, step-by-step runs in a live browser, self-healing targets, reusable blocks,
+a picture after every action in the report - and the same test can also use the CLI, REST, SNMP and
+NETCONF steps.
 
 - [1. Set up (once)](#1-set-up-once)
-- [2. Your first web test: record it](#2-your-first-web-test-record-it)
-- [3. The web step, field by field](#3-the-web-step-field-by-field)
-- [4. Actions](#4-actions)
-- [5. Targets: telling it what to act on](#5-targets-telling-it-what-to-act-on)
-- [6. Checks](#6-checks)
-- [7. Logins and passwords](#7-logins-and-passwords)
-- [8. Variables, test data and reading values from the page](#8-variables-test-data-and-reading-values-from-the-page)
-- [9. Frames, tabs, pop-ups and dialogs](#9-frames-tabs-pop-ups-and-dialogs)
-- [10. Files: upload and download](#10-files-upload-and-download)
-- [11. Waiting for slow pages](#11-waiting-for-slow-pages)
-- [12. Screenshots, traces and debugging a failure](#12-screenshots-traces-and-debugging-a-failure)
-- [13. Mixing web and CLI steps](#13-mixing-web-and-cli-steps)
-- [14. Running without Termwright (CI)](#14-running-without-termwright-ci)
-- [15. Worked examples](#15-worked-examples)
-- [16. Troubleshooting](#16-troubleshooting)
+- [2. Save the web app as a session](#2-save-the-web-app-as-a-session)
+- [3. Record a web test](#3-record-a-web-test)
+- [4. The web step, field by field](#4-the-web-step-field-by-field)
+- [5. Actions](#5-actions)
+- [6. Targets: telling it what to act on](#6-targets-telling-it-what-to-act-on)
+- [7. Step by step in a live browser: Debug, ▶ and ⌖ Pick](#7-step-by-step-in-a-live-browser-debug--and--pick)
+- [8. Self-healing targets](#8-self-healing-targets)
+- [9. Blocks: reusable actions](#9-blocks-reusable-actions)
+- [10. Checks](#10-checks)
+- [11. Logins and passwords](#11-logins-and-passwords)
+- [12. Variables, test data and reading values from the page](#12-variables-test-data-and-reading-values-from-the-page)
+- [13. Frames, tabs, pop-ups and dialogs](#13-frames-tabs-pop-ups-and-dialogs)
+- [14. Files: upload and download](#14-files-upload-and-download)
+- [15. Waiting for slow pages](#15-waiting-for-slow-pages)
+- [16. The run report: pictures, video, trace](#16-the-run-report-pictures-video-trace)
+- [17. Web, REST and CLI in one test](#17-web-rest-and-cli-in-one-test)
+- [18. Environments: the same test on staging and production](#18-environments-the-same-test-on-staging-and-production)
+- [19. Running without Termwright (CI)](#19-running-without-termwright-ci)
+- [20. Worked examples](#20-worked-examples)
+- [21. Troubleshooting](#21-troubleshooting)
 
 ---
 
@@ -31,83 +36,110 @@ This guide goes step by step from setting up to running web tests in CI.
 Web steps need **Node.js** (18 or later) on the computer that runs the tests.
 
 1. Install Node.js from [nodejs.org](https://nodejs.org) (macOS: `brew install node`).
-2. In Termwright open **Tests**, edit a test and add a step with **+ More ▾ → Web Page (Playwright)**.
-3. The step says *Playwright is not set up on this computer*. Click **Set Up Playwright**. It installs
+2. In Termwright open **Tests**, click **Record a Web Test** (or add a step with **+ More ▾ → Web Page
+   (Playwright)**).
+3. If it says *Playwright is not set up on this computer*, click **Set Up Playwright**. It installs
    Playwright and its Chromium browser in Termwright's data folder (about 150 MB, once).
 
-When the banner is gone, web steps can run and record.
+## 2. Save the web app as a session
 
-## 2. Your first web test: record it
+A web app is saved like a device: in the session list, **+ New**, protocol **More… → Web App**.
 
-Recording is the fastest way: you use the site as usual and Termwright writes the actions.
+![A web app session](screenshots/web-guide/05-web-app-session.png)
 
-1. **Tests → + New Test** (or edit a test), then **+ More ▾ → Web Page (Playwright)**.
-2. Type the page address, for example `https://10.10.0.5/login`.
-3. If the site uses a self-signed certificate (most device GUIs do), tick **Self-signed certificate OK**.
-4. If the site asks you to log in, choose the saved session that holds its user name and password in
-   **Login** (see [7](#7-logins-and-passwords)).
-5. Click **● Record in Browser**. A browser window opens at that address with a banner at the bottom:
+| Field | |
+|---|---|
+| **Address** | `https://crm-staging.example.com` - web steps' paths (`/contacts`) go after it |
+| **User / Password** | the account the tests use; the password is kept in the system keychain |
+| **Browser, Page size** | Chromium (default), Firefox or WebKit; e.g. `1280x800` |
+| **Self-signed certificate OK** | for test servers with their own certificates |
+| **Login → ● Record Login** | a browser opens at the address: log in as usual, then close it |
+
+**Record Login** saves the login as actions (`{{username}}` and `{{password}}` in place of what you
+typed - the password itself is never in the recording). From then on:
+
+- every web step with this app starts **logged in** (the browser's cookies are kept per app),
+- when the app shows its login page again (expired session, new computer, CI), the step **logs in by
+  itself** with the recorded login and goes on,
+- **Test Login** checks the recorded login in a fresh browser,
+- **double-click** the session (or right-click → **Open in Browser**) opens the app, logged in.
+
+Single sign-on pages (Okta, Azure AD…) record the same way; one-time codes cannot be automated - use a
+test account without them.
+
+## 3. Record a web test
+
+1. **Tests → Record a Web Test**.
+
+   ![Record a Web Test](screenshots/web-guide/06-record-web-test.png)
+
+2. Choose the **web app**, the **start page** (`/contacts`, or empty for the address), a **name** and the
+   folder.
+3. **Start Recording.** The browser opens logged in, with a banner at the bottom:
 
    ![The browser while recording](screenshots/web-guide/04-browser-recording.png)
 
-6. Do the task: click links and buttons, type into fields, choose options, tick boxes. Each one is added
-   to the step as you go (a blue outline flashes on what was recorded).
-7. To add a **check**, hold **Alt** (Option on a Mac) and click a text on the page: the step gets
-   *Check it shows* for that text (a green outline flashes).
-8. Close the browser window. The recording is in the step:
+4. Do the task: click, type, choose, tick, upload. Each one becomes an action (a blue outline flashes).
+5. To add a **check**, hold **Alt** (Option on a Mac) and click a text: *Check it shows* (green outline).
+6. Close the browser. The test opens in the editor:
 
    ![The recorded actions](screenshots/web-guide/03-recording.png)
 
-9. Look the actions over: rename targets if you like, delete extra clicks (✕), move actions (↑), add
-   more (**+ Action**). Click **Save**, then **Run Test**.
+7. Look it over, **▶ Debug in Browser** to try it ([7](#7-step-by-step-in-a-live-browser-debug--and--pick)),
+   then **Save** and **Run Test**.
 
 What the recorder writes:
 
 | You do | Recorded |
 |---|---|
-| Click a button, link, tab or menu item | `click` with the most readable target it finds (`role=button[name="Save"]`, `text=Alarms`) |
-| Type into a field (then leave it or press Enter) | `fill label=User name "admin"` (and `press Enter` if you pressed it) |
-| Type into a password field | `fill label=Password "{{password}}"` - the password itself is never recorded |
-| Choose in a drop-down | `select label=Mode "Tagged"` (the option's text) |
+| Click a button, link, tab or menu item | `click` with the most readable target (`role=button[name="Save"]`, `text=Alarms`) and up to two fallbacks |
+| Type into a field (then leave it or press Enter) | `fill label=Name "Ann Lee"` (and `press Enter` if you pressed it) |
+| Type into a password field | `fill label=Password "{{password}}"` - never the password |
+| Choose in a drop-down | `select label=Type "Customer"` (the option's text) |
 | Tick / untick | `check` / `uncheck` |
 | Choose a file | `upload` with the file names (put the files in the tests folder) |
 | A link opens a new tab | `tab last` |
 | Alt+click a text | `expect "the text"` |
 
-## 3. The web step, field by field
+You can also record into any existing web step: **● Record in Browser** (or, with the debug browser open,
+**● Record from Here** - the actions go after the selected one).
+
+## 4. The web step, field by field
 
 ![A web step in the editor](screenshots/web-guide/01-web-step.png)
 
 | Field | What it does |
 |---|---|
-| **Address** | The page opened first. May be empty if the first action is *Go to address*. `{{variables}}` work. |
+| **Address** | The page opened first: a path after the web app's address (`/contacts`, empty = the address itself), or a full address. `{{variables}}` work. |
 | **Browser** | Chromium (default), Firefox or WebKit (Safari's engine). Firefox and WebKit need `npx playwright install firefox webkit` in the Playwright folder. |
 | **Actions** | What to do, in order. Each has an action, usually a **target**, and sometimes a **value**. |
 | **Self-signed certificate OK** | Accept certificates the browser does not trust (device GUIs). |
 | **Show the browser** | Run with a visible window (default hidden) - useful to watch a run. |
-| **Trace** | Record a Playwright trace of the whole step ([12](#12-screenshots-traces-and-debugging-a-failure)). |
-| **Login** | A saved session: its user name and password fill `{{username}}` / `{{password}}` and answer the site's HTTP login (the browser's own user-name box). |
-| **Keep login as** | Keep the cookies under this name: the next web steps with the same name start logged in, so only the first one has to log in. |
+| **Trace** | Record a Playwright trace of the whole step ([16](#16-the-run-report-pictures-video-trace)). |
+| **Web app** | The web app session (its address, login and settings) - or any saved session whose user name and password fill `{{username}}` / `{{password}}`. A testbed role works too: `{{app}}`. |
+| **Keep login as** | (sessions that are not web apps) keep the cookies under this name: the next web steps with the same name start logged in. Web apps do this by themselves. |
+| **Pictures** | A picture after every action in the run report (off: only when an action fails). |
 | **Size** | The page size, e.g. `1280x800`, or `390x844` to see a phone layout. |
-| **Checks** | The usual checks of a step; they look at the step's output (see [6](#6-checks)). |
+| **Checks** | The usual checks of a step; they look at the step's output (see [10](#10-checks)). |
 
 In the YAML file the step looks like this:
 
 ```yaml
-- name: Add VLAN 200 in the GUI
+- name: Create a contact
   web:
-    url: https://mgmt.lab.local/login
-    insecure: true
-    login: Lab Web/mgmt-admin
-    state: mgmt
+    login: Apps/CRM staging        # the web app: starts logged in
+    url: /contacts
     actions:
-      - { do: fill, target: label=User name, value: "{{username}}" }
-      - { do: fill, target: label=Password, value: "{{password}}" }
-      - { do: click, target: 'role=button[name="Sign in"]' }
-      - { do: expect, value: Dashboard }
+      - { do: click, target: 'role=button[name="New contact"]', alt: ['#new-contact'] }
+      - { do: fill, target: label=Name, value: "{{name}}", alt: ['#contact-name'] }
+      - { do: select, target: label=Type, value: Customer }
+      - { do: block, target: save-and-confirm, with: { toast: Saved } }
+      - { do: expect, target: table.contacts, value: "{{name}}" }
 ```
 
-## 4. Actions
+`alt` are the fallback targets ([8](#8-self-healing-targets)); `block` uses a saved block ([9](#9-blocks-reusable-actions)).
+
+## 5. Actions
 
 Pick the action from the list; the boxes after it change to what it needs.
 
@@ -143,10 +175,11 @@ Pick the action from the list; the boxes after it change to what it needs.
 | Check address / Check title (`expect_url` / `expect_title`) | - | text | Part of the address or the title. |
 | Read into variable (`read`) | yes | name | Its text becomes `{{name}}` for later steps. |
 | Screenshot (`screenshot`) | optional | file name | The page, or just the target. Saved in `reports/web-shots`. |
+| Use block (`block`) | block name | its values | The actions of a saved block ([9](#9-blocks-reusable-actions)). |
 
 Every action waits for its target (up to the step's timeout, 30 s by default), so you rarely need *Wait*.
 
-## 5. Targets: telling it what to act on
+## 6. Targets: telling it what to act on
 
 Prefer what a person sees on the page; it survives redesigns better than CSS.
 
@@ -171,7 +204,53 @@ Tips:
 - `role=row[name=/200/]` takes a regular expression between slashes.
 - Ids that look generated (`mat-input-17`, `ext-gen1234`) change between releases; the recorder avoids them.
 
-## 6. Checks
+## 7. Step by step in a live browser: Debug, ▶ and ⌖ Pick
+
+Writing or fixing a web test does not need full runs. **▶ Debug in Browser** opens the step's page in a
+browser (logged in) and **keeps it open** while you edit:
+
+![Step by step](screenshots/web-guide/07-step-by-step.png)
+
+- **▶** on an action runs just that action in the open browser; its result shows on the left
+  (✓, ⚠ healed, ✗ with the reason). Change the action and press ▶ again - no rerun from the start.
+- **▶ Run All** runs the step from its page; **↺ Start Over** goes back to the page; **■ Stop** closes
+  the browser.
+- **⌖ Pick**: click ⌖ on an action, then click the element in the browser (a blue box follows the mouse,
+  Esc cancels). Its target - and fallbacks - are filled in. Nobody needs to write selectors.
+- **● Record from Here**: records in the open browser; the actions go after the selected action (click
+  an action's number to select it; Shift+click selects a range).
+
+The variables of the test (its defaults and the first data row) are used, and blocks run as their actions.
+
+## 8. Self-healing targets
+
+The recorder and ⌖ Pick save up to two **fallback targets** with each action (`alt:` in the YAML; the
+target box's tooltip shows them). When a new release of the app changes the page and the target is no
+longer found, the run tries the fallbacks before failing. The action passes, and the run says so:
+
+```
+✓ fill label=Name "Ann Lee"
+healed 2: label=Name → #contact-name
+```
+
+The step shows **⚠ Healed in the last run** with **Use the New Targets**: one click makes the target that
+worked the target (the old one becomes a fallback); save the test. The HTML report lists healed actions
+too, so a release that renamed things is visible without failing every test.
+
+## 9. Blocks: reusable actions
+
+Logging in, saving a dialog, opening a menu: actions many tests repeat can be a **block**.
+
+1. Select the actions (click their numbers; Shift+click for a range) - or none for all.
+2. **Save as Block…** and give it a name, e.g. *Save and confirm*.
+3. The actions become one **Use block** action. `{{names}}` in them become the block's values: the
+   action shows a box for each (e.g. `toast: Saved`).
+
+Other web steps choose **Use block** and the block's name; its actions run in the same browser, in
+place. Blocks are files of the tests folder (`procs/<name>.yaml`) - change one and every test that uses
+it changes. A block can use other blocks.
+
+## 10. Checks
 
 There are two places to check things.
 
@@ -183,13 +262,18 @@ There are two places to check things.
 read and the page's text at the end. For example `contains "VLAN 200 saved"`, `not contains "Error"`,
 `field "Uptime: (\S+)"`, or a regular expression. They report every check, not just the first failure.
 
-## 7. Logins and passwords
+## 11. Logins and passwords
 
 Passwords never go in a test file.
 
-1. Save the site's login as a session (**+ New** in the session list; protocol API or any, with the host,
-   user name and password - the password is kept in the system keychain).
-2. In the web step choose it in **Login**.
+**Web apps** ([2](#2-save-the-web-app-as-a-session)): record the login once on the session; the steps
+need no login actions at all.
+
+**Other sites**, or a login inside the test:
+
+1. Save the account as a session (any protocol, with the user name and password - the password is kept in
+   the system keychain).
+2. In the web step choose it in **Web app**.
 3. Use `{{username}}` and `{{password}}` as values:
 
    ```yaml
@@ -200,11 +284,11 @@ Passwords never go in a test file.
 The password is typed into the page but shown as `"••••"` in logs and reports. The same session also
 answers HTTP (basic) logins. Recording a password field writes `{{password}}` for you.
 
-**Log in once per run:** set **Keep login as** (e.g. `mgmt`) on every web step of the GUI. The first
-step logs in; its cookies are kept, and the next steps with the same name open already logged in - they
-need no login actions. If a later step finds the login page again, add the login actions to it too.
+**Log in once per run** (sessions that are not web apps): set **Keep login as** (e.g. `mgmt`) on every
+web step of the GUI. The first step logs in; its cookies are kept, and the next steps with the same name
+open already logged in.
 
-## 8. Variables, test data and reading values from the page
+## 12. Variables, test data and reading values from the page
 
 - `{{name}}` works in addresses, targets and values: test variables, testbed roles and **test data**
   columns (run the test once per row of a CSV/Excel file).
@@ -218,7 +302,7 @@ need no login actions. If a later step finds the login page again, add the login
   switch's CLI shows the same name.
 - Values read also show in the step's output, so step checks can test them.
 
-## 9. Frames, tabs, pop-ups and dialogs
+## 13. Frames, tabs, pop-ups and dialogs
 
 - **Frames:** start the target with `frame=<the iframe> >>`: `frame=#main >> role=button[name="Apply"]`.
   Frames inside frames: `frame=#outer >> frame=#inner >> text=OK`.
@@ -228,14 +312,14 @@ need no login actions. If a later step finds the login page again, add the login
   into a prompt) **before** the click that shows it. Without one, pop-ups are accepted. Every pop-up's
   message is in the log (`dialog: confirm: Save?`).
 
-## 10. Files: upload and download
+## 14. Files: upload and download
 
 - **Upload:** put the file in the tests folder (e.g. `files/fw-33.2.bin`), then
   `upload label=Firmware "files/fw-33.2.bin"`. Several files: separate them with commas.
 - **Download:** `download role=button[name="Export"] "config.txt"` clicks it and saves the file in
   `reports/web-shots/config.txt`.
 
-## 11. Waiting for slow pages
+## 15. Waiting for slow pages
 
 Actions already wait for their target. When a page needs more:
 
@@ -246,17 +330,29 @@ Actions already wait for their target. When a page needs more:
 - Give the step a longer **Timeout** (s) for slow controllers, or tick **Retry until it passes** for
   values that settle.
 
-## 12. Screenshots, traces and debugging a failure
+## 16. The run report: pictures, video, trace
 
-When an action fails the log shows which one and why, for example:
+Each run keeps, in its report folder (`reports/<run>/web/`):
+
+- a **picture after every action** (turn off with *Pictures* on the step),
+- the **screenshot** of the moment an action failed (red frame),
+- a **video** of a failed step (`.webm`),
+- the **trace**, when *Trace* is ticked.
+
+In Termwright the step's result shows the pictures as a strip - click one to enlarge it:
+
+![Pictures of a run](screenshots/web-guide/08-run-pictures.png)
+
+The HTML report shows them the same way, and the run folder can be zipped and shared on its own. When an
+action fails the log says which one and why:
 
 ```
 ✓ click role=button[name="Save"]
 ✗ expect .toast "VLAN 200 saved": found "VLAN 200 exists"
-screenshot: reports/web-shots/failed-1763814455123.png
+screenshot: web/failed-1763814455123.png
+video: web/failed-1763814455990.webm
 ```
 
-- The **screenshot** of the moment it failed is in the run report.
 - Tick **Show the browser** and run the test to watch it.
 - Tick **Trace** for a full recording of the step: the page before and after each action, the network and
   the console. Open it with `npx playwright show-trace reports/web-shots/trace-….zip`
@@ -264,10 +360,32 @@ screenshot: reports/web-shots/failed-1763814455123.png
 - Add `screenshot "after-save"` actions to keep pictures of passing runs too.
 - **Explain Failure** (AI) reads the log and the page text and suggests the fix.
 
-## 13. Mixing web and CLI steps
+## 17. Web, REST and CLI in one test
 
-A web step is a step like any other, so one test can change something in the GUI and check it on the
-device (or the other way round):
+A web step is a step like any other. **REST steps can use the web app session too**: the path goes after
+the app's address and the request carries the login the web steps keep (the browser's cookies), so an
+API call runs as the logged-in user - create data through the API, check it in the GUI, clean up through
+the API:
+
+```yaml
+name: Contact from the API shows in the GUI
+vars: { app: Apps/CRM staging, name: Test Contact 7 }
+steps:
+  - web: { login: "{{app}}", url: / }             # logs in (once)
+  - http: { session: "{{app}}", method: POST, url: /api/contacts, body: '{"name": "{{name}}"}' }
+    expect: [{ status: 201 }]
+    save: [{ var: id, json: id }]
+  - web:
+      login: "{{app}}"
+      url: /contacts
+      actions:
+        - { do: fill, target: placeholder=Search, value: "{{name}}" }
+        - { do: expect, target: table.contacts, value: "{{name}}" }
+cleanup:
+  - http: { session: "{{app}}", method: DELETE, url: "/api/contacts/{{id}}" }
+```
+
+And with devices - change something in a GUI and check it on the switch:
 
 ```yaml
 name: GUI VLAN reaches the switch
@@ -291,7 +409,20 @@ cleanup:
   - run: { session: "{{core}}", command: "no vlan {{vlan}}" }
 ```
 
-## 14. Running without Termwright (CI)
+## 18. Environments: the same test on staging and production
+
+Use a testbed role for the app instead of the session's name:
+
+```yaml
+# testbeds/staging.yaml          # testbeds/prod.yaml
+app: Apps/CRM staging            app: Apps/CRM prod
+```
+
+The steps say `login: "{{app}}"` (and `session: "{{app}}"` in REST steps). Choose the testbed when you run
+- in Termwright, in a schedule, or `twrun run --testbed testbeds/prod.yaml`. Each app keeps its own
+login.
+
+## 19. Running without Termwright (CI)
 
 Web steps run everywhere tests run:
 
@@ -306,15 +437,16 @@ Web steps run everywhere tests run:
   ```
 
   (`TW_PLAYWRIGHT_DIR=/path` uses a Playwright installed elsewhere.)
-- The **Login** session must be in the exported `inventory.yaml` (it is, when the test uses it); its
-  password comes from `TW_PASSWORD_<NAME>`, the keychain or a prompt, like device passwords.
+- The web app is in the exported `inventory.yaml` (`protocol: web`, `web_url`, `web_login` - the recorded
+  login, with no password); its password comes from `TW_PASSWORD_<NAME>`, the keychain or a prompt, like
+  device passwords. The login the steps keep is in `.web-state/` of the suite.
 - On a Linux CI machine without a display, leave **Show the browser** off. Chromium may need its system
   libraries: `npx --prefix .playwright playwright install --with-deps chromium`.
 
 Values read into variables are passed on by Termwright and twrun; in Python and Go suites they show in
-the log.
+the log. Blocks are expanded when the suite is exported.
 
-## 15. Worked examples
+## 20. Worked examples
 
 **Log in and check the dashboard**
 
@@ -360,7 +492,7 @@ web:
     - { do: click, target: frame=#settings >> role=button[name="Apply"] }
 ```
 
-## 16. Troubleshooting
+## 21. Troubleshooting
 
 | Problem | Fix |
 |---|---|
@@ -369,7 +501,10 @@ web:
 | *Timeout 30000ms exceeded* waiting for a target | The target does not match: check the spelling, use `text=`/`role=`, or the element is in a frame (`frame=… >>`) or another tab (`tab last`). |
 | A click does nothing | Something covers it (cookie banner, overlay): click that away first, or `wait_gone` it. |
 | *strict mode* / the wrong element | Make the target exact: `>> nth=0`, `role=…[name="…"]`. |
-| `{{password}}` typed literally | Choose the **Login** session of the step. |
-| Logged out between steps | Give every web step of the site the same **Keep login as**. |
+| `{{password}}` typed literally | Choose the step's **Web app** (or login session). |
+| *the app's login (fill label=Email): …* | The login page changed: **Record Login** again on the web app session, then **Test Login**. |
+| A step keeps logging in | The app's cookies expire quickly, or the login's first field is also on other pages - that is fine; it only logs in when that field shows. |
+| ⌖ Pick does nothing | Click in the browser window that opened (it may be behind Termwright); Esc cancels. |
+| Logged out between steps | Use a web app session (it keeps the login), or give every web step the same **Keep login as**. |
 | Recording records too much | Delete the extra actions with ✕ - hovering, scrolling and clicks on empty space are not recorded. |
 | Works on your Mac, fails in CI | Different screen size: set **Size**. Missing libraries: `playwright install --with-deps chromium`. |

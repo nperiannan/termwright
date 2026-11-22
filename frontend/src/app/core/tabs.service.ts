@@ -637,6 +637,7 @@ export class Tabs {
       const node = this.ui.findNode(path);
       if (isRemoteDesktop(node?.protocol)) { await this.openRemote(path, null); return; }
       if (node?.protocol === 'WOL') { await this.wol.wake(await this.backend.getSession(path)); return; }
+      if (node?.protocol === 'Web') { try { await this.backend.webOpenApp(path); this.ui.toast(tr('{0} opens in a browser', node.name), 'success'); } catch (e) { this.ui.toast(errText(e), 'error'); } return; }
       if (node?.protocol === 'API') { await this.openApi(path, node.name); return; }
       if (node?.protocol === 'SNMP') { await this.openSnmp(path, node.name); return; }
       if ((this.ui.settings()?.teams ?? []).length && node && !(await this.injector.get(TeamStatusService).allowConnect(node))) return; // reserved by someone else

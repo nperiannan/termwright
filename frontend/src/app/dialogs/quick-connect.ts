@@ -137,7 +137,7 @@ export class QuickConnect {
   legacy = false;
 
   readonly mainProtos = ['SSH2', 'Telnet', 'Serial', 'RDP'];
-  readonly otherProtos = PROTOCOLS.filter(p => !['SSH2', 'Telnet', 'Serial', 'RDP', 'API', 'SNMP'].includes(p));
+  readonly otherProtos = PROTOCOLS.filter(p => !['SSH2', 'Telnet', 'Serial', 'RDP', 'API', 'SNMP', 'Web'].includes(p));
   readonly protoLabel = protoLabel;
   protoMenu(ev: MouseEvent) {
     this.ui.showMenu(ev, this.otherProtos.map(p => ({ label: (this.protocol === p ? '✓ ' : '') + protoLabel(p), icon: '', action: () => { this.protocol = p; this.onProto(); } })));

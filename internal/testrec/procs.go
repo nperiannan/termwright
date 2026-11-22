@@ -129,8 +129,15 @@ func (f Folder) ExpandCalls(c Case) (Case, error) {
 	if c.Steps, err = f.expandList(c.Steps, 0); err != nil {
 		return c, err
 	}
-	c.Cleanup, err = f.expandList(c.Cleanup, 0)
-	return c, err
+	if c.Cleanup, err = f.expandList(c.Cleanup, 0); err != nil {
+		return c, err
+	}
+	for _, l := range [][]Step{c.Setup, c.Steps, c.Cleanup} {
+		if err := f.expandStepBlocks(l); err != nil {
+			return c, err
+		}
+	}
+	return c, nil
 }
 
 func (f Folder) expandList(l []Step, depth int) ([]Step, error) {

@@ -27,7 +27,7 @@ var WebActions = func() []string {
 	return out
 }()
 
-func fillWeb(w WebStep, v map[string]string) WebStep {
+func FillWeb(w WebStep, v map[string]string) WebStep {
 	w.URL, w.Login, w.State = Fill(w.URL, v), Fill(w.Login, v), Fill(w.State, v)
 	acts := make([]WebAction, len(w.Actions))
 	for i, a := range w.Actions {

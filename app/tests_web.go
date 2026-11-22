@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/termwright/termwright/internal/config"
+	"github.com/termwright/termwright/internal/session"
 	"github.com/termwright/termwright/internal/testrec"
 	"github.com/termwright/termwright/internal/webrun"
 )
@@ -32,14 +33,24 @@ func (a *App) webExtra(w testrec.WebStep) (testrec.WebStep, webrun.Extra, string
 	if d, err := config.DataDir(); err == nil {
 		x.StateDir = filepath.Join(d, "web-state")
 	}
+	if f, err := a.testsFolder(); err == nil {
+		if acts, err := f.ExpandBlocks(w.Actions); err == nil {
+			w.Actions = acts
+		}
+	}
 	if w.Login != "" {
 		if s, err := a.store.Get(w.Login); err == nil {
 			pw, ok := a.secret(s.Path)
 			if !ok && s.DeviceType != "" {
 				pw, _ = a.secret("devicetype:" + strings.ToLower(s.DeviceType))
 			}
-			x.HTTPUser, x.HTTPPassword = s.Username, pw
-			w = webrun.WithLogin(w, s.Username, pw)
+			if s.Protocol == session.ProtoWeb {
+				w, x = webrun.ForApp(w, webrun.App{Name: s.Path, URL: s.WebURL, Browser: s.WebBrowser, Viewport: s.WebViewport,
+					Insecure: s.WebInsecure, User: s.Username, Password: pw, Login: webrun.ParseLogin(s.WebLogin)}, x)
+			} else {
+				x.HTTPUser, x.HTTPPassword = s.Username, pw
+				w = webrun.WithLogin(w, s.Username, pw)
+			}
 		}
 	}
 	return w, x, shots

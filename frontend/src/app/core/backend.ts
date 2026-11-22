@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import type { TestWeb, TestWebAction, TestbedDevice, TestExpect, WebStatus, TestBooking, TestTrends, TestProc, TestProcInfo, TemplateSpec, SNMPRow, HMockInfo, APIMonitor, APIMonitorState, SNMPDashboard, SNMPDashPoll, SNMPSimState, TestApproval, TopoPlan, TopoRequest, TopoResult, LayoutRequest, LayoutResult, TestCase, TestCaseInfo, TestRunReport, TestsTree, TestsGitInfo, TestSchedule, TestScheduleView, IntegrationsConfig, TestTable, TestHistory } from './models';
+import type { TestWeb, TestWebAction, WebResult, WebPick, TestbedDevice, TestExpect, WebStatus, TestBooking, TestTrends, TestProc, TestProcInfo, TemplateSpec, SNMPRow, HMockInfo, APIMonitor, APIMonitorState, SNMPDashboard, SNMPDashPoll, SNMPSimState, TestApproval, TopoPlan, TopoRequest, TopoResult, LayoutRequest, LayoutResult, TestCase, TestCaseInfo, TestRunReport, TestsTree, TestsGitInfo, TestSchedule, TestScheduleView, IntegrationsConfig, TestTable, TestHistory } from './models';
 import { EmuEngines, EmuHostNIC, EmuTrex,
   EmuServer, EmuServerView,
   AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange, SNMPRequest, SNMPResult, SNMPMibNode, SNMPModule, SNMPSecretState, SNMPTrapState, SNMPTrapsView, HSendRequest, HResponse, HCollection, HCollectionInfo, HRunRequest, HRunResult, HHistoryItem, HRequest, AISkill, HEnv, HVar, HHostCookies, SyslogSettings, SyslogState, SyslogMsg, SyslogRule, SyslogQuery, SyslogSendIn } from './models';
@@ -356,6 +356,18 @@ export class Backend {
   webStatus() { return this.call<WebStatus>('WebStatus'); }
   webSetup() { return this.call<void>('WebSetup'); }
   webRecord(w: TestWeb) { return this.call<TestWebAction[]>('WebRecord', w); }
+  webRecordLogin(path: string, url: string, user: string) { return this.call<TestWebAction[]>('WebRecordLogin', path, url, user); }
+  webTestLogin(path: string) { return this.call<string>('WebTestLogin', path); }
+  webOpenApp(path: string) { return this.call<void>('WebOpenApp', path); }
+  webDebugOpen(w: TestWeb, vars: Record<string, string>) { return this.call<void>('WebDebugOpen', w, vars); }
+  webDebugRun(acts: TestWebAction[], from: number, vars: Record<string, string>) { return this.call<WebResult[]>('WebDebugRun', acts, from, vars); }
+  webDebugPick() { return this.call<WebPick | null>('WebDebugPick'); }
+  webDebugRecord(on: boolean) { return this.call<void>('WebDebugRecord', on); }
+  webDebugRestart() { return this.call<void>('WebDebugRestart'); }
+  webDebugClose() { return this.call<void>('WebDebugClose'); }
+  testsSaveWebBlock(name: string, description: string, acts: TestWebAction[]) { return this.call<string>('TestsSaveWebBlock', name, description, acts); }
+  testsImage(p: string) { return this.call<string>('TestsImage', p); }
+  testsWebBlocks() { return this.call<TestProcInfo[]>('TestsWebBlocks'); }
   testStop() { return this.call<void>('TestStop'); }
   testResume(action: string, vars?: Record<string, string>) { return this.call<void>('TestResume', action, vars ?? null); }
   testManualAnswer(id: string, result: string, note: string) { return this.call<void>('TestManualAnswer', id, result, note); }

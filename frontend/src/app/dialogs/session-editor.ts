@@ -151,7 +151,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                 
                 </div>
                 <div class="pair o4">
-                @if (!remote() && s.protocol !== 'WOL' && s.protocol !== 'API') {
+                @if (!remote() && s.protocol !== 'WOL' && s.protocol !== 'API' && s.protocol !== 'Web') {
                 <div class="f"><label>Device type</label>
                 <select name="devtype" [ngModel]="s.deviceType" (ngModelChange)="s.deviceType = $event; onDeviceType()">
                   <option value="">(none)</option>
@@ -293,6 +293,20 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                       <button type="button" (click)="apiTest()" [disabled]="apiBusy()">{{ apiBusy() ? 'Testing…' : 'Test (send GET)' }}</button>
                       @if (apiMsg(); as m) { <span [class.ok]="m.ok" [class.bad]="!m.ok" class="snmpmsg">{{ m.text }}</span> }</div></div>
                 }
+                @if (s.protocol === 'Web') {
+                  <div class="f o3 wide"><label>Address</label><input name="weburl" [(ngModel)]="s.webUrl" placeholder="https://app.example.com (web steps' paths go after it)" spellcheck="false" /></div>
+                  <div class="pair o5"><div class="f"><label>User</label><input name="webuser" [(ngModel)]="s.username" autocomplete="off" /></div>
+                    <div class="f"><label>Password</label><div class="row"><input name="webpw" [type]="isShown('web') ? 'text' : 'password'" autocomplete="new-password" [(ngModel)]="pw" [disabled]="noPw" [placeholder]="pwState() === 'set' ? '(saved - type to change)' : pwState() === 'empty' ? '(saved: no password)' : ''" /> <button type="button" class="eye" (click)="toggleShow('web')" [title]="isShown('web') ? 'Hide' : 'Show what you typed'" [attr.aria-pressed]="isShown('web')"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg></button></div></div></div>
+                  <div class="pair o5"><div class="f"><label>Browser</label><select name="webbr" [(ngModel)]="s.webBrowser"><option [ngValue]="undefined">Chromium</option><option value="firefox">Firefox</option><option value="webkit">WebKit (Safari)</option></select></div>
+                    <div class="f"><label>Page size</label><input name="webvp" [(ngModel)]="s.webViewport" placeholder="1280x800" /></div></div>
+                  <div class="f o5 wide"><label></label><label class="nowrap"><input type="checkbox" name="webins" [(ngModel)]="s.webInsecure" /> Self-signed certificate OK</label></div>
+                  <div class="f o6 wide"><label>Login</label>
+                    <div><div class="row">@if (webLoginCount()) { <span class="ok">✓ recorded: {{ webLoginCount() }} actions</span> } @else { <span class="mut">not recorded - web steps start at the address as it is</span> }<span class="sp"></span>
+                      <button type="button" class="rec" (click)="webRecordLogin()" [disabled]="webBusy()">{{ webBusy() === 'rec' ? '● Recording… close the browser' : '● Record Login' }}</button>
+                      @if (webLoginCount()) { <button type="button" (click)="webTestLogin()" [disabled]="!!webBusy()">{{ webBusy() === 'test' ? 'Testing…' : 'Test Login' }}</button><button type="button" class="lnk" (click)="s.webLogin = ''" title="Forget the recorded login">Clear</button> }</div>
+                      @if (webMsg(); as m) { <div [class.ok]="m.ok" [class.bad]="!m.ok" class="snmpmsg">{{ m.text }}</div> }
+                      <div class="hint">Log in once in the browser that opens, then close it. Web steps with this app start logged in; when the login page shows again they log in by themselves. The password you type is never saved in the recording - it is the one above, in the keychain. Double-click the session to open the app, logged in.</div></div></div>
+                }
                 @if (s.protocol === 'RDP') {
                   <label></label><div class="hint">Opens in this computer's Remote Desktop client (Remote Desktop Connection on Windows, Windows App on macOS,
                     FreeRDP or Remmina on Linux). With a jump host or proxy, Termwright opens a local tunnel for it.</div>
@@ -354,7 +368,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                       <button type="button" (click)="ui.open('passwords')">{{ au.account ? 'Edit Account…' : 'Accounts…' }}</button></div>
                   }
                 }
-                @if (s.protocol !== 'WOL' && s.protocol !== 'API' && s.protocol !== 'SNMP' && (s.protocol === 'SSH2' || (!remote() && s.protocol !== 'Local Shell'))) {
+                @if (s.protocol !== 'WOL' && s.protocol !== 'API' && s.protocol !== 'SNMP' && s.protocol !== 'Web' && (s.protocol === 'SSH2' || (!remote() && s.protocol !== 'Local Shell'))) {
                   <label class="o5">{{ '' }}</label>
                   <div class="checks o5">
                     @if (!remote() && s.protocol !== 'Local Shell') {
@@ -818,7 +832,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
         @if (error()) { <span class="err">{{ error() }}</span> }
         <span class="spacer"></span>
         <button type="button" (click)="ui.close()">Cancel</button>
-        <button type="button" (click)="save(true)">{{ s.protocol === 'WOL' ? 'Save &amp; Wake' : s.protocol === 'API' || s.protocol === 'SNMP' ? 'Save &amp; Open' : 'Save &amp; Connect' }}</button>
+        <button type="button" (click)="save(true)">{{ s.protocol === 'WOL' ? 'Save &amp; Wake' : s.protocol === 'API' || s.protocol === 'SNMP' || s.protocol === 'Web' ? 'Save &amp; Open' : 'Save &amp; Connect' }}</button>
         <button type="submit" class="primary">Save</button>
       </div>
     </form>
@@ -868,7 +882,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
   styles: [`
     .apivars { width: 100%; border-collapse: collapse; margin-bottom: 8px; } .apivars th { text-align: left; font-weight: 500; color: var(--muted); padding: 4px; } .apivars td { padding: 3px 4px; } .apivars input:not([type=checkbox]) { width: 100%; box-sizing: border-box; } .apivars .x { padding: 2px 8px; } h3.sec { margin: 18px 0 8px; font-size: 13px; }
     .eye { display: inline-flex; align-items: center; justify-content: center; padding: 3px 7px; color: var(--muted); flex: none; } .nw { white-space: nowrap; }
-    .vault { color: var(--ok); font-size: 12px; white-space: nowrap; } .snmpmsg { font-size: 12px; } .snmpmsg.ok { color: var(--ok); } .snmpmsg.bad { color: var(--danger); }
+    .vault { color: var(--ok); font-size: 12px; white-space: nowrap; } .snmpmsg { font-size: 12px; } .snmpmsg.ok { color: var(--ok); } .snmpmsg.bad { color: var(--danger); } button.rec { color: #f85149; border-color: color-mix(in srgb, #f85149 50%, transparent); font-weight: 600; } span.ok { color: var(--ok); }
     .rt { border: 1px solid var(--line, var(--border)); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px;
       .rth { display: flex; gap: 12px; align-items: center; } .tx { flex: 1; display: flex; flex-direction: column; line-height: 1.4; small { color: var(--muted); } }
       &.off { border-color: color-mix(in srgb, #f59e0b 55%, transparent); select, input:not(.tgl input), .grid { opacity: .6; } } } /* not the switch's own (hidden) check box */
@@ -949,10 +963,34 @@ export class SessionEditor implements OnInit {
   }
 
   wakeNow() { if (this.s) void this.tabs.wake(structuredClone(this.s), '', 'none'); }
+  // ---- web app: its recorded login ----
+  readonly webBusy = signal<'' | 'rec' | 'test'>('');
+  readonly webMsg = signal<{ ok: boolean; text: string } | null>(null);
+  webLoginCount() { try { return (JSON.parse(this.s?.webLogin || '[]') as unknown[]).length; } catch { return 0; } }
+  async webRecordLogin() {
+    if (!this.s) return;
+    const url = (this.s.webUrl ?? '').trim();
+    if (!url) { this.webMsg.set({ ok: false, text: 'Type the address first.' }); return; }
+    this.webBusy.set('rec'); this.webMsg.set(null);
+    try {
+      const acts = await this.backend.webRecordLogin(this.oldPath ?? '', /^[a-z]+:\/\//i.test(url) ? url : 'https://' + url, this.s.username ?? '');
+      if (!acts.length) { this.webMsg.set({ ok: false, text: 'Nothing was recorded.' }); return; }
+      this.s.webLogin = JSON.stringify(acts);
+      this.webMsg.set({ ok: true, text: acts.length + ' actions recorded - save the session, then Test Login.' });
+    } catch (e) { this.webMsg.set({ ok: false, text: e instanceof Error ? e.message : String(e) }); }
+    finally { this.webBusy.set(''); }
+  }
+  async webTestLogin() {
+    if (!this.oldPath) { this.webMsg.set({ ok: false, text: 'Save the session first.' }); return; }
+    this.webBusy.set('test'); this.webMsg.set(null);
+    try { await this.backend.webTestLogin(this.oldPath); this.webMsg.set({ ok: true, text: 'Logged in.' }); }
+    catch (e) { this.webMsg.set({ ok: false, text: e instanceof Error ? e.message : String(e) }); }
+    finally { this.webBusy.set(''); }
+  }
   /** Who logs in (Account). */
-  canLogin() { return !!this.s && !['Local Shell', 'VNC', 'WOL', 'API', 'SNMP'].includes(this.s.protocol); }
+  canLogin() { return !!this.s && !['Local Shell', 'VNC', 'WOL', 'API', 'SNMP', 'Web'].includes(this.s.protocol); }
   ownFields() {
-    if (!this.s || this.s.protocol === 'WOL' || this.s.protocol === 'API' || this.s.protocol === 'SNMP') return false;
+    if (!this.s || this.s.protocol === 'WOL' || this.s.protocol === 'API' || this.s.protocol === 'SNMP' || this.s.protocol === 'Web') return false;
     if (!this.canLogin()) return true;
     const c = accountChoice(this.s);
     return c === '-' || (c === '' && defaultLogin(this.ui.settings(), this.s).kind === 'own');
@@ -1192,7 +1230,7 @@ export class SessionEditor implements OnInit {
 
   remote() { return this.s?.protocol === 'RDP' || this.s?.protocol === 'VNC'; }
   /** Sessions without a terminal (remote desktops, Wake-on-LAN). */
-  noTerm() { return this.remote() || this.s?.protocol === 'WOL' || this.s?.protocol === 'API' || this.s?.protocol === 'SNMP'; }
+  noTerm() { return this.remote() || this.s?.protocol === 'WOL' || this.s?.protocol === 'API' || this.s?.protocol === 'SNMP' || this.s?.protocol === 'Web'; }
   readonly mainProtos = ['SSH2', 'Telnet', 'Serial', 'RDP', 'VNC'];
   readonly otherProtos = PROTOCOLS.filter(p => !['SSH2', 'Telnet', 'Serial', 'RDP', 'VNC'].includes(p));
   readonly protoLabel = protoLabel;
@@ -1211,7 +1249,7 @@ export class SessionEditor implements OnInit {
   subtitle() {
     const s = this.s;
     if (!s) return '';
-    const where = s.protocol === 'API' ? (s.apiBaseUrl ?? '') : s.protocol === 'SNMP' ? (s.hostname || '') : s.protocol === 'Serial' ? [s.comPort, s.baudRate].filter(Boolean).join(' ') : s.protocol === 'Local Shell' ? '' : (s.username ? s.username + '@' : '') + (s.hostname || '');
+    const where = s.protocol === 'API' ? (s.apiBaseUrl ?? '') : s.protocol === 'Web' ? (s.webUrl ?? '') : s.protocol === 'SNMP' ? (s.hostname || '') : s.protocol === 'Serial' ? [s.comPort, s.baudRate].filter(Boolean).join(' ') : s.protocol === 'Local Shell' ? '' : (s.username ? s.username + '@' : '') + (s.hostname || '');
     return [s.folder ? s.folder.split('/').join(' / ') : (this.oldPath ? 'Top level' : 'New session'), s.protocol, where].filter(Boolean).join(' · ');
   }
   // ---- SNMP page ----
@@ -1222,7 +1260,7 @@ export class SessionEditor implements OnInit {
   readonly snmpSec = signal({ community: false, writeCommunity: false, auth: false, priv: false });
   readonly snmpBusy = signal(false);
   readonly snmpMsg = signal<{ ok: boolean; text: string } | null>(null);
-  snmpOk() { const p = this.s?.protocol ?? ''; return !!p && !['RDP', 'VNC', 'Local Shell', 'WOL', 'Serial', 'API'].includes(p); }
+  snmpOk() { const p = this.s?.protocol ?? ''; return !!p && !['RDP', 'VNC', 'Local Shell', 'WOL', 'Serial', 'API', 'Web'].includes(p); }
 
   // ---- REST API session ----
   readonly varEx = '{{name}}';
@@ -1347,6 +1385,7 @@ export class SessionEditor implements OnInit {
     this.s.port = defaultPort(this.s.protocol) || this.s.port;
     if (this.s.protocol === 'API') { this.s.deviceType = ''; this.page.set('connection'); this.loadApiSecrets(); }
     if (this.s.protocol === 'SNMP') { this.s.port = 0; if (!['connection', 'snmp'].includes(this.page())) this.page.set('connection'); }
+    if (this.s.protocol === 'Web') { this.s.deviceType = ''; this.s.port = 0; this.page.set('connection'); }
     if (this.s.protocol === 'WOL') { this.s.deviceType = ''; if (this.page() !== 'firewall') this.page.set('connection'); if (!this.s.wolNetwork && /^\d+\.\d+\.\d+\.\d+$/.test(this.s.hostname)) this.s.wolNetwork = this.s.hostname.replace(/\.\d+$/, '.0/24'); }
     if (this.s.protocol === 'Console' && !this.s.consoleMethod) { this.s.consoleMethod = 'opengear-ssh'; this.s.initialCr = true; }
   }
@@ -1467,6 +1506,12 @@ export class SessionEditor implements OnInit {
       if (!s.apiBaseUrl?.trim()) { this.page.set('connection'); this.error.set('Please enter the base URL (https://…).'); return; }
       s.apiBaseUrl = s.apiBaseUrl.trim();
       try { s.hostname = new URL(s.apiBaseUrl.replace(/\{\{[^}]*\}\}/g, 'x')).host; } catch { /* shown as it is */ }
+    }
+    if (s.protocol === 'Web') {
+      if (!s.webUrl?.trim()) { this.page.set('connection'); this.error.set('Please enter the web app\'s address (https://…).'); return; }
+      s.webUrl = s.webUrl.trim();
+      if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s.webUrl)) s.webUrl = 'https://' + s.webUrl;
+      try { s.hostname = new URL(s.webUrl.replace(/\{\{[^}]*\}\}/g, 'x')).host; } catch { /* shown as it is */ }
     }
     if (['SSH2', 'Telnet', 'Raw', 'SNMP'].includes(s.protocol) && !s.hostname.trim()) {
       this.page.set('connection'); this.error.set('Please enter a hostname.'); return;

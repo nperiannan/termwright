@@ -145,6 +145,12 @@ type line struct {
 	Dialogs []string
 	Reads   []struct{ Name, Value string }
 	Rec     *Action `json:"rec"`
+	Healed  string  `json:"healed"`
+	Pic     string  `json:"pic"`
+	Video   string  `json:"video"`
+	Pick    *Pick   `json:"pick"`
+	Ack     *int    `json:"ack"`
+	Closed  bool    `json:"closed"`
 }
 
 func (r Runner) start(ctx context.Context, job map[string]any) (*exec.Cmd, *bytes.Buffer, error) {
@@ -157,7 +163,7 @@ func (r Runner) start(ctx context.Context, job map[string]any) (*exec.Cmd, *byte
 	}
 	in, _ := json.Marshal(job)
 	c := exec.CommandContext(ctx, st.Node, filepath.Join(r.Dir, "runner.js"))
-	c.Dir, c.Env, c.Stdin = r.Dir, r.env(st.Node), bytes.NewReader(in)
+	c.Dir, c.Env, c.Stdin = r.Dir, r.env(st.Node), bytes.NewReader(append(in, '\n'))
 	var stderr bytes.Buffer
 	c.Stderr = &stderr
 	return c, &stderr, nil
@@ -175,8 +181,7 @@ func (r Runner) Run(ctx context.Context, w Step, shots string, timeout int, x ..
 			return "", errors.New(ActionText(a) + ": {{password}} and {{username}} come from the step's Login session - choose one")
 		}
 	}
-	c, stderr, err := r.start(ctx, map[string]any{"step": w, "shots": shots, "timeout": timeout, "root": ex.Root, "stateDir": ex.StateDir,
-		"httpUser": ex.HTTPUser, "httpPassword": ex.HTTPPassword})
+	c, stderr, err := r.start(ctx, ex.job(w, shots, timeout))
 	if err != nil {
 		return "", err
 	}
@@ -208,6 +213,12 @@ func (r Runner) Run(ctx context.Context, w Step, shots string, timeout int, x ..
 				fmt.Fprintf(&log, "  → %s", l.Note)
 			}
 			log.WriteByte('\n')
+			if l.Healed != "" && l.I >= 0 && l.I < len(w.Actions) {
+				fmt.Fprintf(&log, "healed %d: %s → %s\n", l.I+1, w.Actions[l.I].Target, l.Healed)
+			}
+			if l.Pic != "" {
+				fmt.Fprintf(&log, "picture: %s\n", l.Pic)
+			}
 		default:
 			fmt.Fprintf(&log, "✗ %s: %s\n", what, l.Error)
 			if l.Shot != "" {
@@ -215,6 +226,9 @@ func (r Runner) Run(ctx context.Context, w Step, shots string, timeout int, x ..
 			}
 			if l.Trace != "" {
 				fmt.Fprintf(&log, "trace: %s  (npx playwright show-trace <file>)\n", l.Trace)
+			}
+			if l.Video != "" {
+				fmt.Fprintf(&log, "video: %s\n", l.Video)
 			}
 			if l.URL != "" {
 				fmt.Fprintf(&log, "page: %s\n", l.URL)
@@ -245,7 +259,8 @@ type Drive struct {
 // Record opens the step's page in a visible browser and returns the actions the person does there, as
 // they happen (each also goes to onAction), until the window is closed. drive is for tests.
 func (r Runner) Record(ctx context.Context, w Step, onAction func(Action), x Extra, drive ...Drive) ([]Action, error) {
-	job := map[string]any{"step": w, "record": true, "root": x.Root, "stateDir": x.StateDir, "httpUser": x.HTTPUser, "httpPassword": x.HTTPPassword}
+	job := x.job(w, "", 30)
+	job["record"] = true
 	if len(drive) > 0 {
 		job["drive"] = drive
 	}
@@ -308,14 +323,38 @@ type Step struct {
 	// Viewport: the page size, e.g. 1280x800.
 	Viewport string `yaml:"viewport,omitempty" json:"viewport,omitempty"`
 	// Trace: record a Playwright trace (reports/web-shots/trace-….zip: npx playwright show-trace).
-	Trace   bool     `yaml:"trace,omitempty" json:"trace,omitempty"`
-	Actions []Action `yaml:"actions,omitempty" json:"actions,omitempty"`
+	Trace bool `yaml:"trace,omitempty" json:"trace,omitempty"`
+	// Pictures: "" - a picture after every action (in the report); "off" - only when an action fails.
+	Pictures string   `yaml:"pictures,omitempty" json:"pictures,omitempty"`
+	Actions  []Action `yaml:"actions,omitempty" json:"actions,omitempty"`
 }
 
-// Extra is what the runner gets besides the step: where files and states are, the HTTP login.
+// Extra is what the runner gets besides the step: where files and states are, the HTTP login, the web
+// app's recorded login (done when the app asks to log in), and the name the pictures start with.
 type Extra struct {
 	Root, StateDir         string
 	HTTPUser, HTTPPassword string
+	Login                  []Action
+	Prefix                 string
+	NoVideo                bool
+}
+
+func (x Extra) job(w Step, shots string, timeout int) map[string]any {
+	pre := x.Prefix
+	if pre == "" {
+		pre = "web-" + time.Now().Format("150405.000")
+	}
+	return map[string]any{"step": w, "shots": shots, "timeout": timeout, "root": x.Root, "stateDir": x.StateDir,
+		"httpUser": x.HTTPUser, "httpPassword": x.HTTPPassword, "login": x.Login, "prefix": pre,
+		"pictures": w.Pictures != "off" && shots != "", "video": !x.NoVideo && !w.Show && shots != ""}
+}
+
+// Pick is the element a person clicked to choose a target: the target and its fallbacks.
+type Pick struct {
+	Target string   `json:"target"`
+	Alt    []string `json:"alt,omitempty"`
+	Text   string   `json:"text,omitempty"`
+	Tag    string   `json:"tag,omitempty"`
 }
 
 // Action is one thing to do on the page.
@@ -333,6 +372,11 @@ type Action struct {
 	Value string `yaml:"value,omitempty" json:"value,omitempty"`
 	// Secret: the value is a password (from {{secret:Session}}): it is never logged.
 	Secret bool `yaml:"-" json:"secret,omitempty"`
+	// Alt: other ways to find the target, tried when it is not there (the GUI changed): the run says
+	// "healed" and which one matched.
+	Alt []string `yaml:"alt,omitempty" json:"alt,omitempty"`
+	// With: a block's values (do: block, target: the block's name).
+	With map[string]string `yaml:"with,omitempty" json:"with,omitempty"`
 }
 
 // Actions are what a web step can do, with what each needs.
@@ -347,7 +391,7 @@ var Actions = []struct{ Do, Needs, Says string }{
 	{"expect", "", "check it shows"}, {"expect_not", "", "check it is gone"}, {"expect_value", "target value", "check a field's value"},
 	{"expect_count", "target value", "check how many there are"}, {"expect_checked", "target", "check it is ticked"}, {"expect_enabled", "target", "check it is enabled"},
 	{"expect_url", "value", "check the address"}, {"expect_title", "value", "check the title"}, {"read", "target value", "read a text into a variable"},
-	{"screenshot", "", "save a screenshot"},
+	{"screenshot", "", "save a screenshot"}, {"block", "target", "do the actions of a saved block"},
 }
 
 // ActionText is an action in a few words, as the log shows it.

@@ -698,7 +698,7 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 			err = errors.New("this runner cannot drive Spirent TestCenter or IxNetwork")
 		}
 	case st.Web != nil:
-		w := fillWeb(*st.Web, v)
+		w := FillWeb(*st.Web, v)
 		sr.Target, sr.Sent = "browser", WebText(w)
 		if wd, ok := d.(WebDriver); ok {
 			out, err = wd.Web(sctx, w)

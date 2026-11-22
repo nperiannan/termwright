@@ -475,6 +475,9 @@ func (d *testDriver) Command(ctx context.Context, session, cmd, prompt string) (
 }
 
 func (d *testDriver) HTTP(ctx context.Context, h testrec.HTTPStep) (testrec.HTTPAnswer, error) {
+	if ans, ok, err := d.a.webAppHTTP(ctx, h); ok {
+		return ans, err
+	}
 	req := apiclient.Request{Method: h.Method, URL: h.URL}
 	for k, v := range h.Headers {
 		req.Headers = append(req.Headers, apiclient.KV{Key: k, Value: v})

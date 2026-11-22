@@ -22,6 +22,8 @@ export interface Session {
   /** SNMP (the browser, the map and discovery): version '' = v2c, '1', '2c', '3'; the community and v3 passwords are in the credential store. */
   /** REST API session (protocol 'API'): the secret and secret variables' values are in the credential store. */
   apiBaseUrl?: string; apiAuth?: string; apiKeyName?: string; apiKeyIn?: string; apiLogin?: string; apiTokenPath?: string; apiTokenUrl?: string;
+  /** Web app session (protocol 'Web'): address, browser settings and the recorded login (JSON actions). */
+  webUrl?: string; webInsecure?: boolean; webBrowser?: string; webViewport?: string; webLogin?: string;
   apiClientId?: string; apiScope?: string; apiInsecure?: boolean; apiCaFile?: string; apiVars?: APIVar[];
   snmpVersion?: string; snmpPort?: number; snmpHost?: string; snmpUser?: string; snmpAuth?: string; snmpPriv?: string; snmpContext?: string; snmpWrite?: boolean;
   environment?: string; rdpDomain?: string; rdpFullScreen?: boolean; rdpSize?: string; vncViewOnly?: boolean; keywordSet: string; fontFamily: string; fontSize: number; backspace: '' | 'bs'; logonScript: string; serialDtr: boolean; serialRts: boolean;
@@ -234,7 +236,7 @@ export interface ImportSource { app: string; path: string; what: string; }
 
 export interface FileFilter { displayName: string; pattern: string; }
 
-export const PROTOCOLS = ['SSH2', 'Telnet', 'Serial', 'Local Shell', 'Raw', 'Console', 'RDP', 'VNC', 'WOL', 'API', 'SNMP'] as const;
+export const PROTOCOLS = ['SSH2', 'Telnet', 'Serial', 'Local Shell', 'Raw', 'Console', 'RDP', 'VNC', 'WOL', 'API', 'SNMP', 'Web'] as const;
 /** Console server access methods (Console sessions). */
 export const CONSOLE_METHODS: { id: string; label: string }[] = [
   { id: 'opengear-ssh', label: 'SSH as user:portNN (Opengear)' },
@@ -271,7 +273,7 @@ export const BAUD_RATES = [300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115
 
 /** How a protocol is named in the protocol choice. */
 export function protoLabel(p: string): string {
-  return ({ SSH2: 'SSH', WOL: 'Wake-on-LAN', API: 'REST API', 'Local Shell': 'Local Shell' } as Record<string, string>)[p] ?? p;
+  return ({ SSH2: 'SSH', WOL: 'Wake-on-LAN', API: 'REST API', Web: 'Web App', 'Local Shell': 'Local Shell' } as Record<string, string>)[p] ?? p;
 }
 
 export function defaultPort(protocol: string): number {
@@ -641,7 +643,9 @@ export interface TemplateSpec { kind: 'table' | 'fields'; header?: string; colum
 
 export interface TestTrends { runs: { dir: string; at: string; passed: number; failed: number; skipped: number; flaky: number; ms: number; testbed?: string; version?: string }[]; tests: { file: string; case: string; runs: number; failures: number; flips: number; flaky: number; last?: string }[]; versions: { version: string; passed: number; total: number }[]; }
 export interface TestBooking { id: string; testbed: string; from: string; to: string; who: string; why?: string; mine?: boolean; }
-export interface TestWebAction { do: string; target?: string; value?: string; secret?: boolean; }
-export interface TestWeb { url?: string; browser?: string; show?: boolean; insecure?: boolean; state?: string; login?: string; viewport?: string; trace?: boolean; actions?: TestWebAction[]; }
+export interface TestWebAction { do: string; target?: string; value?: string; secret?: boolean; alt?: string[]; with?: Record<string, string>; }
+export interface WebResult { i: number; ok: boolean; note?: string; error?: string; healed?: string; }
+export interface WebPick { target: string; alt?: string[]; text?: string; tag?: string; }
+export interface TestWeb { url?: string; browser?: string; show?: boolean; insecure?: boolean; state?: string; login?: string; viewport?: string; trace?: boolean; pictures?: string; actions?: TestWebAction[]; }
 export interface WebStatus { node?: string; version?: string; ready: boolean; dir: string; hint?: string; }
 export interface TestbedDevice { role: string; session?: string; folder?: string; name?: string; host?: string; deviceType?: string; model?: string; protocol?: string; value?: string; }

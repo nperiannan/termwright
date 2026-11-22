@@ -20,7 +20,9 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/termwright/termwright/internal/secrets"
+	"github.com/termwright/termwright/internal/session"
 	"github.com/termwright/termwright/internal/testrec"
+	"github.com/termwright/termwright/internal/webrun"
 )
 
 // The Tests view: the tests folder's tree, opening or cloning a folder, reading and saving the YAML,
@@ -411,6 +413,9 @@ func (a *App) TestbedDevices(file string) ([]TestbedDevice, error) {
 		d := TestbedDevice{Role: role}
 		if s, err := a.store.Get(v); err == nil && v != "" {
 			d.Session, d.Folder, d.Name, d.Host, d.DeviceType, d.Protocol = v, s.Folder, s.Name, s.Hostname, s.DeviceType, s.Protocol
+			if s.Protocol == session.ProtoWeb {
+				d.Host = s.WebURL
+			}
 			if st := facts[v]; st != nil {
 				d.Model = st["Model"]
 			}
@@ -678,6 +683,8 @@ func (a *App) inventoryDevice(path string) (testrec.InventoryDevice, bool) {
 		d.Protocol, d.BaseURL, d.Auth, d.KeyName, d.Insecure = "api", s.APIBaseURL, s.APIAuth, s.APIKeyName, s.APIInsecure
 	case "telnet", "telnet/tls":
 		d.Protocol = "telnet"
+	case "web":
+		d.Protocol, d.WebURL, d.Browser, d.Viewport, d.Insecure, d.WebLogin = "web", s.WebURL, s.WebBrowser, s.WebViewport, s.WebInsecure, webrun.ParseLogin(s.WebLogin)
 	default:
 		d.Protocol = "ssh"
 	}

@@ -2,7 +2,7 @@ import { Component, computed, inject, input } from '@angular/core';
 import { Ui } from '../core/ui.service';
 
 /** Kinds of session icons: each has its own color and symbol so sessions are told apart at a glance. */
-export type SessionKind = 'ssh' | 'sftp' | 'telnet' | 'serial' | 'console' | 'shell' | 'raw' | 'rdp' | 'vnc' | 'wol' | 'api' | 'snmp' | 'folder' | 'folder-open';
+export type SessionKind = 'ssh' | 'sftp' | 'telnet' | 'serial' | 'console' | 'shell' | 'raw' | 'rdp' | 'vnc' | 'wol' | 'api' | 'snmp' | 'web' | 'folder' | 'folder-open';
 
 const KINDS: Record<Exclude<SessionKind, 'folder' | 'folder-open'>, { from: string; to: string; title: string }> = {
   ssh: { from: '#34d399', to: '#059669', title: 'SSH2 terminal' },
@@ -17,6 +17,7 @@ const KINDS: Record<Exclude<SessionKind, 'folder' | 'folder-open'>, { from: stri
   vnc: { from: '#2dd4bf', to: '#0369a1', title: 'VNC remote screen' },
   api: { from: '#a78bfa', to: '#7c3aed', title: 'REST API (API client)' },
   snmp: { from: '#22d3ee', to: '#0e7490', title: 'SNMP (SNMP Browser)' },
+  web: { from: '#fb923c', to: '#c2410c', title: 'Web app (opens in a browser, for web tests)' },
 };
 
 /**
@@ -52,6 +53,7 @@ const KINDS: Record<Exclude<SessionKind, 'folder' | 'folder-open'>, { from: stri
             @switch (kind()) {
               @case ('ssh') { <path d="M4.2 5.6l2.4 2.4-2.4 2.4M8.3 10.6h3.6" /> }
               @case ('snmp') { <path d="M4.2 11.5a5.5 5.5 0 0 1 7.6-7.6M6.2 11.5a3.2 3.2 0 0 1 5.3-5.3" stroke-width="1.3" /><path d="M8 8l3.6-3.6" stroke-width="1.3" /><path d="M8 8h.01" stroke-width="2.2" /> }
+              @case ('web') { <circle cx="8" cy="8" r="3.6" stroke-width="1.3" /><path d="M4.4 8h7.2M8 4.4c1.1 1.1 1.6 2.3 1.6 3.6S9.1 10.5 8 11.6M8 4.4C6.9 5.5 6.4 6.7 6.4 8s.5 2.5 1.6 3.6" stroke-width="1.1" /> }
               @case ('api') { <path d="M5.8 4.6c-1 0-1.4.5-1.4 1.3v.9c0 .6-.4 1.2-1 1.2.6 0 1 .6 1 1.2v.9c0 .8.4 1.3 1.4 1.3M10.2 4.6c1 0 1.4.5 1.4 1.3v.9c0 .6.4 1.2 1 1.2-.6 0-1 .6-1 1.2v.9c0 .8-.4 1.3-1.4 1.3" stroke-width="1.3" /><path d="M7 8h.01M9 8h.01" stroke-width="1.7" /> }
               @case ('sftp') { <path d="M5.6 11.3V4.9M3.8 6.6l1.8-1.8 1.8 1.8M10.4 4.7v6.4M8.6 9.4l1.8 1.8 1.8-1.8" /> }
               @case ('telnet') { <path d="M4.6 4.9h6.8M8 4.9v6.4" /> }

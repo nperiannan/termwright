@@ -145,6 +145,10 @@ func run(args []string) int {
 				fmt.Printf("  -  %-40s API %s (not logged in to)\n", d.Session, d.BaseURL)
 				continue
 			}
+			if strings.EqualFold(d.Protocol, "web") {
+				fmt.Printf("  -  %-40s web app %s (logged in to by its web steps)\n", d.Session, d.WebURL)
+				continue
+			}
 			c, cancel := context.WithTimeout(ctx, 45*time.Second)
 			_, err := e.Command(c, d.Session, "", "", 15*time.Second)
 			cancel()

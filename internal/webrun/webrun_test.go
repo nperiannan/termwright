@@ -143,3 +143,73 @@ func TestRecord(t *testing.T) {
 	}
 	t.Log(s)
 }
+
+// TestSession steps through a page: login by the app's recorded login, run, heal, pick and record.
+func TestSession(t *testing.T) {
+	pw := os.Getenv("TW_PLAYWRIGHT")
+	if pw == "" {
+		t.Skip("TW_PLAYWRIGHT not set")
+	}
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "node_modules"), 0o755)
+	os.Symlink(pw, filepath.Join(dir, "node_modules", "playwright"))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if c, err := r.Cookie("sid"); err != nil || c.Value != "ok" {
+			fmt.Fprint(w, `<html><title>Login</title><body><label>User <input id="u"></label><label>Password <input type="password" id="p"></label>
+<button onclick="if(document.getElementById('p').value==='pw1'){document.cookie='sid=ok;path=/';location.reload()}">Sign in</button></body></html>`)
+			return
+		}
+		fmt.Fprint(w, `<html><title>App</title><body><h1>Contacts</h1><label>Name <input id="contact-name"></label><button id="add" onclick="document.getElementById('out').textContent='Added '+document.getElementById('contact-name').value">Add</button><div id="out"></div></body></html>`)
+	}))
+	defer srv.Close()
+	r := Runner{Dir: dir}
+	login := []Action{{Do: "fill", Target: "label=User", Value: "qa"}, {Do: "fill", Target: "label=Password", Value: "pw1", Secret: true}, {Do: "click", Target: "text=Sign in"}}
+	x := Extra{Root: dir, StateDir: filepath.Join(dir, "state"), Login: login}
+	s, err := r.Open(context.Background(), Step{URL: srv.URL + "/contacts", State: "app"}, filepath.Join(dir, "shots"), x, Drive{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	// label=Full name is gone: its fallback #contact-name is used
+	res, err := s.Run([]Action{{Do: "fill", Target: "label=Full name", Alt: []string{"#contact-name"}, Value: "Ann"}, {Do: "click", Target: "#add"}, {Do: "expect", Value: "Added Ann"}}, 0)
+	if err != nil || len(res) != 3 || !res[2].OK || res[0].Healed != "#contact-name" {
+		t.Fatalf("%v %+v", err, res)
+	}
+	res, _ = s.Run([]Action{{Do: "expect", Value: "Not here"}}, 3)
+	if len(res) != 1 || res[0].OK || res[0].I != 3 {
+		t.Fatalf("%+v", res)
+	}
+	var rec []Action
+	s.OnRec = func(a Action) { rec = append(rec, a) }
+	if err := s.Record(true); err != nil {
+		t.Fatal(err)
+	}
+	s.Drive([]Drive{{Do: "click", Target: "#add"}})
+	s.Record(false)
+	s.Drive([]Drive{{Do: "click", Target: "#add"}})
+	if len(rec) != 1 || rec[0].Do != "click" || rec[0].Target != "#add" {
+		t.Fatalf("recorded %+v", rec)
+	}
+	// the login was kept: a normal run starts logged in
+	out, err := r.Run(context.Background(), Step{URL: srv.URL, State: "app", Actions: []Action{{Do: "expect", Value: "Contacts"}}}, filepath.Join(dir, "shots"), 10, Extra{StateDir: x.StateDir})
+	if err != nil || !strings.Contains(out, "picture: ") {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	// without the state, the app's login runs by itself
+	out, err = r.Run(context.Background(), Step{URL: srv.URL, Actions: []Action{{Do: "expect", Value: "Contacts"}}}, filepath.Join(dir, "shots"), 10, Extra{Login: login})
+	if err != nil || !strings.Contains(out, "logged in") || strings.Contains(out, "pw1") {
+		t.Fatalf("%v\n%s", err, out)
+	}
+}
+
+func TestForApp(t *testing.T) {
+	w, x := ForApp(Step{URL: "/contacts", Actions: []Action{{Do: "goto", Value: "/x"}, {Do: "fill", Target: "label=P", Value: "{{password}}"}}},
+		App{Name: "Apps/CRM", URL: "https://crm.example.com/", Insecure: true, User: "qa", Password: "pw", Login: []Action{{Do: "fill", Value: "{{username}}"}}}, Extra{})
+	if w.URL != "https://crm.example.com/contacts" || w.Actions[0].Value != "https://crm.example.com/x" || !w.Actions[1].Secret || w.Actions[1].Value != "pw" ||
+		!w.Insecure || w.State != "app-Apps/CRM" || x.Login[0].Value != "qa" {
+		t.Fatalf("%+v %+v", w, x)
+	}
+	if Join("https://a", "https://b/c") != "https://b/c" || Join("https://a", "") != "https://a" {
+		t.Fatal("join")
+	}
+}

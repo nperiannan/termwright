@@ -569,6 +569,7 @@ func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars
 	if err := os.MkdirAll(abs, 0o755); err != nil {
 		return rep, err
 	}
+	moveWebFiles(&rep, abs)
 	f.writeLogs(&rep, abs)
 	j, _ := json.MarshalIndent(rep, "", "  ")
 	for name, b := range map[string][]byte{"result.json": j, "junit.xml": JUnit(rep), "report.html": HTML(rep), "results.xlsx": XLSX(rep), "report.pdf": PDFReport(rep)} {

@@ -137,7 +137,7 @@ And much more - see the [feature list](docs/FEATURES.md).
 |---|---|
 | ![Testbed calendar](docs/screenshots/tests-guide/29-calendar.png) <br/>*Testbed calendar: who has which testbed when* | ![Export](docs/screenshots/tests-guide/32-export.png) <br/>*Export a suite that runs without Termwright: Python, Go or twrun* |
 
-Step by step with pictures: [Testing with Termwright](docs/TESTS_GUIDE.md).
+Step by step with pictures: [Testing with Termwright](docs/TESTS_GUIDE.md) and the [Web GUI Testing Guide](docs/WEB_TESTING_GUIDE.md) (any web app: record a browser test, debug it step by step, self-healing targets - no code).
 
 ## SNMP, syslog and REST API
 
