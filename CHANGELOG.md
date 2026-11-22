@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Run log viewer is wide again**: the Run log window opens 1400 px wide (it was held at the small dialog width), so device output and the checks table fit without scrolling sideways.
+
 - **Standalone Go suite**: Export Automation Suite → **On its own, as code** → Go. The zip is a Go module that logs in to the devices itself - SSH (jump hosts too) and Telnet with prompt learning and paging off, REST APIs, SNMP v1/v2c/v3 with the standard MIBs, NETCONF, web steps (Playwright) and TextFSM tables. Procedures become Go functions in `lib/twprocs` (`twprocs.CreateVlan(tw, map[string]string{"vlan": "200"}, false, false)`). `go test ./cases/...` or `run.sh` / `run.cmd`.
 
 - **twrun - run suites without Termwright, no code**: Export Automation Suite → **On its own, with the twrun program** packs the YAML tests, procedures, data, testbeds, templates, `inventory.yaml` and twrun for Linux, macOS or Windows (both CPU types; downloaded from the release when missing). twrun runs them the same way Termwright does - checks, saves, loops, procedures, data rows, reruns of flaky tests, timeouts, device error messages - and writes the same reports (HTML, PDF, JUnit XML, run logs). `twrun check` logs in to each device; `twrun setup-web` installs Playwright for web steps. The release now has twrun for six systems.
