@@ -750,7 +750,7 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 		if err := ask("Write a testbed", "testbeds/"+argStr(args, "name")+".yaml from the sessions of "+argStr(args, "folder"), false); err != nil {
 			return "", err
 		}
-		rel, err := a.TestsNewTestbed(argStr(args, "name"), argStr(args, "folder"))
+		rel, err := a.TestsNewTestbed(argStr(args, "name"), argStr(args, "folder"), argStrs(args, "sessions"))
 		if err != nil {
 			return "", err
 		}

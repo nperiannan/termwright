@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import type { TestExpect, WebStatus, TestBooking, TestTrends, TestProc, TestProcInfo, TemplateSpec, SNMPRow, HMockInfo, APIMonitor, APIMonitorState, SNMPDashboard, SNMPDashPoll, SNMPSimState, TestApproval, TopoPlan, TopoRequest, TopoResult, LayoutRequest, LayoutResult, TestCase, TestCaseInfo, TestRunReport, TestsTree, TestsGitInfo, TestSchedule, TestScheduleView, IntegrationsConfig, TestTable, TestHistory } from './models';
+import type { TestbedDevice, TestExpect, WebStatus, TestBooking, TestTrends, TestProc, TestProcInfo, TemplateSpec, SNMPRow, HMockInfo, APIMonitor, APIMonitorState, SNMPDashboard, SNMPDashPoll, SNMPSimState, TestApproval, TopoPlan, TopoRequest, TopoResult, LayoutRequest, LayoutResult, TestCase, TestCaseInfo, TestRunReport, TestsTree, TestsGitInfo, TestSchedule, TestScheduleView, IntegrationsConfig, TestTable, TestHistory } from './models';
 import { EmuEngines, EmuHostNIC, EmuTrex,
   EmuServer, EmuServerView,
   AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange, SNMPRequest, SNMPResult, SNMPMibNode, SNMPModule, SNMPSecretState, SNMPTrapState, SNMPTrapsView, HSendRequest, HResponse, HCollection, HCollectionInfo, HRunRequest, HRunResult, HHistoryItem, HRequest, AISkill, HEnv, HVar, HHostCookies, SyslogSettings, SyslogState, SyslogMsg, SyslogRule, SyslogQuery, SyslogSendIn } from './models';
@@ -297,7 +297,10 @@ export class Backend {
   testSaveYAML(rel: string, text: string) { return this.call<string>('TestSaveYAML', rel, text); }
   testsOpenFolder() { return this.call<string>('TestsOpenFolder'); }
   testsClone(repo: string) { return this.call<string>('TestsClone', repo); }
-  testsNewTestbed(name: string, folder: string) { return this.call<string>('TestsNewTestbed', name, folder); }
+  testsNewTestbed(name: string, folder: string, sessions: string[] = []) { return this.call<string>('TestsNewTestbed', name, folder, sessions); }
+  testbedDevices(file: string) { return this.call<TestbedDevice[]>('TestbedDevices', file); }
+  testbedChange(file: string, add: string[], removeRoles: string[]) { return this.call<void>('TestbedChange', file, add, removeRoles); }
+  testsDeviceModels(paths: string[]) { return this.call<Record<string, string>>('TestsDeviceModels', paths); }
   testsGitInit() { return this.call<string>('TestsGitInit'); }
   testsGitPull() { return this.call<string>('TestsGitPull'); }
   testsGitCommit(message: string) { return this.call<string>('TestsGitCommit', message); }

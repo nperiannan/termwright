@@ -347,12 +347,13 @@ func inventoryOf(sessions map[string]bool, dev func(string) (InventoryDevice, bo
 }
 
 // standaloneGoMod: the module of a standalone Go suite (the engine needs x/crypto/ssh and yaml).
-const standaloneGoMod = "module " + GoModule + "\n\ngo 1.24.0\n\nrequire (\n\tgolang.org/x/crypto " + xCryptoVersion + "\n\tgopkg.in/yaml.v3 v3.0.1\n)\n\nrequire golang.org/x/sys " + xSysVersion + " // indirect\n"
+const standaloneGoMod = "module " + GoModule + "\n\ngo 1.24.0\n\nrequire (\n\tgolang.org/x/crypto " + xCryptoVersion + "\n\tgolang.org/x/term " + xTermVersion + "\n\tgopkg.in/yaml.v3 v3.0.1\n)\n\nrequire golang.org/x/sys " + xSysVersion + " // indirect\n"
 
 // the versions Termwright builds with (TestStandaloneGoModVersions keeps them equal to go.mod)
 const (
 	xCryptoVersion = "v0.43.0"
 	xSysVersion    = "v0.37.0"
+	xTermVersion   = "v0.36.0"
 )
 
 func golibFile(n string) []byte { b, _ := golib.ReadFile("golib/" + n); return b }

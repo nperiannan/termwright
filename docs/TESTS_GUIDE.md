@@ -102,6 +102,8 @@ Every run is kept in `reports/history.jsonl`. A test's **History** tab shows its
 
 ## 9. Testbeds, suites and tags
 
+**+ New** (Testbeds) asks for a session folder, then lists its devices under their full folder paths with address, device type and model: tick the ones the tests may use (All / None, or filter). A testbed opens as that device list; **+ Add Devices** adds more from any folder, ✕ takes one out, **Edit YAML** shows the file.
+
 A **testbed** maps the roles to sessions: the recorder saves sessions as roles (`access-sw7` → `{{access_sw7}}`), and a testbed points them at other devices. **Testbeds → + New** writes one from a session folder (the emulated lab's, another site's); testbeds open and save in place and show their lock with *Release*.
 
 **Tags** (⋯ → Tags…) group tests across suites; the tag chips filter the list and *Run shown…* runs what is shown. A **plan** (`suites/<name>.yaml`: tests as files, suite folders or other plans, narrowed by tags) is a named set to run together; select tests and **Save as plan…**, then run it from **Plans** at the top of the list. `params: [{vlan: "42"}, {vlan: "100"}]` runs a test once per entry.

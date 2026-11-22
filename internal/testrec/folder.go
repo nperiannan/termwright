@@ -778,6 +778,68 @@ func (f Folder) WriteTestbed(name string, sessions []string, comment string) (st
 	return rel, os.WriteFile(p, []byte(b.String()), 0o644)
 }
 
+// ChangeTestbed adds sessions to a testbed (each a role named after it) and takes roles out; its other
+// values and its comments stay. A testbed with groups (nested values) is changed in its YAML only.
+func (f Folder) ChangeTestbed(rel string, add, removeRoles []string) error {
+	if !strings.Contains(rel, "/") {
+		rel = "testbeds/" + rel
+	}
+	txt, err := f.ReadText(rel)
+	if err != nil {
+		return err
+	}
+	var raw map[string]any
+	if err := yaml.Unmarshal([]byte(txt), &raw); err != nil {
+		return fmt.Errorf("%s: %w", rel, err)
+	}
+	m := map[string]string{}
+	for k, v := range raw {
+		switch t := v.(type) {
+		case map[string]any, []any:
+			return fmt.Errorf("%s has groups of values: change it in its YAML", rel)
+		case nil:
+			m[k] = ""
+		default:
+			m[k] = fmt.Sprint(t)
+		}
+	}
+	for _, r := range removeRoles {
+		delete(m, r)
+	}
+	have := map[string]bool{}
+	for _, v := range m {
+		have[v] = true
+	}
+	for _, s := range add {
+		if have[s] {
+			continue
+		}
+		r := RoleName(s)
+		for i := 2; m[r] != ""; i++ {
+			r = RoleName(s) + "_" + strconv.Itoa(i)
+		}
+		m[r] = s
+		have[s] = true
+	}
+	var b strings.Builder
+	for _, line := range strings.Split(txt, "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "#") {
+			break
+		}
+		b.WriteString(line + "\n")
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		y, _ := yaml.Marshal(map[string]string{k: m[k]})
+		b.Write(y)
+	}
+	return f.SaveText(rel, b.String())
+}
+
 func exists(p string) bool { _, err := os.Stat(p); return err == nil }
 
 // Remove moves a test and its generated code (Go, Python, TCL) to .removed/<time>/ in the tests folder:

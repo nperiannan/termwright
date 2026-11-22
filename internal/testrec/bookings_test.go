@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -34,4 +35,32 @@ func TestBookings(t *testing.T) {
 	if !mine.Mine || f.CheckBooking("testbeds/lab.yaml", false) != nil {
 		t.Fatal("own booking refused", mine)
 	}
+}
+
+func TestChangeTestbed(t *testing.T) {
+	d := t.TempDir()
+	f := Folder{Root: d}
+	rel, err := f.WriteTestbed("lab", []string{"Lab/EXOS/10.0.0.1", "Lab/EXOS/core"}, "devices of Lab/EXOS")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.SaveText(rel, mustRead(t, filepath.Join(d, rel))+"vlan: \"200\"\n")
+	if err := f.ChangeTestbed(rel, []string{"Lab/VOSS/edge", "Lab/EXOS/core"}, []string{"dev_10_0_0_1"}); err != nil {
+		t.Fatal(err)
+	}
+	m, _ := f.Testbed(rel)
+	if m["edge"] != "Lab/VOSS/edge" || m["core"] != "Lab/EXOS/core" || m["dev_10_0_0_1"] != "" || m["vlan"] != "200" || len(m) != 3 {
+		t.Fatal(m)
+	}
+	if txt := mustRead(t, filepath.Join(d, rel)); !strings.HasPrefix(txt, "# devices of Lab/EXOS") {
+		t.Fatal(txt)
+	}
+}
+
+func mustRead(t *testing.T, p string) string {
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }

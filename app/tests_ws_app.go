@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"sort"
 
 	"context"
 	"errors"
@@ -346,7 +347,7 @@ func (a *App) TestsOpenInEditor(rel string) error {
 
 // TestsNewTestbed writes testbeds/<name>.yaml with a role for each saved session in a session folder
 // (the emulated lab's folder, a site): core-sw1 → {{core_sw1}}. It returns the file.
-func (a *App) TestsNewTestbed(name, folder string) (string, error) {
+func (a *App) TestsNewTestbed(name, folder string, sessions []string) (string, error) {
 	f, err := a.testsFolder()
 	if err != nil {
 		return "", err
@@ -359,10 +360,100 @@ func (a *App) TestsNewTestbed(name, folder string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if len(sessions) > 0 { // only the devices picked
+		in := map[string]bool{}
+		for _, p := range paths {
+			in[p] = true
+		}
+		var picked []string
+		for _, s := range sessions {
+			if !in[s] {
+				return "", fmt.Errorf("%s is not a session of %s", s, folder)
+			}
+			picked = append(picked, s)
+		}
+		paths = picked
+	}
 	if len(paths) == 0 {
 		return "", fmt.Errorf("no saved sessions in %s", folder)
 	}
-	return f.WriteTestbed(name, paths, "the sessions of "+folder)
+	return f.WriteTestbed(name, paths, "devices of "+folder)
+}
+
+// TestbedDevice is one value of a testbed: a role and its saved session (with how to reach it), or another value.
+type TestbedDevice struct {
+	Role       string `json:"role"`
+	Session    string `json:"session,omitempty"`
+	Folder     string `json:"folder,omitempty"`
+	Name       string `json:"name,omitempty"`
+	Host       string `json:"host,omitempty"`
+	DeviceType string `json:"deviceType,omitempty"`
+	Model      string `json:"model,omitempty"`
+	Protocol   string `json:"protocol,omitempty"`
+	// Value: a value that is not a saved session (an address, a VLAN number…).
+	Value string `json:"value,omitempty"`
+}
+
+// TestbedDevices lists a testbed's roles with their sessions (folder, name, address, device type, model).
+func (a *App) TestbedDevices(file string) ([]TestbedDevice, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return nil, err
+	}
+	m, err := f.Testbed(file)
+	if err != nil {
+		return nil, err
+	}
+	facts := a.cfg.Get().DeviceFacts
+	out := []TestbedDevice{}
+	for role, v := range m {
+		d := TestbedDevice{Role: role}
+		if s, err := a.store.Get(v); err == nil && v != "" {
+			d.Session, d.Folder, d.Name, d.Host, d.DeviceType, d.Protocol = v, s.Folder, s.Name, s.Hostname, s.DeviceType, s.Protocol
+			if st := facts[v]; st != nil {
+				d.Model = st["Model"]
+			}
+		} else {
+			d.Value = v
+		}
+		out = append(out, d)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Folder != out[j].Folder {
+			return out[i].Folder < out[j].Folder
+		}
+		return out[i].Name+out[i].Role < out[j].Name+out[j].Role
+	})
+	return out, nil
+}
+
+// TestbedChange adds saved sessions to a testbed (a role each) and takes roles out.
+func (a *App) TestbedChange(file string, add, removeRoles []string) error {
+	f, err := a.testsFolder()
+	if err != nil {
+		return err
+	}
+	if err := mayEdit(f); err != nil {
+		return err
+	}
+	for _, s := range add {
+		if _, err := a.store.Get(s); err != nil {
+			return fmt.Errorf("no saved session %s", s)
+		}
+	}
+	return f.ChangeTestbed(file, add, removeRoles)
+}
+
+// TestsDeviceModels: the models known for sessions (from their device facts).
+func (a *App) TestsDeviceModels(paths []string) map[string]string {
+	out := map[string]string{}
+	facts := a.cfg.Get().DeviceFacts
+	for _, p := range paths {
+		if st := facts[p]; st != nil && st["Model"] != "" {
+			out[p] = st["Model"]
+		}
+	}
+	return out
 }
 
 // TestRemove moves a test and its generated code to .removed/ in the tests folder (nothing is deleted).

@@ -6,7 +6,7 @@ import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { Recorder, escapeRe, fieldPattern, isRead } from '../core/recorder.service';
 import { Tabs } from '../core/tabs.service';
-import { WebStatus, TestBooking, TestTrends, TestTable, TestProc, TestProcInfo, TemplateSpec, SessionNode, TestApproval, CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestHistory, TestStepResult, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
+import { TestbedDevice, WebStatus, TestBooking, TestTrends, TestTable, TestProc, TestProcInfo, TemplateSpec, SessionNode, TestApproval, CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestHistory, TestStepResult, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
 import { expectLabel, parseTableCheck, stepText } from './recorder-panel';
 import { AIChat } from '../core/ai-chat.service';
 import { Icon } from './icon';
@@ -566,9 +566,29 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
         }
         <ng-template #fileView>
           @if (fileSel(); as fp) {
-            <div class="head"><div class="crumb">{{ fp }}</div><div class="title"><h1>{{ base(fp) }}</h1>@if (fp.startsWith('reports/')) { <span class="pill">read only</span> }@if (lockOf(fp); as l) { <span class="pill s">🔒 in use by {{ l.user }} on {{ l.host }} since {{ l.since.slice(11, 16) }}</span><button type="button" (click)="releaseLock(fp)" title="Free the testbed when that run is over">Release</button> }<span class="sp"></span><button type="button" (click)="copyText(fileText)" title="Copy to the clipboard"><app-icon name="copy" [size]="13" /> Copy</button><button type="button" (click)="backend.testsOpenInEditor(fp)">Open in VS Code</button>@if (fp.startsWith('testbeds/') || fp.startsWith('suites/')) { <button type="button" class="badbtn" (click)="removeFile(fp)" title="Move it to .removed/ in the tests folder"><app-icon name="trash" [size]="13" /> Delete</button> }@if (!fp.startsWith('reports/')) { <button type="button" class="savb" (click)="saveFile()">Save</button> }</div></div>
+            <div class="head"><div class="crumb">{{ fp }}</div><div class="title"><h1>{{ base(fp) }}</h1>@if (fp.startsWith('reports/')) { <span class="pill">read only</span> }@if (lockOf(fp); as l) { <span class="pill s">🔒 in use by {{ l.user }} on {{ l.host }} since {{ l.since.slice(11, 16) }}</span><button type="button" (click)="releaseLock(fp)" title="Free the testbed when that run is over">Release</button> }<span class="sp"></span><button type="button" (click)="copyText(fileText)" title="Copy to the clipboard"><app-icon name="copy" [size]="13" /> Copy</button><button type="button" (click)="backend.testsOpenInEditor(fp)">Open in VS Code</button>@if (fp.startsWith('testbeds/') || fp.startsWith('suites/')) { <button type="button" class="badbtn" (click)="removeFile(fp)" title="Move it to .removed/ in the tests folder"><app-icon name="trash" [size]="13" /> Delete</button> }@if (!fp.startsWith('reports/') && !(fp.startsWith('testbeds/') && !tbYaml())) { <button type="button" class="savb" (click)="saveFile()">Save</button> }</div></div>
+            @if (fp.startsWith('testbeds/') && !tbYaml()) {
+              <div class="body">
+                <div class="row tbvbar"><span class="mut">{{ tbDevs().length }} {{ tbDevs().length === 1 ? 'role' : 'roles' }} - tests use {{ '{{' }}role{{ '}}' }}</span><span class="sp"></span>
+                  <button type="button" (click)="openTbPick(fp)">+ Add Devices</button><button type="button" (click)="tbYaml.set(true)">Edit YAML</button></div>
+                <div class="tbv">
+                  @for (g of tbDevGroups(); track g.folder) {
+                    <div class="tbg"><span class="fi"></span>{{ g.folder || 'Other values' }}<span class="mut">{{ g.items.length }}</span></div>
+                    @for (d of g.items; track d.role) {
+                      <div class="tbd" [class.val]="!d.session">
+                        <code class="dr">{{ d.role }}</code>
+                        @if (d.session) { <span class="dn ell" [title]="d.session">{{ d.name }}</span><span class="dh mut">{{ d.host }}</span><span class="dt">{{ d.deviceType || '-' }}</span><span class="dm mut ell">{{ d.model || '' }}</span> }
+                        @else { <span class="dn ell">{{ d.value || '(empty)' }}</span><span class="dh mut">{{ d.value?.includes('/') ? 'not a saved session' : 'value' }}</span><span></span><span></span> }
+                        <button type="button" class="lnk" (click)="removeRole(fp, d.role)" title="Take it out of the testbed">✕</button>
+                      </div>
+                    }
+                  } @empty { <div class="empty mut">No roles yet: + Add Devices.</div> }
+                </div>
+              </div>
+            } @else {
             <div class="body"><textarea class="code" [(ngModel)]="fileText" spellcheck="false" [attr.aria-label]="fp"></textarea>
-              <div class="row"><span class="mut">{{ fp.startsWith('lib/') ? 'Termwright writes twtest and run_tests again when it is updated: keep your own helpers in other files.' : fp.startsWith('templates/') ? 'TextFSM templates; the index says which command each one parses (ntc-templates format).' : 'Roles and values: role: Folder/session, name: value.' }}</span></div></div>
+              <div class="row"><span class="mut">{{ fp.startsWith('lib/') ? 'Termwright writes twtest and run_tests again when it is updated: keep your own helpers in other files.' : fp.startsWith('templates/') ? 'TextFSM templates; the index says which command each one parses (ntc-templates format).' : 'Roles and values: role: Folder/session, name: value.' }}</span>@if (fp.startsWith('testbeds/')) { <span class="sp"></span><button type="button" class="lnk" (click)="tbYaml.set(false); openFile(fp)">Back to the device list</button> }</div></div>
+            }
           } @else { <div class="empty mut">Select a file.</div> }
         </ng-template>
       </section>
@@ -582,22 +602,45 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
       }
       @if (tbPick()) {
         <div class="scrim fixed" (click)="tbPick.set(false)" aria-hidden="true"></div>
-        <div class="mdlg wide" role="dialog" aria-label="New testbed">
-          <h3>New Testbed</h3>
-          <span class="mut">Choose the session folder: each of its sessions becomes a role the tests can use.</span>
-          <input class="tbq" [(ngModel)]="tbQuery" placeholder="Search folders" aria-label="Search folders" />
-          <div class="fpick">
-            @for (fo of folderList(); track fo.path) {
-              <div class="fo" [class.on]="tbFolder === fo.path" [style.padding-left.px]="10 + fo.depth * 16" (click)="tbFolder = fo.path; tbName = fo.name" (dblclick)="tbFolder = fo.path; tbName = fo.name; createTestbed()" role="button" tabindex="0">
-                <span class="fi"></span><span class="ell">{{ fo.name }}</span><span class="mut">{{ fo.n }} {{ fo.n === 1 ? 'session' : 'sessions' }}</span>
+        <div class="mdlg tbdlg" role="dialog" aria-label="Testbed devices">
+          <h3>{{ tbAppend ? 'Add Devices to ' + base(tbAppend) : 'New Testbed' }}</h3>
+          <span class="mut">Choose a session folder, then tick the devices the tests may use. Each device becomes a role: tests use <code>{{ '{{' }}role{{ '}}' }}</code>.</span>
+          <div class="tbcols">
+            <div class="tbcol">
+              <input class="tbq" [(ngModel)]="tbQuery" placeholder="Search folders" aria-label="Search folders" />
+              <div class="fpick">
+                @for (fo of folderList(); track fo.path) {
+                  <div class="fo" [class.on]="tbFolder === fo.path" [style.padding-left.px]="10 + fo.depth * 16" (click)="pickFolder(fo.path)" role="button" tabindex="0" [title]="fo.path">
+                    <span class="fi"></span><span class="ell">{{ fo.name }}</span><span class="mut">{{ fo.n }}</span>
+                  </div>
+                } @empty { <p class="mut">No session folders{{ tbQuery ? ' match' : '' }}.</p> }
               </div>
-            } @empty { <p class="mut">No session folders{{ tbQuery ? ' match' : '' }}.</p> }
+            </div>
+            <div class="tbcol">
+              @if (tbFolder) {
+                <div class="row tbbar"><input class="tbq grow" [(ngModel)]="tbDevQ" placeholder="Filter devices: name, address, type, model" aria-label="Filter devices" />
+                  <button type="button" (click)="tbSelectAll(true)">All</button><button type="button" (click)="tbSelectAll(false)">None</button></div>
+                <div class="fpick devs">
+                  @for (g of devGroups(); track g.folder) {
+                    <div class="dg" [title]="g.folder"><span class="fi"></span>{{ g.folder }}</div>
+                    @for (d of g.items; track d.path) {
+                      <label class="dv" [class.on]="tbPicked.has(d.path)" [class.had]="tbHas.has(d.path)">
+                        <input type="checkbox" [checked]="tbPicked.has(d.path) || tbHas.has(d.path)" [disabled]="tbHas.has(d.path)" (change)="tbToggle(d.path)" />
+                        <span class="dn ell">{{ d.name }}</span><span class="dh mut">{{ d.host }}</span><span class="dt">{{ d.deviceType || '-' }}</span><span class="dm mut ell">{{ tbModels()[d.path] || '' }}</span>
+                        <code class="dr">{{ tbHas.has(d.path) ? 'in the testbed' : roleName(d.path) }}</code>
+                      </label>
+                    }
+                  } @empty { <p class="mut">No devices{{ tbDevQ ? ' match' : '' }}.</p> }
+                </div>
+              } @else { <div class="empty mut">Choose a folder on the left.</div> }
+            </div>
           </div>
-          @if (tbFolder) {
-            <span class="mut">Roles: {{ rolesOf(tbFolder).slice(0, 8).join(', ') }}{{ rolesOf(tbFolder).length > 8 ? ' …' : '' }}</span>
-            <label class="fld"><span>Testbed name</span><input [(ngModel)]="tbName" /></label>
-          }
-          <div class="row"><span class="sp"></span><button type="button" (click)="tbPick.set(false)">Cancel</button><button type="button" class="savb" (click)="createTestbed()" [disabled]="!tbFolder || !tbName.trim()">Create</button></div>
+          <div class="row">
+            @if (!tbAppend) { <label class="fld grow tbname"><span>Testbed name</span><input [(ngModel)]="tbName" /></label> }
+            <span class="mut">{{ tbPicked.size }} {{ tbPicked.size === 1 ? 'device' : 'devices' }} picked</span><span class="sp"></span>
+            <button type="button" (click)="tbPick.set(false)">Cancel</button>
+            <button type="button" class="savb" (click)="createTestbed()" [disabled]="!tbPicked.size || (!tbAppend && !tbName.trim())">{{ tbAppend ? 'Add' : 'Create' }}</button>
+          </div>
         </div>
       }
       @if (exp(); as x) {
@@ -772,6 +815,13 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
     .calb.mine { background: color-mix(in srgb, var(--accent) 20%, var(--bg)); border-color: color-mix(in srgb, var(--accent) 55%, transparent); } .calb:hover { filter: brightness(1.08); }
     .calnote { margin: 10px 2px; font-size: 12px; } .bkl { margin-top: 12px; } b.accent { color: var(--accent); } .bkf { margin-top: 12px; } .bkf .form { padding: 12px; }
     .webst { background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 6px; padding: 8px 10px; align-items: center; }
+    .mdlg.tbdlg { width: min(1180px, 96vw); height: min(84vh, 820px); } .tbcols { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px 1fr; gap: 12px; } .tbcol { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+    .tbcol .fpick { flex: 1; max-height: none; } .tbbar { gap: 6px; } .tbname { display: flex !important; flex-direction: row !important; align-items: center; gap: 8px; max-width: 380px; } .tbname span { white-space: nowrap; }
+    .dg, .tbg { display: flex; align-items: center; gap: 8px; padding: 7px 10px 4px; font-weight: 600; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .tbg { color: var(--text); font-size: 12.5px; padding-top: 12px; } .tbg .mut { font-weight: 400; }
+    .dv, .tbd { display: grid; grid-template-columns: 18px minmax(120px, 1.4fr) 120px 90px minmax(80px, 1fr) minmax(110px, auto); align-items: center; gap: 10px; padding: 5px 10px 5px 28px; font-size: 12.5px; border-radius: 6px; cursor: pointer; }
+    .tbd { grid-template-columns: minmax(130px, auto) minmax(120px, 1.4fr) 120px 90px minmax(80px, 1fr) 24px; cursor: default; } .dv:hover, .tbd:hover { background: var(--hover); } .dv.on { background: color-mix(in srgb, var(--accent) 12%, transparent); } .dv.had { opacity: .6; }
+    .dr { font: 11.5px var(--mono, monospace) !important; color: var(--muted) !important; background: none !important; padding: 0 !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .dt { font-size: 11.5px; } .tbd.val .dn { font-family: var(--mono, monospace); }
+    .tbv { border: 1px solid var(--border); border-radius: 8px; padding: 4px 0 8px; overflow: auto; } .tbvbar { margin-bottom: 8px; gap: 6px; }
     .rc3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .rc3 label { display: flex; flex-direction: column; gap: 3px; } .rc3 small { color: var(--muted); font-size: 11px; } .rc3 input, .rc3 select { width: 100%; }
     .pill.w { background: color-mix(in srgb, var(--warn, #e0a030) 18%, transparent); color: var(--warn, #b07a10); }
     .trbars { display: flex; align-items: flex-end; gap: 4px; height: 120px; padding: 10px 12px; }
@@ -1152,8 +1202,15 @@ export class TestsView implements OnInit, OnDestroy {
     this.busy.set(false);
   }
   readonly tbPick = signal(false);
-  tbQuery = ''; tbFolder = ''; tbName = '';
-  openTbPick() { this.tbQuery = ''; this.tbFolder = ''; this.tbName = ''; this.tbPick.set(true); if (!this.ui.tree()) void this.backend.getSessionTree().then(t => this.ui.tree.set(t)).catch(() => {}); }
+  tbQuery = ''; tbFolder = ''; tbName = ''; tbDevQ = ''; tbAppend = '';
+  tbPicked = new Set<string>(); tbHas = new Set<string>();
+  readonly tbModels = signal<Record<string, string>>({});
+  openTbPick(append = '') {
+    this.tbQuery = ''; this.tbFolder = ''; this.tbName = ''; this.tbDevQ = ''; this.tbAppend = append; this.tbPicked = new Set(); this.tbHas = new Set();
+    if (append) void this.backend.testbedDevices(append).then(l => { this.tbHas = new Set((l ?? []).map(d => d.session ?? '').filter(Boolean)); }).catch(() => {});
+    this.tbPick.set(true);
+    if (!this.ui.tree()) void this.backend.getSessionTree().then(t => this.ui.tree.set(t)).catch(() => {});
+  }
   folderList() {
     const out: { path: string; name: string; depth: number; n: number }[] = [], q = this.tbQuery.trim().toLowerCase();
     const count = (n: SessionNode): number => (n.children ?? []).reduce((k, c) => k + (c.isFolder ? count(c) : 1), 0);
@@ -1161,6 +1218,34 @@ export class TestsView implements OnInit, OnDestroy {
     walk(this.ui.tree()?.children ?? [], 0);
     return out;
   }
+  private folderNode(path: string) {
+    const find = (l: SessionNode[]): SessionNode | null => { for (const n of l) { if (n.path === path) return n; const r = find(n.children ?? []); if (r) return r; } return null; };
+    return find(this.ui.tree()?.children ?? []);
+  }
+  pickFolder(path: string) {
+    this.tbFolder = path;
+    if (!this.tbAppend && !this.tbName) this.tbName = path.split('/').slice(-2).join('-');
+    const all = this.devicesOf(path).map(d => d.path);
+    void this.backend.testsDeviceModels(all).then(m => this.tbModels.update(x => ({ ...x, ...(m ?? {}) }))).catch(() => {});
+  }
+  devicesOf(path: string) {
+    const out: SessionNode[] = [];
+    const all = (n: SessionNode | null) => { for (const c of n?.children ?? []) { if (c.isFolder) all(c); else out.push(c); } };
+    all(this.folderNode(path));
+    return out.map(c => ({ path: c.path, name: c.name, host: c.hostname ?? '', deviceType: c.deviceType ?? '', folder: c.path.slice(0, c.path.lastIndexOf('/')) }));
+  }
+  devGroups() {
+    const q = this.tbDevQ.trim().toLowerCase(), m = this.tbModels();
+    const by = new Map<string, ReturnType<TestsView['devicesOf']>>();
+    for (const d of this.devicesOf(this.tbFolder)) {
+      if (q && ![d.name, d.host, d.deviceType, m[d.path] ?? ''].some(x => x.toLowerCase().includes(q))) continue;
+      by.set(d.folder, [...(by.get(d.folder) ?? []), d]);
+    }
+    return [...by.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([folder, items]) => ({ folder, items: items.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })) }));
+  }
+  tbToggle(p: string) { const s = new Set(this.tbPicked); if (s.has(p)) s.delete(p); else s.add(p); this.tbPicked = s; }
+  tbSelectAll(on: boolean) { const s = new Set(this.tbPicked); for (const g of this.devGroups()) for (const d of g.items) { if (this.tbHas.has(d.path)) continue; if (on) s.add(d.path); else s.delete(d.path); } this.tbPicked = s; }
+  roleName(path: string) { const n = path.split('/').pop()!.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''); return !n || /^\d/.test(n) ? 'dev_' + n : n; }
   rolesOf(path: string) {
     const find = (l: SessionNode[]): SessionNode | null => { for (const n of l) { if (n.path === path) return n; const r = find(n.children ?? []); if (r) return r; } return null; };
     const all = (n: SessionNode | null): SessionNode[] => (n?.children ?? []).flatMap(c => c.isFolder ? all(c) : [c]);
@@ -1181,10 +1266,15 @@ export class TestsView implements OnInit, OnDestroy {
     catch (e) { this.ui.toast(errText(e), 'error'); }
   }
   async createTestbed() {
-    if (!this.tbFolder || !this.tbName.trim()) return;
+    if (!this.tbPicked.size) return;
+    const picked = [...this.tbPicked], append = this.tbAppend;
+    if (!append && !this.tbName.trim()) return;
     this.tbPick.set(false);
-    try { const rel = await this.backend.testsNewTestbed(this.tbName.trim(), this.tbFolder); this.ui.toast(tr('Wrote {0}', rel), 'success'); await this.load(); void this.openFile(rel); this.section.set('testbeds'); }
-    catch (e) { this.ui.toast(errText(e), 'error'); }
+    try {
+      if (append) { await this.backend.testbedChange(append, picked, []); this.ui.toast(tr('Added {0} devices', picked.length), 'success'); await this.openFile(append); return; }
+      const rel = await this.backend.testsNewTestbed(this.tbName.trim(), this.tbFolder, picked);
+      this.ui.toast(tr('Wrote {0}', rel), 'success'); await this.load(); this.section.set('testbeds'); void this.openFile(rel);
+    } catch (e) { this.ui.toast(errText(e), 'error'); }
   }
   expMode(x: { lang: string; standalone: boolean }, m: 'code' | 'runner' | 'termwright') {
     x.standalone = m !== 'termwright';
@@ -1351,7 +1441,20 @@ export class TestsView implements OnInit, OnDestroy {
     await this.openFile('roles.yaml');
     if (this.fileText.startsWith('#') && !this.fileText.includes('approval')) this.fileText = '# Who may do what in this tests folder (user names as in "Run by"; an empty list lets everyone).\n# Shared through Git: it keeps an honest team in step, it is not a security boundary.\neditors: []\nrunners: []\napprovers: []\n# approval: production   # runs on production sessions need an approved request (or: always)\n';
   }
-  async openFile(f: string) { this.fileSel.set(f); this.fileText = await this.backend.testFile(f).catch(e => '# ' + errText(e)); }
+  async openFile(f: string) {
+    this.fileSel.set(f); this.fileText = await this.backend.testFile(f).catch(e => '# ' + errText(e));
+    if (f.startsWith('testbeds/')) { this.tbYaml.set(false); this.tbDevs.set(await this.backend.testbedDevices(f).catch(() => []) ?? []); }
+  }
+  readonly tbYaml = signal(false);
+  readonly tbDevs = signal<TestbedDevice[]>([]);
+  tbDevGroups() {
+    const by = new Map<string, TestbedDevice[]>();
+    for (const d of this.tbDevs()) by.set(d.session ? d.folder ?? '' : '', [...(by.get(d.session ? d.folder ?? '' : '') ?? []), d]);
+    return [...by.entries()].sort((a, b) => (a[0] === '' ? 1 : b[0] === '' ? -1 : a[0].localeCompare(b[0]))).map(([folder, items]) => ({ folder, items }));
+  }
+  async removeRole(fp: string, role: string) {
+    try { await this.backend.testbedChange(fp, [], [role]); await this.openFile(fp); } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
   async saveFile() { try { await this.backend.testSaveFile(this.fileSel(), this.fileText); this.ui.toast(tr('Saved'), 'success'); await this.load(); } catch (e) { this.ui.toast(errText(e), 'error'); } }
   moreMenu(ev: MouseEvent) {
     this.ui.showMenu(ev, [

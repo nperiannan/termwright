@@ -6,7 +6,6 @@
 package standalone
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -17,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 )
 
@@ -154,14 +154,16 @@ func (e *Engine) Secret(d Device, kind string) (string, error) {
 	return "", fmt.Errorf("no %s for %s: set %s (or %s for every device)", kind, d.Session, EnvName(pre, d.Session), strings.TrimSuffix(pre, "_"))
 }
 
-// AskTerminal asks on the terminal (the typing shows only when stdin is not a terminal-capable reader).
+// AskTerminal asks on the terminal without showing what is typed.
 func AskTerminal(label string) (string, error) {
-	if fi, err := os.Stdin.Stat(); err != nil || fi.Mode()&os.ModeCharDevice == 0 {
+	fd := int(os.Stdin.Fd())
+	if !term.IsTerminal(fd) {
 		return "", errors.New("not a terminal")
 	}
 	fmt.Fprintf(os.Stderr, "%s: ", label)
-	s, err := bufio.NewReader(os.Stdin).ReadString('\n')
-	return strings.TrimRight(s, "\r\n"), err
+	b, err := term.ReadPassword(fd)
+	fmt.Fprintln(os.Stderr)
+	return strings.TrimRight(string(b), "\r\n"), err
 }
 
 // Close logs out of every device.

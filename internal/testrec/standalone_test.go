@@ -128,7 +128,7 @@ func TestStandaloneGoModVersions(t *testing.T) {
 		t.Skip(err)
 	}
 	sum := string(golibFile("go.sum.txt"))
-	for mod, v := range map[string]string{"golang.org/x/crypto": xCryptoVersion, "golang.org/x/sys": xSysVersion, "gopkg.in/yaml.v3": "v3.0.1"} {
+	for mod, v := range map[string]string{"golang.org/x/crypto": xCryptoVersion, "golang.org/x/sys": xSysVersion, "golang.org/x/term": xTermVersion, "gopkg.in/yaml.v3": "v3.0.1"} {
 		if !strings.Contains(string(b), mod+" "+v) {
 			t.Errorf("go.mod has another %s than %s: update export.go and golib/go.sum.txt", mod, v)
 		}

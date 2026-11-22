@@ -2256,7 +2256,7 @@ paths:
                                     description: 'run: seconds the whole run may take (tests not started by then are skipped)'
                                     type: integer
                                 sessions:
-                                    description: 'save_state: the saved sessions'
+                                    description: 'save_state: the saved sessions; new_testbed: only these sessions of the folder (default: all)'
                                     items:
                                         type: string
                                     type: array

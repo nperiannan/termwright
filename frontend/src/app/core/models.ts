@@ -643,3 +643,4 @@ export interface TestBooking { id: string; testbed: string; from: string; to: st
 export interface TestWebAction { do: string; target?: string; value?: string; }
 export interface TestWeb { url?: string; browser?: string; show?: boolean; insecure?: boolean; actions?: TestWebAction[]; }
 export interface WebStatus { node?: string; version?: string; ready: boolean; dir: string; hint?: string; }
+export interface TestbedDevice { role: string; session?: string; folder?: string; name?: string; host?: string; deviceType?: string; model?: string; protocol?: string; value?: string; }

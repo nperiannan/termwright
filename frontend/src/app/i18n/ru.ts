@@ -5241,6 +5241,17 @@ const ru: Record<string, string> = {
   'How it runs': 'Как запускается',
   'On its own, as code - Termwright is not needed': 'Самостоятельно, как код - Termwright не нужен',
   'On its own, with the twrun program - no code': 'Самостоятельно, программой twrun - без кода',
+  'record and run tests on devices, APIs and web pages (Playwright); reports, trends, CI; export suites that run without Termwright': 'запись и запуск тестов устройств, API и веб-страниц (Playwright); отчёты, тренды, CI; экспорт наборов, работающих без Termwright',
+  'SNMP browser v1/v2c/v3 with MIBs, dashboards, alarms, traps and a simulator': 'SNMP-браузер v1/v2c/v3 с MIB, панелями, тревогами, трапами и симулятором',
+  'syslog server with severity cards, filters, alerts and saved files': 'syslog-сервер с карточками важности, фильтрами, оповещениями и файлами',
+  'virtual labs of EXOS, VOSS, Linux, servers and microcontrollers; traffic tests, TRex': 'виртуальные лаборатории EXOS, VOSS, Linux, серверов и микроконтроллеров; тесты трафика, TRex',
+  'Add Devices': 'Добавить устройства',
+  '+ Add Devices': '+ Добавить устройства',
+  'Edit YAML': 'Изменить YAML',
+  'Back to the device list': 'Назад к списку устройств',
+  'Choose a folder on the left.': 'Выберите папку слева.',
+  'Added {0} devices': 'Добавлено устройств: {0}',
+  'Other values': 'Другие значения',
 };
 
 export default ru;

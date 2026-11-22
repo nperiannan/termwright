@@ -4,6 +4,14 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Testbeds: pick the devices**: **+ New** testbed shows the chosen folder's devices - grouped by their full folder path, with address, device type, model and the role each becomes - to tick one by one, or All / None, with a filter. Only the ticked devices go in (it used to take every session of the folder).
+
+- **Testbed view**: a testbed opens as its devices grouped under their full folder paths (role, name, address, device type, model) and its other values; **+ Add Devices** adds more from any folder, ✕ takes a role out, **Edit YAML** shows the file.
+
+- **twrun asks for passwords without showing them** (when no TW_PASSWORD… is set).
+
+- **About and README**: a Test tile and a Syslog tile in About; the README has separate architecture diagrams for tests (recorder, runner, Playwright, exported suites, twrun), the API Client, the SNMP Browser and syslog.
+
 - **Run log viewer is wide again**: the Run log window opens 1400 px wide (it was held at the small dialog width), so device output and the checks table fit without scrolling sideways.
 
 - **Standalone Go suite**: Export Automation Suite → **On its own, as code** → Go. The zip is a Go module that logs in to the devices itself - SSH (jump hosts too) and Telnet with prompt learning and paging off, REST APIs, SNMP v1/v2c/v3 with the standard MIBs, NETCONF, web steps (Playwright) and TextFSM tables. Procedures become Go functions in `lib/twprocs` (`twprocs.CreateVlan(tw, map[string]string{"vlan": "200"}, false, false)`). `go test ./cases/...` or `run.sh` / `run.cmd`.
