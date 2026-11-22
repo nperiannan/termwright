@@ -173,6 +173,9 @@ Values come from five places; the later one wins:
 4. **The testbed** - its devices, their ports and values
 5. **The run** - what the Run panel changes
 
+**In the app:** click ⚙ on a folder in the test list (or ⋯ → **Defaults for All Tests…**). The dialog shows the
+order, the folder's own values (editable) and the ones it gets from above (grey), and its step options.
+
 A `defaults.yaml` holds values and step options:
 
 ```yaml
@@ -180,7 +183,9 @@ vars: { vlan: "200", site: lab }
 step_options: { timeout: 30, retry: { timeout: 60 } }
 ```
 
-**Testbeds** describe themselves and how their devices are cabled:
+**Testbeds** describe themselves and how their devices are cabled. On the testbed page: **Description**, **Tags**
+(type and press Enter), **Links between devices** (pick device and port on each side, **+ Link**), and click a
+port's name (port1…) to give it properties. Or in YAML:
 
 ```yaml
 description: Two EXOS switches, stack + standalone
@@ -206,6 +211,9 @@ requires:
   dut: { device_type: EXOS, stack: true, ports: 2, tags: [l3] }
   peer: { ports: 1 }
 ```
+
+In the editor, the **Needs** line under each device in the Devices panel sets this; the Run panel lists the
+tests the chosen testbed will skip before you start.
 
 Passwords and tokens are never values: they stay in the keychain (or `TW_PASSWORD_<NAME>`), whatever the
 testbed. Termwright, twrun and exported Python and Go suites all read the same files the same way.

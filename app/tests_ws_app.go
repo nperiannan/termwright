@@ -1081,3 +1081,56 @@ func (a *App) TestsSaveSuiteDefaults(dir string, d testrec.Defaults) error {
 	}
 	return f.SaveSuiteDefaults(dir, d)
 }
+
+// SuiteDefaultsView is a folder's own defaults and what it gets from the folders above.
+type SuiteDefaultsView struct {
+	Own       testrec.Defaults `json:"own"`
+	Inherited testrec.Defaults `json:"inherited"`
+}
+
+// TestsDefaultsView reads a folder's defaults.yaml with what it inherits ("" = all tests).
+func (a *App) TestsDefaultsView(dir string) (SuiteDefaultsView, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return SuiteDefaultsView{}, err
+	}
+	return SuiteDefaultsView{Own: f.LoadSuiteDefaults(dir), Inherited: f.InheritedDefaults(dir)}, nil
+}
+
+// SkipPreview is a test the chosen testbed will skip, and why.
+type SkipPreview struct {
+	File string `json:"file"`
+	Case string `json:"case"`
+	Why  string `json:"why"`
+}
+
+// TestsWillSkip lists the tests (all when files is empty) a testbed does not have what they need.
+func (a *App) TestsWillSkip(files []string, testbed string) []SkipPreview {
+	out := []SkipPreview{}
+	f, err := a.testsFolder()
+	if err != nil {
+		return out
+	}
+	vars := map[string]string{}
+	if testbed != "" {
+		if tb, err := f.Testbed(testbed); err == nil {
+			vars = tb
+		}
+	}
+	if len(files) == 0 {
+		for _, c := range f.List() {
+			files = append(files, c.File)
+		}
+	}
+	d := &testDriver{a: a}
+	for _, file := range files {
+		c, err := f.Load(file)
+		if err != nil {
+			continue
+		}
+		if why := f.Unmet(c, vars, d); why != "" {
+			out = append(out, SkipPreview{File: file, Case: c.Name, Why: why})
+		}
+	}
+	return out
+}

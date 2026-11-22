@@ -608,7 +608,10 @@ export interface TestStep {
   expected?: string; manual?: { instruction: string }; traffic?: { test: string }; upgrade?: { session: string; image: string }; wait?: number; if?: string; retry?: { timeout?: number; interval?: number }; loop?: { var: string; values?: string[]; range?: string; from?: string; steps: TestStep[] };
 }
 export interface TestStepOptions { timeout?: number; wait?: number; retry?: { timeout?: number; interval?: number }; continueOnFail?: boolean; ignoreErrors?: boolean; }
-export interface TestCase { defaults?: TestStepOptions; data?: string; qtest?: { testCase: string }; name?: string; description?: string; tags?: string[]; dependsOn?: string[]; watch?: { syslog?: string[]; traps?: string[]; devices?: string[] }; configDiff?: boolean; configIgnore?: string[]; vars?: Record<string, string>; params?: Record<string, string>[]; restore?: ('config' | 'lab')[]; setup?: TestStep[]; steps: TestStep[]; cleanup?: TestStep[]; }
+export interface TestRequirement { deviceType?: string; stack?: boolean; ports?: number; model?: string; tags?: string[]; }
+export interface TestSuiteDefaults { vars?: Record<string, string>; stepOptions?: TestStepOptions; }
+export interface TestbedMeta { tags: string[]; description?: string; links: string[]; }
+export interface TestCase { requires?: Record<string, TestRequirement>; defaults?: TestStepOptions; data?: string; qtest?: { testCase: string }; name?: string; description?: string; tags?: string[]; dependsOn?: string[]; watch?: { syslog?: string[]; traps?: string[]; devices?: string[] }; configDiff?: boolean; configIgnore?: string[]; vars?: Record<string, string>; params?: Record<string, string>[]; restore?: ('config' | 'lab')[]; setup?: TestStep[]; steps: TestStep[]; cleanup?: TestStep[]; }
 export interface TestCaseInfo { file: string; name: string; description?: string; tags?: string[]; steps: number; error?: string; }
 export interface TestCheckResult { what: string; passed: boolean; got?: string; }
 export interface TestStepResult { vars?: Record<string, string>; name: string; kind: string; phase?: '' | 'setup' | 'cleanup' | 'restore'; target?: string; sent?: string; status?: number; output?: string; ms: number; passed: boolean; skipped?: boolean; unchecked?: boolean; error?: string; checks?: TestCheckResult[]; table?: TestTable; expected?: string; }
@@ -651,4 +654,4 @@ export interface WebResult { i: number; ok: boolean; note?: string; error?: stri
 export interface WebPick { target: string; alt?: string[]; text?: string; tag?: string; }
 export interface TestWeb { url?: string; browser?: string; show?: boolean; insecure?: boolean; state?: string; login?: string; viewport?: string; trace?: boolean; pictures?: string; actions?: TestWebAction[]; }
 export interface WebStatus { node?: string; version?: string; ready: boolean; dir: string; hint?: string; }
-export interface TestbedDevice { role: string; session?: string; folder?: string; name?: string; host?: string; deviceType?: string; model?: string; protocol?: string; value?: string; values?: Record<string, string>; wanted?: string[]; ports?: { name: string; value: string; set?: boolean }[]; }
+export interface TestbedDevice { role: string; session?: string; folder?: string; name?: string; host?: string; deviceType?: string; model?: string; protocol?: string; value?: string; values?: Record<string, string>; wanted?: string[]; ports?: { name: string; value: string; set?: boolean; props?: Record<string, string> }[]; }

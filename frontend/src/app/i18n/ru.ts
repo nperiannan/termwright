@@ -5340,6 +5340,23 @@ const ru: Record<string, string> = {
   'Other values': 'Другие значения',
   'traffic generator: streams, RFC 2544, convergence; TRex, Spirent TestCenter and IxNetwork': 'генератор трафика: потоки, RFC 2544, сходимость; TRex, Spirent TestCenter и IxNetwork',
   'Spirent / IxNetwork Traffic Run': 'Прогон трафика Spirent / IxNetwork',
+  'Links between devices': 'Связи между устройствами',
+  'Who wins:': 'Что важнее:',
+  'stack or not': 'стек или нет',
+  'a stack': 'стек',
+  'not a stack': 'не стек',
+  'any device type': 'любой тип устройства',
+  '+ Link': '+ Связь',
+  'the test': 'тест',
+  'the testbed': 'стенд',
+  'the run': 'запуск',
+  'at least': 'не менее',
+  'ports': 'портов',
+  'Defaults for All Tests…': 'Значения по умолчанию для всех тестов…',
+  'which port of one device is cabled to which port of another': 'какой порт одного устройства соединён с каким портом другого',
+  'what this testbed is (exos, stack, l3…) - tests can require tags': 'что это за стенд (exos, stack, l3…) - тесты могут требовать теги',
+  'For every test in {0} and its folders. Its folders, the test itself, the testbed and the run can still change them.': 'Для всех тестов в {0} и вложенных папках. Вложенные папки, сам тест, стенд и запуск могут их изменить.',
+  'For every test. Folders, tests, testbeds and runs can still change them.': 'Для всех тестов. Папки, тесты, стенды и запуски могут их изменить.',
 };
 
 export default ru;

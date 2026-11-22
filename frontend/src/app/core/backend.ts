@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import type { TestWeb, TestWebAction, WebResult, WebPick, TestbedDevice, TestExpect, WebStatus, TestBooking, TestTrends, TestProc, TestProcInfo, TemplateSpec, SNMPRow, HMockInfo, APIMonitor, APIMonitorState, SNMPDashboard, SNMPDashPoll, SNMPSimState, TestApproval, TopoPlan, TopoRequest, TopoResult, LayoutRequest, LayoutResult, TestCase, TestCaseInfo, TestRunReport, TestsTree, TestsGitInfo, TestSchedule, TestScheduleView, IntegrationsConfig, TestTable, TestHistory } from './models';
+import type { TestbedMeta, TestSuiteDefaults, TestWeb, TestWebAction, WebResult, WebPick, TestbedDevice, TestExpect, WebStatus, TestBooking, TestTrends, TestProc, TestProcInfo, TemplateSpec, SNMPRow, HMockInfo, APIMonitor, APIMonitorState, SNMPDashboard, SNMPDashPoll, SNMPSimState, TestApproval, TopoPlan, TopoRequest, TopoResult, LayoutRequest, LayoutResult, TestCase, TestCaseInfo, TestRunReport, TestsTree, TestsGitInfo, TestSchedule, TestScheduleView, IntegrationsConfig, TestTable, TestHistory } from './models';
 import { EmuEngines, EmuHostNIC, EmuTrex,
   EmuServer, EmuServerView,
   AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange, SNMPRequest, SNMPResult, SNMPMibNode, SNMPModule, SNMPSecretState, SNMPTrapState, SNMPTrapsView, HSendRequest, HResponse, HCollection, HCollectionInfo, HRunRequest, HRunResult, HHistoryItem, HRequest, AISkill, HEnv, HVar, HHostCookies, SyslogSettings, SyslogState, SyslogMsg, SyslogRule, SyslogQuery, SyslogSendIn } from './models';
@@ -372,6 +372,12 @@ export class Backend {
   testsRoles(files: string[]) { return this.call<{ role: string; session: string; deviceType?: string }[]>('TestsRoles', files); }
   testsUsePortVars(c: TestCase) { return this.call<{ case: TestCase; changed: number }>('TestsUsePortVars', c); }
   testsPorts(session: string) { return this.call<string[]>('TestsPorts', session); }
+  testbedInfo(file: string) { return this.call<TestbedMeta>('TestbedInfo', file); }
+  testbedSetInfo(file: string, m: TestbedMeta) { return this.call<void>('TestbedSetInfo', file, m); }
+  testbedSetPortProp(file: string, role: string, port: string, key: string, value: string) { return this.call<void>('TestbedSetPortProp', file, role, port, key, value); }
+  testsDefaultsView(dir: string) { return this.call<{ own: TestSuiteDefaults; inherited: TestSuiteDefaults }>('TestsDefaultsView', dir); }
+  testsSaveSuiteDefaults(dir: string, d: TestSuiteDefaults) { return this.call<void>('TestsSaveSuiteDefaults', dir, d); }
+  testsWillSkip(files: string[], testbed: string) { return this.call<{ file: string; case: string; why: string }[]>('TestsWillSkip', files, testbed); }
   testsImage(p: string) { return this.call<string>('TestsImage', p); }
   testsWebBlocks() { return this.call<TestProcInfo[]>('TestsWebBlocks'); }
   testStop() { return this.call<void>('TestStop'); }

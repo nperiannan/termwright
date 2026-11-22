@@ -207,3 +207,33 @@ func addLinks(v map[string]string) {
 		}
 	}
 }
+
+// Unmet says what a test needs that the devices of a run do not have ("" = it runs): vars are the testbed's
+// and the run's values; d gives the devices' facts.
+func (f Folder) Unmet(c Case, vars map[string]string, d Driver) string {
+	if len(c.Requires) == 0 {
+		return ""
+	}
+	if pc, err := f.Prepare(c); err == nil {
+		c = pc
+	}
+	v := map[string]string{}
+	for k, x := range c.Vars {
+		v[k] = x
+	}
+	for k, x := range vars {
+		v[k] = x
+	}
+	addFacts(d, v, vars)
+	addLinks(v)
+	return unmet(c, v)
+}
+
+// InheritedDefaults: the defaults a folder's tests get from the folders above it (not its own file).
+func (f Folder) InheritedDefaults(dir string) Defaults {
+	dir = strings.Trim(dir, "/")
+	if dir == "" {
+		return Defaults{Vars: map[string]string{}}
+	}
+	return f.SuiteDefaults(path.Dir(dir) + "/x.yaml")
+}
