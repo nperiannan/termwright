@@ -863,21 +863,44 @@ class Tests:
 
     def run(self, *files: str, vars: Optional[dict] = None, testbed: Optional[str] = None, on_cleanup_fail: str = "",
             cleanup: str = "", tags: Optional[list] = None, testbeds: Optional[list] = None, timeout: float = 1800,
-            step_from: int = 0, step_only: int = 0) -> str:
+            step_from: int = 0, step_only: int = 0, rerun: int = 0, test_timeout: int = 0, run_timeout: int = 0) -> str:
         """Run tests (none: all), optionally on a testbed (a file in testbeds/). on_cleanup_fail: what happens
         when a test's cleanup fails - "stop" (default: the remaining tests are skipped), "restore" (put back the
         configuration saved before the run) or "factory" (factory default); both may reboot the devices.
         cleanup: "steps" (default), "off" (no cleanup - tests build on each other) or "auto" (the cleanup
         steps, else the undo of the configuration commands that ran). files may be tests, folders or suites/... files;
         tags: only tests with one of these tags ("!slow" leaves those out). testbeds: run on several at the same time.
+        rerun: run a failed test again up to this many times (one that then passes is reported flaky);
+        test_timeout / run_timeout: seconds a test (without its own timeout) / the whole run may take.
         Returns pass/fail per step and the report's path (JUnit XML and HTML in reports/)."""
         return self._run(timeout=timeout, action="run", files=list(files) or None, vars=vars, testbed=testbed,
                          on_cleanup_fail=on_cleanup_fail or None, cleanup=cleanup or None, tags=tags or None, testbeds=testbeds or None,
-                         **{k: v for k, v in {"from": step_from, "only": step_only}.items() if v})
+                         **{k: v for k, v in {"from": step_from, "only": step_only, "rerun": rerun, "test_timeout": test_timeout, "run_timeout": run_timeout}.items() if v})
+
+    def bookings(self, testbed: str = "") -> str:
+        """Testbed bookings that have not ended (bookings.yaml in the tests folder)."""
+        return self._run(action="bookings", testbed=testbed or None)
+
+    def book(self, testbed: str, end: str, start: str = "", why: str = "") -> str:
+        """Book a testbed: start / end as "YYYY-MM-DD HH:MM" local time (start default now). Runs and schedules
+        of other people are refused on it until the booking ends."""
+        return self._run(action="book", testbed=testbed, start=start or None, end=end, note=why or None)
+
+    def unbook(self, id: str) -> str:
+        """Cancel a booking (its id from bookings())."""
+        return self._run(action="unbook", id=id)
 
     def send_qtest(self, dir: str = "", files: Optional[list] = None) -> str:
         """Sends a run's results (default: the last run) to qTest - the tests that name a qTest test case."""
         return self._run(action="send_qtest", dir=dir or None, files=files or None)
+
+    def procs(self) -> str:
+        """The procedures (procs/<name>.yaml): shared steps with parameters that tests call with call: {proc, with}."""
+        return self._run(action="procs")
+
+    def save_file(self, file: str, yaml: str) -> str:
+        """Writes a procs/, testbeds/, suites/, data/ or templates/ file of the tests folder."""
+        return self._run(action="save_file", file=file, yaml=yaml)
 
     def approvals(self) -> str:
         """Run approval requests (roles.yaml approval: production|always), newest first."""

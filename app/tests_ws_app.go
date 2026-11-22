@@ -1,9 +1,15 @@
 package app
 
 import (
+	"io"
+	"net/http"
+	"regexp"
+	"sort"
+
 	"context"
 	"errors"
 	"fmt"
+	"github.com/termwright/termwright/internal/textfsm"
 	"net/url"
 	"os"
 	"os/exec"
@@ -13,6 +19,7 @@ import (
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"github.com/termwright/termwright/internal/secrets"
 	"github.com/termwright/termwright/internal/testrec"
 )
 
@@ -271,7 +278,7 @@ func (a *App) TestsGitCommit(message string) (string, error) {
 		return "", err
 	}
 	var paths []string
-	for _, p := range []string{"cases", "testbeds", "lib", "templates", "suites", "roles.yaml", "approvals", "go.mod", ".gitignore", "README.md"} {
+	for _, p := range []string{"cases", "testbeds", "lib", "templates", "suites", "procs", "data", "roles.yaml", "approvals", "go.mod", ".gitignore", "README.md"} {
 		if _, err := os.Stat(filepath.Join(f.Root, p)); err == nil {
 			paths = append(paths, p)
 		}
@@ -341,7 +348,7 @@ func (a *App) TestsOpenInEditor(rel string) error {
 
 // TestsNewTestbed writes testbeds/<name>.yaml with a role for each saved session in a session folder
 // (the emulated lab's folder, a site): core-sw1 → {{core_sw1}}. It returns the file.
-func (a *App) TestsNewTestbed(name, folder string) (string, error) {
+func (a *App) TestsNewTestbed(name, folder string, sessions []string) (string, error) {
 	f, err := a.testsFolder()
 	if err != nil {
 		return "", err
@@ -354,10 +361,100 @@ func (a *App) TestsNewTestbed(name, folder string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if len(sessions) > 0 { // only the devices picked
+		in := map[string]bool{}
+		for _, p := range paths {
+			in[p] = true
+		}
+		var picked []string
+		for _, s := range sessions {
+			if !in[s] {
+				return "", fmt.Errorf("%s is not a session of %s", s, folder)
+			}
+			picked = append(picked, s)
+		}
+		paths = picked
+	}
 	if len(paths) == 0 {
 		return "", fmt.Errorf("no saved sessions in %s", folder)
 	}
-	return f.WriteTestbed(name, paths, "the sessions of "+folder)
+	return f.WriteTestbed(name, paths, "devices of "+folder)
+}
+
+// TestbedDevice is one value of a testbed: a role and its saved session (with how to reach it), or another value.
+type TestbedDevice struct {
+	Role       string `json:"role"`
+	Session    string `json:"session,omitempty"`
+	Folder     string `json:"folder,omitempty"`
+	Name       string `json:"name,omitempty"`
+	Host       string `json:"host,omitempty"`
+	DeviceType string `json:"deviceType,omitempty"`
+	Model      string `json:"model,omitempty"`
+	Protocol   string `json:"protocol,omitempty"`
+	// Value: a value that is not a saved session (an address, a VLAN number…).
+	Value string `json:"value,omitempty"`
+}
+
+// TestbedDevices lists a testbed's roles with their sessions (folder, name, address, device type, model).
+func (a *App) TestbedDevices(file string) ([]TestbedDevice, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return nil, err
+	}
+	m, err := f.Testbed(file)
+	if err != nil {
+		return nil, err
+	}
+	facts := a.cfg.Get().DeviceFacts
+	out := []TestbedDevice{}
+	for role, v := range m {
+		d := TestbedDevice{Role: role}
+		if s, err := a.store.Get(v); err == nil && v != "" {
+			d.Session, d.Folder, d.Name, d.Host, d.DeviceType, d.Protocol = v, s.Folder, s.Name, s.Hostname, s.DeviceType, s.Protocol
+			if st := facts[v]; st != nil {
+				d.Model = st["Model"]
+			}
+		} else {
+			d.Value = v
+		}
+		out = append(out, d)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Folder != out[j].Folder {
+			return out[i].Folder < out[j].Folder
+		}
+		return out[i].Name+out[i].Role < out[j].Name+out[j].Role
+	})
+	return out, nil
+}
+
+// TestbedChange adds saved sessions to a testbed (a role each) and takes roles out.
+func (a *App) TestbedChange(file string, add, removeRoles []string) error {
+	f, err := a.testsFolder()
+	if err != nil {
+		return err
+	}
+	if err := mayEdit(f); err != nil {
+		return err
+	}
+	for _, s := range add {
+		if _, err := a.store.Get(s); err != nil {
+			return fmt.Errorf("no saved session %s", s)
+		}
+	}
+	return f.ChangeTestbed(file, add, removeRoles)
+}
+
+// TestsDeviceModels: the models known for sessions (from their device facts).
+func (a *App) TestsDeviceModels(paths []string) map[string]string {
+	out := map[string]string{}
+	facts := a.cfg.Get().DeviceFacts
+	for _, p := range paths {
+		if st := facts[p]; st != nil && st["Model"] != "" {
+			out[p] = st["Model"]
+		}
+	}
+	return out
 }
 
 // TestRemove moves a test and its generated code to .removed/ in the tests folder (nothing is deleted).
@@ -402,4 +499,256 @@ func (a *App) TestHistory(file string, limit int) ([]testrec.TestHistory, error)
 		return nil, err
 	}
 	return f.History(file, limit), nil
+}
+
+// TestsExport packs a standalone suite (tests, generated code, library, testbeds, plan, run script for the
+// OS) as a zip the person saves; it returns the file.
+func (a *App) TestsExport(o testrec.ExportOptions) (string, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return "", err
+	}
+	o.Device = a.inventoryDevice
+	if o.Lang == "runner" {
+		o.Version = teamImageTag()
+		ctx, cancel := context.WithTimeout(a.ctx, 3*time.Minute)
+		o.Runners = a.twrunBinaries(ctx, o.OS)
+		cancel()
+	}
+	b, name, err := f.Export(o)
+	if err != nil {
+		return "", err
+	}
+	p, err := wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{Title: "Export Automation Suite", DefaultFilename: name, CanCreateDirectories: true})
+	if err != nil || p == "" {
+		return "", err
+	}
+	if err := os.WriteFile(p, b, 0o644); err != nil {
+		return "", err
+	}
+	f.Audit("export", fmt.Sprintf("%s (%s, %s, %d tests or plans)", filepath.Base(p), o.Lang, o.OS, len(o.Files)))
+	return p, nil
+}
+
+// TestProcs lists the procedures (procs/*.yaml): shared steps with parameters that tests call.
+func (a *App) TestProcs() ([]testrec.ProcInfo, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return nil, err
+	}
+	return f.Procs(), nil
+}
+
+// TestProc reads one procedure.
+func (a *App) TestProc(name string) (testrec.Proc, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return testrec.Proc{}, err
+	}
+	return f.LoadProc(name)
+}
+
+// TestSaveProc writes a procedure; it returns its file.
+func (a *App) TestSaveProc(name string, p testrec.Proc) (string, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return "", err
+	}
+	if err := mayEdit(f); err != nil {
+		return "", err
+	}
+	f.Audit("save procedure", name)
+	return f.SaveProc(name, p)
+}
+
+// TestMakeTemplate writes a TextFSM template made with the table maker (templates/<name>.textfsm) and, when
+// the session has a device type, its index line so "parse: auto" finds it for that command; it returns
+// the file name to put in the step's parse.
+func (a *App) TestMakeTemplate(name, session, command string, spec testrec.TemplateSpec) (string, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return "", err
+	}
+	src, err := testrec.MakeTemplate(spec)
+	if err != nil {
+		return "", err
+	}
+	file := strings.Trim(regexp.MustCompile(`[^a-z0-9_]+`).ReplaceAllString(strings.ToLower(name), "_"), "_")
+	if file == "" {
+		return "", errors.New("give the table a name")
+	}
+	file += ".textfsm"
+	dir := f.TemplatesDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(filepath.Join(dir, file), []byte(src), 0o644); err != nil {
+		return "", err
+	}
+	if s, err := a.store.Get(session); err == nil && strings.TrimSpace(command) != "" {
+		if platform := textfsm.Platform(s.DeviceType); platform != "" {
+			idx := filepath.Join(dir, "index")
+			b, _ := os.ReadFile(idx)
+			line := fmt.Sprintf("%s, .*, %s, %s", file, platform, regexp.QuoteMeta(strings.Join(strings.Fields(command), " ")))
+			if !strings.Contains(string(b), file+",") {
+				// own templates go before the community ones
+				txt := string(b)
+				if i := strings.Index(txt, "# --- ntc-templates"); i >= 0 {
+					txt = txt[:i] + line + "\n" + txt[i:]
+				} else {
+					txt = strings.TrimRight(txt, "\n") + "\n" + line + "\n"
+				}
+				_ = os.WriteFile(idx, []byte(txt), 0o644)
+			}
+		}
+	}
+	f.Audit("make table", file)
+	return file, nil
+}
+
+// TestPreviewTemplate parses output with the template a table spec makes (the table maker's preview).
+func (a *App) TestPreviewTemplate(spec testrec.TemplateSpec, output string) (*textfsm.Table, error) {
+	src, err := testrec.MakeTemplate(spec)
+	if err != nil {
+		return nil, err
+	}
+	t, err := textfsm.Parse(src)
+	if err != nil {
+		return nil, err
+	}
+	tab, err := t.Run(output)
+	return &tab, err
+}
+
+// TestPickData lets the person choose a CSV or Excel file for a test's data; a file outside the tests
+// folder is copied into data/. It returns the path to put in the test's data.
+func (a *App) TestPickData() (string, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return "", err
+	}
+	p, err := wruntime.OpenFileDialog(a.ctx, wruntime.OpenDialogOptions{Title: "Test Data (one run per row)",
+		Filters: []wruntime.FileFilter{{DisplayName: "CSV or Excel (*.csv, *.xlsx)", Pattern: "*.csv;*.xlsx"}}})
+	if err != nil || p == "" {
+		return "", err
+	}
+	if rel, err := filepath.Rel(f.Root, p); err == nil && !strings.HasPrefix(rel, "..") {
+		return filepath.ToSlash(rel), nil
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return "", err
+	}
+	rel := "data/" + filepath.Base(p)
+	if err := os.MkdirAll(filepath.Join(f.Root, "data"), 0o755); err != nil {
+		return "", err
+	}
+	return rel, os.WriteFile(filepath.Join(f.Root, filepath.FromSlash(rel)), b, 0o644)
+}
+
+// TestTrends is the suite over its runs: counts per run, the tests that fail most and pass rates per
+// software version (files: only those tests or plans; testbed: only runs on it).
+func (a *App) TestTrends(files []string, testbed string, limit int) (testrec.Trends, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return testrec.Trends{}, err
+	}
+	var exp []string
+	if len(files) > 0 {
+		if exp, err = f.ExpandFiles(files, nil); err != nil {
+			return testrec.Trends{}, err
+		}
+	}
+	if limit <= 0 {
+		limit = 30
+	}
+	return f.SuiteTrends(exp, testbed, limit), nil
+}
+
+// inventoryDevice is a saved session as a standalone suite's device: how to reach it, never a secret.
+func (a *App) inventoryDevice(path string) (testrec.InventoryDevice, bool) {
+	s, err := a.store.Get(path)
+	if err != nil {
+		return testrec.InventoryDevice{}, false
+	}
+	d := testrec.InventoryDevice{Session: path, Host: s.Hostname, Port: s.Port, Username: s.Username, DeviceType: s.DeviceType,
+		KeyFile: s.IdentityFile, Jump: s.JumpSession}
+	switch strings.ToLower(s.Protocol) {
+	case "api":
+		d.Protocol, d.BaseURL, d.Auth, d.KeyName, d.Insecure = "api", s.APIBaseURL, s.APIAuth, s.APIKeyName, s.APIInsecure
+	case "telnet", "telnet/tls":
+		d.Protocol = "telnet"
+	default:
+		d.Protocol = "ssh"
+	}
+	// "no password" saved for the session or its device type: the suite then never asks for one
+	if pw, ok := secrets.Lookup(path); ok && pw == "" {
+		d.NoPassword = true
+	} else if !ok && s.DeviceType != "" {
+		if pw, ok := secrets.Lookup("devicetype:" + strings.ToLower(s.DeviceType)); ok && pw == "" {
+			d.NoPassword = true
+		}
+	}
+	if s.DeviceType != "" {
+		if dt, ok := a.deviceTypeNamed(s.DeviceType); ok {
+			for _, re := range dt.Errors() {
+				d.Errors = append(d.Errors, re.String())
+			}
+		}
+	}
+	if s.SNMPVersion != "" || s.SNMPUser != "" {
+		d.SNMPVer, d.SNMPHost, d.SNMPPort, d.SNMPUser, d.SNMPAuth, d.SNMPPriv = s.SNMPVersion, s.SNMPHost, s.SNMPPort, s.SNMPUser, s.SNMPAuth, s.SNMPPriv
+	}
+	return d, true
+}
+
+// twrunBinaries gets the twrun programs of an operating system (both architectures): next to Termwright,
+// in the data folder's runners/, else from the GitHub release of this version (nightly for development
+// builds). The ones it cannot get are left out - the suite's run script downloads them on its first run.
+func (a *App) twrunBinaries(ctx context.Context, goos string) map[string][]byte {
+	if goos == "mac" {
+		goos = "darwin"
+	}
+	out := map[string][]byte{}
+	exe, _ := os.Executable()
+	repo := a.cfg.Get().UpdateRepo
+	if repo == "" {
+		repo = "nperiannan/termwright"
+	}
+	tag := teamImageTag()
+	for _, arch := range []string{"amd64", "arm64"} {
+		name := "twrun-" + goos + "-" + arch
+		if goos == "windows" {
+			name += ".exe"
+		}
+		var found []byte
+		for _, dir := range []string{filepath.Dir(exe), filepath.Join(a.cfg.DataDir(), "runners")} {
+			if b, err := os.ReadFile(filepath.Join(dir, name)); err == nil && len(b) > 1<<20 {
+				found = b
+				break
+			}
+		}
+		if found == nil {
+			u := "https://github.com/" + repo + "/releases/download/v" + tag + "/" + name
+			if tag == "nightly" {
+				u = "https://github.com/" + repo + "/releases/download/nightly/" + name
+			}
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+			if err != nil {
+				continue
+			}
+			res, err := (&http.Client{Timeout: 3 * time.Minute}).Do(req)
+			if err != nil {
+				continue
+			}
+			if res.StatusCode == http.StatusOK {
+				found, _ = io.ReadAll(io.LimitReader(res.Body, 64<<20))
+			}
+			res.Body.Close()
+		}
+		if len(found) > 1<<20 {
+			out[name] = found
+		}
+	}
+	return out
 }

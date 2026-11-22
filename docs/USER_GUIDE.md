@@ -1578,6 +1578,17 @@ site:
 
 **+** next to **Testbeds** in the Tests tab writes one for you: give a session folder (for example the emulated lab's folder, or a site) and a name, and it gets a role for each saved session in it (`core-sw1` → `core_sw1: Lab/core-sw1`). A test recorded with *Sessions as roles* then runs on those devices when you pick the testbed. An existing testbed is never replaced.
 
+### Run control, notifications, trends, bookings and web steps
+
+- **Run control** (Run panel): rerun a failed test up to 3 times (a test that then passes is marked *flaky*), a test timeout and a run timeout in minutes. Schedules have them too.
+- **Notifications** (Options → Integrations): a Teams or chat webhook and/or e-mail for scheduled runs, API monitors and SNMP alarms - only on failures or always. **Send a Test** checks them.
+- **PDF report**: each run writes `report.pdf`; **PDF** in the run opens it. **📈 Trends** in Runs shows pass rates, the tests that fail most and results per software version.
+- **📅 Calendar** in Testbeds: book a testbed for a time; other people's runs ask first and their schedules are refused. Bookings are in `bookings.yaml` (share it with Git).
+- **Web steps**: + More → **Web Page (Playwright)** - click, type, check text and take screenshots on a web page; **Set Up Playwright** installs it once (Node.js needed).
+
+- **Spirent TestCenter / IxNetwork**: + More → **Spirent / IxNetwork Traffic Run** loads a saved configuration, connects the chassis ports, runs the traffic and checks loss and latency per stream (see the Tests guide).
+- **Export without Termwright**: ⋯ → Export Automation Suite → **On its own, as code** (Python or Go) or **with the twrun program** (the YAML tests and a runner for Linux, macOS or Windows) gives a suite that logs in to the devices itself (inventory.yaml from your sessions; passwords from `TW_PASSWORD…`, the keyring or a prompt). Procedures become functions in `lib/python/twprocs.py`.
+
 ### Go tests
 
 Saving a test also writes it as a Go test next to it (`cases/vlan/vlan-42_test.go`): one subtest per step, checks as plain calls, for example ``a.Field(`Admin\s+State:\s*(\S+)`).Equals("Enabled")``. Termwright also writes `go.mod` (module `termwright-tests`) and `lib/twtest`, a small helper that uses only Go's standard library. Edit the YAML, not the Go file - it is written again on every save; files you add to `lib/` yourself are never replaced.
@@ -1635,6 +1646,10 @@ The TCL scripts print TAP (`ok 1 - show version`, `not ok 2 - …` with the reas
 **Suites** (`suites/<name>.yaml`: `name`, `tests` - files, folders or suites - and `tags`) are named sets; *Save as suite…* keeps a selection. A run **locks** its testbed (`locks/` in the tests folder, stale after 12 hours; *Release* frees it) and can run on several testbeds at once. Every run records the software version of each device (its device facts) and adds its results to `reports/history.jsonl`. While recording, show commands get checks for what was configured before them (*Options* in the recorder turns it off).
 
 **Import.** **Import Test Cases** (⋯ menu) takes Excel or CSV manual test cases, a **Postman collection** (one test per request; folders become suites; the status check comes from the test script or the saved example) or an **OpenAPI 3 / Swagger 2** description (one test per operation; tags become suites; the first 2xx answer is the status check). Name the API session the requests go to.
+
+**Procedures, data, NETCONF, breakpoints, samples and tables.** Shared steps with parameters live in `procs/` (**Procedures** in the left bar; **+ More → Call a Procedure** in a test). **Test data** runs a test once per CSV or Excel row. **+ More → NETCONF Request** sends get, get-config, edit-config or an RPC over SSH (port 830); XML replies are checked with paths like `data.vlans.vlan[0].name`. Click a step's number for a breakpoint (Run Step, Continue, Skip, change variables); **Step through** stops before every step. **Sample over time** checks the average, maximum, minimum, change or rate of a value. **▦ Make a Table…** turns output into a table by clicking the header line and saves it as a TextFSM template. See the testing guide, section 14.
+
+**Export and debug.** ⋯ → **Export Automation Suite** saves the chosen tests or a plan as a standalone zip (Go, Python or TCL code, library, testbeds, `plan.txt`, a run script for Linux, macOS or Windows; runs write JUnit XML and each test's run log) - see the testing guide. **Pause when a step fails** (Run panel) waits at a failed step with the connections open (Open Device, Retry Step, Continue, Stop Test); a step row has **Run This Step** and **Run From Here** and lists its variables.
 
 **Team roles and approvals.** `roles.yaml` in the tests folder (Library → **Team roles**) lists who may edit (`editors`), run (`runners`) and approve (`approvers`) tests - user names as in *Run by*; an empty list lets everyone. `approval: production` makes runs that touch production sessions wait for an approved request (`always`: every run). A blocked run offers **Ask for an Approval**; an approver (someone else than the requester) approves or rejects it under **Runs → Approvals**, and the approval allows that run - the same tests on the same testbed - for 24 hours. Requests and decisions are files in `approvals/`, shared through Git with the tests, and the audit log records them. It keeps an honest team in step; it is not a security boundary.
 

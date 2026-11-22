@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/termwright/termwright/internal/integrations"
 	"strconv"
 	"strings"
 	"sync"
@@ -46,7 +47,6 @@ func (a *App) HTTPMockStart(collection string, port int) (apiclient.MockInfo, er
 	httpMocks[c.ID] = m
 	return m.Info(), nil
 }
-
 
 // HTTPMockStop stops a collection's mock server.
 func (a *App) HTTPMockStop(collection string) {
@@ -200,8 +200,10 @@ func (a *App) runMonitor(ctx context.Context, m config.APIMonitor) {
 			msg = m.Name + ": " + err.Error()
 		}
 		_ = a.Notify("API monitor failed", msg)
+		a.notifyResults(integrations.Message{Title: "API monitor failed", Text: msg, Failed: true})
 	case ok && !wasOK:
 		_ = a.Notify("API monitor passes again", m.Name)
+		a.notifyResults(integrations.Message{Title: "API monitor passes again", Text: m.Name})
 	}
 }
 

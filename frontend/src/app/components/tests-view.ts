@@ -6,7 +6,7 @@ import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { Recorder, escapeRe, fieldPattern, isRead } from '../core/recorder.service';
 import { Tabs } from '../core/tabs.service';
-import { TestApproval, CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestHistory, TestStepResult, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
+import { TestbedDevice, WebStatus, TestBooking, TestTrends, TestTable, TestProc, TestProcInfo, TemplateSpec, SessionNode, TestApproval, CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestHistory, TestStepResult, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
 import { expectLabel, parseTableCheck, stepText } from './recorder-panel';
 import { AIChat } from '../core/ai-chat.service';
 import { Icon } from './icon';
@@ -14,7 +14,7 @@ import { highlight, Lang } from '../core/highlight';
 
 type View = 'steps' | 'yaml' | 'go' | 'py' | 'tcl' | 'history';
 type Phase = 'setup' | 'steps' | 'cleanup';
-type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'library';
+type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'procs' | 'library';
 
 /** The Tests tab: the tests folder's tree, the selected test (steps, YAML, generated Go) and the last run. */
 type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestStepResult };
@@ -52,11 +52,11 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                 }
               }
               @for (g of groups(); track g.dir) {
-                <div class="fold"><button type="button" class="lnk fl" (click)="toggleFold(g.dir)">{{ folded().includes(g.dir) ? '▸' : '▾' }} {{ g.dir || 'No suite' }}</button><span class="cnt">{{ g.cases.length }}</span>
+                <div class="fold suite"><button type="button" class="lnk fl" (click)="toggleFold(g.dir)">{{ folded().includes(g.dir) ? '▸' : '▾' }} {{ g.dir || 'No suite' }}</button><span class="cnt">{{ g.cases.length }}</span>
                   <button type="button" class="lnk" (click)="openRun(filesOf(g), g.dir || 'cases')" [title]="'Run the tests in ' + (g.dir || 'cases')">▶</button></div>
                 @if (!folded().includes(g.dir)) {
                   @for (c of g.cases; track c.file) {
-                    <div class="case" [class.sel]="c.file === sel() && section() === 'tests'" (click)="select(c.file)" (keydown.enter)="select(c.file)" tabindex="0" role="button" [title]="c.error || c.description || c.file">
+                    <div class="case in" [class.sel]="c.file === sel() && section() === 'tests'" (click)="select(c.file)" (keydown.enter)="select(c.file)" tabindex="0" role="button" [title]="c.error || c.description || c.file">
                       <input type="checkbox" [checked]="picked().includes(c.file)" (click)="$event.stopPropagation()" (change)="pick(c.file)" [attr.aria-label]="'Select ' + c.name" />
                       <span class="dot" [class]="dot(c)"></span><span class="cn">{{ caseName(c) }}</span><span class="n">{{ c.steps }}</span></div>
                   }
@@ -77,7 +77,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
               }
             </div>
             @if (picked().length) {
-              <div class="selbar"><b>{{ picked().length }} selected</b><span class="sp"></span><button type="button" class="lnk" (click)="picked.set([])">Clear</button><button type="button" class="lnk" (click)="saveSuite()" title="Keep the selected tests as a plan (suites/…) to run them together again">Save as plan…</button><button type="button" class="go" (click)="openRun(picked(), (picked().length === 1 ? '1 test' : picked().length + ' tests'))"><app-icon name="play" [size]="12" /> Run {{ picked().length === 1 ? 'Test' : picked().length + ' Tests' }}</button></div>
+              <div class="selbar"><b>{{ picked().length }} selected</b><span class="sp"></span><button type="button" class="sbtn" (click)="picked.set([])">Clear</button><button type="button" class="sbtn" (click)="saveSuite()" title="Keep the selected tests as a plan (suites/…) to run them together again">Save as plan…</button><button type="button" class="go" (click)="openRun(picked(), (picked().length === 1 ? '1 test' : picked().length + ' tests'))"><app-icon name="play" [size]="12" /> Run {{ picked().length === 1 ? 'Test' : picked().length + ' Tests' }}</button></div>
             } @else if (filtering()) {
               <div class="selbar"><span class="mut">{{ filtered().length }} of {{ tree()?.cases?.length ?? 0 }} shown</span><span class="sp"></span><button type="button" (click)="openRun(shownFiles(), filtered().length + ' shown tests')" [disabled]="!filtered().length"><app-icon name="play" [size]="13" /> Run shown…</button></div>
             } @else {
@@ -85,7 +85,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
             }
           }
           @case ('runs') {
-            <div class="stop"><b>Runs</b><span class="mut">past runs of this tests folder, newest first</span></div>
+            <div class="stop"><div class="row"><b class="grow">Runs</b><button type="button" [class.on]="trendsOn()" (click)="openTrends()" title="Pass rate over the runs, the tests that fail most, results per software version">📈 Trends</button></div><span class="mut">past runs of this tests folder, newest first</span></div>
             <div class="list">
               @if (approvals().length) {
                 <div class="fold"><span>Approvals</span></div>
@@ -115,9 +115,18 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
             </div>
           }
           @case ('testbeds') {
-            <div class="stop"><div class="row"><b class="grow">Testbeds</b><button type="button" (click)="newTestbed()" title="A role for each session of a session folder">+ New</button></div><span class="mut">which devices a run uses</span></div>
+            <div class="stop"><div class="row"><b class="grow">Testbeds</b><button type="button" [class.on]="calOn()" (click)="openCal()" title="Book a testbed so other people's runs and schedules leave it alone">📅 Calendar</button><button type="button" (click)="openTbPick()" title="A role for each session of a session folder">+ New</button></div><span class="mut">which devices a run uses</span></div>
             <div class="list">
-              @for (b of tree()?.testbeds ?? []; track b) { <div class="case" [class.sel]="fileSel() === b" (click)="openFile(b)" (keydown.enter)="openFile(b)" tabindex="0" role="button"><span class="cn">{{ base(b) }}</span>@if (lockOf(b); as l) { <span class="n" [title]="'Locked by ' + l.user + ' on ' + l.host + ' since ' + l.since.slice(11, 16)">🔒 {{ l.mine ? 'running' : l.user }}</span> }</div> } @empty { <div class="empty-s">No testbeds.</div> }
+              @for (b of tree()?.testbeds ?? []; track b) { <div class="case" [class.sel]="fileSel() === b" (click)="calOn.set(false); openFile(b)" (keydown.enter)="openFile(b)" (contextmenu)="fileMenu($event, b)" tabindex="0" role="button"><span class="cn">{{ base(b) }}</span>@if (bookedNow(b); as k) { <span class="n" [title]="'Booked by ' + k.who + ' until ' + hm(k.to) + (k.why ? ' - ' + k.why : '')">📅 {{ k.mine ? 'yours' : k.who }}</span> }@if (lockOf(b); as l) { <span class="n" [title]="'Locked by ' + l.user + ' on ' + l.host + ' since ' + l.since.slice(11, 16)">🔒 {{ l.mine ? 'running' : l.user }}</span> }</div> } @empty { <div class="empty-s">No testbeds.</div> }
+            </div>
+          }
+          @case ('procs') {
+            <div class="stop"><div class="row"><b class="grow">Procedures</b><button type="button" (click)="newProc()" title="Shared steps with parameters, e.g. create a VLAN on a switch">+ New</button></div><span class="mut">steps several tests share - change once, every test follows</span></div>
+            <div class="list">
+              @for (p of procs(); track p.file) {
+                <div class="case" [class.sel]="procSel() === p.file" (click)="openProc(p.file)" (keydown.enter)="openProc(p.file)" (contextmenu)="fileMenu($event, p.file)" tabindex="0" role="button" [title]="p.error || p.description || p.file">
+                  <span class="cn">{{ p.name }}<span class="mut">({{ (p.params ?? []).join(', ') }})</span></span><span class="n">{{ p.steps }}</span></div>
+              } @empty { <div class="empty-s">No procedures yet. <b>+ New</b>, or ⋯ on a test → <b>Make a Procedure from This Test</b>.</div> }
             </div>
           }
           @case ('library') {
@@ -146,14 +155,27 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
             <button type="button" (click)="stopRun()" title="Stop after the step that runs now (cleanups still run)">■ Stop</button>
           </div>
           @if (paused(); as pz) {
-            <div class="pausebar" role="alert">
-              <span class="pzi">❚❚</span><div class="pzt"><b>Paused at a failed step</b> <span class="mut">{{ pz.case }} · {{ pz.step.name }}</span>
-                <div class="bad">{{ pz.step.error || failedCheck(pz.step) || 'a check failed' }}</div></div>
-              <span class="sp"></span>
-              @if (pz.step.target) { <button type="button" (click)="openDevice(pz.step.target)" title="Open the device in a terminal tab to look around (a new login)">Open Device</button> }
-              <button type="button" class="go" (click)="resume('retry')" title="Run the step again - after you fixed the device or the test">↻ Retry Step</button>
-              <button type="button" (click)="resume('continue')" title="Go on with the next step (the test still fails)">Continue</button>
-              <button type="button" class="badbtn" (click)="resume('stop')" title="End the test; its cleanup runs">Stop Test</button>
+            <div class="pausebar" [class.bp]="pz.breakpoint" role="alert">
+              <div class="pzrow">
+                <span class="pzi">{{ pz.breakpoint ? '●' : '❚❚' }}</span><div class="pzt"><b>{{ pz.breakpoint ? 'Stopped at a breakpoint' : 'Paused at a failed step' }}</b><span class="mut">{{ pz.case }} · {{ pz.step.name }}</span>
+                  @if (!pz.breakpoint) { <div class="bad">{{ pz.step.error || failedCheck(pz.step) || 'a check failed' }}</div> } @else { <div class="mut">The step has not run yet. Change a variable below if you like, then run it.</div> }</div>
+                <span class="sp"></span>
+                @if (pz.step.target) { <button type="button" (click)="openDevice(pz.step.target)" title="Open the device in a terminal tab to look around (a new login)">Open Device</button> }
+                @if (pz.breakpoint) {
+                  <button type="button" class="go" (click)="resume('step')" title="Run this step, then stop before the next one">▶ Run Step</button>
+                  <button type="button" (click)="resume('continue')" title="Run on to the next breakpoint">Continue</button>
+                  <button type="button" (click)="resume('skip')" title="Leave this step out and stop before the next one">Skip</button>
+                } @else {
+                  <button type="button" class="go" (click)="resume('retry')" title="Run the step again - after you fixed the device or the test">↻ Retry Step</button>
+                  <button type="button" (click)="resume('continue')" title="Go on with the next step (the test still fails)">Continue</button>
+                }
+                <button type="button" class="badbtn" (click)="resume('stop')" title="End the test; its cleanup runs">Stop Test</button>
+              </div>
+              @if (pauseVars().length) {
+                <details class="pzvars" [open]="pz.breakpoint"><summary>Variables ({{ pauseVars().length }})</summary>
+                  <div class="vars">@for (x of pauseVars(); track x.k) { <span class="vk">{{ '{{' + x.k + '}}' }}</span><input class="vin" [(ngModel)]="x.v" [attr.aria-label]="x.k" /> }</div>
+                </details>
+              }
             </div>
           }
         }
@@ -188,12 +210,43 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
         }
         @switch (section()) {
           @case ('runs') {
-            @if (runRep(); as rep) {
+            @if (trendsOn()) {
+              <div class="head"><div class="crumb">reports/history.jsonl</div><div class="title"><h1>Trends</h1><span class="sp"></span>
+                <select [(ngModel)]="trWhat" (ngModelChange)="loadTrends()" aria-label="Which tests"><option value="">Every test</option>@for (p of tree()?.suites ?? []; track p.file) { <option [value]="p.file">Plan: {{ p.name }}</option> }</select>
+                <select [(ngModel)]="trTestbed" (ngModelChange)="loadTrends()" aria-label="Testbed"><option value="">Any testbed</option>@for (b of tree()?.testbeds ?? []; track b) { <option [value]="b">{{ base(b) }}</option> }</select>
+                <button type="button" (click)="trendsOn.set(false)">Close</button></div></div>
+              <div class="body">
+                @if (trends(); as tr) {
+                  @if (!tr.runs.length) { <div class="empty mut">No runs recorded yet{{ trWhat || trTestbed ? ' for this choice' : '' }}.</div> } @else {
+                    <div class="kpis">
+                      <div class="kpi"><b>{{ trRate(tr) }}%</b><span>passed (last {{ tr.runs.length }} runs)</span></div>
+                      <div class="kpi"><b class="bad">{{ trSum(tr, 'failed') }}</b><span>failures</span></div>
+                      <div class="kpi"><b class="kwarn">{{ trSum(tr, 'flaky') }}</b><span>flaky (passed on a rerun)</span></div>
+                      <div class="kpi"><b>{{ trAvgMin(tr) }}</b><span>average run</span></div></div>
+                    <div class="sec"><div class="sh">Pass rate per run<span class="sp"></span><span class="norm">oldest left · click a bar to open the run</span></div>
+                      <div class="trbars">
+                        @for (r of tr.runs; track r.dir) {
+                          <div class="trb" (click)="trendsOn.set(false); openRunReport(r.dir)" [title]="when(r.dir) + ' · ' + r.passed + ' passed, ' + r.failed + ' failed, ' + r.skipped + ' skipped' + (r.version ? ' · ' + r.version : '') + (r.testbed ? ' · ' + base(r.testbed) : '')">
+                            <i class="tf" [style.flex-grow]="r.failed"></i><i class="ts" [style.flex-grow]="r.skipped"></i><i class="tp" [style.flex-grow]="r.passed"></i></div>
+                        }
+                      </div></div>
+                    <div class="trgrid">
+                      <div class="sec"><div class="sh">Tests that fail most</div>
+                        @for (t of tr.tests; track t.file) { <div class="trrow" (click)="trendsOn.set(false); section.set('tests'); select(t.file)" role="button" tabindex="0"><span class="cn">{{ t.case }}</span><span class="bad">{{ t.failures }}/{{ t.runs }} failed</span>@if (t.flips) { <span class="kwarn">{{ t.flips }} flips</span> }<span class="mut ell" [title]="t.last ?? ''">{{ t.last }}</span></div> }
+                        @empty { <div class="none">No failures in these runs.</div> }</div>
+                      <div class="sec"><div class="sh">Per software version</div>
+                        @for (v of tr.versions; track v.version) { <div class="trrow"><span class="cn">{{ v.version }}</span><span class="bar trv"><i class="okb" [style.width.%]="100 * v.passed / v.total"></i></span><span>{{ (100 * v.passed / v.total).toFixed(0) }}%</span><span class="mut">{{ v.total }} results</span></div> }
+                        @empty { <div class="none">No versions recorded (the runs read them from the devices).</div> }</div>
+                    </div>
+                  }
+                }
+              </div>
+            } @else if (runRep(); as rep) {
               <div class="head"><div class="crumb">{{ rep.dir }} · {{ rep.testbed ? 'testbed ' + base(rep.testbed) : "the tests' own sessions" }} · {{ rep.cleanup === 'off' ? 'no cleanup' : rep.cleanup === 'auto' ? 'cleanup or undo' : 'cleanup steps' }} · {{ dur(rep.ms) }}@if (verText(rep.versions)) { · {{ verText(rep.versions) }} }@if (rep.runBy) { · run by {{ rep.runBy }} }</div>
                 <div class="title"><h1>Run · {{ when(rep.dir) }}</h1>
                   <span class="pill" [class]="rep.failed ? 'pill f' : rep.skipped ? 'pill s' : 'pill p'">{{ rep.failed ? rep.failed + ' failed' : rep.skipped ? rep.skipped + ' skipped' : 'all passed' }}</span>
                   <span class="sp"></span>
-                  <button type="button" (click)="backend.testsOpen(rep.dir)">HTML report</button><button type="button" (click)="backend.testsOpen(rep.dir + '/junit.xml')">JUnit</button>
+                  <button type="button" (click)="backend.testsOpen(rep.dir)">HTML report</button><button type="button" (click)="backend.testsOpen(rep.dir + '/report.pdf')" title="The report as a PDF: summary, tests, every step with expected and found">PDF</button><button type="button" (click)="backend.testsOpen(rep.dir + '/junit.xml')">JUnit</button>
                   <button type="button" (click)="sendQTest(rep)" [disabled]="sending()" title="Send each test's result to its qTest test case (Global Options → Integrations)">{{ sending() ? 'Sending…' : 'Send to qTest' }}</button>
                   @if (failedFiles(rep).length) { <button type="button" class="go" (click)="openRun(failedFiles(rep), 'the failed tests')"><app-icon name="play" [size]="12" /> Run Failed Again</button> }
                 </div></div>
@@ -207,7 +260,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                   @for (r of rep.results; track $index) {
                     <div class="rrow rq" (click)="r.file && openTest(r.file)" (keydown.enter)="r.file && openTest(r.file)" tabindex="0" role="button">
                       <span [class]="r.skipped ? 'warn' : r.passed ? 'ok' : 'bad'">{{ r.skipped ? '○' : r.passed ? '✓' : '✗' }}</span>
-                      <span>{{ r.case }}@if (r.cleanupFailed) { <span class="pill f sm">cleanup</span> }</span>
+                      <span>{{ r.case }}@if (r.flaky) { <span class="pill w sm" [title]="'Failed first, passed on attempt ' + r.attempts">flaky</span> }@if (r.cleanupFailed) { <span class="pill f sm">cleanup</span> }</span>
                       <span class="mut">{{ r.passed ? notChecked(r) : failText(r) }}@if (!r.passed && !r.skipped) { · <button type="button" class="lnk" (click)="$event.stopPropagation(); explain(r)">✦ Explain</button> }</span>
                       <span class="mut">{{ r.qtestRun }}@if (r.defect) { @if (r.qtestRun) { · } <button type="button" class="lnk" (click)="$event.stopPropagation(); backend.openURL(r.defectUrl!)">{{ r.defect }}</button> } @else if (!r.passed && !r.skipped) { @if (r.qtestRun) { · } <button type="button" class="lnk" (click)="$event.stopPropagation(); createDefect(rep.dir, r)" title="Open a Jira defect with the steps, the failed output and the report">+ defect</button> }</span>
                       <span class="r mut">{{ dur(r.ms) }}@if (r.log) { <button type="button" class="lnk" (click)="$event.stopPropagation(); openLog(r.log!, r.case)" title="Every step: what was sent, the full answer, the checks">Log</button> }</span></div>
@@ -232,6 +285,8 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                 }
                 <label><span>After each test</span><select [(ngModel)]="s.cleanup"><option [ngValue]="undefined">Run its cleanup steps</option><option value="off">No cleanup - tests build on each other</option><option value="auto">Cleanup steps, else undo its configuration</option></select></label>
                 <label><span>If a cleanup fails</span><select [(ngModel)]="s.onCleanupFail"><option [ngValue]="undefined">Stop the run - skip the rest</option><option value="restore">Restore the saved configuration</option><option value="factory">Factory default</option></select></label>
+                <label title="A failed test runs again up to this many times; passing on a rerun marks it flaky"><span>Rerun a failed test</span><select [(ngModel)]="s.rerun"><option [ngValue]="undefined">No</option><option [ngValue]="1">Once</option><option [ngValue]="2">Twice</option><option [ngValue]="3">3 times</option></select></label>
+                <label title="Tests not started by then are skipped and the run reports them"><span>Stop the run after (minutes)</span><input type="number" min="0" [(ngModel)]="s.runTimeout" placeholder="no limit" /></label>
                 <label class="ck"><input type="checkbox" [(ngModel)]="s.production" /> May use production sessions</label>
                 <label class="ck"><input type="checkbox" [(ngModel)]="s.off" /> Off</label>
                 @if (schedView(); as v) { @if (v.state.last) { <p class="mut">Last run {{ v.state.last.slice(0, 16).replace('T', ' ') }}: {{ v.state.error || (v.state.passed + ' passed, ' + v.state.failed + ' failed') }}@if (v.state.dir) { · <button type="button" class="lnk" (click)="openRunReport(v.state.dir!)">open</button> }</p> } }
@@ -239,7 +294,66 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
               </div></div>
             } @else { <div class="empty mut">Select a schedule, or + New.</div> }
           }
-          @case ('testbeds') { <ng-container *ngTemplateOutlet="fileView" /> }
+          @case ('testbeds') {
+            @if (calOn()) {
+              <div class="head"><div class="crumb">bookings.yaml - shared with the team through Git</div><div class="title"><h1>Testbed Calendar</h1><span class="sp"></span>
+                <button type="button" (click)="calMove(-7)" aria-label="Previous week">‹</button><button type="button" (click)="calToday()">This Week</button><button type="button" (click)="calMove(7)" aria-label="Next week">›</button>
+                <button type="button" class="pri" (click)="newBooking()">+ Book</button></div></div>
+              <div class="body">
+                <div class="cal">
+                  <div class="calh"><span></span>@for (d of calDays(); track d.getTime()) { <span [class.today]="isToday(d)">{{ calDay(d) }}</span> }</div>
+                  @for (b of tree()?.testbeds ?? []; track b) {
+                    <div class="calr"><span class="caln" [title]="b">{{ base(b) }}</span>
+                      <div class="calt" (dblclick)="newBooking(b, $event)" title="Double-click to book">
+                        @for (d of calDays(); track d.getTime()) { <i class="cald" [class.today]="isToday(d)"></i> }
+                        @if (nowPct() >= 0) { <i class="caln-now" [style.left.%]="nowPct()"></i> }
+                        @for (k of weekBookings(b); track k.id) {
+                          <div class="calb" [class.mine]="k.b.mine" [style.left.%]="k.l" [style.width.%]="k.w" (click)="editBooking(k.b)" [title]="k.b.who + ': ' + fmtWhen(k.b.from) + ' → ' + fmtWhen(k.b.to) + (k.b.why ? '\n' + k.b.why : '')"><b>{{ k.b.mine ? 'You' : k.b.who }}</b> {{ k.b.why }}</div>
+                        }
+                      </div></div>
+                  } @empty { <div class="empty mut">No testbeds yet. Make one with + New.</div> }
+                </div>
+                @if (bookings().length) {
+                  <div class="sec bkl"><div class="sh">Coming up</div>
+                    @for (k of bookings(); track k.id) { <div class="trrow" role="button" tabindex="0" (click)="editBooking(k)" (keydown.enter)="editBooking(k)"><span class="cn">{{ base(k.testbed) }}</span><span>{{ fmtWhen(k.from) }} → {{ fmtWhen(k.to) }}</span><b [class.accent]="k.mine">{{ k.mine ? 'You' : k.who }}</b><span class="mut ell">{{ k.why }}</span></div> }
+                  </div>
+                }
+                <p class="mut calnote">While a testbed is booked, runs and schedules by other people are refused (a run can still take it after asking). Bookings are in bookings.yaml in the tests folder - commit it so the team sees them.</p>
+                @if (bk(); as k) {
+                  <div class="sec bkf"><div class="sh">{{ k.id ? 'Booking' : 'New Booking' }}@if (k.id && !k.mine) { <span class="norm"> - by {{ k.who }}</span> }</div>
+                    <div class="form">
+                      <label><span>Testbed</span><select [(ngModel)]="k.testbed">@for (b of tree()?.testbeds ?? []; track b) { <option [value]="b">{{ base(b) }}</option> }</select></label>
+                      <label><span>From</span><input type="datetime-local" [(ngModel)]="bkFrom" /></label>
+                      <label><span>To</span><input type="datetime-local" [(ngModel)]="bkTo" /></label>
+                      <label><span>Why</span><input [(ngModel)]="k.why" placeholder="Upgrade to the new release" /></label>
+                      <div class="row"><span class="sp"></span>@if (k.id) { <button type="button" class="badbtn" (click)="cancelBooking(k)">Cancel Booking</button> }<button type="button" (click)="bk.set(null)">Close</button><button type="button" class="pri" (click)="saveBooking(k)">Save</button></div>
+                    </div></div>
+                }
+              </div>
+            } @else { <ng-container *ngTemplateOutlet="fileView" /> }
+          }
+          @case ('procs') {
+            @if (proc(); as p) {
+              <div class="head"><div class="crumb">{{ procSel() }}</div><div class="title"><h1>{{ p.name }}</h1><span class="pill">procedure</span><span class="sp"></span>
+                <button type="button" (click)="copyText(callSnippet(p))" title="Copy the YAML of a step that calls it"><app-icon name="copy" [size]="13" /> Copy Call</button>
+                <button type="button" (click)="editProcYaml()">✎ Edit YAML</button>
+                <button type="button" class="badbtn" (click)="removeFile(procSel())"><app-icon name="trash" [size]="13" /> Delete</button></div></div>
+              <div class="body">
+                @if (p.description) { <p class="mut">{{ p.description }}</p> }
+                <div class="meta"><span>Parameters <b>@for (x of p.params ?? []; track x) { <span class="tag">{{ '{{' }}{{ x.split('=')[0] }}{{ '}}' }}{{ x.includes('=') ? ' = ' + x.split('=')[1] : '' }}</span> } @empty { none }</b></span>
+                  <span>Used by <b>{{ procUsers(p.name ?? '').length }} {{ procUsers(p.name ?? '').length === 1 ? 'test' : 'tests' }}</b></span></div>
+                <div class="sec">
+                  <div class="sh">Steps<span class="sp"></span><span class="norm">{{ p.steps.length }} steps</span></div>
+                  <div class="srow hd"><span>#</span><span>Device</span><span>Command</span><span>Checks</span><span></span><span></span></div>
+                  @for (st of p.steps; track $index; let i = $index) {
+                    <div class="srow"><span class="mut">{{ i + 1 }}</span><span class="dev">{{ shortDev(target(st)) }}</span><span class="cmd">{{ text(st) }}</span>
+                      <span class="chips">@for (e of st.expect ?? []; track $index) { <span class="chip">{{ label(e) }}</span> } @empty { @if (!isReadStep(st)) { <span class="chip n">✓ device errors</span> } @else { <span class="chip w">○ not checked</span> } }</span><span></span><span></span></div>
+                  }
+                </div>
+                <p class="mut">In a test: <b>+ More ▾ → Call a Procedure</b>. Its steps run in place of the call with the parameters filled in, in Termwright and in the generated Go, Python and TCL.</p>
+              </div>
+            } @else { <ng-container *ngTemplateOutlet="fileView" /> }
+          }
           @case ('library') { <ng-container *ngTemplateOutlet="fileView" /> }
           @default {
             @if (sel() && test(); as t) {
@@ -250,7 +364,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                   @for (g of t.tags ?? []; track g) { <span class="tag">{{ g }}</span> }
                   <span class="sp"></span>
                   @if (last()[sel()]?.log; as lg) { <button type="button" (click)="openLog(lg, t.name || sel())" title="The last run's log: every step, what was sent and what came back">Run Log</button> }
-                  @if (!draft()) { <button type="button" (click)="edit()">✎ Edit</button> }
+                  @if (!draft()) { <button type="button" (click)="edit()">✎ Edit</button> } @else { <button type="button" (click)="draft.set(null)">Cancel</button><button type="button" class="savb" (click)="saveDraft()" title="Save the test (its YAML, Go, Python and TCL)">Save</button> }
                   <button type="button" (click)="testMenu($event)" title="Rename, duplicate, delete, open">⋯</button>
                   <button type="button" class="go" (click)="openRun([sel()], t.name || sel())" [disabled]="busy()"><app-icon name="play" [size]="12" /> {{ busy() ? 'Running…' : 'Run Test' }}</button>
                 </div>
@@ -267,6 +381,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                   <div class="meta">
                     @if (varsText()) { <span>Defaults <b>{{ varsText() }}</b></span> }
                     @if (t.params?.length) { <span>Runs {{ t.params?.length }}× <b>{{ paramsText() }}</b></span> }
+                    @if (t.data) { <span>Data <b>{{ t.data }}</b> <span class="mut">- one run per row</span></span> }
                     @if (t.restore?.length) { <span>Afterwards <b>{{ restoreText() }} put back</b></span> }
                     @if (t.qtest?.testCase) { <span>qTest <b>{{ t.qtest?.testCase }}</b></span> }
                     @if (t.dependsOn?.length) { <span>Depends on <b>{{ t.dependsOn.join(', ') }}</b></span> }
@@ -276,6 +391,10 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                   </div>
                   @for (r of restoreRes(); track $index) { <div class="trow" [class.bad]="!r.passed"><span>{{ r.passed ? '✓' : '✗' }}</span><span>{{ r.name }}</span><span class="mut">{{ r.target }} {{ r.error }}</span></div> }
                   @if (draft(); as d) {
+                    <div class="sec"><div class="sh">Test data</div>
+                      <div class="ed"><div class="row opts"><span class="mut">Run the test once per row of a CSV or Excel file - its column names are variables ({{ '{{' }}vlan{{ '}}' }}).</span><span class="sp"></span>
+                        @if (d.data) { <span class="tag">{{ d.data }}</span><button type="button" class="lnk" (click)="d.data = undefined; touch()">Remove</button> }
+                        <button type="button" (click)="pickData(d)">{{ d.data ? 'Change…' : 'Choose a File…' }}</button></div></div></div>
                     <div class="sec"><div class="sh">While the test runs</div>
                       <div class="ed">
                         <div class="row opts"><label class="wide" title="Words, or /regex/; one per line or comma-separated. The syslog server must be on.">Fail on syslog <input class="cmdi" [ngModel]="(d.watch?.syslog ?? []).join(', ')" (ngModelChange)="setWatch(d, 'syslog', $event)" placeholder="e.g. LINK-3-UPDOWN, /%.*-[0-2]-/" /></label></div>
@@ -293,10 +412,45 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                               @else if (s.http) { <input class="ses" [(ngModel)]="s.http.session" placeholder="API session (or a full URL)" aria-label="API session" /><select [(ngModel)]="s.http.method" aria-label="Method">@for (m of methods; track m) { <option [value]="m">{{ m }}</option> }</select><input class="cmdi" [(ngModel)]="s.http.url" placeholder="URL or /path" aria-label="URL" /> }
                               @else if (s.manual) { <span class="mut">manual</span><input class="cmdi" [(ngModel)]="s.manual.instruction" placeholder="what the person does or checks" aria-label="Instruction" /> }
                               @else if (s.upgrade) { <span class="mut">upgrade</span><input class="ses" [(ngModel)]="s.upgrade.session" placeholder="session" aria-label="Session" /><input class="cmdi" [(ngModel)]="s.upgrade.image" placeholder="image file or URL" aria-label="Image" /> }
+                              @else if (s.call) { <span class="mut">call</span><select class="ses" [ngModel]="s.call.proc" (ngModelChange)="setCallProc(s, $event)" aria-label="Procedure"><option value="">choose a procedure</option>@for (p of procs(); track p.file) { <option [value]="p.name">{{ p.name }}</option> }</select><span class="cmd fl">{{ procParamsText(s.call.proc) }}</span> }
+                              @else if (s.netconf) { <span class="mut">netconf</span><input class="ses" [(ngModel)]="s.netconf.session" placeholder="SSH session" aria-label="Session" /><select [(ngModel)]="s.netconf.op" aria-label="Operation"><option value="get">get</option><option value="get-config">get-config</option><option value="edit-config">edit-config</option><option value="rpc">rpc</option></select>
+                                @if (s.netconf.op === 'get-config') { <select [(ngModel)]="s.netconf.source" aria-label="Source"><option [ngValue]="undefined">running</option><option value="candidate">candidate</option><option value="startup">startup</option></select> }
+                                @if (s.netconf.op === 'edit-config') { <select [(ngModel)]="s.netconf.target" aria-label="Target"><option [ngValue]="undefined">running</option><option value="candidate">candidate (then commit)</option></select> }<span class="sp"></span> }
+                              @else if (s.tgen) { <span class="mut">traffic</span><select [(ngModel)]="s.tgen.kind" aria-label="Traffic generator"><option value="stc">Spirent TestCenter</option><option value="ixnetwork">IxNetwork</option></select><input class="cmdi" [(ngModel)]="s.tgen.server" placeholder="API session or https://api-server" aria-label="Server" list="tw-api-sessions" /><label class="mut">for <input type="number" class="num2" [(ngModel)]="s.tgen.duration" placeholder="10" /> s</label> }
+                              @else if (s.web) { <span class="mut">web</span><input class="cmdi" [(ngModel)]="s.web.url" placeholder="https://device-or-app/login" aria-label="Page address" /><select [(ngModel)]="s.web.browser" aria-label="Browser"><option [ngValue]="undefined">Chromium</option><option value="firefox">Firefox</option><option value="webkit">WebKit (Safari)</option></select> }
                               @else if (s.traffic) { <span class="mut">traffic test</span><input class="cmdi" [(ngModel)]="s.traffic.test" placeholder="saved lab traffic test" aria-label="Traffic test" /> }
                               @else { <span class="cmd fl">{{ s.loop ? 'loop' : text(s) }}</span><span class="sp"></span> }
                               <button type="button" class="lnk" (click)="moveStep(ph.k, i, -1)" [disabled]="i === 0" title="Move up">↑</button><button type="button" class="lnk" (click)="moveStep(ph.k, i, 1)" [disabled]="lastI" title="Move down">↓</button><button type="button" class="lnk" (click)="removeStep(ph.k, i)" title="Remove the step">✕</button>
                             </div>
+                            @if (s.call) {
+                              <div class="row opts">@for (pn of procParams(s.call.proc); track pn.k) { <label>{{ pn.k }} <input class="pin" [ngModel]="s.call.with?.[pn.k] ?? ''" (ngModelChange)="setCallArg(s, pn.k, $event)" [placeholder]="pn.d || varHint" /></label> } @empty { <span class="mut">{{ s.call.proc ? 'no parameters' : 'Choose a procedure (Procedures in the left bar).' }}</span> }</div>
+                            }
+                            @if (s.tgen; as tg) {
+                              <div class="row opts"><label class="wide" title="The saved configuration in the tests folder: STC .xml or .tcc, IxNetwork .ixncfg or .json (empty: what the server has loaded)">Configuration <input class="cmdi" [(ngModel)]="tg.config" placeholder="tgen/l3-traffic.xml" /></label></div>
+                              <div class="row opts"><label class="wide" title="Chassis ports in the order of the configuration's ports (empty: the configuration's own)">Chassis ports <input class="cmdi" [ngModel]="(tg.ports ?? []).join(', ')" (ngModelChange)="tg.ports = splitPorts($event); touch()" placeholder="10.1.1.5/1/1, 10.1.1.5/1/2" /></label>
+                                <label title="Start the configuration's protocols (devices, BGP…) before the traffic"><input type="checkbox" [(ngModel)]="tg.protocols" /> Start protocols</label>
+                                @if (tg.kind === 'ixnetwork') { <label title="An existing session (Windows API servers: 1); empty makes one">Session <input class="pin" [(ngModel)]="tg.session" placeholder="new" /></label> }</div>
+                              <div class="row opts"><span class="mut">The result is JSON: check <b>loss &lt; 0.01</b>, <b>streams[0].loss &lt; 0.1</b>, <b>streams[1].latencyUs &lt; 50</b> or <b>rx &gt; 0</b> (Result checks below). The API session holds the server's address and login.</span></div>
+                            }
+                            @if (s.web; as w) {
+                              @if (webSt(); as ws) { @if (!ws.ready) { <div class="row opts webst"><span>🌐 {{ ws.node ? 'Playwright is not set up on this computer.' : 'Node.js is not installed.' }} <small class="mut">{{ ws.hint }}</small></span><span class="sp"></span>@if (ws.node) { <button type="button" class="pri" (click)="webSetup()" [disabled]="webBusy()">{{ webBusy() ? 'Setting up…' : 'Set Up Playwright' }}</button> }</div>@if (webBusy()) { <div class="row opts"><code class="mut">{{ webLine() }}</code></div> } } }
+                              @for (a of w.actions ?? []; track $index; let k = $index) {
+                                <div class="row opts inner"><span class="mut">{{ k + 1 }}</span>
+                                  <select [(ngModel)]="a.do" aria-label="Action">@for (o of webActs; track o.k) { <option [value]="o.k">{{ o.l }}</option> }</select>
+                                  @if (a.do !== 'goto' && a.do !== 'screenshot' && !(a.do === 'wait' && !a.target && a.value)) { <input class="cmdi" [(ngModel)]="a.target" [placeholder]="a.do === 'expect' || a.do === 'expect_not' ? 'text=Welcome  or  #status  (empty: the text below anywhere)' : 'text=Sign in   #user   role=button[name=&quot;Save&quot;]   label=Password'" aria-label="Target" /> }
+                                  @if (a.do !== 'click' && a.do !== 'check' && a.do !== 'uncheck' && a.do !== 'hover') { <input class="pin" [(ngModel)]="a.value" [type]="a.do === 'fill' && isSecretTarget(a.target) ? 'password' : 'text'" [placeholder]="webValHint(a.do)" aria-label="Value" /> }
+                                  <button type="button" class="lnk" (click)="w.actions!.splice(k, 1); touch()" title="Remove the action">✕</button></div>
+                              }
+                              <div class="row opts"><button type="button" class="lnk" (click)="(w.actions ??= []).push({ do: 'click', target: '' }); touch()">+ Action</button><span class="sp"></span>
+                                <label title="Accept self-signed certificates (device web pages)"><input type="checkbox" [(ngModel)]="w.insecure" /> Self-signed certificate OK</label><label title="Show the browser window while it runs (default: hidden)"><input type="checkbox" [(ngModel)]="w.show" /> Show the browser</label></div>
+                              <div class="row opts"><span class="mut">The step's output is the action log and the page's text, so <b>contains</b> checks work on it. A failed action saves a screenshot in reports/web-shots.</span></div>
+                            }
+                            @if (s.netconf; as nc) {
+                              @if (nc.op === 'get' || nc.op === 'get-config' || !nc.op) { <div class="row opts"><label class="wide" title="A subtree filter: only these parts of the data come back">Filter <textarea class="cmdi body" [(ngModel)]="nc.filter" rows="2" placeholder="<vlans xmlns=&quot;http://openconfig.net/yang/vlan&quot;/>"></textarea></label></div> }
+                              @if (nc.op === 'edit-config') { <div class="row opts"><label class="wide">Config <textarea class="cmdi body" [(ngModel)]="nc.config" rows="4" placeholder="<vlans xmlns=&quot;...&quot;><vlan><vlan-id>200</vlan-id>…</vlan></vlans>"></textarea></label></div> }
+                              @if (nc.op === 'rpc') { <div class="row opts"><label class="wide">RPC <textarea class="cmdi body" [(ngModel)]="nc.rpc" rows="3" placeholder="<get-schema xmlns=&quot;…&quot;>…</get-schema>"></textarea></label></div> }
+                              <div class="row opts"><span class="mut">Check the answer with <b>XML path =</b> (data.vlans.vlan[0].name = v200) or contains. Port <input type="number" class="num2" [(ngModel)]="nc.port" placeholder="830" /></span></div>
+                            }
                             @if (s.http && s.http.method !== 'GET' && s.http.method !== 'DELETE') { <div class="row opts"><label class="wide">Body <textarea class="cmdi body" [(ngModel)]="s.http.body" rows="2" placeholder='{"name": "v200", "vid": 200}'></textarea></label></div> }
                             @if (s.loop; as lp) {
                               <div class="row opts"><label>For each <input class="pin" [(ngModel)]="lp.var" placeholder="port" /></label>
@@ -308,6 +462,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                               }
                               <div class="row opts inner"><button type="button" class="lnk" (click)="lp.steps.push({ run: { session: lastSession(), command: '' } }); touch()">+ Step in the loop</button></div>
                             }
+                            @if (!s.call) {
                             <div class="row opts"><label class="wide" title="What should happen, in words - shown with the step and in the reports">Expected <input class="cmdi" [(ngModel)]="s.expected" placeholder="e.g. VLAN 200 lists port 1:2 tagged" /></label></div>
                             <div class="row opts"><label>Timeout <input type="number" min="0" class="num2" [(ngModel)]="s.timeout" /> s</label>
                               <label><input type="checkbox" [(ngModel)]="s.continueOnFail" /> Go on when it fails</label>
@@ -315,6 +470,8 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                               <label title="Run the step only when this holds, e.g. {{ '{{' }}vlan{{ '}}' }} != 1 (==, !=, contains, ~, >, <)">If <input class="pin" [(ngModel)]="s.if" placeholder="always" /></label>
                               <label title="Run the step again until its checks pass, for at most this many seconds"><input type="checkbox" [ngModel]="!!s.retry" (ngModelChange)="s.retry = $event ? { timeout: 60, interval: 5 } : undefined" /> Retry until it passes</label>
                               @if (s.retry) { <label>for <input type="number" min="1" class="num2" [(ngModel)]="s.retry.timeout" /> s</label> }
+                              @if (s.run || s.http || s.snmp || s.netconf) { <label title="Run the step several times and check the minimum, maximum, average, change or rate of a value (CPU, counters, errors)"><input type="checkbox" [ngModel]="!!s.sample" (ngModelChange)="s.sample = $event ? { count: 5, interval: 10 } : undefined; touch()" /> Sample over time</label>
+                                @if (s.sample) { <label><input type="number" min="2" class="num2" [(ngModel)]="s.sample.count" /> times, every <input type="number" min="0" class="num2" [(ngModel)]="s.sample.interval" /> s</label> } }
                               @if (s.run) { <label title="Do not fail the step when the device answers with an error message"><input type="checkbox" [(ngModel)]="s.ignoreErrors" /> Ignore device errors</label>
                                 <label title="Turn the output into a table with a TextFSM template: auto (templates/index) or a file in templates/">Parse <input class="pin" [(ngModel)]="s.run.parse" placeholder="off" list="tw-parse" /></label> }</div>
                             <div class="chips">@for (e of s.expect ?? []; track $index; let j = $index) { <span class="chip">{{ label(e) }} <button type="button" class="x" (click)="removeCheck(s, j)" title="Remove the check">×</button></span> }
@@ -322,12 +479,13 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                                 <span class="addck"><select [(ngModel)]="c.k" aria-label="Check">@for (k of checkKinds(s); track k.k) { <option [value]="k.k">{{ k.l }}</option> }</select>
                                   <input [(ngModel)]="c.v" [placeholder]="checkHint(c.k)" aria-label="Value" (keydown.enter)="addCheck(s, c)" /><button type="button" (click)="addCheck(s, c)" [disabled]="!c.v.trim()">+ Check</button></span>
                               }</div>
+                            } @else { <div class="row opts"><label><input type="checkbox" [(ngModel)]="s.continueOnFail" /> Go on when it fails</label><label title="Run the procedure only when this holds">If <input class="pin" [(ngModel)]="s.if" placeholder="always" /></label><span class="mut">The procedure's own steps have their checks.</span></div> }
                           </div>
                         } @empty { <div class="none">no {{ ph.l.toLowerCase() }} steps</div> }
                       </div>
                     }
                     <datalist id="tw-parse"><option value="auto"></option></datalist>
-                    <div class="row"><span class="mut">Saving writes the test's YAML and its Go, Python and TCL code again.</span><span class="sp"></span><button type="button" (click)="draft.set(null)">Cancel</button><button type="button" class="pri" (click)="saveDraft()">Save</button></div>
+                    <div class="row"><span class="mut">Saving writes the test's YAML and its Go, Python and TCL code again.</span></div>
                   } @else {
                     @for (ph of phases; track ph.k) {
                       @if (ph.k === 'steps' || listOf(t, ph.k).length) {
@@ -337,7 +495,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                           @for (s of listOf(t, ph.k); track $index; let i = $index) {
                             @let r = resOf(ph.k, i);
                             <div class="srow" [attr.aria-expanded]="isOpen(ph.k, i)" [class.f]="r && !r.passed && !r.skipped" [class.open]="isOpen(ph.k, i)" (click)="toggleRow(ph.k, i)" (keydown.enter)="toggleRow(ph.k, i)" (contextmenu)="stepMenu($event, ph.k, i)" tabindex="0" role="button">
-                              <span class="mut">{{ i + 1 }}</span><span class="dev" [title]="target(s)">{{ s.loop ? 'loop' : s.manual ? 'you' : shortDev(target(s)) }}</span><span class="cmd" [class.manual]="!!s.manual">{{ text(s) }}@if (logicText(s)) { <span class="logic">{{ logicText(s) }}</span> }@if (s.expected) { <span class="expd">Expected: {{ s.expected }}</span> }</span>
+                              @if (ph.k === 'steps') { <span class="bpn" [class.on]="hasBreak(i)" (click)="toggleBreak(i); $event.stopPropagation()" [title]="hasBreak(i) ? 'Breakpoint: the run stops before this step - click to remove' : 'Click to stop before this step (breakpoint)'">{{ i + 1 }}</span> } @else { <span class="mut">{{ i + 1 }}</span> }<span class="dev" [title]="target(s)">{{ s.loop ? 'loop' : s.manual ? 'you' : shortDev(target(s)) }}</span><span class="cmd" [class.manual]="!!s.manual">{{ text(s) }}@if (logicText(s)) { <span class="logic">{{ logicText(s) }}</span> }@if (s.expected) { <span class="expd">Expected: {{ s.expected }}</span> }</span>
                               <span class="chips">@for (e of s.expect ?? []; track $index; let j = $index) { <span class="chip" [class.b]="r?.checks?.[j]?.passed === false">{{ r?.checks?.[j]?.passed === false ? '✗' : r ? '✓' : '' }} {{ label(e) }}</span> }
                                 @if (!(s.expect?.length) && !s.manual) { @if (isReadStep(s)) { <span class="chip w" title="A read step without checks passes whatever it shows: select text in its output and right-click to add one">○ not checked</span> } @else { <span class="chip n" title="Fails when the device answers with an error message (the device type's error patterns)">✓ device errors</span> } }@if (s.manual) { <span class="chip m">you decide</span> }</span>
                               <span [class]="r ? (r.skipped ? 'mut' : r.passed ? 'ok' : 'bad') : 'mut'">{{ r ? (r.skipped ? '– skipped' : r.passed ? '✓ passed' : '✗ failed') : '' }}</span>
@@ -367,7 +525,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                                     @if (df.lines.length) { <pre class="diff">@for (l of df.lines; track $index) { <span [class]="l[0] === '+' ? 'da' : 'dr'">{{ l }}</span>
 } </pre> } @else { <p class="mut">The output is the same as in that run.</p> }
                                   } @else if (r && !r.skipped && r.output) { <button type="button" class="lnk cmp" (click)="compare(ph.k, i)" title="Show which lines of the output differ from the last run where this test passed">Compare with the last pass</button> }
-                                  <h4>Output · select text, right-click to check it</h4>
+                                  <h4 class="oh">Output · select text, right-click to check it<span class="sp"></span>@if (s.run && r?.output) { <button type="button" class="sbtn" (click)="openTable(ph.k, i, s, r!.output!)" title="Turn this output into a table (or fields) by clicking - no template to write">▦ Make a Table…</button> }</h4>
                                   @if (r?.output) { <pre (contextmenu)="outMenu($event, { i: i, phase: ph.k === 'steps' ? '' : ph.k })">{{ r?.output }}</pre> } @else { <p class="mut">{{ r ? 'no output' : 'not run yet' }}</p> }
                                 </div>
                               </div>
@@ -416,9 +574,29 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
         }
         <ng-template #fileView>
           @if (fileSel(); as fp) {
-            <div class="head"><div class="crumb">{{ fp }}</div><div class="title"><h1>{{ base(fp) }}</h1>@if (fp.startsWith('reports/')) { <span class="pill">read only</span> }@if (lockOf(fp); as l) { <span class="pill s">🔒 in use by {{ l.user }} on {{ l.host }} since {{ l.since.slice(11, 16) }}</span><button type="button" (click)="releaseLock(fp)" title="Free the testbed when that run is over">Release</button> }<span class="sp"></span><button type="button" (click)="copyText(fileText)" title="Copy to the clipboard"><app-icon name="copy" [size]="13" /> Copy</button><button type="button" (click)="backend.testsOpenInEditor(fp)">Open in VS Code</button>@if (!fp.startsWith('reports/')) { <button type="button" class="pri" (click)="saveFile()">Save</button> }</div></div>
+            <div class="head"><div class="crumb">{{ fp }}</div><div class="title"><h1>{{ base(fp) }}</h1>@if (fp.startsWith('reports/')) { <span class="pill">read only</span> }@if (lockOf(fp); as l) { <span class="pill s">🔒 in use by {{ l.user }} on {{ l.host }} since {{ l.since.slice(11, 16) }}</span><button type="button" (click)="releaseLock(fp)" title="Free the testbed when that run is over">Release</button> }<span class="sp"></span><button type="button" (click)="copyText(fileText)" title="Copy to the clipboard"><app-icon name="copy" [size]="13" /> Copy</button><button type="button" (click)="backend.testsOpenInEditor(fp)">Open in VS Code</button>@if (fp.startsWith('testbeds/') || fp.startsWith('suites/')) { <button type="button" class="badbtn" (click)="removeFile(fp)" title="Move it to .removed/ in the tests folder"><app-icon name="trash" [size]="13" /> Delete</button> }@if (!fp.startsWith('reports/') && !(fp.startsWith('testbeds/') && !tbYaml())) { <button type="button" class="savb" (click)="saveFile()">Save</button> }</div></div>
+            @if (fp.startsWith('testbeds/') && !tbYaml()) {
+              <div class="body">
+                <div class="row tbvbar"><span class="mut">{{ tbDevs().length }} {{ tbDevs().length === 1 ? 'role' : 'roles' }} - tests use {{ '{{' }}role{{ '}}' }}</span><span class="sp"></span>
+                  <button type="button" (click)="openTbPick(fp)">+ Add Devices</button><button type="button" (click)="tbYaml.set(true)">Edit YAML</button></div>
+                <div class="tbv">
+                  @for (g of tbDevGroups(); track g.folder) {
+                    <div class="tbg"><span class="fi"></span>{{ g.folder || 'Other values' }}<span class="mut">{{ g.items.length }}</span></div>
+                    @for (d of g.items; track d.role) {
+                      <div class="tbd" [class.val]="!d.session">
+                        <code class="dr">{{ d.role }}</code>
+                        @if (d.session) { <span class="dn ell" [title]="d.session">{{ d.name }}</span><span class="dh mut">{{ d.host }}</span><span class="dt">{{ d.deviceType || '-' }}</span><span class="dm mut ell">{{ d.model || '' }}</span> }
+                        @else { <span class="dn ell">{{ d.value || '(empty)' }}</span><span class="dh mut">{{ d.value?.includes('/') ? 'not a saved session' : 'value' }}</span><span></span><span></span> }
+                        <button type="button" class="lnk" (click)="removeRole(fp, d.role)" title="Take it out of the testbed">✕</button>
+                      </div>
+                    }
+                  } @empty { <div class="empty mut">No roles yet: + Add Devices.</div> }
+                </div>
+              </div>
+            } @else {
             <div class="body"><textarea class="code" [(ngModel)]="fileText" spellcheck="false" [attr.aria-label]="fp"></textarea>
-              <div class="row"><span class="mut">{{ fp.startsWith('lib/') ? 'Termwright writes twtest and run_tests again when it is updated: keep your own helpers in other files.' : fp.startsWith('templates/') ? 'TextFSM templates; the index says which command each one parses (ntc-templates format).' : 'Roles and values: role: Folder/session, name: value.' }}</span></div></div>
+              <div class="row"><span class="mut">{{ fp.startsWith('lib/') ? 'Termwright writes twtest and run_tests again when it is updated: keep your own helpers in other files.' : fp.startsWith('templates/') ? 'TextFSM templates; the index says which command each one parses (ntc-templates format).' : 'Roles and values: role: Folder/session, name: value.' }}</span>@if (fp.startsWith('testbeds/')) { <span class="sp"></span><button type="button" class="lnk" (click)="tbYaml.set(false); openFile(fp)">Back to the device list</button> }</div></div>
+            }
           } @else { <div class="empty mut">Select a file.</div> }
         </ng-template>
       </section>
@@ -428,6 +606,111 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
           <div class="row"><h2 class="fl">Run log · {{ lv.title }}</h2><span class="sp"></span><button type="button" (click)="copyText(lv.text)">Copy</button><button type="button" (click)="backend.testsOpenInEditor(lv.file)">Open in Editor</button><button type="button" (click)="logView.set(null)">Close</button></div>
           <span class="mut">{{ lv.file }}</span>
           <pre class="logpre">@for (ln of lv.text.split('\n'); track $index) {<span [class]="logCls(ln)">{{ ln + '\n' }}</span>}</pre>
+        </div>
+      }
+      @if (tbPick()) {
+        <div class="scrim fixed" (click)="tbPick.set(false)" aria-hidden="true"></div>
+        <div class="mdlg tbdlg" role="dialog" aria-label="Testbed devices">
+          <h3>{{ tbAppend ? 'Add Devices to ' + base(tbAppend) : 'New Testbed' }}</h3>
+          <span class="mut">Choose a session folder, then tick the devices the tests may use. Each device becomes a role: tests use <code>{{ '{{' }}role{{ '}}' }}</code>.</span>
+          <div class="tbcols">
+            <div class="tbcol">
+              <input class="tbq" [(ngModel)]="tbQuery" placeholder="Search folders" aria-label="Search folders" />
+              <div class="fpick">
+                @for (fo of folderList(); track fo.path) {
+                  <div class="fo" [class.on]="tbFolder === fo.path" [style.padding-left.px]="10 + fo.depth * 16" (click)="pickFolder(fo.path)" role="button" tabindex="0" [title]="fo.path">
+                    <span class="fi"></span><span class="ell">{{ fo.name }}</span><span class="mut">{{ fo.n }}</span>
+                  </div>
+                } @empty { <p class="mut">No session folders{{ tbQuery ? ' match' : '' }}.</p> }
+              </div>
+            </div>
+            <div class="tbcol">
+              @if (tbFolder) {
+                <div class="row tbbar"><input class="tbq grow" [(ngModel)]="tbDevQ" placeholder="Filter devices: name, address, type, model" aria-label="Filter devices" />
+                  <button type="button" (click)="tbSelectAll(true)">All</button><button type="button" (click)="tbSelectAll(false)">None</button></div>
+                <div class="fpick devs">
+                  @for (g of devGroups(); track g.folder) {
+                    <div class="dg" [title]="g.folder"><span class="fi"></span>{{ g.folder }}</div>
+                    @for (d of g.items; track d.path) {
+                      <label class="dv" [class.on]="tbPicked.has(d.path)" [class.had]="tbHas.has(d.path)">
+                        <input type="checkbox" [checked]="tbPicked.has(d.path) || tbHas.has(d.path)" [disabled]="tbHas.has(d.path)" (change)="tbToggle(d.path)" />
+                        <span class="dn ell">{{ d.name }}</span><span class="dh mut">{{ d.host }}</span><span class="dt">{{ d.deviceType || '-' }}</span><span class="dm mut ell">{{ tbModels()[d.path] || '' }}</span>
+                        <code class="dr">{{ tbHas.has(d.path) ? 'in the testbed' : roleName(d.path) }}</code>
+                      </label>
+                    }
+                  } @empty { <p class="mut">No devices{{ tbDevQ ? ' match' : '' }}.</p> }
+                </div>
+              } @else { <div class="empty mut">Choose a folder on the left.</div> }
+            </div>
+          </div>
+          <div class="row">
+            @if (!tbAppend) { <label class="fld grow tbname"><span>Testbed name</span><input [(ngModel)]="tbName" /></label> }
+            <span class="mut">{{ tbPicked.size }} {{ tbPicked.size === 1 ? 'device' : 'devices' }} picked</span><span class="sp"></span>
+            <button type="button" (click)="tbPick.set(false)">Cancel</button>
+            <button type="button" class="savb" (click)="createTestbed()" [disabled]="!tbPicked.size || (!tbAppend && !tbName.trim())">{{ tbAppend ? 'Add' : 'Create' }}</button>
+          </div>
+        </div>
+      }
+      <datalist id="tw-api-sessions">@for (a of apiSessions(); track a) { <option [value]="a"></option> }</datalist>
+      @if (exp(); as x) {
+        <div class="scrim fixed" (click)="exp.set(null)" aria-hidden="true"></div>
+        <div class="mdlg wide" role="dialog" aria-label="Export automation suite">
+          <h3>Export Automation Suite</h3>
+          <span class="mut">A zip with the tests and their code, the procedures, the library, the testbeds, a plan and a run script that writes JUnit XML and each test's run log.</span>
+          <div class="fld"><span>How it runs</span>
+            <label class="radio" [class.on]="x.standalone && x.lang !== 'runner'"><input type="radio" name="twsa" [checked]="x.standalone && x.lang !== 'runner'" (change)="expMode(x, 'code')" /><span>On its own, as code - Termwright is not needed<small>Python or Go tests with a library that logs in to the devices itself (SSH, Telnet, REST APIs, SNMP, NETCONF, web pages). Procedures become functions you can call.</small></span></label>
+            <label class="radio" [class.on]="x.lang === 'runner'"><input type="radio" name="twsa" [checked]="x.lang === 'runner'" (change)="expMode(x, 'runner')" /><span>On its own, with the twrun program - no code<small>The YAML tests and twrun for the chosen system: the same runs, reports, procedures, reruns and timeouts as in Termwright.</small></span></label>
+            <label class="radio" [class.on]="!x.standalone"><input type="radio" name="twsa" [checked]="!x.standalone" (change)="expMode(x, 'termwright')" /><span>Through Termwright<small>Python, Go or TCL whose steps go through the app, or <code>termwright tests serve</code> on a server, which logs in with the saved sessions.</small></span></label>
+            <small class="mut">Devices come from your sessions as inventory.yaml; passwords are never in the zip - environment variables (TW_PASSWORD…), the system keyring or a prompt.</small>
+          </div>
+          <label class="fld"><span>Tests</span><select [(ngModel)]="x.what">
+            @if (picked().length) { <option value="picked">The {{ picked().length }} selected {{ picked().length === 1 ? 'test' : 'tests' }}</option> }
+            @if (sel()) { <option value="sel">This test ({{ base(sel()) }})</option> }
+            @for (p of tree()?.suites ?? []; track p.file) { <option [value]="p.file">Plan: {{ p.name }}</option> }
+            <option value="all">Every test in the folder</option></select></label>
+          @if (x.lang !== 'runner') { <div class="segs"><span class="mut">Language</span>@for (l of (x.standalone ? ['python', 'go'] : ['python', 'go', 'tcl']); track l) { <button type="button" [class.on]="x.lang === l" (click)="x.lang = l">{{ l === 'python' ? 'Python' : l === 'go' ? 'Go' : 'TCL' }}</button> }</div> }
+          <div class="segs"><span class="mut">Runs on</span>@for (o of ['linux', 'mac', 'windows']; track o) { <button type="button" [class.on]="x.os === o" (click)="x.os = o">{{ o === 'mac' ? 'macOS' : o === 'linux' ? 'Linux' : 'Windows' }}</button> }</div>
+          <label class="fld"><span>Testbed - the devices it runs on by default</span><select [(ngModel)]="x.testbed"><option value="">The tests' own sessions</option>@for (b of tree()?.testbeds ?? []; track b) { <option [value]="b">{{ base(b) }}</option> }</select></label>
+          <label class="fld"><span>Suite name</span><input [(ngModel)]="x.name" /></label>
+          <div class="row"><span class="sp"></span><button type="button" (click)="exp.set(null)">Cancel</button><button type="button" class="savb" (click)="doExport()">Export…</button></div>
+        </div>
+      }
+      @if (tm(); as m) {
+        <div class="scrim fixed" (click)="tm.set(null)" aria-hidden="true"></div>
+        <div class="mdlg tmk" role="dialog" aria-label="Make a table">
+          <div class="row"><h3>Make a Table</h3><span class="mut">{{ m.command }}</span><span class="sp"></span>
+            <div class="segs"><button type="button" [class.on]="m.kind === 'table'" (click)="m.kind = 'table'; previewTable()">Rows and columns</button><button type="button" [class.on]="m.kind === 'fields'" (click)="m.kind = 'fields'; detectFields(); previewTable()">Label: value fields</button></div></div>
+          <span class="mut">{{ m.kind === 'table' ? 'Click the header line of the table. Its columns are found from the header; rename them and say which may have spaces in their values.' : 'Tick the lines whose value you want; each becomes a named value.' }}</span>
+          <div class="tmgrid">
+            <div class="tmout">
+              @for (l of m.lines; track $index; let li = $index) {
+                <div class="tl" [class.hd]="m.kind === 'table' && m.header === li" [class.pick]="m.kind === 'fields' && fieldOn(li)" (click)="m.kind === 'table' ? pickHeader(li) : toggleField(li)">@if (m.kind === 'fields' && isField(l)) { <input type="checkbox" [checked]="fieldOn(li)" tabindex="-1" /> }<span>{{ l || ' ' }}</span></div>
+              }
+            </div>
+            <div class="tmside">
+              @if (m.kind === 'table') {
+                <h4>Columns</h4>
+                @for (c of m.cols; track $index; let ci = $index) {
+                  <div class="tc"><input [(ngModel)]="c.name" (ngModelChange)="previewTable()" aria-label="Column name" /><label title="Values in this column may contain spaces (the next column then starts after two spaces or more)"><input type="checkbox" [(ngModel)]="c.spaces" (ngModelChange)="previewTable()" /> spaces</label><button type="button" class="lnk" (click)="m.cols.splice(ci, 1); previewTable()" title="Leave this column out">✕</button></div>
+                } @empty { <p class="mut">Click the header line on the left.</p> }
+              } @else {
+                <h4>Fields</h4>
+                @for (fl of m.fields; track $index; let fi = $index) {
+                  <div class="tc"><input [(ngModel)]="fl.name" (ngModelChange)="previewTable()" aria-label="Field name" /><span class="mut ell">{{ fl.label }}</span><button type="button" class="lnk" (click)="m.fields.splice(fi, 1); previewTable()">✕</button></div>
+                } @empty { <p class="mut">Tick lines on the left.</p> }
+              }
+              <h4>Preview</h4>
+              @if (m.err) { <p class="bad">{{ m.err }}</p> }
+              @if (m.preview?.header?.length) {
+                <div class="tprev"><table><tr>@for (h of m.preview!.header; track h) { <th>{{ h }}</th> }</tr>
+                  @for (r of m.preview!.rows.slice(0, 50); track $index) { <tr>@for (c of r; track $index) { <td>{{ c }}</td> }</tr> }</table></div>
+                <span class="mut">{{ m.preview!.rows.length }} rows</span>
+              } @else if (!m.err) { <p class="mut">Nothing yet.</p> }
+            </div>
+          </div>
+          <div class="row"><label class="fld nm"><span>Table name</span><input [(ngModel)]="m.name" /></label><span class="sp"></span>
+            <span class="mut">Saved as a TextFSM template - it works in the runs, the generated code and anywhere TextFSM runs.</span>
+            <button type="button" (click)="tm.set(null)">Cancel</button><button type="button" class="savb" (click)="saveTable()" [disabled]="!m.preview?.rows?.length || !m.name.trim()">Save Table</button></div>
         </div>
       }
       @if (manual(); as m) {
@@ -463,6 +746,13 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
           @if (cleanupMode !== 'off') {
             <label class="fld"><span>If a cleanup fails</span><select [(ngModel)]="onCleanupFail" (ngModelChange)="keepOcf()"><option value="stop">Stop the run - skip the rest</option><option value="restore">Restore the configuration saved before the run</option><option value="factory">Factory default, then go on</option></select></label>
           }
+          <div class="fld"><span>Run control</span>
+            <div class="rc3">
+              <label title="A failed test runs again up to this many times; if it then passes it is marked flaky"><small>Rerun a failed test</small><select [(ngModel)]="rerun" (ngModelChange)="keepRc()"><option [ngValue]="0">No</option><option [ngValue]="1">Once</option><option [ngValue]="2">Twice</option><option [ngValue]="3">3 times</option></select></label>
+              <label title="A test without its own timeout is stopped after this (its cleanup still runs). 0 = no limit"><small>Test timeout, min</small><input type="number" min="0" [(ngModel)]="caseMin" (ngModelChange)="keepRc()" placeholder="no limit" /></label>
+              <label title="Tests not started by then are skipped. 0 = no limit"><small>Run timeout, min</small><input type="number" min="0" [(ngModel)]="runMin" (ngModelChange)="keepRc()" placeholder="no limit" /></label>
+            </div></div>
+          @if (!multi()) { <label class="chk" title="Stop before every step: run the test one step at a time"><input type="checkbox" [(ngModel)]="stepMode" /> <span><b>Step through</b><small class="mut"> - stop before every step{{ breakCount() ? '; ' + breakCount() + ' breakpoints set' : '' }}</small></span></label> }
           @if (!multi()) { <label class="chk" title="When a step fails, the run waits with the devices' connections open: look at the device, then run the step again, go on or stop"><input type="checkbox" [(ngModel)]="pauseOnFail" /> <span><b>Pause when a step fails</b><small class="mut"> - debug: retry the step, go on or stop</small></span></label> }
           <span class="sp"></span>
           <div class="row"><button type="button" class="grow" (click)="runFiles.set(null)">Cancel</button><button type="button" class="go grow2" (click)="startRun()" [disabled]="multi() && multiPick.length < 1"><app-icon name="play" [size]="12" /> Run {{ rf.length ? rf.length + (rf.length === 1 ? ' test' : ' tests') : 'all' }}{{ multi() ? ' on ' + multiPick.length + ' testbeds' : '' }}</button></div>
@@ -494,6 +784,8 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
     .list { flex: 1; overflow: auto; padding: 6px; display: flex; flex-direction: column; gap: 1px; }
     .fold { display: flex; align-items: center; gap: 6px; padding: 7px 6px 3px; color: var(--muted); font-size: 12px; } .fold .lnk { color: var(--muted); padding: 0; text-align: left; } .fold .fl { flex: 1; } .cnt { font-size: 11px; }
     .case { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 7px; cursor: pointer; }
+    .fold.suite { padding: 10px 6px 4px; } .fold.suite .lnk.fl { color: var(--text); font-size: 13.5px; font-weight: 600; } .fold.suite .cnt { font-size: 11.5px; }
+    .case.in { margin-left: 16px; font-size: 12.5px; }
     .case:hover { background: var(--hover, rgba(255,255,255,.05)); } .case.sel { background: color-mix(in srgb, var(--accent) 18%, transparent); }
     .case input { margin: 0; } .cn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .n { color: var(--muted); font-size: 11px; }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--text) 25%, transparent); flex: none; } .dot.p { background: var(--ok, #3fbf75); } .dot.f { background: var(--danger, #ef6161); } .dot.e { background: var(--warn, #e0a030); }
@@ -506,13 +798,58 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
     :host-context(.light) .recb:hover { background: #f3f4f6 !important; border-color: #b9bdc5 !important; }
     .go { display: inline-flex; align-items: center; gap: 6px; justify-content: center; height: 28px !important; padding: 0 12px !important; border-radius: 6px !important; background: #1f9d55 !important; color: #fff !important; border: 1px solid #188a4a !important; font-size: 12.5px; font-weight: 600; box-shadow: none !important; }
     .go:hover:not(:disabled) { background: #188a4a !important; } .go:disabled { opacity: .55; }
-    .pausebar { display: flex; align-items: center; gap: 10px; padding: 10px 20px; background: color-mix(in srgb, var(--warn, #e0a030) 14%, var(--panel)); border-bottom: 1px solid color-mix(in srgb, var(--warn, #e0a030) 45%, var(--border)); }
-    .pausebar .pzi { color: var(--warn, #e0a030); font-weight: 700; } .pausebar .pzt { min-width: 0; } .pausebar .pzt > .mut { margin-left: 8px; } .pausebar .pzt .bad { font-size: 12px; margin-top: 2px; } .pausebar button { height: 28px; }
+    .pausebar { display: flex; flex-direction: column; gap: 8px; padding: 10px 20px; background: color-mix(in srgb, var(--warn, #e0a030) 14%, var(--panel)); border-bottom: 1px solid color-mix(in srgb, var(--warn, #e0a030) 45%, var(--border)); }
+    .pausebar .pzi { color: var(--warn, #e0a030); font-weight: 700; } .pausebar .pzt { flex: 1; min-width: 0; } .pausebar .pzt > .mut { margin-left: 8px; } .pausebar .pzt .bad { font-size: 12px; margin-top: 2px; } .pausebar button { height: 28px; }
+    .pzrow { display: flex; align-items: center; gap: 10px; } .pausebar.bp { background: color-mix(in srgb, var(--danger, #ef6161) 10%, var(--panel)); border-bottom-color: color-mix(in srgb, var(--danger, #ef6161) 40%, var(--border)); } .pausebar.bp .pzi { color: var(--danger, #ef6161); }
+    .pzvars summary { cursor: pointer; color: var(--muted); font-size: 12px; } .pzvars .vars { margin-top: 6px; align-items: center; } .vin { height: 26px; font: 12px var(--mono, monospace); }
+    .bpn { cursor: pointer; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; color: var(--muted); } .bpn:hover { background: color-mix(in srgb, var(--danger, #ef6161) 15%, transparent); } .bpn.on { background: var(--danger, #ef6161); color: #fff; font-weight: 600; }
+    .oh { display: flex; align-items: center; gap: 8px; } .oh .sbtn { text-transform: none; letter-spacing: 0; }
+    .tmk { width: min(1200px, 96vw) !important; height: min(86vh, 900px); max-height: none !important; } .tmk h3 { margin: 0; }
+    .tmgrid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr); gap: 14px; }
+    .tmout { overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--cbg); padding: 6px 0; font: 12px/1.5 var(--mono, monospace); }
+    .tmout .tl { display: flex; gap: 6px; align-items: center; padding: 0 10px; white-space: pre; cursor: pointer; min-height: 18px; } .tmout .tl:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+    .tmout .tl.hd { background: var(--accent-soft); box-shadow: inset 3px 0 var(--accent); font-weight: 600; } .tmout .tl.pick { background: color-mix(in srgb, var(--ok, #3fbf75) 14%, transparent); } .tmout .tl input { margin: 0; }
+    .tmside { overflow: auto; display: flex; flex-direction: column; gap: 6px; } .tmside h4 { margin: 6px 0 2px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+    .tc { display: flex; align-items: center; gap: 8px; } .tc input:not([type]) { flex: 1; height: 26px; font: 12px var(--mono, monospace); } .tc label { font-size: 12px; display: flex; gap: 4px; align-items: center; }
+    .tprev { overflow: auto; max-height: 300px; border: 1px solid var(--border); border-radius: 8px; } .tprev table { border-collapse: collapse; font: 11.5px var(--mono, monospace); width: 100%; } .tprev th, .tprev td { border-bottom: 1px solid var(--border); padding: 3px 8px; text-align: left; white-space: nowrap; } .tprev th { background: var(--panel); position: sticky; top: 0; }
+    .fld.nm { flex-direction: row; align-items: center; gap: 8px; } .fld.nm input { width: 240px; }
+    .cal { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .calh, .calr { display: grid; grid-template-columns: 150px 1fr; } .calh { grid-template-columns: 150px repeat(7, 1fr); background: var(--panel2, var(--hover)); font-size: 12px; font-weight: 600; }
+    .calh span { padding: 7px 8px; border-left: 1px solid var(--border); } .calh span:first-child { border-left: 0; } .calh .today { color: var(--accent); }
+    .calr { border-top: 1px solid var(--border); min-height: 44px; } .caln { padding: 12px 10px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+    .calt { position: relative; display: grid; grid-template-columns: repeat(7, 1fr); cursor: copy; } .cald { border-left: 1px solid var(--border); } .cald.today { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+    .caln-now { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--danger, #e5484d); }
+    .calb { position: absolute; top: 7px; bottom: 7px; border-radius: 5px; padding: 3px 7px; font-size: 11.5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer;
+      background: color-mix(in srgb, var(--warn, #e0a030) 22%, var(--bg)); border: 1px solid color-mix(in srgb, var(--warn, #e0a030) 55%, transparent); color: var(--text); }
+    .calb.mine { background: color-mix(in srgb, var(--accent) 20%, var(--bg)); border-color: color-mix(in srgb, var(--accent) 55%, transparent); } .calb:hover { filter: brightness(1.08); }
+    .calnote { margin: 10px 2px; font-size: 12px; } .bkl { margin-top: 12px; } b.accent { color: var(--accent); } .bkf { margin-top: 12px; } .bkf .form { padding: 12px; }
+    .webst { background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 6px; padding: 8px 10px; align-items: center; }
+    .mdlg.tbdlg { width: min(1180px, 96vw); height: min(84vh, 820px); } .tbcols { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px 1fr; gap: 12px; } .tbcol { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+    .tbcol .fpick { flex: 1; max-height: none; } .tbbar { gap: 6px; } .tbname { display: flex !important; flex-direction: row !important; align-items: center; gap: 8px; max-width: 380px; } .tbname span { white-space: nowrap; }
+    .dg, .tbg { display: flex; align-items: center; gap: 8px; padding: 7px 10px 4px; font-weight: 600; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .tbg { color: var(--text); font-size: 12.5px; padding-top: 12px; } .tbg .mut { font-weight: 400; }
+    .dv, .tbd { display: grid; grid-template-columns: 18px minmax(120px, 1.4fr) 120px 90px minmax(80px, 1fr) minmax(110px, auto); align-items: center; gap: 10px; padding: 5px 10px 5px 28px; font-size: 12.5px; border-radius: 6px; cursor: pointer; }
+    .tbd { grid-template-columns: minmax(130px, auto) minmax(120px, 1.4fr) 120px 90px minmax(80px, 1fr) 24px; cursor: default; } .dv:hover, .tbd:hover { background: var(--hover); } .dv.on { background: color-mix(in srgb, var(--accent) 12%, transparent); } .dv.had { opacity: .6; }
+    .dr { font: 11.5px var(--mono, monospace) !important; color: var(--muted) !important; background: none !important; padding: 0 !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .dt { font-size: 11.5px; } .tbd.val .dn { font-family: var(--mono, monospace); }
+    .tbv { border: 1px solid var(--border); border-radius: 8px; padding: 4px 0 8px; overflow: auto; } .tbvbar { margin-bottom: 8px; gap: 6px; }
+    .rc3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .rc3 label { display: flex; flex-direction: column; gap: 3px; } .rc3 small { color: var(--muted); font-size: 11px; } .rc3 input, .rc3 select { width: 100%; }
+    .pill.w { background: color-mix(in srgb, var(--warn, #e0a030) 18%, transparent); color: var(--warn, #b07a10); }
+    .trbars { display: flex; align-items: flex-end; gap: 4px; height: 120px; padding: 10px 12px; }
+    .trb { flex: 1; max-width: 26px; height: 100%; display: flex; flex-direction: column; border-radius: 3px; overflow: hidden; cursor: pointer; background: color-mix(in srgb, var(--text) 6%, transparent); } .trb:hover { outline: 2px solid var(--accent); }
+    .trb i { display: block; flex-basis: 0; } .trb .tp { background: var(--ok, #3fbf75); } .trb .tf { background: var(--danger, #ef6161); } .trb .ts { background: var(--faint, #9aa1ab); }
+    .trgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; } .trrow { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-top: 1px solid var(--border); cursor: default; font-size: 12.5px; } .trrow[role=button] { cursor: pointer; } .trrow:hover { background: var(--hover); }
+    .trrow .cn { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; } .trrow .ell { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .trv { display: block; flex: 1; min-width: 60px; height: 8px; border-radius: 4px; overflow: hidden; background: color-mix(in srgb, var(--danger, #ef6161) 55%, transparent); } .trv i { display: block; height: 100%; background: var(--ok, #3fbf75); }
     .chip.n { background: color-mix(in srgb, var(--text) 7%, transparent); color: var(--muted); }
     .pill.run { display: inline-flex; align-items: center; gap: 6px; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); } .spin.sm { width: 10px; height: 10px; border-width: 2px; }
     .vars { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; font: 12px/1.45 var(--mono, monospace); margin-bottom: 8px; } .vars .vk { color: var(--accent); } .vars .vv { word-break: break-all; }
     .dbg { display: flex; gap: 6px; margin-top: 10px; } .dbg button { height: 26px; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
     .chk { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; cursor: pointer; } .chk input { margin-top: 2px; }
+    .mdlg.wide { width: min(640px, 94vw); max-height: 86vh; } .mdlg h3 { margin: 0; font-size: 16px; }
+    .tbq { height: 30px; } .fpick { max-height: 300px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; padding: 4px; }
+    .fpick .fo { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; cursor: pointer; } .fpick .fo:hover { background: var(--hover); } .fpick .fo.on { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
+    .fpick .fi { width: 14px; height: 11px; border-radius: 2px; background: var(--folder, #d9b45a); flex: none; } .fpick .ell { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .segs { display: flex; align-items: center; gap: 6px; } .segs .mut { width: 80px; } .segs button { height: 28px; padding: 0 12px; } .segs button.on { background: var(--accent-soft) !important; border-color: var(--accent) !important; color: var(--text) !important; }
+    .sbtn { height: 28px; padding: 0 10px; font-size: 12.5px; }
+    .savb { background: var(--accent) !important; color: #fff !important; border-color: transparent !important; font-weight: 600; } .savb:hover { filter: brightness(1.1); }
     .selbar > * { white-space: nowrap; } .selbar { display: flex; align-items: center; gap: 8px; margin: 8px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: color-mix(in srgb, var(--text) 4%, transparent); }
     .selbar.col { flex-direction: column; align-items: stretch; } .selbar .full { justify-content: center; width: 100%; } .selbar b { font-weight: 600; font-size: 12.5px; }
     .main { position: relative; background: var(--bg); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -566,7 +903,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
     .lres .lms { font-weight: 400; color: inherit; opacity: .85; } .lres .lerr { font-weight: 400; color: #fca5a5; } .lres .lnote { font-weight: 400; color: #8b919b; }
     .console pre.unused { margin: 0; min-height: 60px; overflow: auto; padding: 8px 20px; font: 12px/1.45 var(--mono, monospace); color: #cfd3da; white-space: pre-wrap; }
     .lg-ok { color: #4ade80; } .lg-bad { color: #f87171; } .lg-hd { color: #e8eaee; font-weight: 600; }
-    .logdlg { width: min(1000px, 94vw); height: min(80vh, 900px); } .logpre { flex: 1; margin: 0; overflow: auto; padding: 10px 12px; border-radius: 8px; background: #111317; color: #cfd3da; font: 12px/1.5 var(--mono, monospace); white-space: pre-wrap; }
+    .mdlg.logdlg { width: min(1400px, 96vw); height: min(88vh, 1100px); } .logpre { flex: 1; margin: 0; overflow: auto; padding: 10px 12px; border-radius: 8px; background: #111317; color: #cfd3da; font: 12px/1.5 var(--mono, monospace); white-space: pre; }
     .live { display: flex; align-items: center; gap: 10px; padding: 7px 20px; background: color-mix(in srgb, var(--accent) 12%, var(--panel)); border-bottom: 1px solid var(--border); font-size: 12.5px; }
     .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); border-top-color: var(--accent); animation: sp 0.9s linear infinite; } @keyframes sp { to { transform: rotate(360deg); } }
     .scrim.fixed { position: fixed; z-index: 50; } .mdlg { position: fixed; z-index: 51; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(560px, 92vw); display: flex; flex-direction: column; gap: 10px; padding: 20px 22px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 24px 60px rgba(0,0,0,.45); }
@@ -650,7 +987,7 @@ export class TestsView implements OnInit, OnDestroy {
   }
   readonly rails: { k: Section; l: string; i: string; t: string }[] = [
     { k: 'tests', l: 'Tests', i: 'checklist', t: 'Tests: record, edit and run' }, { k: 'runs', l: 'Runs', i: 'play', t: 'Past runs and their results' },
-    { k: 'schedules', l: 'Schedules', i: 'clock', t: 'Scheduled runs' }, { k: 'testbeds', l: 'Testbeds', i: 'hosts', t: 'Which devices a run uses' }, { k: 'library', l: 'Library', i: 'file', t: 'Templates and code helpers' }];
+    { k: 'schedules', l: 'Schedules', i: 'clock', t: 'Scheduled runs' }, { k: 'testbeds', l: 'Testbeds', i: 'hosts', t: 'Which devices a run uses' }, { k: 'procs', l: 'Procedures', i: 'layers', t: 'Shared steps with parameters that tests call' }, { k: 'library', l: 'Library', i: 'file', t: 'Templates and code helpers' }];
   readonly q = signal('');
   readonly tag = signal('all');
   readonly folded = signal<string[]>([]);
@@ -706,7 +1043,7 @@ export class TestsView implements OnInit, OnDestroy {
       this.liveStep.set(e); this.liveCount.update(n => n + 1);
       this.pushLive({ k: 'res', s: e.step });
     }));
-    this.offs.push(this.backend.on('tests:paused', (e: { case: string; step: TestStepResult }) => { this.paused.set(e); this.showLive.set(true); }));
+    this.offs.push(this.backend.on('tests:paused', (e: { case: string; step: TestStepResult; breakpoint?: boolean }) => { this.paused.set(e); this.pauseVars.set(Object.entries(e.step.vars ?? {}).sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => ({ k, v }))); this.showLive.set(true); }));
     this.offs.push(this.backend.on('tests:resumed', () => this.paused.set(null)));
     this.offs.push(this.backend.on('tests:step-start', (e: { case: string; step: string }) => this.pushLive({ k: 'head', c: e.case, t: e.step })));
     this.offs.push(this.backend.on('tests:out', (e: { session: string; text: string }) => this.addLive(e.text)));
@@ -721,6 +1058,7 @@ export class TestsView implements OnInit, OnDestroy {
       this.tree.set(await this.backend.testsTree());
       this.git.set(await this.backend.testsGit());
       this.schedules.set(await this.backend.testSchedules().catch(() => []) ?? []);
+      void this.loadBookings(); void this.loadWebSt();
       this.sig = await this.backend.testsSignature();
       const files = this.tree()?.cases.map(c => c.file) ?? [];
       if (this.sel() && files.includes(this.sel())) await this.select(this.sel(), true); else if (!this.sel() && files.length) await this.select(files[0]);
@@ -776,13 +1114,19 @@ export class TestsView implements OnInit, OnDestroy {
     this.busy.set(true);
     try {
       const cleanup = extra.only ? 'off' : this.cleanupMode || undefined;
-      this.took(await this.backend.runTests({ files, testbed: this.testbed || undefined, confirmed, forceLock, onCleanupFail: cleanup === 'off' ? undefined : this.onCleanupFail, cleanup, from: extra.from, only: extra.only, pauseOnFail: this.pauseOnFail }));
+      this.took(await this.backend.runTests({ files, testbed: this.testbed || undefined, confirmed, forceLock, onCleanupFail: cleanup === 'off' ? undefined : this.onCleanupFail, cleanup, from: extra.from, only: extra.only, pauseOnFail: this.pauseOnFail, rerun: this.rerun || undefined, caseTimeout: this.caseMin && this.caseMin > 0 ? Math.round(this.caseMin * 60) : undefined, runTimeout: this.runMin && this.runMin > 0 ? Math.round(this.runMin * 60) : undefined, breaks: files.length === 1 ? this.breaksFor(files[0]) : undefined, stepMode: this.stepMode || undefined }));
+      this.stepMode = false;
       await this.load();
     } catch (e) {
       const t = errText(e);
       if (!confirmed && /production sessions/i.test(t)) {
         this.busy.set(false);
         if (await this.ui.confirm(tr('Run on Production?'), t + '. ' + tr('Their commands and requests are sent to those devices.'), tr('Run'), true)) return this.run(files, true, forceLock, extra);
+        return;
+      }
+      if (!forceLock && /is booked by/i.test(t)) {
+        this.busy.set(false);
+        if (await this.ui.confirm(tr('Testbed Booked'), t + '. ' + tr('Run anyway? Their work on it may be disturbed.'), tr('Run Anyway'), true)) return this.run(files, confirmed, true, extra);
         return;
       }
       if (/needs an approval/i.test(t)) { this.busy.set(false); this.showLive.set(false); return this.askApproval(files, this.testbed || '', t); }
@@ -866,6 +1210,98 @@ export class TestsView implements OnInit, OnDestroy {
     } catch (e) { this.ui.toast(errText(e), 'error'); }
     this.busy.set(false);
   }
+  readonly tbPick = signal(false);
+  tbQuery = ''; tbFolder = ''; tbName = ''; tbDevQ = ''; tbAppend = '';
+  tbPicked = new Set<string>(); tbHas = new Set<string>();
+  readonly tbModels = signal<Record<string, string>>({});
+  openTbPick(append = '') {
+    this.tbQuery = ''; this.tbFolder = ''; this.tbName = ''; this.tbDevQ = ''; this.tbAppend = append; this.tbPicked = new Set(); this.tbHas = new Set();
+    if (append) void this.backend.testbedDevices(append).then(l => { this.tbHas = new Set((l ?? []).map(d => d.session ?? '').filter(Boolean)); }).catch(() => {});
+    this.tbPick.set(true);
+    if (!this.ui.tree()) void this.backend.getSessionTree().then(t => this.ui.tree.set(t)).catch(() => {});
+  }
+  folderList() {
+    const out: { path: string; name: string; depth: number; n: number }[] = [], q = this.tbQuery.trim().toLowerCase();
+    const count = (n: SessionNode): number => (n.children ?? []).reduce((k, c) => k + (c.isFolder ? count(c) : 1), 0);
+    const walk = (l: SessionNode[], d: number) => { for (const n of l) if (n.isFolder) { const k = count(n); if (k && (!q || n.path.toLowerCase().includes(q))) out.push({ path: n.path, name: n.name, depth: q ? 0 : d, n: k }); walk(n.children ?? [], d + 1); } };
+    walk(this.ui.tree()?.children ?? [], 0);
+    return out;
+  }
+  private folderNode(path: string) {
+    const find = (l: SessionNode[]): SessionNode | null => { for (const n of l) { if (n.path === path) return n; const r = find(n.children ?? []); if (r) return r; } return null; };
+    return find(this.ui.tree()?.children ?? []);
+  }
+  pickFolder(path: string) {
+    this.tbFolder = path;
+    if (!this.tbAppend && !this.tbName) this.tbName = path.split('/').slice(-2).join('-');
+    const all = this.devicesOf(path).map(d => d.path);
+    void this.backend.testsDeviceModels(all).then(m => this.tbModels.update(x => ({ ...x, ...(m ?? {}) }))).catch(() => {});
+  }
+  devicesOf(path: string) {
+    const out: SessionNode[] = [];
+    const all = (n: SessionNode | null) => { for (const c of n?.children ?? []) { if (c.isFolder) all(c); else out.push(c); } };
+    all(this.folderNode(path));
+    return out.map(c => ({ path: c.path, name: c.name, host: c.hostname ?? '', deviceType: c.deviceType ?? '', folder: c.path.slice(0, c.path.lastIndexOf('/')) }));
+  }
+  devGroups() {
+    const q = this.tbDevQ.trim().toLowerCase(), m = this.tbModels();
+    const by = new Map<string, ReturnType<TestsView['devicesOf']>>();
+    for (const d of this.devicesOf(this.tbFolder)) {
+      if (q && ![d.name, d.host, d.deviceType, m[d.path] ?? ''].some(x => x.toLowerCase().includes(q))) continue;
+      by.set(d.folder, [...(by.get(d.folder) ?? []), d]);
+    }
+    return [...by.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([folder, items]) => ({ folder, items: items.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })) }));
+  }
+  tbToggle(p: string) { const s = new Set(this.tbPicked); if (s.has(p)) s.delete(p); else s.add(p); this.tbPicked = s; }
+  tbSelectAll(on: boolean) { const s = new Set(this.tbPicked); for (const g of this.devGroups()) for (const d of g.items) { if (this.tbHas.has(d.path)) continue; if (on) s.add(d.path); else s.delete(d.path); } this.tbPicked = s; }
+  roleName(path: string) { const n = path.split('/').pop()!.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''); return !n || /^\d/.test(n) ? 'dev_' + n : n; }
+  rolesOf(path: string) {
+    const find = (l: SessionNode[]): SessionNode | null => { for (const n of l) { if (n.path === path) return n; const r = find(n.children ?? []); if (r) return r; } return null; };
+    const all = (n: SessionNode | null): SessionNode[] => (n?.children ?? []).flatMap(c => c.isFolder ? all(c) : [c]);
+    return all(find(this.ui.tree()?.children ?? [])).map(c => c.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''));
+  }
+  fileMenu(ev: MouseEvent, rel: string) {
+    ev.preventDefault();
+    this.ui.showMenu(ev, [
+      { label: 'Open', action: () => void this.openFile(rel) },
+      { label: 'Open in VS Code', action: () => void this.backend.testsOpenInEditor(rel) },
+      { separator: true },
+      { label: rel.startsWith('suites/') ? 'Delete Plan' : 'Delete Testbed', icon: 'trash', action: () => void this.removeFile(rel) },
+    ]);
+  }
+  async removeFile(rel: string) {
+    if (!(await this.ui.confirm(tr('Delete {0}?', this.base(rel)), tr('It is moved to .removed/ in the tests folder (it can be brought back from there).'), tr('Delete'), true))) return;
+    try { await this.backend.testRemove(rel); if (this.fileSel() === rel) this.fileSel.set(''); this.ui.toast(tr('Deleted {0}', this.base(rel)), 'success'); await this.load(); }
+    catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  async createTestbed() {
+    if (!this.tbPicked.size) return;
+    const picked = [...this.tbPicked], append = this.tbAppend;
+    if (!append && !this.tbName.trim()) return;
+    this.tbPick.set(false);
+    try {
+      if (append) { await this.backend.testbedChange(append, picked, []); this.ui.toast(tr('Added {0} devices', picked.length), 'success'); await this.openFile(append); return; }
+      const rel = await this.backend.testsNewTestbed(this.tbName.trim(), this.tbFolder, picked);
+      this.ui.toast(tr('Wrote {0}', rel), 'success'); await this.load(); this.section.set('testbeds'); void this.openFile(rel);
+    } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  expMode(x: { lang: string; standalone: boolean }, m: 'code' | 'runner' | 'termwright') {
+    x.standalone = m !== 'termwright';
+    if (m === 'runner') x.lang = 'runner';
+    else if (x.lang === 'runner' || (m === 'code' && x.lang === 'tcl')) x.lang = 'python';
+  }
+  readonly exp = signal<{ what: string; lang: string; os: string; testbed: string; name: string; standalone: boolean } | null>(null);
+  openExport() {
+    const plat = navigator.platform.toLowerCase(), os = plat.includes('win') ? 'windows' : plat.includes('mac') ? 'mac' : 'linux';
+    const what = this.picked().length ? 'picked' : this.sel() ? 'sel' : 'all';
+    this.exp.set({ what, lang: 'python', standalone: true, os, testbed: this.testbed || '', name: (this.tree()?.root ?? 'termwright-suite').split(/[\\/]/).pop() || 'termwright-suite' });
+  }
+  async doExport() {
+    const x = this.exp(); if (!x) return;
+    const files = x.what === 'picked' ? this.picked() : x.what === 'sel' ? [this.sel()] : x.what === 'all' ? [] : [x.what];
+    try { const p = await this.backend.testsExport({ files, lang: x.lang, os: x.os, testbed: x.testbed, name: x.name, standalone: x.standalone || x.lang === 'runner' }); if (p) { this.exp.set(null); this.ui.toast(tr('Exported {0}', p), 'success'); } }
+    catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
   async newTestbed() {
     const folder = await this.ui.input(tr('New Testbed'), tr('Session folder whose sessions become roles (e.g. Lab)'), '');
     if (!folder) return;
@@ -906,6 +1342,7 @@ export class TestsView implements OnInit, OnDestroy {
   go(k: Section) {
     this.section.set(k);
     if (k === 'runs') void this.loadApprovals();
+    if (k === 'procs') { void this.loadProcs(); this.proc.set(null); }
     if (k === 'runs' && !this.runRep()) { const r = this.report() ?? null; if (r) { this.runRep.set(r); this.runSel.set(r.dir); } else { const d = this.tree()?.reports?.[0]?.dir; if (d) void this.openRunReport(d); } }
   }
   /** The tests shown: search and tag filter. */
@@ -933,7 +1370,58 @@ export class TestsView implements OnInit, OnDestroy {
     const t = new Date(), y = new Date(Date.now() - 864e5), f = (x: Date) => x.toISOString().slice(0, 10);
     return d === f(t) ? 'Today' : d === f(y) ? 'Yesterday' : d;
   }
+  // ---- testbed calendar ----
+  readonly calOn = signal(false);
+  readonly bookings = signal<TestBooking[]>([]);
+  readonly calStart = signal(this.monday(new Date()));
+  readonly bk = signal<TestBooking | null>(null);
+  bkFrom = ''; bkTo = '';
+  private monday(d: Date) { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
+  calDays() { const s = this.calStart(); return Array.from({ length: 7 }, (_, i) => new Date(s.getFullYear(), s.getMonth(), s.getDate() + i)); }
+  calMove(n: number) { const s = this.calStart(); this.calStart.set(new Date(s.getFullYear(), s.getMonth(), s.getDate() + n)); }
+  calToday() { this.calStart.set(this.monday(new Date())); }
+  isToday(d: Date) { return d.toDateString() === new Date().toDateString(); }
+  calDay(d: Date) { return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' }); }
+  hm(t: string) { return new Date(t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }); }
+  fmtWhen(t: string) { return new Date(t).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+  private weekMs = 7 * 864e5;
+  nowPct() { const p = (Date.now() - this.calStart().getTime()) / this.weekMs; return p >= 0 && p < 1 ? p * 100 : -1; }
+  weekBookings(tb: string) {
+    const s = this.calStart().getTime(), e = s + this.weekMs;
+    return this.bookings().filter(b => b.testbed === tb).map(b => ({ b, f: Math.max(s, new Date(b.from).getTime()), t: Math.min(e, new Date(b.to).getTime()) }))
+      .filter(x => x.t > x.f).map(x => ({ id: x.b.id, b: x.b, l: 100 * (x.f - s) / this.weekMs, w: Math.max(10, 100 * (x.t - x.f) / this.weekMs) })).map(x => ({ ...x, l: Math.min(x.l, 100 - x.w) }));
+  }
+  bookedNow(tb: string) { const n = Date.now(); return this.bookings().find(b => b.testbed === tb && new Date(b.from).getTime() <= n && n < new Date(b.to).getTime()) ?? null; }
+  async loadBookings() { try { this.bookings.set(await this.backend.testBookings() ?? []); } catch { /* no tests folder */ } }
+  openCal() { this.calOn.set(true); this.section.set('testbeds'); void this.loadBookings(); }
+  private localIso(d: Date) { const p = (n: number) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()); }
+  newBooking(tb?: string, ev?: MouseEvent) {
+    let from = new Date(); from.setMinutes(from.getMinutes() < 30 ? 30 : 60, 0, 0);
+    if (ev) { const r = (ev.currentTarget as HTMLElement).getBoundingClientRect(); const t = this.calStart().getTime() + this.weekMs * (ev.clientX - r.left) / r.width; from = new Date(t); from.setMinutes(0, 0, 0); }
+    this.bkFrom = this.localIso(from); this.bkTo = this.localIso(new Date(from.getTime() + 2 * 36e5));
+    this.bk.set({ id: '', testbed: tb ?? this.testbed ?? this.tree()?.testbeds?.[0] ?? '', from: '', to: '', who: '', why: '' });
+  }
+  editBooking(b: TestBooking) { this.bkFrom = this.localIso(new Date(b.from)); this.bkTo = this.localIso(new Date(b.to)); this.bk.set({ ...b }); }
+  async saveBooking(k: TestBooking) {
+    try {
+      await this.backend.testSaveBooking({ ...k, from: new Date(this.bkFrom).toISOString(), to: new Date(this.bkTo).toISOString() });
+      this.bk.set(null); this.ui.toast(tr('Booked'), 'success'); await this.loadBookings();
+    } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  async cancelBooking(k: TestBooking) {
+    if (!k.mine && !(await this.ui.confirm(tr('Cancel Their Booking?'), tr('{0} booked this testbed. Cancel the booking anyway?', k.who), tr('Cancel Booking'), true))) return;
+    try { await this.backend.testRemoveBooking(k.id); this.bk.set(null); await this.loadBookings(); } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  readonly trendsOn = signal(false);
+  readonly trends = signal<TestTrends | null>(null);
+  trWhat = ''; trTestbed = '';
+  openTrends() { this.trendsOn.set(true); void this.loadTrends(); }
+  async loadTrends() { try { this.trends.set(await this.backend.testTrends(this.trWhat ? [this.trWhat] : [], this.trTestbed, 40)); } catch (e) { this.ui.toast(errText(e), 'error'); } }
+  trSum(t: TestTrends, k: 'failed' | 'flaky' | 'passed') { return t.runs.reduce((n, r) => n + r[k], 0); }
+  trRate(t: TestTrends) { const p = this.trSum(t, 'passed'), all = p + this.trSum(t, 'failed'); return all ? Math.round(100 * p / all) : 0; }
+  trAvgMin(t: TestTrends) { const ms = t.runs.reduce((n, r) => n + r.ms, 0) / Math.max(1, t.runs.length); return ms > 60000 ? (ms / 60000).toFixed(1) + ' min' : (ms / 1000).toFixed(0) + ' s'; }
   async openRunReport(dir: string) {
+    this.trendsOn.set(false);
     this.section.set('runs'); this.runSel.set(dir);
     try { this.runRep.set(JSON.parse(await this.backend.testFile(dir + '/result.json')) as TestRunReport); }
     catch (e) { this.runRep.set(null); this.ui.toast(errText(e), 'error'); }
@@ -962,12 +1450,26 @@ export class TestsView implements OnInit, OnDestroy {
     await this.openFile('roles.yaml');
     if (this.fileText.startsWith('#') && !this.fileText.includes('approval')) this.fileText = '# Who may do what in this tests folder (user names as in "Run by"; an empty list lets everyone).\n# Shared through Git: it keeps an honest team in step, it is not a security boundary.\neditors: []\nrunners: []\napprovers: []\n# approval: production   # runs on production sessions need an approved request (or: always)\n';
   }
-  async openFile(f: string) { this.fileSel.set(f); this.fileText = await this.backend.testFile(f).catch(e => '# ' + errText(e)); }
+  async openFile(f: string) {
+    this.fileSel.set(f); this.fileText = await this.backend.testFile(f).catch(e => '# ' + errText(e));
+    if (f.startsWith('testbeds/')) { this.tbYaml.set(false); this.tbDevs.set(await this.backend.testbedDevices(f).catch(() => []) ?? []); }
+  }
+  readonly tbYaml = signal(false);
+  readonly tbDevs = signal<TestbedDevice[]>([]);
+  tbDevGroups() {
+    const by = new Map<string, TestbedDevice[]>();
+    for (const d of this.tbDevs()) by.set(d.session ? d.folder ?? '' : '', [...(by.get(d.session ? d.folder ?? '' : '') ?? []), d]);
+    return [...by.entries()].sort((a, b) => (a[0] === '' ? 1 : b[0] === '' ? -1 : a[0].localeCompare(b[0]))).map(([folder, items]) => ({ folder, items }));
+  }
+  async removeRole(fp: string, role: string) {
+    try { await this.backend.testbedChange(fp, [], [role]); await this.openFile(fp); } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
   async saveFile() { try { await this.backend.testSaveFile(this.fileSel(), this.fileText); this.ui.toast(tr('Saved'), 'success'); await this.load(); } catch (e) { this.ui.toast(errText(e), 'error'); } }
   moreMenu(ev: MouseEvent) {
     this.ui.showMenu(ev, [
       { label: 'Write a Test with AI…', action: () => void this.writeWithAI() },
       { label: 'Import Test Cases (Excel, CSV, Postman, OpenAPI)…', action: () => void this.importManual() },
+      { label: 'Export Automation Suite (Go, Python, TCL)…', icon: 'export', action: () => this.openExport() },
       { separator: true },
       { label: 'Open a Tests Folder…', action: () => void this.openFolder() },
       { label: 'Clone a Git Repository…', action: () => void this.clone() },
@@ -986,6 +1488,7 @@ export class TestsView implements OnInit, OnDestroy {
     this.ui.showMenu(ev, [
       { label: 'Rename…', action: () => void this.rename(false) },
       { label: 'Duplicate…', action: () => void this.rename(true) },
+      { label: 'Make a Procedure from This Test…', action: () => void this.procFromTest() },
       { label: 'Tags…', action: () => void this.editTags() },
       { label: 'Depends On…', action: () => void this.editDeps() },
       { label: 'qTest Test Case…', action: () => void this.editQTest() },
@@ -1074,9 +1577,28 @@ export class TestsView implements OnInit, OnDestroy {
     }
     return out;
   }
+  private rc = (() => { try { return JSON.parse(localStorage.getItem('tw.tests.rc') ?? '{}') as { r?: number; c?: number; t?: number }; } catch { return {}; } })();
+  rerun = this.rc.r ?? 0; caseMin: number | null = this.rc.c || null; runMin: number | null = this.rc.t || null;
+  keepRc() { try { localStorage.setItem('tw.tests.rc', JSON.stringify({ r: this.rerun, c: this.caseMin, t: this.runMin })); } catch { /* not kept */ } }
   pauseOnFail = (() => { try { return localStorage.getItem('tw.tests.pause') === '1'; } catch { return false; } })();
-  readonly paused = signal<{ case: string; step: TestStepResult } | null>(null);
-  async resume(act: 'retry' | 'continue' | 'stop') { this.paused.set(null); await this.backend.testResume(act).catch(e => this.ui.toast(errText(e), 'error')); }
+  readonly paused = signal<{ case: string; step: TestStepResult; breakpoint?: boolean } | null>(null);
+  async resume(act: 'retry' | 'continue' | 'stop' | 'step' | 'skip') {
+    const orig = this.paused()?.step.vars ?? {}, set: Record<string, string> = {};
+    for (const x of this.pauseVars()) if (orig[x.k] !== x.v) set[x.k] = x.v;
+    this.paused.set(null);
+    await this.backend.testResume(act, set).catch(e => this.ui.toast(errText(e), 'error'));
+  }
+  readonly pauseVars = signal<{ k: string; v: string }[]>([]);
+  stepMode = false;
+  private readonly breaks = signal<Record<string, number[]>>((() => { try { return JSON.parse(localStorage.getItem('tw.tests.breaks') || '{}'); } catch { return {}; } })());
+  breaksFor(file: string) { return this.breaks()[file] ?? []; }
+  hasBreak(i: number) { return this.breaksFor(this.sel()).includes(i + 1); }
+  breakCount() { return this.breaksFor(this.sel()).length; }
+  toggleBreak(i: number) {
+    const f = this.sel(), l = this.breaksFor(f), n = i + 1;
+    this.breaks.update(m => ({ ...m, [f]: l.includes(n) ? l.filter(x => x !== n) : [...l, n].sort((a, b) => a - b) }));
+    try { localStorage.setItem('tw.tests.breaks', JSON.stringify(this.breaks())); } catch { /* not kept */ }
+  }
   openDevice(path: string) { void this.tabsSvc.openSession(path); }
   runningNow(file: string) { const f = this.runningFiles; return !f.length || f.includes(file); }
   private runningFiles: string[] = [];
@@ -1212,6 +1734,11 @@ export class TestsView implements OnInit, OnDestroy {
   }
   addMenu(ev: MouseEvent, p: Phase) {
     this.ui.showMenu(ev, [
+      { label: 'Call a Procedure', action: () => this.addCall(p) },
+      { label: 'NETCONF Request', action: () => this.addNetconf(p) },
+      { label: 'Web Page (Playwright)', action: () => this.addWeb(p) },
+      { label: 'Spirent / IxNetwork Traffic Run', action: () => this.addTGen(p) },
+      { separator: true },
       { label: 'API Request', action: () => this.addApi(p) },
       { label: 'From a curl Command…', action: () => void this.addCurl(p) },
       { label: 'Manual Step (a person answers)', action: () => this.addManual(p) },
@@ -1220,6 +1747,129 @@ export class TestsView implements OnInit, OnDestroy {
       { label: 'Software Upgrade', action: () => this.addUpgrade(p) },
       { label: 'Lab Traffic Test', action: () => this.addTraffic(p) },
     ]);
+  }
+  addCall(p: Phase) { const d = this.draft(); if (!d) return; void this.loadProcs(); this.listOf(d, p).push({ call: { proc: '', with: {} } }); this.touch(); }
+  readonly webActs = [{ k: 'click', l: 'Click' }, { k: 'fill', l: 'Type into' }, { k: 'press', l: 'Press key' }, { k: 'select', l: 'Choose option' }, { k: 'check', l: 'Tick' }, { k: 'uncheck', l: 'Untick' }, { k: 'hover', l: 'Hover' },
+    { k: 'expect', l: 'Check it shows' }, { k: 'expect_not', l: 'Check it is gone' }, { k: 'wait', l: 'Wait for' }, { k: 'goto', l: 'Go to address' }, { k: 'screenshot', l: 'Screenshot' }];
+  readonly webSt = signal<WebStatus | null>(null);
+  readonly webBusy = signal(false);
+  readonly webLine = signal('');
+  private webOff?: () => void;
+  webValHint(d: string) { return ({ fill: 'text to type', press: 'Enter', select: 'option', goto: 'https://…', wait: 'seconds', screenshot: 'file name', expect: 'text', expect_not: 'text' } as Record<string, string>)[d] ?? ''; }
+  isSecretTarget(t?: string) { return /pass|secret|token/i.test(t ?? ''); }
+  async loadWebSt() { try { this.webSt.set(await this.backend.webStatus()); } catch { /* not in this build */ } }
+  async webSetup() {
+    this.webBusy.set(true); this.webLine.set(tr('Starting…'));
+    if (!this.webOff) { this.webOff = this.backend.on('web:setup', (l: string) => this.webLine.set(l)); this.offs.push(this.webOff); }
+    try { await this.backend.webSetup(); this.ui.toast(tr('Playwright is ready'), 'success'); }
+    catch (e) { this.ui.toast(errText(e), 'error'); }
+    finally { this.webBusy.set(false); await this.loadWebSt(); }
+  }
+  splitPorts(v: string) { return v.split(/[,\s]+/).map(x => x.trim()).filter(Boolean); }
+  addTGen(p: Phase) { const d = this.draft(); if (!d) return; this.listOf(d, p).push({ tgen: { kind: 'stc', server: '', duration: 30 }, expect: [{ json: 'loss', less: 0.01 }] }); this.touch(); }
+  apiSessions() { const out: string[] = []; const w = (l: SessionNode[]) => { for (const n of l) { if (n.isFolder) w(n.children ?? []); else if ((n.protocol ?? '').toUpperCase() === 'API') out.push(n.path); } }; w(this.ui.tree()?.children ?? []); return out; }
+  addWeb(p: Phase) { const d = this.draft(); if (!d) return; this.listOf(d, p).push({ web: { url: '', actions: [{ do: 'expect', value: '' }] } }); this.touch(); void this.loadWebSt(); }
+  addNetconf(p: Phase) { const d = this.draft(); if (!d) return; this.listOf(d, p).push({ netconf: { session: this.lastSession(), op: 'get-config' } }); this.touch(); }
+  setCallProc(s: TestStep, name: string) { if (!s.call) return; s.call.proc = name; const keep: Record<string, string> = {}; for (const p of this.procParams(name)) keep[p.k] = s.call.with?.[p.k] ?? ''; s.call.with = keep; this.touch(); }
+  setCallArg(s: TestStep, k: string, v: string) { if (!s.call) return; s.call.with = { ...(s.call.with ?? {}), [k]: v }; this.touch(); }
+  readonly varHint = 'value or {{var}}';
+  procParams(name: string) { return (this.procs().find(p => p.name === name)?.params ?? []).map(x => ({ k: x.split('=')[0].trim(), d: x.includes('=') ? x.split('=').slice(1).join('=').trim() : '' })); }
+  procParamsText(name: string) { const p = this.procs().find(x => x.name === name); return p ? `${p.steps} steps${p.description ? ' - ' + p.description : ''}` : ''; }
+  async pickData(d: TestCase) { try { const rel = await this.backend.testPickData(); if (rel) { d.data = rel; this.touch(); } } catch (e) { this.ui.toast(errText(e), 'error'); } }
+  // ---- procedures ----
+  readonly procs = signal<TestProcInfo[]>([]);
+  readonly procSel = signal('');
+  readonly proc = signal<TestProc | null>(null);
+  async loadProcs() { this.procs.set((await this.backend.testProcs().catch(() => [])) ?? []); }
+  async openProc(file: string) {
+    this.procSel.set(file); this.fileSel.set('');
+    const name = this.procs().find(p => p.file === file)?.name ?? file;
+    try { this.proc.set(await this.backend.testProc(file.replace(/^procs\//, '').replace(/\.yaml$/, ''))); } catch (e) { this.proc.set(null); this.ui.toast(errText(e), 'error'); void name; }
+  }
+  editProcYaml() { const f = this.procSel(); this.proc.set(null); void this.openFile(f); }
+  callSnippet(p: TestProc) { return `- call:\n    proc: ${p.name}\n    with:\n` + (p.params ?? []).map(x => `      ${x.split('=')[0].trim()}: "${x.includes('=') ? x.split('=')[1].trim() : ''}"`).join('\n'); }
+  procUsers(name: string) { return (this.tree()?.cases ?? []).filter(c => (c as TestCaseInfo & { calls?: string[] }).calls?.includes(name)); }
+  async newProc() {
+    const name = await this.ui.input(tr('New Procedure'), tr('Name, e.g. create-vlan'), ''); if (!name) return;
+    try {
+      const rel = await this.backend.testSaveProc(name, { name, description: '', params: ['switch', 'vlan'], steps: [{ run: { session: '{{switch}}', command: 'create vlan v{{vlan}} tag {{vlan}}' } }, { run: { session: '{{switch}}', command: 'show vlan v{{vlan}}' }, expect: [{ contains: 'v{{vlan}}' }] }] });
+      await this.loadProcs(); this.section.set('procs'); this.proc.set(null); this.procSel.set(rel); void this.openFile(rel);
+      this.ui.toast(tr('An example is in the file - change the steps and parameters, then Save'), 'info');
+    } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  async procFromTest() {
+    const t = this.test(); if (!t) return;
+    const name = await this.ui.input(tr('Make a Procedure'), tr('Its steps become a procedure; the variables they use ({{x}}) become its parameters. Name:'), (t.name || 'procedure').toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+    if (!name) return;
+    const steps = structuredClone(t.steps), used = new Set<string>();
+    JSON.stringify(steps).replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_, v) => { used.add(v); return ''; });
+    const params = [...used].map(v => t.vars?.[v] !== undefined ? `${v}=${t.vars[v]}` : v);
+    try { const rel = await this.backend.testSaveProc(name, { name, description: t.description ?? '', params, steps }); await this.loadProcs(); this.section.set('procs'); await this.openProc(rel); this.ui.toast(tr('Procedure {0} made - call it from other tests with + More → Call a Procedure', name), 'success'); }
+    catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  // ---- table maker: a table (or fields) from output by clicking; saved as a TextFSM template ----
+  readonly tm = signal<{ phase: Phase; i: number; session: string; command: string; lines: string[]; kind: 'table' | 'fields'; header: number; cols: { name: string; spaces: boolean }[]; fields: { line: number; name: string; label: string }[]; preview: TestTable | null; err: string; name: string } | null>(null);
+  private tmTimer: ReturnType<typeof setTimeout> | undefined;
+  openTable(p: Phase, i: number, s: TestStep, out: string) {
+    const lines = out.replace(/\r/g, '').split('\n').slice(0, 400);
+    const sess = s.run?.session ?? '', cmd = s.run?.command ?? '';
+    const name = (this.shortDev(sess) + ' ' + this.fill(cmd)).toLowerCase().replace(/\{\{|\}\}/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 60);
+    // the header: a line of three or more columns without "label:" whose next row (after a ---- line) has as many
+    const segs = (l: string) => l.trim() ? l.trim().split(/\s{2,}/).length : 0, sepLine = (l: string) => /^[-=+|\s]{4,}$/.test(l);
+    let header = -1;
+    for (let k = 0; k < lines.length - 1 && header < 0; k++) {
+      const n = segs(lines[k]);
+      if (n < 3 || lines[k].includes(':') || sepLine(lines[k])) continue;
+      let j = k + 1; while (j < lines.length && sepLine(lines[j])) j++;
+      if (j < lines.length && segs(lines[j]) >= n - 1) header = k;
+    }
+    const labelled = lines.filter(l => /^\s*[A-Za-z][\w ./()-]{1,40}?:\s*\S/.test(l)).length;
+    const kind: 'table' | 'fields' = header < 0 && labelled >= 1 ? 'fields' : 'table';
+    this.tm.set({ phase: p, i, session: this.fill(sess), command: this.fill(cmd), lines, kind, header: -1, cols: [], fields: [], preview: null, err: '', name });
+    if (kind === 'table' && header >= 0) this.pickHeader(header); else { this.detectFields(); this.previewTable(); }
+  }
+  private fill(s: string) { const v = this.test()?.vars ?? {}; return s.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (m, k) => v[k] ?? m); }
+  pickHeader(li: number) {
+    const m = this.tm(); if (!m) return;
+    const segs = (m.lines[li].match(/\S+(?: \S+)*/g) ?? []);
+    this.tm.set({ ...m, header: li, cols: segs.map(w => ({ name: w.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '') || 'COL', spaces: w.includes(' ') })) });
+    this.previewTable();
+  }
+  isField(l: string) { return /^\s*[A-Za-z][\w ./()-]{1,40}?(:\s*|\s{2,})\S/.test(l) && !/^[-=\s]+$/.test(l); }
+  fieldOn(li: number) { return !!this.tm()?.fields.some(f => f.line === li); }
+  detectFields() {
+    const m = this.tm(); if (!m || m.fields.length) return;
+    const fields: { line: number; name: string; label: string }[] = [];
+    m.lines.forEach((l, li) => { if (fields.length < 8 && /^\s*[A-Za-z][\w ./()-]{1,40}?:\s*\S/.test(l)) { const lab = l.split(':')[0].trim(); fields.push({ line: li, name: lab.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, ''), label: lab }); } });
+    m.fields = fields;
+  }
+  toggleField(li: number) {
+    const m = this.tm(); if (!m || !this.isField(m.lines[li])) return;
+    if (this.fieldOn(li)) m.fields = m.fields.filter(f => f.line !== li);
+    else { const lab = m.lines[li].split(/:|\s{2,}/)[0].trim(); m.fields = [...m.fields, { line: li, name: lab.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, ''), label: lab }].sort((a, b) => a.line - b.line); }
+    this.tm.set({ ...m }); this.previewTable();
+  }
+  private spec(): TemplateSpec | null {
+    const m = this.tm(); if (!m) return null;
+    return m.kind === 'table' ? { kind: 'table', header: m.header >= 0 ? m.lines[m.header] : '', columns: m.cols.map(c => ({ name: c.name, spaces: c.spaces })) } : { kind: 'fields', fields: m.fields.map(f => ({ name: f.name, label: f.label })) };
+  }
+  previewTable() {
+    clearTimeout(this.tmTimer);
+    this.tmTimer = setTimeout(async () => {
+      const m = this.tm(), sp = this.spec(); if (!m || !sp) return;
+      try { const t = await this.backend.testPreviewTemplate(sp, m.lines.join('\n')); this.tm.set({ ...m, preview: t, err: t?.rows?.length ? '' : 'No rows match yet - check the header line and the columns with spaces.' }); }
+      catch (e) { this.tm.set({ ...m, preview: null, err: errText(e) }); }
+    }, 250);
+  }
+  async saveTable() {
+    const m = this.tm(), sp = this.spec(), t = this.test(); if (!m || !sp || !t) return;
+    try {
+      const file = await this.backend.testMakeTemplate(m.name, m.session, m.command, sp);
+      const c = structuredClone(t), list = m.phase === 'setup' ? c.setup : m.phase === 'cleanup' ? c.cleanup : c.steps, st = list?.[m.i];
+      if (st?.run) { st.run.parse = file; await this.backend.testSave(this.sel(), c); }
+      this.tm.set(null); await this.load();
+      this.ui.toast(tr('Table saved ({0}). Add checks on its values: Edit → + Check → table value, e.g. NAME=v200: VID = 200', file), 'success');
+    } catch (e) { this.ui.toast(errText(e), 'error'); }
   }
   addManual(p: Phase) { const d = this.draft(); if (!d) return; this.listOf(d, p).push({ manual: { instruction: '' } }); this.touch(); }
   readonly manual = signal<{ id: string; name: string; instruction: string; expected: string } | null>(null);
@@ -1301,9 +1951,13 @@ export class TestsView implements OnInit, OnDestroy {
   ck(p: Phase, i: number) { const k = p + i; let c = this.cks.get(k); if (!c) { c = { k: 'contains', v: '' }; this.cks.set(k, c); } return c; }
   checkKinds(s: TestStep) {
     const k = [{ k: 'contains', l: 'contains' }, { k: 'notContains', l: 'does not contain' }, { k: 'matches', l: 'matches' }];
+    const agg = s.sample ? [{ k: 'avg', l: 'average of' }, { k: 'max', l: 'maximum of' }, { k: 'min', l: 'minimum of' }, { k: 'delta', l: 'change of' }, { k: 'rate', l: 'rate/s of' }] : [];
+    if (s.netconf) return [...agg, { k: 'json', l: 'XML path =' }, ...k];
+    if (s.tgen) return [{ k: 'json', l: 'result' }, ...k];
+    if (agg.length) return [...agg, ...(s.http ? [{ k: 'status', l: 'status' }, { k: 'json', l: 'JSON path =' }] : s.snmp ? [{ k: 'oid', l: 'OID =' }] : []), ...k];
     return s.http ? [{ k: 'status', l: 'status' }, { k: 'json', l: 'JSON path =' }, ...k, { k: 'maxMs', l: 'within ms' }] : s.snmp ? [{ k: 'oid', l: 'OID =' }, ...k] : [...k, { k: 'table', l: 'table value' }];
   }
-  checkHint(k: string) { return k === 'json' ? 'data.items[0].name = v42' : k === 'oid' ? 'ifOperStatus.4 = up' : k === 'status' ? '200' : k === 'maxMs' ? '500' : k === 'matches' ? 'v42\\s+42' : k === 'table' ? 'VLAN_ID=200: STATUS = active' : 'text'; }
+  checkHint(k: string) { if (['avg', 'max', 'min', 'delta', 'rate'].includes(k)) return 'CPU:\\s+(\\d+) < 80   (a field pattern, JSON path or OID, then < > or =)'; return k === 'json' ? 'data.items[0].name = v42   or   loss < 0.01' : k === 'oid' ? 'ifOperStatus.4 = up' : k === 'status' ? '200' : k === 'maxMs' ? '500' : k === 'matches' ? 'v42\\s+42' : k === 'table' ? 'VLAN_ID=200: STATUS = active' : 'text'; }
   addCheck(s: TestStep, c: { k: string; v: string }) {
     const v = c.v.trim(); if (!v) return;
     let e: TestExpect;
@@ -1314,7 +1968,19 @@ export class TestsView implements OnInit, OnDestroy {
       e = { table: t };
       if (s.run && !s.run.parse) s.run.parse = 'auto';
     }
-    else if (c.k === 'json' || c.k === 'oid') { const i = v.indexOf('='); e = i > 0 ? { [c.k]: v.slice(0, i).trim(), equals: v.slice(i + 1).trim() } : { [c.k]: v, exists: true }; }
+    else if (['avg', 'max', 'min', 'delta', 'rate'].includes(c.k)) {
+      const m = v.match(/^(.+?)\s*(<|>|=)\s*(-?[\d.]+)$/);
+      if (!m) return this.ui.toast(tr('Write the value, then < > or = and a number, e.g. CPU:\\s+(\\d+) < 80'), 'error');
+      const subj = m[1].trim(), n = Number(m[3]);
+      e = { agg: c.k as TestExpect['agg'] };
+      if (s.snmp) e.oid = subj; else if (s.http || (s.netconf && !subj.includes('('))) e.json = subj; else e.field = subj.includes('(') ? subj : escapeRe(subj) + '\\s*:?\\s*([\\d.]+)';
+      if (m[2] === '<') e.less = n; else if (m[2] === '>') e.greater = n; else e.equals = String(n);
+    }
+    else if (c.k === 'json' || c.k === 'oid') {
+      const m = v.match(/^(.+?)\s*(<|>)\s*(-?[\d.]+)$/);
+      if (m) e = { [c.k]: m[1].trim(), ...(m[2] === '<' ? { less: Number(m[3]) } : { greater: Number(m[3]) }) };
+      else { const i = v.indexOf('='); e = i > 0 ? { [c.k]: v.slice(0, i).trim(), equals: v.slice(i + 1).trim() } : { [c.k]: v, exists: true }; }
+    }
     else e = { [c.k]: v };
     (s.expect ??= []).push(e); c.v = ''; this.touch();
   }

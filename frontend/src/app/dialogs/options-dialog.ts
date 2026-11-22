@@ -687,16 +687,27 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                           <div class="li"><span class="l">Issue type</span><input name="jit" class="v" [(ngModel)]="g.jira.issueType" placeholder="Bug" /></div>
                           <div class="li"><span class="l">Defect for failures<small>open a defect for each failed test of a scheduled run</small></span><input name="jia" type="checkbox" [(ngModel)]="g.jira.auto" /></div>
                         }
+                        @case ('webhook') {
+                          <div class="li"><span class="l">Send run results<small>scheduled runs, monitors and SNMP alarms</small></span><input name="nwh" type="checkbox" [(ngModel)]="g.notify.webhook" /></div>
+                          <div class="li"><span class="l">When</span><select name="nwn" class="v" [(ngModel)]="g.notify.when"><option [ngValue]="undefined">Only when something failed</option><option value="always">After every run</option></select></div>
+                        }
+                        @case ('smtp') {
+                          <div class="li"><span class="l">Mail server<small>port 587 STARTTLS, 465 TLS</small></span><input name="nsh" class="v" [(ngModel)]="g.notify.smtpHost" placeholder="smtp.yourcompany.com" /><input name="nsp" style="width:76px;flex:none" type="number" min="1" [(ngModel)]="g.notify.smtpPort" placeholder="587" /></div>
+                          <div class="li"><span class="l">User name<small>empty: no sign-in</small></span><input name="nsu" class="v" [(ngModel)]="g.notify.smtpUser" autocomplete="off" /></div>
+                          <div class="li"><span class="l">From</span><input name="nsf" class="v" [(ngModel)]="g.notify.from" placeholder="termwright@yourcompany.com" /></div>
+                          <div class="li"><span class="l">To<small>addresses, comma separated</small></span><input name="nst" class="v" [ngModel]="(g.notify.to ?? []).join(', ')" (ngModelChange)="g.notify.to = splitList($event)" placeholder="team@yourcompany.com" /></div>
+                          @if (!g.notify.webhook) { <div class="li"><span class="l">When</span><select name="nsn" class="v" [(ngModel)]="g.notify.when"><option [ngValue]="undefined">Only when something failed</option><option value="always">After every run</option></select></div> }
+                        }
                         @case ('git') {
                           <div class="li"><span class="l">Host<small>the tests folder's remote, over HTTPS</small></span><input name="gih" class="v" [(ngModel)]="g.git.host" placeholder="github.com" /></div>
                           <div class="li"><span class="l">User name</span><input name="giu" class="v" [(ngModel)]="g.git.user" autocomplete="off" /></div>
                         }
                       }
-                      <div class="li"><span class="l">Token<small>{{ integHas()[k.k] ? 'Saved in the OS keychain' : 'Kept in the OS keychain, never in the settings' }}</small></span>
-                        <input [name]="'tok' + k.k" class="v" type="password" autocomplete="off" [(ngModel)]="integTok[k.k]" [placeholder]="integHas()[k.k] ? '•••••••• (type to change)' : 'paste the token'" />
-                        <button type="button" (click)="saveIntegTok(k.k)" [disabled]="!integTok[k.k].trim()">Save Token</button>
+                      <div class="li"><span class="l">{{ k.k === 'webhook' ? 'Webhook address' : k.k === 'smtp' ? 'Mail password' : 'Token' }}<small>{{ integHas()[k.k] ? 'Saved in the OS keychain' : 'Kept in the OS keychain, never in the settings' }}</small></span>
+                        <input [name]="'tok' + k.k" class="v" type="password" autocomplete="off" [(ngModel)]="integTok[k.k]" [placeholder]="integHas()[k.k] ? '•••••••• (type to change)' : k.k === 'webhook' ? 'https://… (Teams, Slack or any incoming webhook)' : k.k === 'smtp' ? 'the mail password' : 'paste the token'" />
+                        <button type="button" (click)="saveIntegTok(k.k)" [disabled]="!integTok[k.k].trim()">Save</button>
                         @if (integHas()[k.k]) { <button type="button" (click)="forgetIntegTok(k.k)">Forget</button> }</div>
-                      <div class="li"><span class="l"></span><button type="button" (click)="testInteg(k.k)">Test Connection</button><span class="hint">{{ integMsg()[k.k] }}</span></div>
+                      <div class="li"><span class="l"></span><button type="button" (click)="testInteg(k.k)">{{ k.k === 'webhook' || k.k === 'smtp' ? 'Send a Test' : 'Test Connection' }}</button><span class="hint">{{ integMsg()[k.k] }}</span></div>
                     </div>
                   </div>
                 }
@@ -1256,15 +1267,16 @@ export class OptionsDialog implements OnInit {
   }
   readonly aiMsg = signal('');
   aiKey = '';
-  readonly integKinds = [{ k: 'qtest', t: 'qTest - test results' }, { k: 'jira', t: 'Jira / Atlassian - defects' }, { k: 'git', t: 'Git host - the tests folder' }];
+  readonly integKinds = [{ k: 'qtest', t: 'qTest - test results' }, { k: 'jira', t: 'Jira / Atlassian - defects' }, { k: 'git', t: 'Git host - the tests folder' }, { k: 'webhook', t: 'Notifications - Teams / chat webhook' }, { k: 'smtp', t: 'Notifications - e-mail' }];
   readonly integHas = signal<Record<string, boolean>>({});
   readonly integMsg = signal<Record<string, string>>({});
-  integTok: Record<string, string> = { qtest: '', jira: '', git: '' };
+  integTok: Record<string, string> = { qtest: '', jira: '', git: '', webhook: '', smtp: '' };
+  splitList(v: string) { return v.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean); }
   /** The settings' integrations (created when missing, so the fields can bind). */
   integ() {
     if (!this.s) return null;
-    const g = (this.s.integrations ??= { qtest: {}, jira: {}, git: {} });
-    g.qtest ??= {}; g.jira ??= {}; g.git ??= {};
+    const g = (this.s.integrations ??= { qtest: {}, jira: {}, git: {}, notify: {} });
+    g.qtest ??= {}; g.jira ??= {}; g.git ??= {}; g.notify ??= {};
     return g;
   }
   loadInteg() { void this.backend.integrationTokens().then(m => this.integHas.set(m ?? {})).catch(() => {}); }

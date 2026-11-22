@@ -297,6 +297,11 @@ class ClientTest(unittest.TestCase):
         bodies = [b for _, p, b in Fake.state["calls"] if p == "/api/v1/tools/tests"]
         self.assertEqual(bodies[-2], {"action": "run", "testbed": "lab-a.yaml", "on_cleanup_fail": "restore"})
         self.assertEqual(bodies[-1], {"action": "new_testbed", "name": "lab-a", "folder": "Lab"})
+        self.lab.tests.run("smoke", rerun=2, run_timeout=600)
+        self.lab.tests.book("testbeds/lab-a.yaml", "2026-12-01 18:00", why="upgrade")
+        bodies = [b for _, p, b in Fake.state["calls"] if p == "/api/v1/tools/tests"]
+        self.assertEqual(bodies[-2], {"action": "run", "files": ["smoke"], "rerun": 2, "run_timeout": 600})
+        self.assertEqual(bodies[-1], {"action": "book", "testbed": "testbeds/lab-a.yaml", "end": "2026-12-01 18:00", "note": "upgrade"})
         self.lab.tests.schedule("nightly", at="02:15", testbed="lab-a.yaml")
         bodies = [b for _, p, b in Fake.state["calls"] if p == "/api/v1/tools/tests"]
         self.assertEqual(bodies[-1], {"action": "schedule", "name": "nightly", "repeat": "daily", "at": "02:15", "testbed": "lab-a.yaml"})

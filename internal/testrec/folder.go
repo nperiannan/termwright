@@ -32,7 +32,7 @@ var builtinTemplates embed.FS
 func (f Folder) TemplatesDir() string { return filepath.Join(f.Root, "templates") }
 
 // Dirs of a tests folder.
-var Dirs = []string{"cases", "lib", "testbeds", "reports", "templates", "suites"}
+var Dirs = []string{"cases", "lib", "testbeds", "reports", "templates", "suites", "procs"}
 
 // MaxCaseSize is the largest case file read (1 MB).
 const MaxCaseSize = 1 << 20
@@ -87,6 +87,8 @@ type CaseInfo struct {
 	Tags []string `json:"tags,omitempty"`
 	// Steps: how many.
 	Steps int `json:"steps"`
+	// Calls: the procedures it calls.
+	Calls []string `json:"calls,omitempty"`
 	// Error: why the file could not be read.
 	Error string `json:"error,omitempty"`
 }
@@ -115,6 +117,13 @@ func (f Folder) List() []CaseInfo {
 			ci.Name, ci.Error = strings.TrimSuffix(d.Name(), filepath.Ext(d.Name())), err.Error()
 		} else {
 			ci.Name, ci.Description, ci.Tags, ci.Steps = c.Name, c.Description, c.Tags, len(c.Steps)
+			for _, l := range [][]Step{c.Setup, c.Steps, c.Cleanup} {
+				for _, st := range l {
+					if st.Call != nil && !slices.Contains(ci.Calls, st.Call.Proc) {
+						ci.Calls = append(ci.Calls, st.Call.Proc)
+					}
+				}
+			}
 		}
 		out = append(out, ci)
 		return nil
@@ -220,6 +229,12 @@ func checkSteps(all []Step, in string) error {
 			}
 			continue
 		}
+		if s.Call != nil {
+			if strings.TrimSpace(s.Call.Proc) == "" || actions(s) > 0 {
+				return fmt.Errorf("%sstep %d: a call step names its procedure (call: {proc: name, with: {...}}) and has nothing else to run", in, i+1)
+			}
+			continue
+		}
 		if actions(s) == 0 && s.Wait > 0 {
 			continue
 		}
@@ -290,6 +305,8 @@ type RunReport struct {
 	Failed int `json:"failed"`
 	// Skipped cases (the run stopped after a failed cleanup).
 	Skipped int `json:"skipped,omitempty"`
+	// Flaky: tests that failed, then passed when run again (counted in Passed).
+	Flaky int `json:"flaky,omitempty"`
 	// Ms: the whole run.
 	Ms int64 `json:"ms"`
 	// OnCleanupFail: what the run did when a cleanup failed: stop, restore or factory.
@@ -316,15 +333,26 @@ type RunOptions struct {
 	OnStepStart func(file, caseName, step string) `json:"-"`
 	// OnStep is called after each step (live progress).
 	OnStep func(file, caseName string, sr StepResult) `json:"-"`
+	// CaseTimeout: seconds a test may take when it has no timeout of its own (0: no limit); RunTimeout:
+	// seconds for the whole run - the tests not started by then are skipped.
+	CaseTimeout int `json:"caseTimeout,omitempty"`
+	RunTimeout  int `json:"runTimeout,omitempty"`
+	// Rerun: run a failed test again up to this many times; one that then passes is marked flaky.
+	Rerun int `json:"rerun,omitempty"`
 	// From: start at this step of the steps (1-based; the setup still runs, earlier steps are skipped).
 	From int `json:"from,omitempty"`
 	// Only: run only this step of the steps (no setup).
 	Only int `json:"only,omitempty"`
-	// Pause is called when a setup or test step fails (debugging): "retry" runs the step again,
-	// "continue" goes on as if it passed, anything else stops (the cleanup still runs). The devices'
-	// connections stay open while it waits.
-	Pause func(ctx context.Context, file, caseName string, sr StepResult) string `json:"-"`
-	file   string
+	// Pause is called when a setup or test step fails, and before a step with a breakpoint (debugging).
+	// After a failure: "retry" runs the step again, "continue" goes on, anything else stops. At a breakpoint:
+	// "step" runs the step and stops before the next, "continue" runs on to the next breakpoint, "skip" leaves
+	// the step out, anything else stops. The variables it returns are set first. The cleanup still runs and
+	// the devices' connections stay open while it waits.
+	Pause func(ctx context.Context, file, caseName string, sr StepResult) (string, map[string]string) `json:"-"`
+	// Breaks: steps (1-based, of the steps) to stop before; StepMode stops before every step.
+	Breaks   []int `json:"breaks,omitempty"`
+	StepMode bool  `json:"stepMode,omitempty"`
+	file     string
 	// Testbed: shown in the report.
 	Testbed string `json:"testbed,omitempty"`
 }
@@ -346,6 +374,11 @@ func (f Folder) RunFiles(ctx context.Context, files []string, d Driver, vars map
 // RunFilesWith is RunFiles with options (what to do when a cleanup fails).
 func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars map[string]string, opt RunOptions, progress func(Result)) (RunReport, error) {
 	schemaRoot.Store(f.Root)
+	if opt.RunTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(opt.RunTimeout)*time.Second)
+		defer cancel()
+	}
 	files, err := f.ExpandFiles(files, opt.Tags)
 	if err != nil {
 		return RunReport{}, err
@@ -363,8 +396,13 @@ func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars
 	rc, canRecover := d.(Recoverer)
 	cases := map[string]Case{}
 	var all []string // every device the run uses, for the configuration saved before it
+	prepErr := map[string]error{}
 	for _, file := range files {
 		if c, err := f.Load(file); err == nil {
+			if c, err = f.Prepare(c); err != nil {
+				prepErr[file] = err
+				continue
+			}
 			cases[file] = c
 			v := map[string]string{}
 			for k, x := range c.Vars {
@@ -409,6 +447,9 @@ func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars
 			rs = []Result{{Case: name, File: file, Start: time.Now(), Skipped: true, Error: stopped}}
 		case !loaded:
 			_, err := f.Load(file)
+			if err == nil {
+				err = prepErr[file]
+			}
 			rs = []Result{{Case: file, File: file, Start: time.Now(), Error: err.Error()}}
 		case f.blockedBy(c, status) != "":
 			name := c.Name
@@ -416,10 +457,27 @@ func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars
 				name = file
 			}
 			rs = []Result{{Case: name, File: file, Start: time.Now(), Skipped: true, Error: f.blockedBy(c, status)}}
+		case ctx.Err() == context.DeadlineExceeded:
+			stopped = fmt.Sprintf("not run: the run took longer than %d s", opt.RunTimeout)
+			rs = []Result{{Case: c.Name, File: file, Start: time.Now(), Skipped: true, Error: stopped}}
 		default:
 			o := opt
 			o.file = file
 			rs = RunParamsWith(ctx, c, d, vars, o)
+			for try := 1; try <= opt.Rerun && ctx.Err() == nil && anyFailed(rs); try++ {
+				again := RunParamsWith(ctx, c, d, vars, o)
+				for i := range again {
+					again[i].Attempts = try + 1
+				}
+				if !anyFailed(again) {
+					for i := range again {
+						again[i].Flaky = true
+					}
+					rs = again
+					break
+				}
+				rs = again
+			}
 		}
 		for _, r := range rs {
 			r.File = file
@@ -453,6 +511,9 @@ func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars
 				rep.Skipped++
 			case r.Passed:
 				rep.Passed++
+				if r.Flaky {
+					rep.Flaky++
+				}
 			default:
 				rep.Failed++
 			}
@@ -510,7 +571,7 @@ func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars
 	}
 	f.writeLogs(&rep, abs)
 	j, _ := json.MarshalIndent(rep, "", "  ")
-	for name, b := range map[string][]byte{"result.json": j, "junit.xml": JUnit(rep), "report.html": HTML(rep), "results.xlsx": XLSX(rep)} {
+	for name, b := range map[string][]byte{"result.json": j, "junit.xml": JUnit(rep), "report.html": HTML(rep), "results.xlsx": XLSX(rep), "report.pdf": PDFReport(rep)} {
 		if err := os.WriteFile(filepath.Join(abs, name), b, 0o644); err != nil {
 			return rep, err
 		}
@@ -717,6 +778,68 @@ func (f Folder) WriteTestbed(name string, sessions []string, comment string) (st
 	return rel, os.WriteFile(p, []byte(b.String()), 0o644)
 }
 
+// ChangeTestbed adds sessions to a testbed (each a role named after it) and takes roles out; its other
+// values and its comments stay. A testbed with groups (nested values) is changed in its YAML only.
+func (f Folder) ChangeTestbed(rel string, add, removeRoles []string) error {
+	if !strings.Contains(rel, "/") {
+		rel = "testbeds/" + rel
+	}
+	txt, err := f.ReadText(rel)
+	if err != nil {
+		return err
+	}
+	var raw map[string]any
+	if err := yaml.Unmarshal([]byte(txt), &raw); err != nil {
+		return fmt.Errorf("%s: %w", rel, err)
+	}
+	m := map[string]string{}
+	for k, v := range raw {
+		switch t := v.(type) {
+		case map[string]any, []any:
+			return fmt.Errorf("%s has groups of values: change it in its YAML", rel)
+		case nil:
+			m[k] = ""
+		default:
+			m[k] = fmt.Sprint(t)
+		}
+	}
+	for _, r := range removeRoles {
+		delete(m, r)
+	}
+	have := map[string]bool{}
+	for _, v := range m {
+		have[v] = true
+	}
+	for _, s := range add {
+		if have[s] {
+			continue
+		}
+		r := RoleName(s)
+		for i := 2; m[r] != ""; i++ {
+			r = RoleName(s) + "_" + strconv.Itoa(i)
+		}
+		m[r] = s
+		have[s] = true
+	}
+	var b strings.Builder
+	for _, line := range strings.Split(txt, "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "#") {
+			break
+		}
+		b.WriteString(line + "\n")
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		y, _ := yaml.Marshal(map[string]string{k: m[k]})
+		b.Write(y)
+	}
+	return f.SaveText(rel, b.String())
+}
+
 func exists(p string) bool { _, err := os.Stat(p); return err == nil }
 
 // Remove moves a test and its generated code (Go, Python, TCL) to .removed/<time>/ in the tests folder:
@@ -728,11 +851,15 @@ func (f Folder) Remove(rel string) (string, error) {
 	}
 	r, _ := filepath.Rel(f.Root, p)
 	r = filepath.ToSlash(r)
-	if !strings.HasPrefix(r, "cases/") || !isCaseFile(r) {
-		return "", fmt.Errorf("%s is not a test in cases/", rel)
+	files := []string{r, GoFile(r), PyFile(r), TclFile(r)}
+	switch {
+	case (strings.HasPrefix(r, "testbeds/") || strings.HasPrefix(r, "suites/") || strings.HasPrefix(r, "procs/")) && isCaseFile(r):
+		files = []string{r} // a testbed or a plan
+	case !strings.HasPrefix(r, "cases/") || !isCaseFile(r):
+		return "", fmt.Errorf("%s is not a test, testbed or plan", rel)
 	}
 	dest := filepath.Join(".removed", time.Now().Format("2006-01-02_150405"))
-	for _, x := range []string{r, GoFile(r), PyFile(r), TclFile(r)} {
+	for _, x := range files {
 		src := filepath.Join(f.Root, filepath.FromSlash(x))
 		if _, err := os.Stat(src); err != nil {
 			continue
@@ -834,11 +961,11 @@ func (f Folder) dirFiles(dir string) []string {
 func (f Folder) SaveText(rel, text string) error {
 	rel = filepath.ToSlash(strings.TrimSpace(rel))
 	ok := false
-	for _, d := range []string{"testbeds/", "templates/", "suites/", "lib/"} {
+	for _, d := range []string{"testbeds/", "templates/", "suites/", "lib/", "procs/", "data/"} {
 		ok = ok || strings.HasPrefix(rel, d)
 	}
 	if !ok {
-		return fmt.Errorf("%s: only testbeds, templates, suites and lib files are saved this way", rel)
+		return fmt.Errorf("%s: only testbeds, templates, suites, procs, data and lib files are saved this way", rel)
 	}
 	p, err := f.path(rel)
 	if err != nil {
@@ -848,4 +975,14 @@ func (f Folder) SaveText(rel, text string) error {
 		return err
 	}
 	return os.WriteFile(p, []byte(text), 0o644)
+}
+
+// anyFailed: a result that failed in its steps (a failed cleanup is not run again: the device may not be clean).
+func anyFailed(rs []Result) bool {
+	for _, r := range rs {
+		if !r.Passed && !r.Skipped && !r.CleanupFailed {
+			return true
+		}
+	}
+	return false
 }

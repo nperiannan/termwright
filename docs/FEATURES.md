@@ -113,10 +113,24 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **Workspace**: Tests, Runs, Schedules, Testbeds and Library; tests as tables with expected vs got; a Run panel for every run setting.
 - **Edit and select**: edit steps and checks in the Tests tab, rename, duplicate and delete tests (to `.removed/`), run only the ticked tests or a folder; the `lib/` helpers are listed apart from the tests.
 - **Tests for AI and automation**: the `tests` tool for the AI assistant and MCP apps, `POST /api/v1/tools/tests`, and `lab.tests` in Python.
+- **Procedures and data**: shared steps with parameters (`procs/`, call: {proc, with}), made from a test in one click; CSV or Excel test data, one run per row.
+- **NETCONF**: get, get-config, edit-config (candidate + commit) and RPCs over SSH, XML replies checked by path, rpc-errors reported.
+- **Breakpoints and stepping**: stop before chosen steps or every step; run, skip, continue, change variables.
+- **Checks over time**: sample a step N times and check average, max, min, change or rate.
+- **Table maker**: click a header line (or label: value lines) to turn output into a table with live preview; saved as TextFSM.
+- **Standalone suites**: export tests, a plan or all as a zip for Linux, macOS or Windows - code (Go, Python, TCL), library, testbeds, plan and run script writing JUnit XML and run logs; the library adds run logs, configure, wait_for, log and testbed roles.
+- **Debugging**: pause on a failed step (retry, continue, stop, open the device), run one step or from a step, variables per step.
 - **Import from Postman and OpenAPI**: one test per request or operation, folders and tags as suites, status checks from the scripts, examples or 2xx answers; Excel and CSV manual test cases too.
 - **Team roles and approvals**: `roles.yaml` (editors, runners, approvers) and approved runs on production sessions (or always), requested and decided in the Tests tab, valid 24 hours, in the audit log.
 - **JSON Schema checks**: `schema` on API steps (inline or a file); SNMP gets and walks recorded with checks that hold (set values, configured names; no counters).
 
+- **Run control**: rerun failed tests (flaky marked), per-test and per-run timeouts, in the Run panel, schedules, CLI and tools.
+- **Notifications**: results of scheduled runs, API monitors and SNMP alarms to a Teams / chat webhook or e-mail.
+- **PDF report and trends**: `report.pdf` per run; Trends with pass rate per run, most failing and flaky tests, pass rate per software version.
+- **Testbed calendar**: book testbeds for a time (shared `bookings.yaml`); other people's runs and schedules respect it.
+- **Standalone export**: Python or Go code, or the twrun program with the YAML tests - runs without Termwright - SSH/Telnet/API/SNMP/NETCONF/web itself, inventory from your sessions, passwords from the environment or keyring; procedures as reusable functions.
+- **Spirent TestCenter / IxNetwork**: traffic runs as test steps through their REST APIs - configuration, chassis ports, protocols, per-stream loss and latency.
+- **Web steps (Playwright)**: open pages, click, type, check text, screenshot - set up from the step editor.
 ## AI assistant and connector
 
 - **AI assistant** (optional, off by default): a chat panel docked right or left or floating, with chat history, pasted pictures and *Add context* (selection, clipboard, whole terminal, other tabs, files) and a token warning; **Agent mode** runs commands in your tabs to debug or fix - read-only commands by themselves, changes after you allow them, production always asks; *Explain with AI* for output and errors and *Ask AI for a Command* for the tab's device type, with Claude, an OpenAI-compatible service, a local Ollama or **Claude Code** (your own Claude login, no API key); secrets removed before sending, commands pasted without Enter, *Save* to the Command Library.

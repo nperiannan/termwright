@@ -29,6 +29,9 @@ type Schedule struct {
 	OnCleanupFail string `json:"onCleanupFail,omitempty"`
 	// Cleanup: "" (steps), "off" or "auto" - see RunOptions.
 	Cleanup string `json:"cleanup,omitempty"`
+	// Rerun: run a failed test again up to this many times (flaky tests); RunTimeout: minutes for the whole run.
+	Rerun      int `json:"rerun,omitempty"`
+	RunTimeout int `json:"runTimeout,omitempty"`
 	// Production: the tests may use production sessions (otherwise such a run is refused).
 	Production bool `json:"production,omitempty"`
 	// Off: kept but not run.

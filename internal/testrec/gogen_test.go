@@ -1,8 +1,11 @@
 package testrec
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -141,6 +144,16 @@ steps:
 		t.Fatal(err)
 	}
 	f.Save("logic/l", lg)
+	// samples over time and a procedure call go through the generated code too
+	f.SaveProc("ver", Proc{Params: []string{"s"}, Steps: []Step{{Run: &RunStep{Session: "{{s}}", Command: "show version"}, Expect: []Expect{{Contains: "ExtremeXOS"}}}}})
+	smp, _ := Parse([]byte(`name: sampled
+steps:
+  - call: {proc: ver, with: {s: Lab/sw1}}
+  - run: {session: Lab/sw1, command: show version}
+    sample: {count: 2}
+    expect: [{field: 'Uptime: (\d+)', agg: avg, greater: 1}, {contains: ExtremeXOS}]
+`))
+	f.Save("logic/sample", smp)
 	if r := Run(context.Background(), lg, fk, nil); !r.Passed {
 		t.Fatalf("logic run: %+v", r)
 	}
@@ -201,6 +214,64 @@ steps:
 		} else {
 			checkClean("python", out)
 		}
+		if out, err := prun(nil, "--testbed", "testbeds/nested.yaml", "--reports", "rp", "cases/vlan"); err != nil {
+			t.Fatalf("python reports: %v\n%s", err, out)
+		}
+		if logs, _ := filepath.Glob(filepath.Join(f.Root, "rp", "*", "logs", "*.log")); len(logs) == 0 {
+			t.Fatal("python: no run log")
+		} else if b, _ := os.ReadFile(logs[0]); !strings.Contains(string(b), "✓ pass") || !strings.Contains(string(b), "Result:   PASSED") || !strings.Contains(string(b), "--- output ---") {
+			t.Fatalf("python run log:\n%s", b)
+		}
+		// an exported suite runs on its own (Python, Linux run script)
+		zb, zname, err := f.Export(ExportOptions{Files: []string{"cases/vlan"}, Lang: "python", OS: "linux", Testbed: "testbeds/nested.yaml", Name: "lab suite"})
+		if err != nil || zname != "lab-suite-python-linux.zip" {
+			t.Fatal(err, zname)
+		}
+		zr, _ := zip.NewReader(bytes.NewReader(zb), int64(len(zb)))
+		ex := t.TempDir()
+		for _, zf := range zr.File {
+			p := filepath.Join(ex, zf.Name)
+			os.MkdirAll(filepath.Dir(p), 0o755)
+			rc, _ := zf.Open()
+			b, _ := io.ReadAll(rc)
+			rc.Close()
+			os.WriteFile(p, b, zf.Mode())
+		}
+		cmd := exec.Command("bash", filepath.Join(ex, "lab-suite", "run.sh"))
+		cmd.Env = append(os.Environ(), "TERMWRIGHT_API="+srv.URL+"/api/v1", "TERMWRIGHT_KEY=k")
+		if out, err := cmd.CombinedOutput(); err != nil || !strings.Contains(string(out), "reports: reports/") {
+			t.Fatalf("exported suite: %v\n%s", err, out)
+		}
+		if logs, _ := filepath.Glob(filepath.Join(ex, "lab-suite", "reports", "*", "logs", "*.log")); len(logs) == 0 {
+			t.Fatal("exported suite: no run log")
+		}
+		for _, lang := range []string{"go", "tcl"} {
+			zb, _, err := f.Export(ExportOptions{Files: []string{"cases/vlan"}, Lang: lang, OS: "linux", Testbed: "testbeds/nested.yaml", Name: "s-" + lang})
+			if err != nil {
+				t.Fatal(err)
+			}
+			zr, _ := zip.NewReader(bytes.NewReader(zb), int64(len(zb)))
+			ex := t.TempDir()
+			for _, zf := range zr.File {
+				p := filepath.Join(ex, zf.Name)
+				os.MkdirAll(filepath.Dir(p), 0o755)
+				rc, _ := zf.Open()
+				b, _ := io.ReadAll(rc)
+				rc.Close()
+				os.WriteFile(p, b, zf.Mode())
+			}
+			if _, err := exec.LookPath(map[string]string{"go": "go", "tcl": "tclsh"}[lang]); err != nil {
+				continue
+			}
+			cmd := exec.Command("bash", filepath.Join(ex, "s-"+lang, "run.sh"))
+			cmd.Env = append(os.Environ(), "TERMWRIGHT_API="+srv.URL+"/api/v1", "TERMWRIGHT_KEY=k")
+			out, err := cmd.CombinedOutput()
+			j, _ := filepath.Glob(filepath.Join(ex, "s-"+lang, "reports", "*", "junit.xml"))
+			l, _ := filepath.Glob(filepath.Join(ex, "s-"+lang, "reports", "*", "logs", "*.log"))
+			if err != nil || len(j) == 0 || len(l) == 0 {
+				t.Fatalf("exported %s suite: %v %v %v\n%s", lang, err, j, l, out)
+			}
+		}
 		out, err := prun(nil, "cases/other")
 		if err == nil || !strings.Contains(out, `expected the output to contain 'NOPE'`) || !strings.Contains(out, "an earlier step failed") {
 			t.Fatalf("python bad: %v\n%s", err, out)
@@ -224,6 +295,14 @@ steps:
 			t.Fatalf("tcl clean: %v\n%s", err, out)
 		} else {
 			checkClean("tcl", out)
+		}
+		if out, err := trun(nil, "-testbed", "testbeds/nested.yaml", "-reports", "rt", "cases/vlan"); err != nil {
+			t.Fatalf("tcl reports: %v\n%s", err, out)
+		}
+		if logs, _ := filepath.Glob(filepath.Join(f.Root, "rt", "*", "logs", "*.log")); len(logs) == 0 {
+			t.Fatal("tcl: no run log")
+		} else if b, _ := os.ReadFile(logs[0]); !strings.Contains(string(b), "✓ pass") || !strings.Contains(string(b), "Result:   PASSED") {
+			t.Fatalf("tcl run log:\n%s", b)
 		}
 		out, err := trun(nil, "cases/other")
 		if err == nil || !strings.Contains(out, `expected the output to contain "NOPE"`) || !strings.Contains(out, "# SKIP an earlier step failed") {

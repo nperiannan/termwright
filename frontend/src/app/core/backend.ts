@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import type { SNMPRow, HMockInfo, APIMonitor, APIMonitorState, SNMPDashboard, SNMPDashPoll, SNMPSimState, TestApproval, TopoPlan, TopoRequest, TopoResult, LayoutRequest, LayoutResult, TestCase, TestCaseInfo, TestRunReport, TestsTree, TestsGitInfo, TestSchedule, TestScheduleView, IntegrationsConfig, TestTable, TestHistory } from './models';
+import type { TestbedDevice, TestExpect, WebStatus, TestBooking, TestTrends, TestProc, TestProcInfo, TemplateSpec, SNMPRow, HMockInfo, APIMonitor, APIMonitorState, SNMPDashboard, SNMPDashPoll, SNMPSimState, TestApproval, TopoPlan, TopoRequest, TopoResult, LayoutRequest, LayoutResult, TestCase, TestCaseInfo, TestRunReport, TestsTree, TestsGitInfo, TestSchedule, TestScheduleView, IntegrationsConfig, TestTable, TestHistory } from './models';
 import { EmuEngines, EmuHostNIC, EmuTrex,
   EmuServer, EmuServerView,
   AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange, SNMPRequest, SNMPResult, SNMPMibNode, SNMPModule, SNMPSecretState, SNMPTrapState, SNMPTrapsView, HSendRequest, HResponse, HCollection, HCollectionInfo, HRunRequest, HRunResult, HHistoryItem, HRequest, AISkill, HEnv, HVar, HHostCookies, SyslogSettings, SyslogState, SyslogMsg, SyslogRule, SyslogQuery, SyslogSendIn } from './models';
@@ -297,7 +297,10 @@ export class Backend {
   testSaveYAML(rel: string, text: string) { return this.call<string>('TestSaveYAML', rel, text); }
   testsOpenFolder() { return this.call<string>('TestsOpenFolder'); }
   testsClone(repo: string) { return this.call<string>('TestsClone', repo); }
-  testsNewTestbed(name: string, folder: string) { return this.call<string>('TestsNewTestbed', name, folder); }
+  testsNewTestbed(name: string, folder: string, sessions: string[] = []) { return this.call<string>('TestsNewTestbed', name, folder, sessions); }
+  testbedDevices(file: string) { return this.call<TestbedDevice[]>('TestbedDevices', file); }
+  testbedChange(file: string, add: string[], removeRoles: string[]) { return this.call<void>('TestbedChange', file, add, removeRoles); }
+  testsDeviceModels(paths: string[]) { return this.call<Record<string, string>>('TestsDeviceModels', paths); }
   testsGitInit() { return this.call<string>('TestsGitInit'); }
   testsGitPull() { return this.call<string>('TestsGitPull'); }
   testsGitCommit(message: string) { return this.call<string>('TestsGitCommit', message); }
@@ -309,7 +312,7 @@ export class Backend {
   testsGit() { return this.call<TestsGitInfo>('TestsGit'); }
   testsOpen(rel: string) { return this.call<void>('TestsOpen', rel); }
   testsOpenInEditor(rel: string) { return this.call<void>('TestsOpenInEditor', rel); }
-  runTests(r: { from?: number; only?: number; pauseOnFail?: boolean; files?: string[]; vars?: Record<string, string>; testbed?: string; confirmed?: boolean; onCleanupFail?: string; cleanup?: string; tags?: string[]; forceLock?: boolean }) { return this.call<TestRunReport>('RunTests', r); }
+  runTests(r: { rerun?: number; caseTimeout?: number; runTimeout?: number; breaks?: number[]; stepMode?: boolean; from?: number; only?: number; pauseOnFail?: boolean; files?: string[]; vars?: Record<string, string>; testbed?: string; confirmed?: boolean; onCleanupFail?: string; cleanup?: string; tags?: string[]; forceLock?: boolean }) { return this.call<TestRunReport>('RunTests', r); }
   runTestsParallel(r: { files?: string[]; testbeds: string[]; confirmed?: boolean; onCleanupFail?: string; cleanup?: string; forceLock?: boolean }) { return this.call<TestRunReport[]>('RunTestsParallel', r); }
   httpMockStart(collection: string, port = 0) { return this.call<HMockInfo>('HTTPMockStart', collection, port); }
   httpMockStop(collection: string) { return this.call<void>('HTTPMockStop', collection); }
@@ -332,14 +335,28 @@ export class Backend {
   testRequestApproval(files: string[], testbed: string, reason: string) { return this.call<TestApproval>('TestRequestApproval', files, testbed, reason); }
   testDecide(id: string, approve: boolean, note: string) { return this.call<TestApproval>('TestDecide', id, approve, note); }
   testReleaseLock(testbed: string) { return this.call<void>('TestReleaseLock', testbed); }
+  testTryChecks(expects: TestExpect[], output: string, status: number) { return this.call<{ what: string; passed: boolean; got?: string }[]>('TestTryChecks', expects, output, status); }
   testParse(session: string, command: string, template: string, output: string) { return this.call<TestTable>('TestParse', session, command, template, output); }
   testSaveFile(rel: string, text: string) { return this.call<void>('TestSaveFile', rel, text); }
   testSaveSuite(rel: string, s: { name?: string; description?: string; tests?: string[]; tags?: string[] }) { return this.call<string>('TestSaveSuite', rel, s); }
   testHistory(file: string, limit = 50) { return this.call<TestHistory[]>('TestHistory', file, limit); }
   testSendQTest(dir: string, files: string[] = []) { return this.call<string>('TestSendQTest', dir, files); }
   testCreateDefect(dir: string, file: string) { return this.call<string[]>('TestCreateDefect', dir, file); }
+  testsExport(o: { files: string[]; lang: string; os: string; testbed: string; name: string; standalone?: boolean }) { return this.call<string>('TestsExport', o); }
+  testProcs() { return this.call<TestProcInfo[]>('TestProcs'); }
+  testProc(name: string) { return this.call<TestProc>('TestProc', name); }
+  testSaveProc(name: string, p: TestProc) { return this.call<string>('TestSaveProc', name, p); }
+  testMakeTemplate(name: string, session: string, command: string, spec: TemplateSpec) { return this.call<string>('TestMakeTemplate', name, session, command, spec); }
+  testPreviewTemplate(spec: TemplateSpec, output: string) { return this.call<TestTable | null>('TestPreviewTemplate', spec, output); }
+  testPickData() { return this.call<string>('TestPickData'); }
+  testTrends(files: string[], testbed: string, limit: number) { return this.call<TestTrends>('TestTrends', files, testbed, limit); }
+  testBookings() { return this.call<TestBooking[]>('TestBookings'); }
+  testSaveBooking(b: TestBooking) { return this.call<TestBooking>('TestSaveBooking', b); }
+  testRemoveBooking(id: string) { return this.call<void>('TestRemoveBooking', id); }
+  webStatus() { return this.call<WebStatus>('WebStatus'); }
+  webSetup() { return this.call<void>('WebSetup'); }
   testStop() { return this.call<void>('TestStop'); }
-  testResume(action: string) { return this.call<void>('TestResume', action); }
+  testResume(action: string, vars?: Record<string, string>) { return this.call<void>('TestResume', action, vars ?? null); }
   testManualAnswer(id: string, result: string, note: string) { return this.call<void>('TestManualAnswer', id, result, note); }
   testImportManual(device: string) { return this.call<string[]>('TestImportManual', device); }
   testsFetchTemplates() { return this.call<string>('TestsFetchTemplates'); }

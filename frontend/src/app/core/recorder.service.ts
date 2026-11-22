@@ -13,6 +13,9 @@ export type RecPhase = 'setup' | 'steps' | 'cleanup';
  *  suggested cleanup step (from the device type's undo rules, a POST's DELETE or an SNMP set's old value). */
 export interface RecStep { fromUndo?: boolean; autoWhy?: string; auto?: number; table?: TestTable; step: TestStep; phase: RecPhase; undo?: TestStep; undone?: boolean; tab?: string; term?: Terminal; marker?: IMarker; output?: string; status?: number; ms?: number; }
 
+/** A step's command or request in a few words. */
+function sentOf(s: TestStep): string { return s.run?.command ?? (s.http ? s.http.method + ' ' + s.http.url : s.snmp ? s.snmp.op : '') ?? ''; }
+
 export type ExpectKind = 'contains' | 'field' | 'matches' | 'notContains' | 'save';
 
 /** The test recorder: while on, commands typed in terminal tabs and requests sent in the API client
@@ -164,8 +167,14 @@ export class Recorder {
 
   output(s: RecStep): string {
     if (s.term && s.marker && !s.marker.isDisposed && s.marker.line >= 0) {
-      const b = s.term.buffer.active, end = b.baseY + b.cursorY, lines: string[] = [];
-      for (let r = s.marker.line + 1; r < end; r++) {
+      // the output ends where the next command typed in the same terminal starts (else at the cursor):
+      // reading to the cursor for an older step would take in the later commands' output too
+      const b = s.term.buffer.active, start = s.marker.line, lines: string[] = [];
+      let end = b.baseY + b.cursorY;
+      for (const x of this.steps()) {
+        if (x !== s && x.term === s.term && x.marker && !x.marker.isDisposed && x.marker.line > start && x.marker.line < end) end = x.marker.line;
+      }
+      for (let r = start + 1; r < end; r++) {
         const ln = b.getLine(r);
         if (!ln) continue;
         const t = ln.translateToString(true);
@@ -183,9 +192,30 @@ export class Recorder {
     return -1;
   }
 
-  /** "Expect this" on text selected in a terminal tab. */
-  expectSelection(tab: string, sel: string, kind: ExpectKind) {
-    const i = this.lastOf(tab);
+  /** The step whose output holds buffer row (the selection's first line); the tab's last one when unknown. */
+  stepAt(tab: string, row?: number): number {
+    if (row === undefined) return this.lastOf(tab);
+    const l = this.steps();
+    let best = -1, bestLine = -1;
+    l.forEach((x, i) => { if (x.tab === tab && x.marker && !x.marker.isDisposed && x.marker.line <= row && x.marker.line > bestLine) { best = i; bestLine = x.marker.line; } });
+    return best >= 0 ? best : this.lastOf(tab);
+  }
+
+  /** The step for selected text: the one at its row when its output holds the text, else the newest step of
+   *  the tab whose output does - so a check never lands on a command whose output does not have it. */
+  private stepFor(tab: string, sel: string, row?: number): number {
+    const norm = (x: string) => x.replace(/\s+/g, ' ').trim();
+    const want = norm(sel), has = (i: number) => i >= 0 && norm(this.output(this.steps()[i])).includes(want);
+    const i = this.stepAt(tab, row);
+    if (has(i)) return i;
+    const l = this.steps();
+    for (let k = l.length - 1; k >= 0; k--) if (l[k].tab === tab && has(k)) return k;
+    return i;
+  }
+
+  /** "Expect this" on text selected in a terminal tab (row: the selection's first buffer row). */
+  expectSelection(tab: string, sel: string, kind: ExpectKind, row?: number) {
+    const i = this.stepFor(tab, sel, row);
     if (i < 0) { this.ui.toast(tr('Type a command first: checks belong to the last recorded command of this tab'), 'info'); return; }
     sel = sel.replace(/\r?\n/g, ' ').trim();
     if (!sel) return;
@@ -201,8 +231,8 @@ export class Recorder {
   }
 
   /** The field pattern of the selection in out, e.g. "Admin State:\s+(\S+)". */
-  fieldOf(tab: string, sel: string): string | null {
-    const i = this.lastOf(tab);
+  fieldOf(tab: string, sel: string, row?: number): string | null {
+    const i = this.stepFor(tab, sel, row);
     return i < 0 ? null : fieldPattern(this.output(this.steps()[i]), sel.trim());
   }
 
@@ -307,10 +337,35 @@ export class Recorder {
   }
   addSuggested(i: number, e: TestExpect) { this.steps.update(l => l.map((x, j) => j === i ? { ...x, step: { ...x.step, expect: [...(x.step.expect ?? []), e] } } : x)); }
 
+  /** Every check must hold for what the device showed while recording; the ones that do not are listed and
+   *  can be removed before saving (else the test would fail on its first run with nothing changed). */
+  private async verifyChecks(): Promise<boolean> {
+    const bad: { i: number; j: number; what: string }[] = [];
+    const l = this.steps();
+    for (let i = 0; i < l.length; i++) {
+      const s = l[i], ex = s.step.expect ?? [];
+      if (!s.step.run || !ex.length || s.phase === 'cleanup') continue;
+      const out = this.output(s);
+      if (!out.trim()) continue;
+      const idx = ex.map((e, j) => ({ e, j })).filter(x => !JSON.stringify(x.e).includes('{{') && !x.e.table && !x.e.agg);
+      if (!idx.length) continue;
+      const res = await this.backend.testTryChecks(idx.map(x => x.e), out, s.status ?? 0).catch(() => []);
+      res.forEach((r, k) => { if (!r.passed) bad.push({ i, j: idx[k].j, what: r.what }); });
+    }
+    if (!bad.length) return true;
+    const list = bad.slice(0, 8).map(b => tr('Step {0} ({1}): {2}', b.i + 1, sentOf(l[b.i].step), b.what)).join('\n');
+    if (!(await this.ui.confirm(tr('Checks That Would Fail'), tr('These checks do not hold for what the device showed while recording, so the test would fail with nothing changed:') + '\n' + list, tr('Remove Them and Save'), true))) return false;
+    const drop = new Map<number, Set<number>>();
+    bad.forEach(b => (drop.get(b.i) ?? drop.set(b.i, new Set()).get(b.i)!).add(b.j));
+    this.steps.update(m => m.map((x, i) => drop.has(i) ? { ...x, step: { ...x.step, expect: (x.step.expect ?? []).filter((_, j) => !drop.get(i)!.has(j)) } } : x));
+    return true;
+  }
+
   async save(): Promise<boolean> {
     if (!this.steps().length) { this.ui.toast(tr('Nothing recorded yet'), 'info'); return false; }
     for (const tab of new Set(this.steps().map(s => s.tab).filter(Boolean))) this.output(this.steps()[this.lastOf(tab!)]);
     this.steps().forEach((_, i) => this.autoCheck(i));
+    if (!(await this.verifyChecks())) return false;
     const bare = this.steps().filter(s => isRead(s.step) && !s.step.expect?.length).length;
     if (bare && !(await this.ui.confirm(tr('Save Without Checks?'), tr('{0} steps read the device but check nothing, so they pass whenever they run. Add a check: select the value and choose Expect this, or use a suggested check.', bare), tr('Save Anyway')))) return false;
     let last = '';

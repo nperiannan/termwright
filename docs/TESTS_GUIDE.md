@@ -102,6 +102,12 @@ Every run is kept in `reports/history.jsonl`. A test's **History** tab shows its
 
 ## 9. Testbeds, suites and tags
 
+![New testbed: tick the devices of a folder](screenshots/tests-guide/31-new-testbed.png)
+
+![A testbed: its devices under their folders](screenshots/tests-guide/30-testbed.png)
+
+**+ New** (Testbeds) asks for a session folder, then lists its devices under their full folder paths with address, device type and model: tick the ones the tests may use (All / None, or filter). A testbed opens as that device list; **+ Add Devices** adds more from any folder, ✕ takes one out, **Edit YAML** shows the file.
+
 A **testbed** maps the roles to sessions: the recorder saves sessions as roles (`access-sw7` → `{{access_sw7}}`), and a testbed points them at other devices. **Testbeds → + New** writes one from a session folder (the emulated lab's, another site's); testbeds open and save in place and show their lock with *Release*.
 
 **Tags** (⋯ → Tags…) group tests across suites; the tag chips filter the list and *Run shown…* runs what is shown. A **plan** (`suites/<name>.yaml`: tests as files, suite folders or other plans, narrowed by tags) is a named set to run together; select tests and **Save as plan…**, then run it from **Plans** at the top of the list. `params: [{vlan: "42"}, {vlan: "100"}]` runs a test once per entry.
@@ -149,7 +155,107 @@ A run that needs an approval offers **Ask for an Approval** (with a reason). The
 
 API steps can also check the answer against a **JSON Schema**: `schema: schemas/vlan.json` (a file in the tests folder) or the schema itself.
 
-## 14. Code, CI and the AI assistant
+## 14. Procedures, data, NETCONF, debugging and tables
+
+**Procedures** are steps several tests share, with parameters - *create a VLAN on a switch*, *check the uplinks*:
+
+```yaml
+# procs/create-vlan.yaml
+name: create-vlan
+params: [switch, vlan, port=1:2]
+steps:
+  - run: {session: "{{switch}}", command: "create vlan v{{vlan}} tag {{vlan}}"}
+  - run: {session: "{{switch}}", command: "configure vlan v{{vlan}} add ports {{port}} tagged"}
+  - run: {session: "{{switch}}", command: "show vlan v{{vlan}}"}
+    expect: [{contains: "v{{vlan}}"}]
+```
+
+In a test: **+ More → Call a Procedure**, choose it and fill the parameters (`call: {proc: create-vlan, with: {switch: "{{core}}", vlan: "200"}}`). **Procedures** in the left bar lists them; ⋯ on a test → **Make a Procedure from This Test** makes one from its steps.
+
+**Test data**: Edit → **Test data → Choose a File…** - a CSV or Excel file; the test runs once per row and the column names are variables (`data: data/vlans.csv`).
+
+**NETCONF**: **+ More → NETCONF Request** - get, get-config, edit-config (a candidate edit is committed) or an RPC, over the session's SSH login on port 830. Check the reply with **XML path =** (`data.vlans.vlan[0].name = v200`) or contains.
+
+**Breakpoints**: click a step's number - it turns red, and the run stops before that step: **Run Step**, **Continue** (to the next breakpoint), **Skip**, **Stop Test**, **Open Device**; the variables can be changed first. **Step through** (Run panel) stops before every step; **Pause when a step fails** stops at failures.
+
+**Checks over time**: tick **Sample over time** (count and interval) and add **average of / maximum of / minimum of / change of / rate/s of** checks, e.g. `CPU:\s+(\d+) < 80`.
+
+**Tables without TextFSM**: open a step's result → **▦ Make a Table…**: click the header line (or tick `label: value` lines), rename the columns, tick *spaces* for columns whose values have spaces, watch the preview, **Save Table**. Then add **table value** checks (`NAME=v200: VID = 200`).
+
+## 15. Run control, notifications, trends, bookings and web pages
+
+**Rerun and timeouts.** In the Run panel, **Run control** has *Rerun a failed test* (up to 3 times), *Test timeout* and *Run timeout* in minutes. A test that only passes on a rerun is shown as **flaky** in the results and counted in Trends. A test over its time is stopped and its cleanup still runs; a test can set its own limit with `timeout: 300` (seconds). Tests not started before the run timeout are reported as skipped. Schedules have the same choices.
+
+**Notifications.** Options → Integrations → *Notifications - Teams / chat webhook* and *Notifications - e-mail*. Paste the incoming webhook address (it is kept in the OS keychain), fill the mail server, from and to, choose *Only when something failed* or *After every run*, and press **Send a Test**. Scheduled runs, API monitors that start failing and SNMP alarms are sent.
+
+**PDF report.** Every run writes `report.pdf` next to the HTML report and JUnit XML; **PDF** in the run opens it.
+
+![Trends: pass rate per run, the tests that fail most, per software version](screenshots/tests-guide/28-trends.png)
+
+**Trends.** Runs → **📈 Trends**: the pass rate of each run (oldest left), the tests that fail most with their flips and last problem, and the pass rate per software version. Choose a plan or a testbed to narrow it.
+
+![The testbed calendar](screenshots/tests-guide/29-calendar.png)
+
+**Booking a testbed.** Testbeds → **📅 Calendar** shows the week, one row per testbed. Double-click a row (or **+ Book**), pick the times and say why. While it is booked, other people's runs ask before taking it and their schedules are refused. Commit `bookings.yaml` so the team sees the bookings.
+
+**Web pages (Playwright).** + More → **Web Page (Playwright)**. Give the address, then actions: *Click*, *Type into*, *Press key*, *Choose option*, *Tick*, *Check it shows*, *Check it is gone*, *Wait for*, *Go to address*, *Screenshot*. Targets: `text=Sign in`, `#user`, `role=button[name="Save"]`, `label=Password`, `placeholder=Search` or an XPath. The first time, **Set Up Playwright** installs Playwright and its Chromium (Node.js is needed). Tick *Self-signed certificate OK* for device web pages. The output is the action log and the page's text, so a *contains* check works on what the page shows; a failed action saves a screenshot in `reports/web-shots`.
+
+**Spirent TestCenter and IxNetwork.** + More → **Spirent / IxNetwork Traffic Run** runs traffic on a commercial traffic generator through its REST API: it loads a saved configuration from the tests folder (STC `.xml` / `.tcc`, IxNetwork `.ixncfg` / `.json`), connects its ports to the chassis ports you list (`10.1.1.5/1/1`), optionally starts the protocols, sends the traffic for the seconds you choose and reads every stream's counters. The server is an **API session** (its base URL - an STC LabServer / REST server, or the IxNetwork API server - with the user name and password) or an address. The result is JSON, so checks read like `loss < 0.01`, `streams[0].loss < 0.1`, `streams[1].latencyUs < 50` or `rx > 0`:
+
+```yaml
+- tgen:
+    kind: ixnetwork          # or stc
+    server: Lab/ixia-api     # an API session, or https://10.1.1.30
+    config: tgen/l3-two-ports.ixncfg
+    ports: [10.1.1.6/1/1, 10.1.1.6/1/2]
+    duration: 30
+    protocols: true
+  expect:
+    - json: loss
+      less: 0.01
+```
+
+It runs in Termwright, in twrun and in the standalone Go suite (not the Python one). The session it makes on the server is removed afterwards (IxNetwork: `session: 1` uses the open session of a Windows API server instead).
+
+## 16. Export a standalone suite
+
+⋯ → **Export Automation Suite** asks which tests (the selected ones, this test, a plan or all), the language (Python, Go or TCL), the operating system it will run on (Linux, macOS or Windows), the default testbed and a name, and saves a zip:
+
+```
+network-tests/
+  cases/…          the YAML and the generated code
+  lib/…            the helper library and its runner
+  testbeds/…  templates/…  suites/…
+  plan.txt         the tests to run, in order - edit it to run fewer or more
+  run.sh           (run.ps1 and run.cmd on Windows)
+  README.md
+```
+
+`./run.sh` (or `./run.sh testbeds/other.yaml`) runs the plan and writes `reports/<date-time>/junit.xml` and `logs/` with each test's run log. The steps go through Termwright - the desktop app with its Local API on, or `termwright tests serve` on a server - which logs in with the saved sessions, so the zip holds no passwords.
+
+The library is also what you build on: besides run, http, snmp and the checks, it has `configure(session, commands)`, `wait_for(session, command, pattern, timeout, interval)`, `log(text)` and `session(role)` (Go: `Configure`, `WaitFor`, `Log`, `Session`; TCL: `tw::configure`, `tw::wait_for`, `tw::log`, `tw::session`).
+
+
+![Export Automation Suite: how it runs](screenshots/tests-guide/32-export.png)
+
+**Without Termwright.** The export dialog has three ways to run:
+
+- **On its own, as code** - Python or Go tests with a library that logs in to the devices itself. Procedures become functions (`twprocs.create_vlan(tw, vlan="200")` in Python, `twprocs.CreateVlan(tw, map[string]string{"vlan": "200"}, false, false)` in Go). Go: install Go 1.24 and run `./run.sh` (the first run downloads two modules) or `go test ./cases/...`.
+- **On its own, with the twrun program** - the YAML tests as they are, and `bin/twrun` for the chosen system. twrun runs them exactly like Termwright (checks, procedures, data, reruns, timeouts) and writes the same reports. `twrun check` tries every login; `twrun setup-web` installs Playwright for web steps.
+- **Through Termwright** - the steps go through the app or `termwright tests serve`.
+
+REST API steps use the API sessions of `inventory.yaml` (base URL, basic / bearer / API-key login; the password in `TW_PASSWORD_<NAME>`, a token in `TW_TOKEN_<NAME>`). Web steps need Playwright: in Python `pip install playwright && playwright install chromium`; in Go and twrun Node.js and `twrun setup-web` (or `npm install --prefix .playwright playwright`).
+
+For the Python suite: The suite then logs in to the devices itself and needs no Termwright on that computer:
+
+1. `python3 -m pip install -r requirements.txt` (paramiko, textfsm, PyYAML; ncclient, playwright and keyring are optional; SNMP steps use the net-snmp commands).
+2. `inventory.yaml` lists every session the tests use - host, protocol (ssh, telnet, api), port, user name, device type, API and SNMP settings, jump host. Change it to run on other devices.
+3. Passwords are never written: set `TW_PASSWORD` (all devices) or `TW_PASSWORD_<NAME>` (the session's last part in capitals, other characters as `_`), keep them in the system keyring (service `termwright`, user = the session), or type them when asked. API tokens: `TW_TOKEN_<NAME>`; SNMP communities: `TW_COMMUNITY_<NAME>`.
+4. `./run.sh` (or `run.cmd`) - reports in `reports/<date-time>/` as above.
+
+Procedures become Python functions in `lib/python/twprocs.py`, so your own tests can call them: `twprocs.create_vlan(tw, vlan="200")`. Steps that need Termwright itself (software upgrades, lab traffic tests, manual steps, saving and restoring the configuration) are skipped or reported.
+
+## 17. Code, CI and the AI assistant
 
 The generated tests run outside the window while Termwright is open - they send each step to Termwright, which logs in with the saved logins:
 

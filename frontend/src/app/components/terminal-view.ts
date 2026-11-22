@@ -825,8 +825,9 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     }
     const t = this.term;
     const sel = t?.getSelection().trim() ?? '';
-    const ex = (kind: ExpectKind) => this.rec.expectSelection(id, sel, kind);
-    const field = this.rec.recording() && sel ? this.rec.fieldOf(id, sel) : null;
+    const row = t?.getSelectionPosition()?.start.y;
+    const ex = (kind: ExpectKind) => this.rec.expectSelection(id, sel, kind, row);
+    const field = this.rec.recording() && sel ? this.rec.fieldOf(id, sel, row) : null;
     const expect = this.rec.recording() && sel && this.tab().kind === 'terminal' ? [
       { label: tr('Expect this: contains "{0}"', sel.length > 30 ? sel.slice(0, 30) + '…' : sel), action: () => ex('contains') },
       ...(field ? [{ label: tr('Expect this: field = "{0}"', sel.length > 24 ? sel.slice(0, 24) + '…' : sel), action: () => ex('field') }] : []),

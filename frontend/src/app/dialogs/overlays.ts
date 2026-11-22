@@ -236,7 +236,7 @@ export class Overlays {
               }
             </div></div>
           <p>A free, open-source, AI-powered platform for network and system engineers: terminal, session manager, file
-            transfer, SNMP, syslog and REST API tools, lab emulator and team sharing - one app for Windows, Linux and macOS.</p>
+            transfer, test automation, SNMP, syslog and REST API tools, lab emulator and team sharing - one app for Windows, Linux and macOS.</p>
           
             <div class="tiles">
               @for (f of tiles; track f[0]) { <div class="tile"><b>{{ f[0] }}</b><span>{{ f[1] }}</span></div> }
@@ -348,7 +348,10 @@ export class About {
     ['Emulate', 'virtual labs of EXOS, VOSS, Linux, servers and microcontrollers'],
     ['Collaborate', 'team server: shared inventory, who is on a device, reservations, usage'],
     ['Connect', 'SSH2, Telnet, Serial, RDP, VNC, local shell; jump hosts and proxies'],
-    ['Monitor', 'SNMP browser v1/v2c/v3 with MIBs, polling and traps; syslog server'],
+    ['Test', 'record and run tests on devices, APIs and web pages (Playwright); reports, trends, CI; export suites that run without Termwright'],
+    ['Monitor', 'SNMP browser v1/v2c/v3 with MIBs, dashboards, alarms, traps and a simulator'],
+    ['Syslog', 'syslog server with severity cards, filters, alerts and saved files'],
+    ['Traffic', 'traffic generator: streams, RFC 2544, convergence; TRex, Spirent TestCenter and IxNetwork'],
     ['APIs', 'REST client like Postman: collections, environments, tests, OpenAPI import'],
     ['Discover', 'network scans, device types, topology maps, Wake-on-LAN'], ['Organise', 'folders, device types, workspaces, import from other programs'],
     ['Automate', 'logon actions, triggers, scripts, command library, alerts'], ['Transfer', 'SFTP with bookmarks and sync, SCP, ZMODEM, YMODEM, XMODEM'],

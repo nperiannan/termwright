@@ -2,13 +2,27 @@
 #
 # Runs the generated TCL tests:  tclsh lib/tcl/run_tests.tcl ?folders or files? ?-junit junit.xml?
 # TW_TESTBED=testbeds/lab.yaml and TW_VAR_<name>=<value> set {{variables}}.
+# -testbed testbeds/lab.yaml sets the devices, -list plan.txt reads the test files from a file, -reports reports
+# writes reports/<date-time>/ with junit.xml and logs/ (each test's run log).
 
 set root [file dirname [file dirname [file dirname [file normalize [info script]]]]]
 set junit ""
 set paths {}
 for {set i 0} {$i < [llength $argv]} {incr i} {
     set a [lindex $argv $i]
-    if {$a eq "-junit" || $a eq "--junit"} { set junit [lindex $argv [incr i]] } else { lappend paths $a }
+    switch -- $a {
+        -junit - --junit { set junit [lindex $argv [incr i]] }
+        -testbed - --testbed { set ::env(TW_TESTBED) [lindex $argv [incr i]] }
+        -list - --list { set fh [open [lindex $argv [incr i]]]; foreach l [split [read $fh] \n] { if {[string trim $l] ne "" && ![string match #* $l]} { lappend paths [file join $root [string trim $l]] } }; close $fh }
+        -reports - --reports {
+            set out [file join [lindex $argv [incr i]] [clock format [clock seconds] -format %Y%m%d-%H%M%S]]
+            file mkdir [file join $out logs]
+            set ::env(TW_LOG_DIR) [file join $out logs]
+            if {$junit eq ""} { set junit [file join $out junit.xml] }
+            puts "reports: $out"
+        }
+        default { lappend paths $a }
+    }
 }
 if {![llength $paths]} { set paths [list [file join $root cases]] }
 

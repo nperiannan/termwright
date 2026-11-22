@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -64,6 +65,10 @@ type Result struct {
 	// CleanupFailed: a cleanup step (or the restore) failed - the device may not be clean; the case
 	// failed because of its cleanup.
 	CleanupFailed bool `json:"cleanupFailed,omitempty"`
+	// Attempts: how many times it ran (more than 1: it was run again after failing); Flaky: it failed,
+	// then passed when run again.
+	Attempts int  `json:"attempts,omitempty"`
+	Flaky    bool `json:"flaky,omitempty"`
 	// Skipped: the case did not run (Error says why: an earlier cleanup failed).
 	Skipped bool `json:"skipped,omitempty"`
 	// Error: why the case could not run at all (a bad file).
@@ -151,9 +156,23 @@ const (
 )
 
 // RunWith runs a case with run options (the cleanup mode).
-func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt RunOptions) Result {
+func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt RunOptions) (res Result) {
 	if opt.Cleanup == CleanupOff {
 		c.Restore = nil
+	}
+	if to := c.Timeout; to > 0 || opt.CaseTimeout > 0 {
+		if to <= 0 {
+			to = opt.CaseTimeout
+		}
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(to)*time.Second)
+		defer cancel()
+		defer func() {
+			if ctx.Err() == context.DeadlineExceeded {
+				res.Passed = false
+				res.Error = strings.TrimSpace(fmt.Sprintf("the test took longer than %d s: stopped (its cleanup ran) %s", to, res.Error))
+			}
+		}()
 	}
 	if e, ok := d.(CaseEnder); ok {
 		defer e.EndCase()
@@ -221,6 +240,7 @@ func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt 
 			before[s] = cfg
 		}
 	}
+	stepping := opt.StepMode
 	run := func(list []Step, phase string, always bool) {
 		for i, st := range list {
 			if phase == "" && ((opt.From > 0 && i+1 < opt.From) || (opt.Only > 0 && i+1 != opt.Only)) {
@@ -245,6 +265,29 @@ func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt 
 				sctx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
 				defer cancel()
 			}
+			if phase == "" && opt.Pause != nil && !always && (stepping || slices.Contains(opt.Breaks, i+1)) {
+				all := map[string]string{}
+				for k, x := range v {
+					all[k] = x
+				}
+				act, set := opt.Pause(ctx, opt.file, r.Case, StepResult{Name: Fill(stepName(st, i), v), Kind: stepKind(st), Skipped: true, Error: fmt.Sprintf("breakpoint: stopped before step %d", i+1), Vars: all})
+				for k, x := range set {
+					v[k] = x
+				}
+				switch act {
+				case "step":
+					stepping = true
+				case "continue":
+					stepping = false
+				case "skip":
+					r.Steps = append(r.Steps, StepResult{Name: Fill(stepName(st, i), v), Kind: stepKind(st), Phase: phase, Skipped: true, Passed: true, Error: "skipped at a breakpoint"})
+					continue
+				default:
+					r.Steps = append(r.Steps, StepResult{Name: Fill(stepName(st, i), v), Kind: stepKind(st), Phase: phase, Skipped: true, Error: "stopped at a breakpoint"})
+					r.Passed, failed = false, true
+					continue
+				}
+			}
 			if opt.OnStepStart != nil {
 				opt.OnStepStart(opt.file, r.Case, PhaseLabel(phase)+Fill(stepName(st, i), v))
 			}
@@ -265,7 +308,11 @@ func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt 
 					if opt.OnStep != nil {
 						opt.OnStep(opt.file, r.Case, sr)
 					}
-					switch opt.Pause(ctx, opt.file, r.Case, sr) {
+					act, set := opt.Pause(ctx, opt.file, r.Case, sr)
+					for k, x := range set {
+						v[k] = x
+					}
+					switch act {
 					case "retry":
 						goto retry
 					case "continue":
@@ -504,6 +551,18 @@ func stepKind(s Step) string {
 	if s.Traffic != nil {
 		return "traffic"
 	}
+	if s.Netconf != nil {
+		return "netconf"
+	}
+	if s.Web != nil {
+		return "web"
+	}
+	if s.TGen != nil {
+		return "tgen"
+	}
+	if s.Call != nil {
+		return "call"
+	}
 	if s.Upgrade != nil {
 		return "upgrade"
 	}
@@ -525,6 +584,14 @@ func stepName(s Step, i int) string {
 		return "upgrade to " + s.Upgrade.Image
 	case s.Manual != nil:
 		return "manual: " + s.Manual.Instruction
+	case s.Call != nil:
+		return "call " + s.Call.Proc
+	case s.Netconf != nil:
+		return NetconfText(*s.Netconf)
+	case s.Web != nil:
+		return WebText(*s.Web)
+	case s.TGen != nil:
+		return TGenText(*s.TGen)
 	case actions(s) == 0 && s.Wait > 0:
 		return fmt.Sprintf("wait %g s", s.Wait)
 	case s.Run != nil:
@@ -614,6 +681,32 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 		} else {
 			err = errors.New("this runner cannot upgrade devices")
 		}
+	case st.Netconf != nil:
+		nc := fillNetconf(*st.Netconf, v)
+		sr.Target, sr.Sent = nc.Session, NetconfText(nc)
+		if nd, ok := d.(NetconfDriver); ok {
+			out, err = nd.Netconf(sctx, nc)
+		} else {
+			err = errors.New("this runner cannot send NETCONF")
+		}
+	case st.TGen != nil:
+		tg := fillTGen(*st.TGen, v)
+		sr.Target, sr.Sent = tg.Server, TGenText(tg)
+		if td, ok := d.(TGenDriver); ok {
+			out, err = td.TGen(sctx, tg)
+		} else {
+			err = errors.New("this runner cannot drive Spirent TestCenter or IxNetwork")
+		}
+	case st.Web != nil:
+		w := fillWeb(*st.Web, v)
+		sr.Target, sr.Sent = "browser", WebText(w)
+		if wd, ok := d.(WebDriver); ok {
+			out, err = wd.Web(sctx, w)
+		} else {
+			err = errors.New("this runner cannot drive a browser")
+		}
+	case st.Call != nil:
+		err = fmt.Errorf("procedure %s was not expanded (run the test from its tests folder)", st.Call.Proc)
 	case st.Traffic != nil:
 		sr.Target, sr.Sent = "lab", "traffic test "+Fill(st.Traffic.Test, v)
 		if tr, ok := d.(TrafficRunner); ok {
@@ -719,7 +812,7 @@ func check(e Expect, out string, status int, ms int64, v map[string]string, rows
 		sch, name := e.Schema, "the schema"
 		if !strings.HasPrefix(strings.TrimSpace(sch), "{") {
 			name = sch
-			b, err := os.ReadFile(filepath.Join(schemaRoot.Load().(string), filepath.Clean("/" + sch)))
+			b, err := os.ReadFile(filepath.Join(schemaRoot.Load().(string), filepath.Clean("/"+sch)))
 			if err != nil {
 				return CheckResult{What: "fits " + name, Got: err.Error()}
 			}
@@ -810,7 +903,9 @@ func extract(field, path, out string) (string, bool) {
 		return "", false
 	}
 	var doc any
-	if json.Unmarshal([]byte(out), &doc) != nil {
+	if t := strings.TrimSpace(out); strings.HasPrefix(t, "<") {
+		doc = XMLDoc(t)
+	} else if json.Unmarshal([]byte(out), &doc) != nil {
 		return "", false
 	}
 	x, ok := JSONPath(doc, path)
@@ -883,6 +978,11 @@ func JSONPath(doc any, path string) (any, bool) {
 
 // StepAnswer is what RunOne got: the generated tests check it themselves.
 type StepAnswer struct {
+	// Target and Sent: the device and what was sent (for the run log).
+	Target string `json:"target,omitempty"`
+	Sent   string `json:"sent,omitempty"`
+	// Checks: the checks Termwright made itself (sample steps' agg checks); the generated test fails on a failed one.
+	Checks []CheckResult `json:"checks,omitempty"`
 	// Output: the command's output or the HTTP body.
 	Output string `json:"output"`
 	// Status: the HTTP status.
@@ -900,8 +1000,13 @@ type StepAnswer struct {
 // RunOne runs one step's action (variables already filled in) without its checks - for the
 // generated tests, which send their steps to Termwright one by one.
 func RunOne(ctx context.Context, st Step, d Driver) StepAnswer {
-	one := Step{Run: st.Run, HTTP: st.HTTP, SNMP: st.SNMP, Traffic: st.Traffic, Upgrade: st.Upgrade, Timeout: st.Timeout}
+	one := Step{Run: st.Run, HTTP: st.HTTP, SNMP: st.SNMP, Traffic: st.Traffic, Upgrade: st.Upgrade, Netconf: st.Netconf, Web: st.Web, TGen: st.TGen, Timeout: st.Timeout}
 	var sr StepResult
+	if st.Sample != nil && st.Sample.Count > 1 { // the checks over all samples are made here
+		one.Sample, one.Expect = st.Sample, st.Expect
+		sr = sampleStep(ctx, one, 0, d, map[string]string{})
+		return StepAnswer{Target: sr.Target, Sent: sr.Sent, Checks: sr.Checks, Output: sr.Output, Status: sr.Status, Ms: sr.Ms, Error: sr.Error, Rows: sr.Rows, Table: sr.Table}
+	}
 	if st.Retry != nil { // the generated tests' retry: Termwright repeats the step until its checks pass
 		one.Expect, one.Retry = st.Expect, st.Retry
 		sr = retryStep(ctx, one, 0, d, map[string]string{})
@@ -909,14 +1014,17 @@ func RunOne(ctx context.Context, st Step, d Driver) StepAnswer {
 			sr.Error = "" // the generated test checks again and says what was wrong
 		}
 	} else {
+		if st.Netconf != nil || st.Web != nil || st.TGen != nil { // XML answers, pages and traffic runs are checked here
+			one.Expect = st.Expect
+		}
 		sr = runStep(ctx, one, 0, d, map[string]string{})
 	}
-	return StepAnswer{Output: sr.Output, Status: sr.Status, Ms: sr.Ms, Error: sr.Error, Rows: sr.Rows, Table: sr.Table}
+	return StepAnswer{Target: sr.Target, Sent: sr.Sent, Checks: sr.Checks, Output: sr.Output, Status: sr.Status, Ms: sr.Ms, Error: sr.Error, Rows: sr.Rows, Table: sr.Table}
 }
 
 func actions(s Step) int {
 	n := 0
-	for _, b := range []bool{s.Run != nil, s.HTTP != nil, s.SNMP != nil, s.Traffic != nil, s.Upgrade != nil, s.Manual != nil} {
+	for _, b := range []bool{s.Run != nil, s.HTTP != nil, s.SNMP != nil, s.Traffic != nil, s.Upgrade != nil, s.Manual != nil, s.Netconf != nil, s.Web != nil, s.TGen != nil} {
 		if b {
 			n++
 		}
@@ -1102,4 +1210,29 @@ func stepVars(st Step, v map[string]string) map[string]string {
 		}
 	}
 	return out
+}
+
+// rawStep is a step for the generated code's Raw call: Termwright runs it and makes its checks
+// (NETCONF answers, samples over time).
+func rawStep(st Step) (string, bool) {
+	if st.Netconf == nil && st.Sample == nil && st.Web == nil && st.TGen == nil {
+		return "", false
+	}
+	r := Step{Run: st.Run, HTTP: st.HTTP, SNMP: st.SNMP, Netconf: st.Netconf, Web: st.Web, TGen: st.TGen, Sample: st.Sample, Expect: st.Expect, Timeout: st.Timeout}
+	b, _ := json.Marshal(r)
+	return string(b), true
+}
+
+// TryChecks runs a step's checks (not table checks) on an output already seen - the recorder uses it to make
+// sure each check holds for what the device showed while recording.
+func TryChecks(expects []Expect, out string, status int, vars map[string]string) []CheckResult {
+	res := make([]CheckResult, 0, len(expects))
+	for _, e := range expects {
+		if e.Table != nil || e.Agg != "" {
+			res = append(res, CheckResult{What: "table/sample check", Passed: true})
+			continue
+		}
+		res = append(res, check(e, out, status, 0, vars, nil))
+	}
+	return res
 }

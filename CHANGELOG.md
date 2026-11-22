@@ -2,6 +2,70 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## 0.44.0 (2026-11-22)
+
+- **Spirent TestCenter and IxNetwork**: + More → **Spirent / IxNetwork Traffic Run** - a test step that loads a saved configuration (STC .xml / .tcc, IxNetwork .ixncfg / .json), connects its ports to the chassis ports, starts the protocols if asked, sends traffic for N seconds and reads each stream's frames, loss and latency through the generator's REST API (STC REST API of a LabServer / REST server; IxNetwork API server, Linux or Windows). The result is JSON for checks such as `loss < 0.01` or `streams[0].latencyUs < 50`. Also in twrun and the standalone Go suite. JSON path checks take `<` and `>` too. Built from the documented REST APIs and tested against simulated servers - not yet against a real chassis.
+
+- **About**: the Test, Traffic and Syslog tiles; new screenshots for About, the Tests tab, trends, testbeds, the calendar and the export in the README and the guides.
+
+- **Standalone suites and twrun on a real switch**: tested end to end on an EXOS stack. Devices with **no password** now work: the export marks them (`no_password` in inventory.yaml) when Termwright saved "no password" for the session or its device type; an empty `TW_PASSWORD` or pressing Enter at the prompt also means none. twrun reads the passwords Termwright saved in this computer's keychain (the session's, then its device type's; password-manager references are resolved). The Python suite needs `paramiko<5`: paramiko 5 dropped the ssh-rsa host keys many switches still use (requirements.txt pins it and the error says so).
+
+- **Testbeds: pick the devices**: **+ New** testbed shows the chosen folder's devices - grouped by their full folder path, with address, device type, model and the role each becomes - to tick one by one, or All / None, with a filter. Only the ticked devices go in (it used to take every session of the folder).
+
+- **Testbed view**: a testbed opens as its devices grouped under their full folder paths (role, name, address, device type, model) and its other values; **+ Add Devices** adds more from any folder, ✕ takes a role out, **Edit YAML** shows the file.
+
+- **twrun asks for passwords without showing them** (when no TW_PASSWORD… is set).
+
+- **About and README**: a Test tile and a Syslog tile in About; the README has separate architecture diagrams for tests (recorder, runner, Playwright, exported suites, twrun), the API Client, the SNMP Browser and syslog.
+
+- **Run log viewer is wide again**: the Run log window opens 1400 px wide (it was held at the small dialog width), so device output and the checks table fit without scrolling sideways.
+
+- **Standalone Go suite**: Export Automation Suite → **On its own, as code** → Go. The zip is a Go module that logs in to the devices itself - SSH (jump hosts too) and Telnet with prompt learning and paging off, REST APIs, SNMP v1/v2c/v3 with the standard MIBs, NETCONF, web steps (Playwright) and TextFSM tables. Procedures become Go functions in `lib/twprocs` (`twprocs.CreateVlan(tw, map[string]string{"vlan": "200"}, false, false)`). `go test ./cases/...` or `run.sh` / `run.cmd`.
+
+- **twrun - run suites without Termwright, no code**: Export Automation Suite → **On its own, with the twrun program** packs the YAML tests, procedures, data, testbeds, templates, `inventory.yaml` and twrun for Linux, macOS or Windows (both CPU types; downloaded from the release when missing). twrun runs them the same way Termwright does - checks, saves, loops, procedures, data rows, reruns of flaky tests, timeouts, device error messages - and writes the same reports (HTML, PDF, JUnit XML, run logs). `twrun check` logs in to each device; `twrun setup-web` installs Playwright for web steps. The release now has twrun for six systems.
+
+- **REST API and web steps standalone**: API requests (basic, bearer and API-key logins from `TW_PASSWORD_` / `TW_TOKEN_`) and Playwright web steps run in the standalone Python and Go suites and in twrun. The inventory also carries each device type's error messages, so a refused command fails its step there too.
+
+- **Standalone Python suite - no Termwright needed**: ⋯ → Export Automation Suite → **On its own**. The zip logs in to the devices itself: SSH (paramiko, jump hosts too) and Telnet with prompt learning and paging turned off per device type, REST APIs, SNMP (net-snmp), NETCONF (ncclient), web steps (Playwright) and TextFSM tables. `inventory.yaml` is written from your saved sessions (host, protocol, port, user, device type, API and SNMP settings) - passwords are never in it: `TW_PASSWORD_<NAME>` / `TW_PASSWORD`, the system keyring or a prompt. `requirements.txt` lists the packages; `run.sh` / `run.ps1` writes JUnit XML and each test's run log as before.
+
+- **Procedures as Python functions**: the generated Python calls procedures as functions in `lib/python/twprocs.py` (`twprocs.create_vlan(tw, vlan="200")`) instead of copying their steps into each test, so hand-written tests reuse them too. The export includes `procs/` and `data/`.
+
+- **Fix**: a test with a **call** step (a procedure) could not be saved or run ("has none of run, http, …").
+
+- **Recorder: checks land on the right step and are verified**: a check now goes to the command whose output holds the selected text (it used to go to the tab's last command, and a step's output could take in the commands after it, so checks from a later `show` command were added to an earlier one). Before saving, every check is tried on what the device showed while recording; checks that would fail with nothing changed are listed with their step and can be removed.
+
+- **Procedures**: shared steps with parameters (`procs/<name>.yaml`) that tests call with **+ More → Call a Procedure** - choose it, fill its parameters (values or `{{variables}}`); change the procedure once and every test follows. The **Procedures** view lists them with their parameters, steps and how many tests use them; ⋯ on a test → **Make a Procedure from This Test** turns its steps into one (its variables become the parameters). Calls are expanded in Termwright's runs and in the generated Go, Python and TCL.
+
+- **Test data from a file**: a test's **Test data** (Edit) is a CSV or Excel file - one run per row, the column names are the variables. A file outside the tests folder is copied into `data/`.
+
+- **NETCONF steps**: **+ More → NETCONF Request** - get, get-config (running, candidate, startup), edit-config (a candidate edit is committed) or any RPC over the session's SSH login on port 830, with a subtree filter. The reply is shown indented; checks use **XML path =** (`data.vlans.vlan[0].name = v200`) or contains, and an `<rpc-error>` fails the step with its message. Also in the generated code and the tools.
+
+- **Breakpoints and stepping**: click a step's number to set a breakpoint (red); a run stops before it with **Run Step**, **Continue**, **Skip** or **Stop Test**, the device can be opened, and the **variables** can be changed before going on. **Step through** in the Run panel stops before every step.
+
+- **Checks over time**: **Sample over time** runs a step several times (every N seconds) and checks the **average, maximum, minimum, change or rate** of a value - CPU below 80 on average, CRC errors that do not grow, a counter's rate - in Termwright and in the generated code.
+
+- **Make a Table without TextFSM**: **▦ Make a Table…** on a step's output: click the header line (columns are found from it; rename them and say which may contain spaces) or tick `label: value` lines, see the parsed rows at once, and save. It is written as a TextFSM template (with its index line for the device type), so `parse` and table checks work in the runs, the generated code and anywhere TextFSM runs.
+
+- **Export an automation suite**: ⋯ → **Export Automation Suite** packs the chosen tests, a plan or every test as a zip that runs on its own - the YAML and its Go, Python or TCL code, the library, the testbeds, the templates, `plan.txt` and a run script for Linux, macOS (`run.sh`) or Windows (`run.ps1`, `run.cmd`). A run writes `reports/<date-time>/` with JUnit XML and each test's run log. The steps still go through Termwright (the app or `termwright tests serve`), so no passwords are in the zip.
+
+- **A fuller library for your own framework**: the Go, Python and TCL helpers write each test's **run log** (`TW_LOG_DIR`: what was sent, what came back, each check with expected and found, the result) and add `configure` (several commands, stops at a device error), `wait_for` (until the output matches), `log`, and testbed roles (`session(role)`, `testbed()`). The Python and TCL runners take `--testbed`, `--list plan.txt` and `--reports`.
+
+- **Tests tab tidy-ups**: Save and Cancel sit at the top next to Edit while editing; Clear and Save as Plan are buttons; suite names are larger with their tests indented under them; the run log viewer is wider and keeps the device's line layout; **+ New** testbed picks the session folder from a list of your folders, showing the roles it will make; testbeds and plans can be deleted (right-click, or Delete in the file view; they go to `.removed/`).
+
+- **Run control**: the Run panel has **Rerun a failed test** (once, twice, 3 times), **Test timeout** and **Run timeout** (minutes). A test that passes on a rerun is marked **flaky**; a test over its time is stopped (its cleanup still runs); tests not started before the run timeout are skipped. A test can set its own `timeout:` (seconds). Schedules have rerun and a run time limit too. Also `--rerun`, `--test-timeout`, `--run-timeout` on the command line and in the tools.
+
+- **Notifications**: Options → Integrations → **Notifications** sends the results of scheduled runs, API monitor failures and SNMP alarms to a **Teams or chat webhook** (a Teams card with the failed tests) and/or by **e-mail** (STARTTLS or TLS), only when something failed or after every run. The webhook address and mail password are kept in the OS keychain. **Send a Test** checks both.
+
+- **PDF report**: each run also writes `report.pdf` - the summary, the tests, and every step with what was sent, each check with expected and found, errors and the output. **PDF** opens it from the run.
+
+- **Trends**: **📈 Trends** in Runs shows the pass rate of the last 40 runs (click a bar to open the run), the tests that fail or flip most with their last problem, flaky counts and the pass rate per software version - for every test, one plan or one testbed.
+
+- **Testbed calendar**: **📅 Calendar** in Testbeds books a testbed for a time (double-click the week view, or **+ Book**). Runs and schedules by other people are refused while it is booked (a run can still take it after asking). Bookings are in `bookings.yaml` in the tests folder, so the team shares them through Git; also `bookings`, `book`, `unbook` in the tools and the Python client.
+
+- **Web steps with Playwright**: **+ More → Web Page (Playwright)** opens a page and clicks, types, presses keys, chooses options, checks text is shown or gone, waits and takes screenshots - targets as `text=Sign in`, `#id`, `role=button[name="Save"]`, `label=Password`. **Set Up Playwright** installs it once (needs Node.js). The step's output is the action log and the page's text, so contains checks work; a failed action saves a screenshot in `reports/web-shots`. Passwords typed into password fields are not logged. Also in the generated Go, Python and TCL.
+
+- **Light theme**: the API Client's JSON colours and request methods are darker and readable on the light background.
+
 ## 0.43.0 (2026-11-21)
 
 - **Faster steps**: after the first command, a prompt shaped like the last one (`Stack.5 #` after `Stack.4 #`) is recognised after 0.2 s of quiet instead of 0.9 s, so each command step takes about a third of the time.

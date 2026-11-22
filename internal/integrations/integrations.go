@@ -22,6 +22,8 @@ type Config struct {
 	QTest QTest `json:"qtest"`
 	Jira  Jira  `json:"jira"`
 	Git   Git   `json:"git"`
+	// Notify: where run results go besides the desktop notification (Teams/Slack webhook, e-mail).
+	Notify Notify `json:"notify"`
 }
 
 // QTest: the qTest Manager site, the user and the project test runs go to.

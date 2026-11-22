@@ -104,6 +104,14 @@ type TestRunRequest struct {
 	Only int `json:"only,omitempty"`
 	// PauseOnFail: when a step fails, wait (connections open) for TestResume: retry, continue or stop.
 	PauseOnFail bool `json:"pauseOnFail,omitempty"`
+	// Rerun: run a failed test again up to this many times; CaseTimeout / RunTimeout: seconds for a test
+	// without its own timeout / for the whole run.
+	Rerun       int `json:"rerun,omitempty"`
+	CaseTimeout int `json:"caseTimeout,omitempty"`
+	RunTimeout  int `json:"runTimeout,omitempty"`
+	// Breaks: steps to stop before (1-based); StepMode: stop before every step.
+	Breaks   []int `json:"breaks,omitempty"`
+	StepMode bool  `json:"stepMode,omitempty"`
 	// Files: tests relative to the tests folder (none: all of them).
 	Files []string `json:"files,omitempty"`
 	// Tags: only tests with one of these tags ("!tag" leaves its tests out).
@@ -195,6 +203,33 @@ func (a *App) runParallel(ctx context.Context, r TestRunRequest, ask netAsker) (
 
 // TestReleaseLock frees a testbed locked by a run that ended without releasing it (or someone
 // else's, when they are done).
+// TestBookings lists the testbed bookings that have not ended.
+func (a *App) TestBookings() ([]testrec.Booking, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return nil, err
+	}
+	return f.Bookings(false), nil
+}
+
+// TestSaveBooking books a testbed (an empty ID) or changes a booking; overlapping bookings are refused.
+func (a *App) TestSaveBooking(b testrec.Booking) (testrec.Booking, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return b, err
+	}
+	return f.SaveBooking(b)
+}
+
+// TestRemoveBooking cancels a booking.
+func (a *App) TestRemoveBooking(id string) error {
+	f, err := a.testsFolder()
+	if err != nil {
+		return err
+	}
+	return f.RemoveBooking(id)
+}
+
 func (a *App) TestReleaseLock(testbed string) error {
 	f, err := a.testsFolder()
 	if err != nil {
@@ -253,6 +288,9 @@ func (a *App) runTests(ctx context.Context, r TestRunRequest, ask netAsker) (tes
 	testsRun.Unlock()
 	defer func() { testsRun.Lock(); delete(testsBusy, r.Testbed); testsRun.Unlock() }()
 	if r.Testbed != "" {
+		if err := f.CheckBooking(r.Testbed, r.ForceLock); err != nil {
+			return testrec.RunReport{}, err
+		}
 		if err := f.TakeLock(r.Testbed, r.ForceLock); err != nil {
 			return testrec.RunReport{}, err
 		}
@@ -275,21 +313,25 @@ func (a *App) runTests(ctx context.Context, r TestRunRequest, ask netAsker) (tes
 		},
 		OnStep: func(file, name string, sr testrec.StepResult) {
 			emitter{a}.Emit("tests:step", map[string]any{"file": file, "case": name, "testbed": r.Testbed, "step": sr})
-		}, From: r.From, Only: r.Only}
-	if r.PauseOnFail && r.interactive {
-		opt.Pause = func(ctx context.Context, file, name string, sr testrec.StepResult) string {
-			ch := make(chan string, 1)
+		}, From: r.From, Only: r.Only, Rerun: min(max(r.Rerun, 0), 5), CaseTimeout: r.CaseTimeout, RunTimeout: r.RunTimeout}
+	if (r.PauseOnFail || len(r.Breaks) > 0 || r.StepMode) && r.interactive {
+		opt.Breaks, opt.StepMode = r.Breaks, r.StepMode
+		opt.Pause = func(ctx context.Context, file, name string, sr testrec.StepResult) (string, map[string]string) {
+			if !r.PauseOnFail && !sr.Skipped { // a failed step, but only breakpoints were asked for
+				return "stop", nil
+			}
+			ch := make(chan testResume, 1)
 			testsPauseMu.Lock()
 			testsPause = ch
 			testsPauseMu.Unlock()
 			defer func() { testsPauseMu.Lock(); testsPause = nil; testsPauseMu.Unlock() }()
-			emitter{a}.Emit("tests:paused", map[string]any{"file": file, "case": name, "testbed": r.Testbed, "step": sr})
+			emitter{a}.Emit("tests:paused", map[string]any{"file": file, "case": name, "testbed": r.Testbed, "step": sr, "breakpoint": sr.Skipped})
 			select {
-			case act := <-ch:
-				emitter{a}.Emit("tests:resumed", act)
-				return act
+			case res := <-ch:
+				emitter{a}.Emit("tests:resumed", res.Action)
+				return res.Action, res.Vars
 			case <-ctx.Done():
-				return "stop"
+				return "stop", nil
 			}
 		}
 	}
@@ -531,7 +573,7 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 		}
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 		defer cancel()
-		req := TestRunRequest{Files: files, Vars: vars, Testbed: argStr(args, "testbed"), OnCleanupFail: argStr(args, "on_cleanup_fail"), Cleanup: argStr(args, "cleanup"), Tags: argStrs(args, "tags"), ForceLock: args["force_lock"] == true, From: argInt(args, "from", 0, 10000), Only: argInt(args, "only", 0, 10000)}
+		req := TestRunRequest{Files: files, Vars: vars, Testbed: argStr(args, "testbed"), OnCleanupFail: argStr(args, "on_cleanup_fail"), Cleanup: argStr(args, "cleanup"), Tags: argStrs(args, "tags"), ForceLock: args["force_lock"] == true, From: argInt(args, "from", 0, 10000), Only: argInt(args, "only", 0, 10000), Rerun: argInt(args, "rerun", 0, 5), CaseTimeout: argInt(args, "test_timeout", 0, 86400), RunTimeout: argInt(args, "run_timeout", 0, 7*86400)}
 		if tbs := argStrs(args, "testbeds"); len(tbs) > 1 {
 			req.Testbed, req.Testbeds = "", tbs
 			reps, err := a.runParallel(ctx, req, ask)
@@ -551,6 +593,27 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 			return "", err
 		}
 		return testsReportText(f, rep), nil
+	case "procs":
+		var b strings.Builder
+		for _, p := range a.mustProcs() {
+			fmt.Fprintf(&b, "%s  %s(%s)  %d steps  %s %s\n", p.File, p.Name, strings.Join(p.Params, ", "), p.Steps, p.Description, p.Error)
+		}
+		if b.Len() == 0 {
+			return "No procedures yet: save procs/<name>.yaml (name, params, steps) with save_file, then use call: {proc, with} in a step.", nil
+		}
+		return b.String(), nil
+	case "save_file":
+		f, err := a.testsFolder()
+		if err != nil {
+			return "", err
+		}
+		if err := mayEdit(f); err != nil {
+			return "", err
+		}
+		if err := f.SaveText(argStr(args, "file"), argStr(args, "yaml")); err != nil {
+			return "", err
+		}
+		return "Saved " + argStr(args, "file"), nil
 	case "approvals":
 		l, err := a.TestApprovals()
 		if err != nil {
@@ -687,7 +750,7 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 		if err := ask("Write a testbed", "testbeds/"+argStr(args, "name")+".yaml from the sessions of "+argStr(args, "folder"), false); err != nil {
 			return "", err
 		}
-		rel, err := a.TestsNewTestbed(argStr(args, "name"), argStr(args, "folder"))
+		rel, err := a.TestsNewTestbed(argStr(args, "name"), argStr(args, "folder"), argStrs(args, "sessions"))
 		if err != nil {
 			return "", err
 		}
@@ -727,6 +790,46 @@ func (a *App) testsTool(ctx context.Context, args map[string]any, ask netAsker) 
 			return "", err
 		}
 		return fmt.Sprintf("Saved schedule %s (%s): %s.", saved.ID, saved.Name, saved.Text()), nil
+	case "bookings":
+		f, err := a.testsFolder()
+		if err != nil {
+			return "", err
+		}
+		var b strings.Builder
+		for _, x := range f.Bookings(false) {
+			if tb := argStr(args, "testbed"); tb != "" && x.Testbed != tb {
+				continue
+			}
+			fmt.Fprintf(&b, "%s  %s  %s - %s  by %s%s\n", x.ID, x.Testbed, x.From.Local().Format("2006-01-02 15:04"), x.To.Local().Format("2006-01-02 15:04"), x.Who, map[bool]string{true: "  why: " + x.Why, false: ""}[x.Why != ""])
+		}
+		if b.Len() == 0 {
+			return "No bookings.", nil
+		}
+		return b.String(), nil
+	case "book":
+		from, to := time.Now(), time.Time{}
+		var err error
+		if v := argStr(args, "start"); v != "" {
+			if from, err = time.ParseInLocation("2006-01-02 15:04", v, time.Local); err != nil {
+				return "", errors.New("start: use YYYY-MM-DD HH:MM")
+			}
+		}
+		if to, err = time.ParseInLocation("2006-01-02 15:04", argStr(args, "end"), time.Local); err != nil {
+			return "", errors.New("end: use YYYY-MM-DD HH:MM")
+		}
+		bk, err := a.TestSaveBooking(testrec.Booking{Testbed: argStr(args, "testbed"), From: from, To: to, Why: argStr(args, "note")})
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("Booked %s for %s from %s to %s (id %s).", bk.Testbed, bk.Who, bk.From.Format("Jan 2 15:04"), bk.To.Format("Jan 2 15:04"), bk.ID), nil
+	case "unbook":
+		if err := ask("Cancel a testbed booking", argStr(args, "id"), false); err != nil {
+			return "", err
+		}
+		if err := a.TestRemoveBooking(argStr(args, "id")); err != nil {
+			return "", err
+		}
+		return "Booking cancelled.", nil
 	case "unschedule":
 		if err := ask("Remove a test schedule", argStr(args, "id"), false); err != nil {
 			return "", err
@@ -863,22 +966,29 @@ func (a *App) TestDecide(id string, approve bool, note string) (testrec.Approval
 	return f.Decide(id, approve, note)
 }
 
+type testResume struct {
+	Action string
+	Vars   map[string]string
+}
+
 var (
 	testsPauseMu sync.Mutex
-	testsPause   chan string
+	testsPause   chan testResume
 )
 
 // TestResume answers a run paused at a failed step: "retry" runs the step again, "continue" goes on,
 // "stop" ends the test (its cleanup still runs).
-func (a *App) TestResume(action string) error {
+func (a *App) TestResume(action string, vars map[string]string) error {
 	testsPauseMu.Lock()
 	defer testsPauseMu.Unlock()
 	if testsPause == nil {
 		return errors.New("no run is paused")
 	}
 	select {
-	case testsPause <- action:
+	case testsPause <- testResume{action, vars}:
 	default:
 	}
 	return nil
 }
+
+func (a *App) mustProcs() []testrec.ProcInfo { l, _ := a.TestProcs(); return l }

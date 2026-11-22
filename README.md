@@ -123,11 +123,19 @@ And much more - see the [feature list](docs/FEATURES.md).
 - **History and reporting**: pass rate, flaky tests and results per software version; send results to **qTest** and open **Jira** defects with the steps and output attached
 - **Plain files**: tests are YAML in a folder that can be a Git repository (Pull, Commit, Push in the Tests tab), and each is also written as **Go**, **Python** and **TCL** test code (`go test ./cases/...`, `python lib/python/run_tests.py`, `tclsh lib/tcl/run_tests.tcl`) - no passwords in any of them, Termwright logs in with the saved logins
 - **Scheduled runs** with a notification when one fails, and the AI assistant to **write a test** from a description or **explain why one failed**
+- **Procedures** (shared steps with parameters), **CSV/Excel test data**, **NETCONF** steps, **breakpoints** and step-through, **checks over time** (average, max, rate) and a **table maker** that turns output into a table by clicking - no TextFSM to write
+- **Spirent TestCenter and IxNetwork** traffic runs as test steps (REST API: load a configuration, run, check loss and latency per stream)
+- **Web steps** with Playwright, **reruns** of flaky tests and **timeouts**, a **testbed calendar**, **Teams / e-mail notifications**, a **PDF report** and **trends** per run, test and software version
+- **Export a standalone suite** for Linux, macOS or Windows (Go, Python or TCL, with the library, testbeds, a plan and a run script that writes JUnit XML and run logs), and **debug** a failing test: pause at the failed step, retry it, run one step or from a step
 - **Import and teams**: Excel/CSV manual test cases, Postman collections and OpenAPI descriptions become tests; `roles.yaml` says who edits, runs and approves, and runs on production can wait for an approval
 - **CI without the window**: `termwright tests run --junit junit.xml`, or `termwright tests serve` for the generated code; secrets from the credential store or `TERMWRIGHT_SECRET_…` variables
 - Usable from the AI assistant, MCP apps, the local REST API and Python
 
 ![Tests tab](docs/screenshots/tests.png)
+
+| ![Trends](docs/screenshots/tests-guide/28-trends.png) <br/>*Trends: pass rate per run, the tests that fail most, per software version* | ![Testbed](docs/screenshots/tests-guide/30-testbed.png) <br/>*A testbed: its devices under their folders, with type and model* |
+|---|---|
+| ![Testbed calendar](docs/screenshots/tests-guide/29-calendar.png) <br/>*Testbed calendar: who has which testbed when* | ![Export](docs/screenshots/tests-guide/32-export.png) <br/>*Export a suite that runs without Termwright: Python, Go or twrun* |
 
 Step by step with pictures: [Testing with Termwright](docs/TESTS_GUIDE.md).
 
@@ -151,6 +159,7 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
 
 ## Recent releases
 
+- **0.44** - tests that run **without Termwright**: standalone **Python** and **Go** suites and the **twrun** runner (devices from your sessions, no passwords in the suite); **web steps** with Playwright; **Spirent TestCenter and IxNetwork** traffic runs; **procedures**, CSV/Excel test data, **NETCONF**, breakpoints and step-through, checks over time, a table maker; reruns of flaky tests, timeouts, **Teams / e-mail** notifications, **PDF reports** and **trends**; a **testbed calendar** and device picker.
 - **0.43** - **Tests**: record, run and generate Go, Python and TCL code, with checks written from what you configured, suites, conditions and loops, parallel testbeds, history, qTest and Jira, Postman and OpenAPI import, team roles and approvals; SNMP **dashboards with alarms**, walk files and a **simulator**; API **mocks, monitors** and JSON Schema checks; the Network Map for **any vendor** with TextFSM templates.
 - **0.42** - the **SNMP Browser** (v1, v2c, v3, MIBs, walk, tables, polling, traps), a **REST API client** like Postman (collections, environments, scripts, tests, Postman and OpenAPI import) and a **syslog server**, all usable by the AI assistant; device types for **Huawei VRP**, **Eltex MES**, **Ruckus ICX** and **Cisco NX-OS**, and a **Detect** pattern per device type so Discover Devices recognises any vendor; a new 2-minute demo.
 - **0.41** - the **Network Map**: the real network drawn from your sessions (LLDP, CDP, EDP, STP, LAG, VLAN) in eight styles, live reading progress, cable and device details; the AI agent's fully autonomous mode asks only on production sessions.
@@ -444,6 +453,204 @@ flowchart TB
 - **Two engines on each host.** `tw-traffic.py` (Python) speaks the protocols and sends the streams. With the fast engine on, `tw-fast` - a small Go program Termwright copies to the host - sends and counts the streams in batches and hands every other frame to `tw-traffic.py`. That is about 100,000 or 420,000 frames per second per host ([benchmarks](docs/PERFORMANCE.md)).
 - **Across hosts** the streams travel over the lab's cables. Each frame carries its stream, sequence number and send time, so loss, order and latency are counted where it arrives, and Termwright adds up every host's counters.
 - **TRex** (optional) is for line rate: Termwright drives it through its JSON-RPC API, and its results appear with the rest in the same report.
+
+### Tests
+
+```mermaid
+flowchart TB
+  AIx["AI assistant / MCP apps<br/>write, run, explain tests"]
+  subgraph PC["Your computer - Termwright"]
+    Rec["Test recorder<br/>commands, API requests and SNMP<br/>become steps; checks verified"]
+    Ed["Tests tab<br/>steps · YAML · code · procedures<br/>testbeds · calendar · breakpoints"]
+    Run["Test runner<br/>setup · steps · cleanup · loops · data<br/>reruns · timeouts · restore"]
+    Drv["Step drivers<br/>SSH / Telnet · REST · SNMP · NETCONF<br/>traffic generators"]
+    Web["Playwright runner<br/>Node.js + Chromium"]
+    Out[("Reports<br/>HTML · PDF · JUnit · run logs · trends")]
+    Rec --> Ed --> Run
+    Run --> Drv
+    Run --> Web
+    Run --> Out
+  end
+  Folder[("Tests folder (Git)<br/>cases · procs · testbeds<br/>templates · bookings · roles")]
+  subgraph DUT["Under test"]
+    Dev["Devices<br/>switches, routers, servers"]
+    Api["REST APIs"]
+    Pages["Web pages<br/>device GUIs, portals"]
+    TG["Spirent TestCenter / IxNetwork<br/>chassis via REST API"]
+  end
+  subgraph Std["Exported suite - no Termwright needed"]
+    Py["Python suite<br/>unittest · twlocal · twprocs"]
+    GoS["Go suite<br/>go test · lib/standalone · twprocs"]
+    TwR["twrun<br/>the YAML tests as they are"]
+  end
+  CI["CI<br/>Jenkins, GitHub Actions…"]
+  Int["qTest · Jira<br/>Teams / e-mail"]
+  AIx -- "tests tool" --> Run
+  Ed <--> Folder
+  Drv -- "CLI · SNMP · NETCONF" --> Dev
+  Drv -- "HTTPS" --> Api
+  Web -- "browser" --> Pages
+  Out -- "results, defects" --> Int
+  Folder -- "Export Automation Suite<br/>inventory.yaml, no passwords" --> Std
+  Std --> DUT
+  CI -- "run.sh · twrun · go test" --> Std
+  Drv -- "REST API" --> TG
+  classDef tw fill:#1f3a5f,stroke:#58a6ff,stroke-width:2px,color:#eaf3ff
+  classDef ai fill:#4a1d3f,stroke:#db61a2,stroke-width:2px,color:#ffeaf6
+  classDef store fill:#4d3b0b,stroke:#e3b341,stroke-width:2px,color:#fff6dc
+  classDef engine fill:#173f2a,stroke:#3fb950,stroke-width:2px,color:#e6ffed
+  classDef qemu fill:#35255a,stroke:#a371f7,stroke-width:2px,color:#f1eaff
+  classDef dut fill:#5c1d22,stroke:#f85149,stroke-width:2px,color:#ffecec
+  classDef ext fill:#2d333b,stroke:#8b949e,stroke-width:2px,color:#f0f6fc
+  class Rec,Ed,Run,Drv tw
+  class Web qemu
+  class Out,Folder store
+  class Py,GoS,TwR engine
+  class Dev,Api,Pages,TG dut
+  class Int,CI ext
+  class AIx ai
+  style PC fill:#58a6ff14,stroke:#58a6ff,stroke-width:2px,stroke-dasharray:6 4
+  style Std fill:#3fb95014,stroke:#3fb950,stroke-width:2px,stroke-dasharray:6 4
+  style DUT fill:#f8514914,stroke:#f85149,stroke-width:2px,stroke-dasharray:6 4
+  linkStyle 0,1,2,4,6 stroke:#58a6ff,stroke-width:2px
+  linkStyle 5 stroke:#db61a2,stroke-width:2px
+  linkStyle 7,8 stroke:#f85149,stroke-width:2px
+  linkStyle 3,9 stroke:#a371f7,stroke-width:2px
+  linkStyle 10,13 stroke:#8b949e,stroke-width:2px
+  linkStyle 11,12 stroke:#3fb950,stroke-width:2px
+  linkStyle 14 stroke:#f0883e,stroke-width:2px
+```
+
+- **Record, then run.** Commands typed in terminal tabs, API Client requests and SNMP queries become steps; each check is tried on what the device showed before the test is saved. The **test runner** sends the steps through the same logins as the terminals, drives web pages with **Playwright** (Node.js and Chromium on this computer) and writes HTML, PDF and JUnit reports with each step's expected and found values.
+- **The tests folder is plain files** - YAML tests, procedures, testbeds, templates and bookings - so a team shares it with Git. qTest, Jira and Teams / e-mail get the results when you set them up.
+- **Exported suites run without Termwright**: Python or Go code with their own device library, or the YAML with **twrun**. They read the devices from `inventory.yaml` and the passwords from the environment, the keychain or a prompt - never from the suite - so CI runs them anywhere.
+
+### API Client
+
+```mermaid
+flowchart LR
+  subgraph PC["Your computer - Termwright"]
+    direction TB
+    AUI["API Client<br/>requests, collections, environments,<br/>auth, scripts, code snippets, history"]
+    AGo["Go backend<br/>variables, login / OAuth2 tokens,<br/>pre-request and test scripts (JavaScript)"]
+    Mock["Mock servers<br/>a collection's saved examples"]
+    Mon["Monitors<br/>collections on a schedule"]
+    Col[("Collections and environments<br/>Postman / OpenAPI import")]
+    Sec[("OS keychain<br/>API keys, tokens, secrets")]
+  end
+  Api["REST APIs<br/>devices, controllers, cloud"]
+  App["Front ends and tests<br/>under development"]
+  Tst["Test recorder<br/>requests become test steps"]
+  Note["Teams / e-mail<br/>monitor fails and recovers"]
+  AUI <--> AGo
+  AGo --- Col
+  AGo --- Sec
+  AGo -- "HTTPS (any certificate: per session)" --> Api
+  Mon --> AGo
+  App -- "HTTP, this computer" --> Mock
+  AGo -- "recorded requests" --> Tst
+  Mon -- "notifications" --> Note
+  classDef tw fill:#1f3a5f,stroke:#58a6ff,stroke-width:2px,color:#eaf3ff
+  classDef store fill:#4d3b0b,stroke:#e3b341,stroke-width:2px,color:#fff6dc
+  classDef engine fill:#173f2a,stroke:#3fb950,stroke-width:2px,color:#e6ffed
+  classDef dut fill:#5c1d22,stroke:#f85149,stroke-width:2px,color:#ffecec
+  classDef ext fill:#2d333b,stroke:#8b949e,stroke-width:2px,color:#f0f6fc
+  class AUI,AGo tw
+  class Mock,Mon engine
+  class Col,Sec store
+  class Api dut
+  class App,Tst,Note ext
+  style PC fill:#58a6ff14,stroke:#58a6ff,stroke-width:2px,stroke-dasharray:6 4
+  linkStyle 0,1,2,4 stroke:#58a6ff,stroke-width:2px
+  linkStyle 3 stroke:#f85149,stroke-width:2px
+  linkStyle 5,6,7 stroke:#8b949e,stroke-width:2px
+```
+
+- Requests go from the Go backend, with the session's variables, login (API key, bearer, login request, OAuth2) and its pre-request and test scripts. Secrets stay in the keychain. **Mock servers** answer with a collection's saved examples on this computer; **monitors** run collections on a schedule and say when they start failing and when they pass again.
+
+### SNMP Browser
+
+```mermaid
+flowchart LR
+  subgraph PC["Your computer - Termwright"]
+    direction TB
+    SUI["SNMP Browser<br/>MIB tree, get / walk / set, table view,<br/>compare, poll, history"]
+    SGo["Go SNMP engine<br/>v1 · v2c · v3 (USM: SHA-2, AES-256)<br/>MIB parser with the standard MIBs"]
+    Dash["Dashboards and alarms<br/>graphs, thresholds"]
+    Trap["Trap receiver<br/>v1 / v2c / v3 traps and informs"]
+    Sim["SNMP simulator<br/>an agent from a saved walk"]
+    MIBs[("MIBs<br/>built in + yours")]
+    Sec[("OS keychain<br/>communities, v3 passwords")]
+  end
+  Dev["Devices<br/>SNMP agents, UDP 161"]
+  NMS["Monitoring tools and tests<br/>that need an agent"]
+  Note["Teams / e-mail<br/>alarm starts"]
+  SUI <--> SGo
+  SGo --- MIBs
+  SGo --- Sec
+  SGo -- "get, getnext, bulk, walk, set (UDP 161)" --> Dev
+  Dash --> SGo
+  Dev -- "traps and informs (UDP 162)" --> Trap
+  NMS -- "UDP, this computer" --> Sim
+  Dash -- "notifications" --> Note
+  classDef tw fill:#1f3a5f,stroke:#58a6ff,stroke-width:2px,color:#eaf3ff
+  classDef store fill:#4d3b0b,stroke:#e3b341,stroke-width:2px,color:#fff6dc
+  classDef engine fill:#173f2a,stroke:#3fb950,stroke-width:2px,color:#e6ffed
+  classDef dut fill:#5c1d22,stroke:#f85149,stroke-width:2px,color:#ffecec
+  classDef ext fill:#2d333b,stroke:#8b949e,stroke-width:2px,color:#f0f6fc
+  class SUI,SGo tw
+  class Dash,Trap,Sim engine
+  class MIBs,Sec store
+  class Dev dut
+  class NMS,Note ext
+  style PC fill:#58a6ff14,stroke:#58a6ff,stroke-width:2px,stroke-dasharray:6 4
+  linkStyle 0,1,2,4 stroke:#58a6ff,stroke-width:2px
+  linkStyle 3,5 stroke:#f85149,stroke-width:2px
+  linkStyle 6,7 stroke:#8b949e,stroke-width:2px
+```
+
+- One SNMP engine for the browser, dashboards, the Network Map, tests and the AI tools: v1, v2c and v3 with SHA-2 and AES, and a MIB parser with the standard MIBs and yours. The **trap receiver** takes traps and informs; the **simulator** answers as an agent from a saved walk, for tools and tests without the device.
+
+### Syslog
+
+```mermaid
+flowchart LR
+  subgraph PC["Your computer - Termwright"]
+    direction TB
+    LUI["Syslog view<br/>cards by severity, search, filters"]
+    LGo["Syslog server (Go)<br/>RFC 3164 / 5424 parser"]
+    Al["Rules<br/>alerts on patterns"]
+    Files[("Saved files and exports")]
+  end
+  Dev["Devices<br/>send syslog"]
+  Tst["Tests<br/>watch for messages during a step"]
+  AIx["AI assistant / MCP apps<br/>syslog tool"]
+  Dev -- "UDP, TCP or TLS (RFC 5425)" --> LGo
+  LGo --> LUI
+  LGo --> Al
+  LGo --- Files
+  Tst -- "watch: expect / forbid messages" --> LGo
+  AIx -- "read and send messages" --> LGo
+  classDef tw fill:#1f3a5f,stroke:#58a6ff,stroke-width:2px,color:#eaf3ff
+  classDef ai fill:#4a1d3f,stroke:#db61a2,stroke-width:2px,color:#ffeaf6
+  classDef store fill:#4d3b0b,stroke:#e3b341,stroke-width:2px,color:#fff6dc
+  classDef engine fill:#173f2a,stroke:#3fb950,stroke-width:2px,color:#e6ffed
+  classDef dut fill:#5c1d22,stroke:#f85149,stroke-width:2px,color:#ffecec
+  classDef ext fill:#2d333b,stroke:#8b949e,stroke-width:2px,color:#f0f6fc
+  class LUI,LGo tw
+  class Al engine
+  class Files store
+  class Dev dut
+  class Tst ext
+  class AIx ai
+  style PC fill:#58a6ff14,stroke:#58a6ff,stroke-width:2px,stroke-dasharray:6 4
+  linkStyle 0 stroke:#f85149,stroke-width:2px
+  linkStyle 1,2,3 stroke:#58a6ff,stroke-width:2px
+  linkStyle 4 stroke:#8b949e,stroke-width:2px
+  linkStyle 5 stroke:#db61a2,stroke-width:2px
+```
+
+- The syslog server receives over UDP, TCP or TLS and reads RFC 3164 and RFC 5424 messages; the view shows them as cards by severity, rules raise alerts, and tests can wait for a message (or fail on one) while a step runs.
 
 ## Project structure
 
