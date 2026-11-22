@@ -2,7 +2,7 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
-## Unreleased
+## 0.44.0 (2026-11-22)
 
 - **Spirent TestCenter and IxNetwork**: + More → **Spirent / IxNetwork Traffic Run** - a test step that loads a saved configuration (STC .xml / .tcc, IxNetwork .ixncfg / .json), connects its ports to the chassis ports, starts the protocols if asked, sends traffic for N seconds and reads each stream's frames, loss and latency through the generator's REST API (STC REST API of a LabServer / REST server; IxNetwork API server, Linux or Windows). The result is JSON for checks such as `loss < 0.01` or `streams[0].latencyUs < 50`. Also in twrun and the standalone Go suite. JSON path checks take `<` and `>` too. Built from the documented REST APIs and tested against simulated servers - not yet against a real chassis.
 
