@@ -135,7 +135,7 @@ func New(t *testing.T, vars map[string]string) *T {
 		v[k] = x
 		explicit[k] = true
 	}
-	addPorts(v, explicit)
+	addPorts(v, explicit, vars)
 	addLinks(v)
 	c := &T{t: t, Vars: v}
 	if d := os.Getenv("TW_LOG_DIR"); d != "" {
@@ -1077,7 +1077,7 @@ var DeviceFacts func(session string) map[string]string
 // else 8) and {{role.ports}} (all of them) by its device type, as Termwright does - unless the testbed or
 // -tw.var sets them: a VOSS switch slot/1…, an EXOS stack slot:2… (then the next slot from port 1), a
 // standalone EXOS switch 2….
-func addPorts(v map[string]string, explicit map[string]bool) {
+func addPorts(v map[string]string, explicit map[string]bool, own map[string]string) {
 	if DeviceFacts == nil {
 		return
 	}
@@ -1118,6 +1118,15 @@ func addPorts(v map[string]string, explicit map[string]bool) {
 		if len(all) > 0 {
 			withPorts = append(withPorts, k)
 		}
+	}
+	if len(withPorts) > 1 { // a testbed with more devices than the test uses: the test's own device
+		var mine []string
+		for _, k := range withPorts {
+			if _, ok := own[k]; ok {
+				mine = append(mine, k)
+			}
+		}
+		withPorts = mine
 	}
 	if len(withPorts) == 1 { // one device: {{port1}} … and {{ports}} are its ports too
 		k := withPorts[0]

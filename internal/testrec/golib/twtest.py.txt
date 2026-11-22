@@ -112,7 +112,7 @@ def _vars(base):
         if k.startswith("TW_VAR_"):
             explicit[k[7:]] = x
     v.update(explicit)
-    _add_ports(v, explicit)
+    _add_ports(v, explicit, base or {})
     _add_links(v)
     return v
 
@@ -189,7 +189,7 @@ def _default_ports(device_type, stack, slot, n, slots):
     return out
 
 
-def _add_ports(v, explicit):
+def _add_ports(v, explicit, own=None):
     """{{role.port1}}...{{role.portN}} (N: role.port_count, else 8) and {{role.ports}} for each device role
     of inventory.yaml, by its device type - unless the testbed or TW_VAR_ sets them."""
     try:
@@ -220,6 +220,8 @@ def _add_ports(v, explicit):
             v[k + ".ports"] = ",".join(all_)
         if all_:
             with_ports.append(k)
+    if len(with_ports) > 1 and own is not None:  # a testbed with more devices than the test uses
+        with_ports = [k for k in with_ports if k in own]
     if len(with_ports) == 1:  # one device: {{port1}} ... and {{ports}} are its ports too
         k = with_ports[0]
         for key in list(v):

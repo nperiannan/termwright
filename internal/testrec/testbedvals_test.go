@@ -50,6 +50,13 @@ func TestFacts(t *testing.T) {
 	if v["dut.device_type"] != "kept" || v["x.device_type"] != "VOSS" || v["x.port1"] != "1/1" || v["port1"] != "1/1" || v["ports"] == "" {
 		t.Fatal(v)
 	}
+	// a testbed with more devices than the test uses: {{port1}} is the test's own device's
+	tb := map[string]string{"dut": "Lab/sw1", "other": "Lab/sw2"}
+	v = map[string]string{"dut": "Lab/sw1", "other": "Lab/sw2", "dut.port1": "7"}
+	addFacts(factDrv{&fake{}}, v, map[string]string{"dut.port1": "7", "dut": "Lab/sw1", "other": "Lab/sw2"}, caseRoles(Case{Vars: map[string]string{"dut": "x"}}))
+	if v["port1"] != "7" {
+		t.Fatal(v["port1"], tb)
+	}
 }
 
 func TestUsePortVars(t *testing.T) {

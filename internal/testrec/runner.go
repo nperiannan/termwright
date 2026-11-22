@@ -185,7 +185,7 @@ func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt 
 	for k, x := range vars {
 		v[k] = x
 	}
-	addFacts(d, v, vars)
+	addFacts(d, v, vars, caseRoles(c))
 	addLinks(v)
 	if why := unmet(c, v); why != "" { // the testbed does not have what the test needs
 		r.Passed, r.Skipped, r.Error = false, true, "skipped: "+why
@@ -1271,7 +1271,7 @@ type Facter interface {
 // addFacts gives each variable that is a saved session its facts as {{role.device_type}}, {{role.host}},
 // {{role.model}}, {{role.name}} and its ports {{role.port1}}…{{role.port8}} - unless the test, the
 // testbed or the run sets them.
-func addFacts(d Driver, v, explicit map[string]string) {
+func addFacts(d Driver, v, explicit map[string]string, own ...map[string]bool) {
 	f, ok := d.(Facter)
 	if !ok {
 		return
@@ -1301,9 +1301,38 @@ func addFacts(d Driver, v, explicit map[string]string) {
 			withPorts = append(withPorts, k)
 		}
 	}
+	if len(withPorts) > 1 && len(own) > 0 && own[0] != nil { // a testbed with more devices than the test uses
+		var mine []string
+		for _, k := range withPorts {
+			if own[0][k] {
+				mine = append(mine, k)
+			}
+		}
+		withPorts = mine
+	}
 	if len(withPorts) == 1 { // one device: {{port1}} … and {{ports}} are its ports too
 		aliasPorts(withPorts[0], v, explicit)
 	}
+}
+
+// caseRoles: the devices a test itself names - its own variables and the {{role}} its steps run on.
+func caseRoles(c Case) map[string]bool {
+	out := map[string]bool{}
+	for k := range c.Vars {
+		if !strings.Contains(k, ".") {
+			out[k] = true
+		}
+	}
+	for _, list := range [][]Step{c.Setup, c.Steps, c.Cleanup} {
+		for _, st := range list {
+			if st.Run != nil {
+				if r := strings.TrimSpace(st.Run.Session); strings.HasPrefix(r, "{{") && strings.HasSuffix(r, "}}") {
+					out[strings.TrimSpace(r[2:len(r)-2])] = true
+				}
+			}
+		}
+	}
+	return out
 }
 
 // aliasPorts makes a role's port variables also {{port1}}…, {{ports}} (a test with one device).
