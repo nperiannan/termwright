@@ -247,6 +247,7 @@ func (f Folder) DataRows(rel string) ([]map[string]string, error) {
 
 // Prepare makes a loaded test ready to run or to write as code: calls expanded, data rows as params.
 func (f Folder) Prepare(c Case) (Case, error) {
+	c = f.withSuite(c)
 	c, err := f.ExpandCalls(c)
 	if err != nil {
 		return c, err

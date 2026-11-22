@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Framework**: values and step options in `defaults.yaml` - for all tests (the tests folder) and for a suite (a folder of tests); the order is all tests, suite, test, testbed, run. Testbeds have a description, **tags** and **links** between devices (`dut.port1 - peer.port1` gives `{{dut.to.peer}}`, `{{peer.to.dut}}`, `{{dut.links.peer}}`); ports can have properties (`{{dut.port1.speed}}`). Tests can say what they need (`requires:` device type, stack, number of ports, model, testbed tags); a testbed without it skips the test with the reason. The same in twrun and exported Python and Go suites.
+
 - **A cleaner test editor**: **Devices** at the top - each device the test uses (`{{role}}` → its session, with Rename); with one device the steps no longer repeat it. **Step options** (timeout, wait, retry, go on when it fails, ignore device errors) are set once for the test; each step chooses **Default** (those), **Custom** (its own, shown only for that step) or **None**. If, parse, sample and "expected" are behind **⚙ More**, and checks are added with **+ check**. Setup, Steps and Cleanup are clearly marked panels with their counts. Also: *Ignore device errors* in the editor now takes effect (it was not saved where the run reads it).
 
 - **Cleanup undoes only what was configured**: a cleanup step that undoes a configuration command (by the device type's undo rules: `delete vlan v1000` for `create vlan v1000 …`) is skipped - "not needed" - when that command never took effect: the test failed before it, or the device refused it. Cleanup steps that match no configuration command still run.

@@ -406,9 +406,10 @@ type TestbedDevice struct {
 
 // TestbedPort is one of a device's port variables.
 type TestbedPort struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
-	Set   bool   `json:"set,omitempty"`
+	Name  string            `json:"name"`
+	Value string            `json:"value"`
+	Set   bool              `json:"set,omitempty"`
+	Props map[string]string `json:"props,omitempty"` // speed, to …
 }
 
 // portsOf: a device's port1…portN (N: role.port_count, else 8), the role's own values first, else the defaults of its device type.
@@ -447,8 +448,8 @@ func (a *App) TestbedDevices(file string) ([]TestbedDevice, error) {
 	used := testsRoleValues(f)
 	out := []TestbedDevice{}
 	for role, v := range m {
-		if r, _, ok := strings.Cut(role, "."); ok && m[r] != "" {
-			continue // a role's own value: listed with the role
+		if r, _, ok := strings.Cut(role, "."); ok && (m[r] != "" || r == "links" || r == "testbed") {
+			continue // a role's own value (listed with the role), a link or the testbed's tags
 		}
 		d := TestbedDevice{Role: role}
 		if s, err := a.store.Get(v); err == nil && v != "" {
@@ -460,7 +461,7 @@ func (a *App) TestbedDevices(file string) ([]TestbedDevice, error) {
 				d.Model = st["Model"]
 			}
 			for k, x := range m {
-				if r, key, ok := strings.Cut(k, "."); ok && r == role && key != "session" {
+				if r, key, ok := strings.Cut(k, "."); ok && r == role && key != "session" && !strings.Contains(key, ".") {
 					if d.Values == nil {
 						d.Values = map[string]string{}
 					}
@@ -472,6 +473,16 @@ func (a *App) TestbedDevices(file string) ([]TestbedDevice, error) {
 		}
 		if d.Session != "" {
 			d.Ports = a.portsOf(d.Session, d.DeviceType, d.Values)
+			for i := range d.Ports { // a port's own properties: role.port1.speed …
+				for k, x := range m {
+					if p, ok := strings.CutPrefix(k, role+"."+d.Ports[i].Name+"."); ok && p != "value" {
+						if d.Ports[i].Props == nil {
+							d.Ports[i].Props = map[string]string{}
+						}
+						d.Ports[i].Props[p] = x
+					}
+				}
+			}
 			for k := range d.Values {
 				if portVar.MatchString(k) || k == "port_count" || k == "ports" {
 					delete(d.Values, k)
@@ -925,4 +936,148 @@ func (a *App) TestsRoles(files []string) []TestRole {
 		}
 	}
 	return out
+}
+
+// TestbedMeta is what a testbed says about itself: its tags (tests can require them), its description and
+// the links between its devices ("dut.port1 - peer.port3").
+type TestbedMeta struct {
+	Tags        []string `json:"tags"`
+	Description string   `json:"description,omitempty"`
+	Links       []string `json:"links"`
+}
+
+// TestbedInfo reads a testbed's tags, description and links.
+func (a *App) TestbedInfo(file string) (TestbedMeta, error) {
+	out := TestbedMeta{Tags: []string{}, Links: []string{}}
+	f, err := a.testsFolder()
+	if err != nil {
+		return out, err
+	}
+	err = f.EditTestbed(file, func(m map[string]any) error {
+		for _, x := range asList(m["tags"]) {
+			out.Tags = append(out.Tags, x)
+		}
+		out.Links = append(out.Links, asList(m["links"])...)
+		if d, ok := m["description"].(string); ok {
+			out.Description = d
+		}
+		return errNoChange
+	})
+	if errors.Is(err, errNoChange) {
+		err = nil
+	}
+	return out, err
+}
+
+var errNoChange = errors.New("no change")
+
+func asList(v any) []string {
+	var out []string
+	if l, ok := v.([]any); ok {
+		for _, x := range l {
+			out = append(out, fmt.Sprint(x))
+		}
+	}
+	return out
+}
+
+// TestbedSetInfo writes a testbed's tags, description and links (links as "dut.port1 - peer.port3").
+func (a *App) TestbedSetInfo(file string, meta TestbedMeta) error {
+	f, err := a.testsFolder()
+	if err != nil {
+		return err
+	}
+	if err := mayEdit(f); err != nil {
+		return err
+	}
+	for _, l := range meta.Links {
+		if p := strings.Fields(strings.ReplaceAll(l, " - ", " ")); len(p) != 2 || !strings.Contains(p[0], ".") || !strings.Contains(p[1], ".") {
+			return fmt.Errorf("link %q: write it as role.port - role.port, e.g. dut.port1 - peer.port1", l)
+		}
+	}
+	return f.EditTestbed(file, func(m map[string]any) error {
+		set := func(k string, l []string) {
+			if len(l) == 0 {
+				delete(m, k)
+				return
+			}
+			x := make([]any, len(l))
+			for i, s := range l {
+				x[i] = s
+			}
+			m[k] = x
+		}
+		set("tags", meta.Tags)
+		set("links", meta.Links)
+		if strings.TrimSpace(meta.Description) == "" {
+			delete(m, "description")
+		} else {
+			m["description"] = strings.TrimSpace(meta.Description)
+		}
+		return nil
+	})
+}
+
+// TestbedSetPortProp sets a property of a device's test port (speed, to…); "" removes it.
+func (a *App) TestbedSetPortProp(file, role, port, key, value string) error {
+	f, err := a.testsFolder()
+	if err != nil {
+		return err
+	}
+	if err := mayEdit(f); err != nil {
+		return err
+	}
+	return f.EditTestbed(file, func(m map[string]any) error {
+		g, ok := m[role].(map[string]any)
+		if !ok {
+			if m[role] == nil {
+				return fmt.Errorf("no role %s", role)
+			}
+			g = map[string]any{"session": fmt.Sprint(m[role])}
+			m[role] = g
+		}
+		pm, ok := g[port].(map[string]any)
+		if !ok {
+			pm = map[string]any{}
+			if g[port] != nil {
+				pm["value"] = fmt.Sprint(g[port])
+			}
+		}
+		if value == "" {
+			delete(pm, key)
+		} else {
+			pm[key] = value
+		}
+		switch {
+		case len(pm) == 0:
+			delete(g, port)
+		case len(pm) == 1 && pm["value"] != nil:
+			g[port] = pm["value"]
+		default:
+			g[port] = pm
+		}
+		return nil
+	})
+}
+
+// TestsSuiteDefaults reads a folder's defaults.yaml ("" = the tests folder): values and step options for
+// every test in it and below.
+func (a *App) TestsSuiteDefaults(dir string) (testrec.Defaults, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return testrec.Defaults{}, err
+	}
+	return f.LoadSuiteDefaults(dir), nil
+}
+
+// TestsSaveSuiteDefaults writes a folder's defaults.yaml.
+func (a *App) TestsSaveSuiteDefaults(dir string, d testrec.Defaults) error {
+	f, err := a.testsFolder()
+	if err != nil {
+		return err
+	}
+	if err := mayEdit(f); err != nil {
+		return err
+	}
+	return f.SaveSuiteDefaults(dir, d)
 }

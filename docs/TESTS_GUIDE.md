@@ -162,6 +162,54 @@ devices can be renamed to match, or the Run panel maps them: choose a device of 
 test's devices and it is added to the testbed under the test's name. Testbeds are listed first in Run, and
 the last one used is chosen.
 
+### How the parts fit: the automation framework
+
+A test says **what** to do with names; a testbed says **which** real devices and ports those names are.
+Values come from five places; the later one wins:
+
+1. **All tests** - `defaults.yaml` in the tests folder
+2. **The suite** - `defaults.yaml` in a folder of tests (`cases/l2/defaults.yaml`), for every test in it and below
+3. **The test** - its own values and step options
+4. **The testbed** - its devices, their ports and values
+5. **The run** - what the Run panel changes
+
+A `defaults.yaml` holds values and step options:
+
+```yaml
+vars: { vlan: "200", site: lab }
+step_options: { timeout: 30, retry: { timeout: 60 } }
+```
+
+**Testbeds** describe themselves and how their devices are cabled:
+
+```yaml
+description: Two EXOS switches, stack + standalone
+tags: [exos, stack, l3]
+dut:
+  session: Discovered-10.127.34.x/EXOS/10.127.34.176
+  port1: { value: "1:2", speed: 10G }
+peer: Discovered-10.127.34.x/EXOS/10.127.34.72
+links:
+  - dut.port1 - peer.port1
+  - dut.port2 - peer.port2
+```
+
+A link gives `{{dut.to.peer}}` (dut's port facing peer), `{{peer.to.dut}}` and `{{dut.links.peer}}` (all of
+them, comma-separated) - so a LAG or routing test finds its ports on any testbed. A port can carry
+properties: `{{dut.port1.speed}}`.
+
+**Tests say what they need**, and a testbed that does not have it **skips** the test with the reason
+(it is not a failure):
+
+```yaml
+requires:
+  dut: { device_type: EXOS, stack: true, ports: 2, tags: [l3] }
+  peer: { ports: 1 }
+```
+
+Passwords and tokens are never values: they stay in the keychain (or `TW_PASSWORD_<NAME>`), whatever the
+testbed. Termwright, twrun and exported Python and Go suites all read the same files the same way.
+
 ## 10. Tables from command output
 
 `parse: auto` on a command step (or **⊞** while recording) turns its output into a table with a **TextFSM** template - the format of the community *ntc-templates*: put their files and their `index` into the tests folder's `templates/`. Built in: EXOS `show vlan`, VOSS `show vlan basic`, Cisco `show vlan brief` and `show interfaces status`. A **table** check tests one value of a row:

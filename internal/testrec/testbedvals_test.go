@@ -128,3 +128,43 @@ func TestStepDefaults(t *testing.T) {
 		t.Fatalf("%+v", s)
 	}
 }
+
+func TestFramework(t *testing.T) {
+	f := Folder{Root: t.TempDir()}
+	os.MkdirAll(filepath.Join(f.Root, "cases", "l2"), 0o755)
+	os.MkdirAll(filepath.Join(f.Root, "testbeds"), 0o755)
+	os.WriteFile(filepath.Join(f.Root, "defaults.yaml"), []byte("vars: {vlan: \"100\", site: lab}\nstep_options: {timeout: 30}\n"), 0o644)
+	os.WriteFile(filepath.Join(f.Root, "cases", "l2", "defaults.yaml"), []byte("vars: {vlan: \"200\"}\nstep_options: {retry: {timeout: 20}}\n"), 0o644)
+	os.WriteFile(filepath.Join(f.Root, "cases", "l2", "t.yaml"), []byte("name: t\nvars: {site: own}\nsteps:\n  - run: {session: s, command: \"show vlan {{vlan}}\"}\n"), 0o644)
+	if l := f.List(); len(l) != 1 {
+		t.Fatalf("defaults.yaml listed as a test: %+v", l)
+	}
+	c, err := f.Load("cases/l2/t.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pc, _ := f.Prepare(c)
+	if pc.Vars["vlan"] != "200" || pc.Vars["site"] != "own" || pc.Steps[0].Timeout != 30 || pc.Steps[0].Retry == nil || pc.Steps[0].Retry.Timeout != 20 {
+		t.Fatalf("%+v %+v", pc.Vars, pc.Steps[0])
+	}
+	os.WriteFile(filepath.Join(f.Root, "testbeds", "tb.yaml"), []byte("tags: [stack, l3]\ndut:\n  session: Lab/a\n  port1: {value: \"1:2\", speed: 10G}\npeer: Lab/b\nlinks:\n  - dut.port1 - peer.port3\n"), 0o644)
+	v, err := f.Testbed("tb.yaml")
+	if err != nil || v["dut.port1"] != "1:2" || v["dut.port1.speed"] != "10G" || v["testbed.tags"] != "stack,l3" {
+		t.Fatalf("%v %v", err, v)
+	}
+	v["peer.port3"] = "3"
+	addLinks(v)
+	if v["dut.to.peer"] != "1:2" || v["peer.to.dut"] != "3" || v["dut.links.peer"] != "1:2" {
+		t.Fatal(v)
+	}
+	yes := true
+	rc := Case{Requires: map[string]Requirement{"dut": {DeviceType: "EXOS", Stack: &yes, Ports: 2, Tags: []string{"l3"}}}}
+	w := map[string]string{"dut": "Lab/a", "dut.device_type": "EXOS", "dut.stack": "true", "dut.port1": "1:2", "dut.port2": "1:3", "testbed.tags": "stack,l3"}
+	if why := unmet(rc, w); why != "" {
+		t.Fatal(why)
+	}
+	w["dut.device_type"], w["dut.port2"] = "VOSS", ""
+	if why := unmet(rc, w); !strings.Contains(why, "not EXOS") || !strings.Contains(why, "1 test ports") {
+		t.Fatal(why)
+	}
+}

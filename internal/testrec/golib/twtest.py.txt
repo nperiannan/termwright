@@ -62,6 +62,12 @@ def read_testbed(path, out):
     with open(path) as f:
         for raw in f:
             line = raw.strip()
+            if line.startswith("- ") and stack:  # a list item: name.1, name.2 ...
+                n = 1
+                while "%s.%d" % (stack[-1][1], n) in out:
+                    n += 1
+                out["%s.%d" % (stack[-1][1], n)] = line[2:].strip().strip("\"'")
+                continue
             if not line or line.startswith("#") or ":" not in line:
                 continue
             indent = len(raw) - len(raw.lstrip(" \t"))
@@ -74,6 +80,23 @@ def read_testbed(path, out):
             v = v.split(" #", 1)[0].strip()
             if not v:
                 stack.append((indent, k))
+                continue
+            if v.startswith("[") and v.endswith("]"):  # [a, b]
+                items = [x.strip().strip("\"'") for x in v[1:-1].split(",") if x.strip()]
+                if k == "tags":
+                    out["testbed.tags"] = ",".join(items)
+                else:
+                    for i, x in enumerate(items):
+                        out["%s.%d" % (k, i + 1)] = x
+                continue
+            if v.startswith("{") and v.endswith("}"):  # {value: "1:2", speed: 10G}
+                for kv in v[1:-1].split(","):
+                    a, _, b = kv.partition(": ")
+                    a, b = a.strip().strip("\"'"), b.strip().strip("\"'")
+                    if a:
+                        out[k + "." + a] = b
+                        if a in ("value", "session"):
+                            out[k] = b
                 continue
             out[k] = v.strip("\"'")
             if k.endswith(".session"):  # role: {session: …, port: …}: {{role}} is its session
@@ -90,7 +113,51 @@ def _vars(base):
             explicit[k[7:]] = x
     v.update(explicit)
     _add_ports(v, explicit)
+    _add_links(v)
     return v
+
+
+def _add_links(v):
+    """For a testbed link "a.port1 - b.port3": {{a.to.b}} is a's port facing b, {{a.links.b}} all of them."""
+    for k in sorted(k for k in v if k.startswith("links.")):
+        parts = [e for e in v[k].replace(",", " ").split() if e not in ("-", "<->", "--")]
+        if len(parts) != 2 or "." not in parts[0] or "." not in parts[1]:
+            continue
+        (a, ap), (b, bp) = parts[0].split(".", 1), parts[1].split(".", 1)
+        for x, xp, y in ((a, ap, b), (b, bp, a)):
+            port = v.get(x + "." + xp) or xp
+            v.setdefault(x + ".to." + y, port)
+            lk = x + ".links." + y
+            if not v.get(lk):
+                v[lk] = port
+            elif port not in v[lk].split(","):
+                v[lk] += "," + port
+
+
+def _unmet(req, v):
+    """What a test needs (REQUIRES: role.device_type, .stack, .ports, .model, .tags) that this run's devices lack."""
+    miss = []
+    for k in sorted(req):
+        want = req[k]
+        r, _, what = k.partition(".")
+        if not v.get(r):
+            miss.append("no device for {{%s}}" % r)
+            continue
+        if what in ("device_type", "model") and want.lower() not in (v.get(r + "." + what) or "").lower():
+            miss.append("{{%s}} %s is not %s" % (r, what, want))
+        elif what == "stack" and (want == "true") != (v.get(r + ".stack") == "true" or bool(v.get(r + ".slot"))):
+            miss.append("{{%s}} stack is not %s" % (r, want))
+        elif what == "ports":
+            n = 0
+            while v.get("%s.port%d" % (r, n + 1)):
+                n += 1
+            if n < int(want):
+                miss.append("{{%s}} has %d test ports, the test needs %s" % (r, n, want))
+        elif what == "tags":
+            for t in want.split(","):
+                if t not in (v.get("testbed.tags") or "").split(","):
+                    miss.append("the testbed is not tagged " + t)
+    return "; ".join(dict.fromkeys(miss))
 
 
 def _default_ports(device_type, stack, slot, n, slots):
@@ -242,6 +309,9 @@ class Run:
     def __init__(self, tc, base):
         self.tc = tc
         self.vars = _vars(base)
+        why = _unmet(getattr(tc, "REQUIRES", None) or {}, self.vars)
+        if why:
+            tc.skipTest("skipped: " + why)
         self.stopped = False
         self.logf = _Log(tc.id())
         self._scopes = []

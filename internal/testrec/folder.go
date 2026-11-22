@@ -135,7 +135,8 @@ func (f Folder) List() []CaseInfo {
 
 func isCaseFile(p string) bool {
 	e := strings.ToLower(filepath.Ext(p))
-	return e == ".yaml" || e == ".yml"
+	b := strings.ToLower(filepath.Base(p))
+	return (e == ".yaml" || e == ".yml") && b != "defaults.yaml" && b != "defaults.yml"
 }
 
 // path makes rel a path inside the folder; a path leaving it is refused.
@@ -175,6 +176,7 @@ func (f Folder) Load(rel string) (Case, error) {
 	if c.Name == "" {
 		c.Name = strings.TrimSuffix(filepath.Base(p), filepath.Ext(p))
 	}
+	c.file = filepath.ToSlash(rel)
 	return c, nil
 }
 
@@ -729,6 +731,20 @@ func (f Folder) Testbed(rel string) (map[string]string, error) {
 			}
 			if s, ok := t["session"].(string); ok && prefix != "" { // role: {session: …, port: …}
 				out[prefix] = s
+			} else if x, ok := t["value"]; ok && prefix != "" { // port1: {value: "1:2", speed: 10G}
+				out[prefix] = fmt.Sprint(x)
+			}
+		case []any:
+			if prefix == "tags" { // the testbed's tags (tests can require them)
+				var tags []string
+				for _, x := range t {
+					tags = append(tags, fmt.Sprint(x))
+				}
+				out["testbed.tags"] = strings.Join(tags, ",")
+				return
+			}
+			for i, x := range t {
+				walk(prefix+"."+strconv.Itoa(i+1), x)
 			}
 		case nil:
 			out[prefix] = ""
@@ -889,7 +905,13 @@ func (f Folder) SetTestbedValue(rel, role, key, value string) error {
 			}
 			g = map[string]any{"session": roleSession(m[role])}
 		}
-		if value == "" {
+		if pm, ok := g[key].(map[string]any); ok { // a port with properties: its value
+			if value == "" {
+				delete(pm, "value")
+			} else {
+				pm["value"] = value
+			}
+		} else if value == "" {
 			delete(g, key)
 		} else {
 			g[key] = value

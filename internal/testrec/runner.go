@@ -186,6 +186,12 @@ func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt 
 		v[k] = x
 	}
 	addFacts(d, v, vars)
+	addLinks(v)
+	if why := unmet(c, v); why != "" { // the testbed does not have what the test needs
+		r.Passed, r.Skipped, r.Error = false, true, "skipped: "+why
+		r.Ms = time.Since(r.Start).Milliseconds()
+		return r
+	}
 	// restore: save the devices' state first; put it back after the cleanup
 	var restore func(context.Context) []StepResult
 	if len(c.Restore) > 0 {
