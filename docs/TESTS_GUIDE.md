@@ -112,6 +112,38 @@ A **testbed** maps the roles to sessions: the recorder saves sessions as roles (
 
 **Tags** (⋯ → Tags…) group tests across suites; the tag chips filter the list and *Run shown…* runs what is shown. A **plan** (`suites/<name>.yaml`: tests as files, suite folders or other plans, narrowed by tags) is a named set to run together; select tests and **Save as plan…**, then run it from **Plans** at the top of the list. `params: [{vlan: "42"}, {vlan: "100"}]` runs a test once per entry.
 
+### Values that differ per device (ports, slots, device types)
+
+A recorded test has the device's values in plain text: `configure vlan v1000 add ports 1:2 tagged` is right
+for a stack (slot:port, slots 1-8) but not for a standalone switch (port `2`) or a VOSS switch (`1/2`). Make
+them variables, set them per device in each testbed, and the same test runs on all of them:
+
+1. **Make a Variable**: in the test editor select `1:2` in a command and right-click → **Make a Variable
+   from "1:2"…**. Termwright suggests `stack_sw.port` (the step's role + `port`); it replaces `1:2` with
+   `{{stack_sw.port}}` in every command and check of the test, and keeps `1:2` as the test's default.
+2. **Set it per device**: open the testbed. Each device shows the values the tests use - `port not set`
+   (dashed) - and **+ Value**: click and type `2` for the standalone switch, `1:2` for the stack. In the file:
+
+   ```yaml
+   dut:
+     session: Discovered/10.127.34.176
+     port: "1:2"
+     slot: "1"
+   ```
+
+   A device without the value uses the test's default.
+3. **Facts come free**: every role that is a saved session also has `{{dut.device_type}}` (EXOS, VOSS…),
+   `{{dut.host}}`, `{{dut.model}}`, `{{dut.version}}` and `{{dut.name}}`.
+4. **Different commands per OS**: give the steps an **If**: `{{dut.device_type}} == VOSS` on the VOSS
+   commands, `{{dut.device_type}} == EXOS` on the EXOS ones (`!=`, `contains`, `~` regular expressions also
+   work). A stack-only step can use `{{dut.port}} contains :`.
+
+**Roles**: tests use the names they were recorded with (`{{stack_x440g2_24x_10g4_stack}}`), testbeds the
+ones they were made with (`dev_10_127_34_176`). Click a role in the testbed to rename it, or let the Run
+panel do it: with a testbed chosen it lists the test's devices and where each runs - choose a device of the
+testbed for each, and it is added to the testbed under the test's name. Testbeds are listed first in Run,
+and the last one used is chosen.
+
 ## 10. Tables from command output
 
 `parse: auto` on a command step (or **⊞** while recording) turns its output into a table with a **TextFSM** template - the format of the community *ntc-templates*: put their files and their `index` into the tests folder's `templates/`. Built in: EXOS `show vlan`, VOSS `show vlan basic`, Cisco `show vlan brief` and `show interfaces status`. A **table** check tests one value of a row:

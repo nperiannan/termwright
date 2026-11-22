@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"slices"
 	"sort"
 
 	"context"
@@ -395,6 +396,9 @@ type TestbedDevice struct {
 	Protocol   string `json:"protocol,omitempty"`
 	// Value: a value that is not a saved session (an address, a VLAN number…).
 	Value string `json:"value,omitempty"`
+	// Values: the role's own values ({{role.port}}); Wanted: the ones the tests use that it does not set.
+	Values map[string]string `json:"values,omitempty"`
+	Wanted []string          `json:"wanted,omitempty"`
 }
 
 // TestbedDevices lists a testbed's roles with their sessions (folder, name, address, device type, model).
@@ -408,8 +412,12 @@ func (a *App) TestbedDevices(file string) ([]TestbedDevice, error) {
 		return nil, err
 	}
 	facts := a.cfg.Get().DeviceFacts
+	used := testsRoleValues(f)
 	out := []TestbedDevice{}
 	for role, v := range m {
+		if r, _, ok := strings.Cut(role, "."); ok && m[r] != "" {
+			continue // a role's own value: listed with the role
+		}
 		d := TestbedDevice{Role: role}
 		if s, err := a.store.Get(v); err == nil && v != "" {
 			d.Session, d.Folder, d.Name, d.Host, d.DeviceType, d.Protocol = v, s.Folder, s.Name, s.Hostname, s.DeviceType, s.Protocol
@@ -419,9 +427,23 @@ func (a *App) TestbedDevices(file string) ([]TestbedDevice, error) {
 			if st := facts[v]; st != nil {
 				d.Model = st["Model"]
 			}
+			for k, x := range m {
+				if r, key, ok := strings.Cut(k, "."); ok && r == role && key != "session" {
+					if d.Values == nil {
+						d.Values = map[string]string{}
+					}
+					d.Values[key] = x
+				}
+			}
 		} else {
 			d.Value = v
 		}
+		for _, k := range used {
+			if r, key, _ := strings.Cut(k, "."); d.Session != "" && (r == role || r == "*") && d.Values[key] == "" && !slices.Contains(d.Wanted, key) {
+				d.Wanted = append(d.Wanted, key)
+			}
+		}
+		sort.Strings(d.Wanted)
 		out = append(out, d)
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -755,6 +777,108 @@ func (a *App) twrunBinaries(ctx context.Context, goos string) map[string][]byte 
 		}
 		if len(found) > 1<<20 {
 			out[name] = found
+		}
+	}
+	return out
+}
+
+var roleValueRe = regexp.MustCompile(`\{\{\s*([A-Za-z_][\w-]*)\.([A-Za-z_][\w-]*)\s*\}\}`)
+
+// factNames are the values every saved-session role has by itself.
+var factNames = map[string]bool{"device_type": true, "host": true, "model": true, "version": true, "name": true, "session": true}
+
+// testsRoleValues: the role values ({{role.key}}) the tests use, as "role.key".
+func testsRoleValues(f testrec.Folder) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, c := range f.List() {
+		b, err := os.ReadFile(filepath.Join(f.Root, filepath.FromSlash(c.File)))
+		if err != nil {
+			continue
+		}
+		for _, m := range roleValueRe.FindAllStringSubmatch(string(b), -1) {
+			if k := m[1] + "." + m[2]; !factNames[m[2]] && !seen[k] {
+				seen[k] = true
+				out = append(out, k)
+			}
+		}
+	}
+	return out
+}
+
+// TestbedSetRole makes a role of a testbed a saved session (a test's role mapped to a device).
+func (a *App) TestbedSetRole(file, role, sess string) error {
+	f, err := a.testsFolder()
+	if err != nil {
+		return err
+	}
+	if err := mayEdit(f); err != nil {
+		return err
+	}
+	if _, err := a.store.Get(sess); err != nil {
+		return fmt.Errorf("no saved session %s", sess)
+	}
+	return f.SetTestbedRole(file, role, sess)
+}
+
+// TestbedSetValue sets one of a role's values in a testbed ({{role.key}}, e.g. its port); "" removes it.
+func (a *App) TestbedSetValue(file, role, key, value string) error {
+	f, err := a.testsFolder()
+	if err != nil {
+		return err
+	}
+	if err := mayEdit(f); err != nil {
+		return err
+	}
+	return f.SetTestbedValue(file, role, key, value)
+}
+
+// TestbedRenameRole renames a role of a testbed.
+func (a *App) TestbedRenameRole(file, from, to string) error {
+	f, err := a.testsFolder()
+	if err != nil {
+		return err
+	}
+	if err := mayEdit(f); err != nil {
+		return err
+	}
+	return f.RenameTestbedRole(file, from, strings.TrimSpace(to))
+}
+
+// TestRole is a device a test uses: its role and the session it uses by default.
+type TestRole struct {
+	Role       string `json:"role"`
+	Session    string `json:"session"`
+	DeviceType string `json:"deviceType,omitempty"`
+}
+
+// TestsRoles lists the roles of tests: their variables that are saved sessions.
+func (a *App) TestsRoles(files []string) []TestRole {
+	f, err := a.testsFolder()
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	out := []TestRole{}
+	for _, file := range files {
+		c, err := f.Load(file)
+		if err != nil {
+			continue
+		}
+		keys := make([]string, 0, len(c.Vars))
+		for k := range c.Vars {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			v := c.Vars[k]
+			if seen[k] || strings.Contains(k, ".") {
+				continue
+			}
+			if s, err := a.store.Get(v); err == nil {
+				seen[k] = true
+				out = append(out, TestRole{Role: k, Session: v, DeviceType: s.DeviceType})
+			}
 		}
 	}
 	return out

@@ -185,6 +185,7 @@ func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt 
 	for k, x := range vars {
 		v[k] = x
 	}
+	addFacts(d, v)
 	// restore: save the devices' state first; put it back after the cleanup
 	var restore func(context.Context) []StepResult
 	if len(c.Restore) > 0 {
@@ -1244,4 +1245,33 @@ func TryChecks(expects []Expect, out string, status int, vars map[string]string)
 		res = append(res, check(e, out, status, 0, vars, nil))
 	}
 	return res
+}
+
+// Facter is a driver that knows a saved session's facts (device_type, host, model, name).
+type Facter interface {
+	Facts(session string) map[string]string
+}
+
+// addFacts gives each variable that is a saved session its facts as {{role.device_type}}, {{role.host}},
+// {{role.model}}, {{role.name}} - unless the test or the testbed sets them.
+func addFacts(d Driver, v map[string]string) {
+	f, ok := d.(Facter)
+	if !ok {
+		return
+	}
+	keys := make([]string, 0, len(v))
+	for k := range v {
+		keys = append(keys, k)
+	}
+	for _, k := range keys {
+		x := v[k]
+		if strings.Contains(k, ".") || x == "" || strings.Contains(x, "{{") {
+			continue
+		}
+		for fk, fv := range f.Facts(x) {
+			if _, set := v[k+"."+fk]; !set {
+				v[k+"."+fk] = fv
+			}
+		}
+	}
 }

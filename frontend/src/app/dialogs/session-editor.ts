@@ -6,7 +6,7 @@ import { askRef, isRef, refOf } from '../core/secret-ref';
 import { followJump } from '../core/jump-refs';
 import { Backend, errText } from '../core/backend';
 import { AuthMode, authModeOf, generateKeyFor, setAuthMode } from '../core/auth-mode';
-import { protoLabel, BAUD_RATES, CONSOLE_METHODS, EMULATIONS, FACT_EVERY, FactRule, LogonAction, PROTOCOLS, Session, SessionNode, SmartCardKey, defaultPort } from '../core/models';
+import { WebStatus, protoLabel, BAUD_RATES, CONSOLE_METHODS, EMULATIONS, FACT_EVERY, FactRule, LogonAction, PROTOCOLS, Session, SessionNode, SmartCardKey, defaultPort } from '../core/models';
 import { SCHEME_NAMES } from '../core/themes';
 import { Tabs } from '../core/tabs.service';
 import { envInfo, envList, envOf } from '../core/env';
@@ -300,9 +300,14 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   <div class="pair o5"><div class="f"><label>Browser</label><select name="webbr" [(ngModel)]="s.webBrowser"><option [ngValue]="undefined">Chromium</option><option value="firefox">Firefox</option><option value="webkit">WebKit (Safari)</option></select></div>
                     <div class="f"><label>Page size</label><input name="webvp" [(ngModel)]="s.webViewport" placeholder="1280x800" /></div></div>
                   <div class="f o5 wide"><label></label><label class="nowrap"><input type="checkbox" name="webins" [(ngModel)]="s.webInsecure" /> Self-signed certificate OK</label></div>
+                  @if (webStNow(); as ws) { @if (!ws.ready) {
+                    <div class="f o6 wide"><label>Playwright</label><div><div class="row"><span class="bad">{{ ws.node ? 'Not set up on this computer - needed to record and run web tests.' : 'Node.js is not installed: install it from nodejs.org (or brew install node) first.' }}</span><span class="sp"></span>
+                      @if (ws.node) { <button type="button" class="pri" (click)="webSetup()" [disabled]="webSetupBusy()">{{ webSetupBusy() ? 'Setting up…' : 'Set Up Playwright' }}</button> }</div>
+                      <div class="hint">{{ webSetupBusy() ? webSetupLine() : 'Once per computer: installs Playwright and its Chromium browser (about 150 MB).' }}</div></div></div>
+                  } }
                   <div class="f o6 wide"><label>Login</label>
                     <div><div class="row">@if (webLoginCount()) { <span class="ok">✓ recorded: {{ webLoginCount() }} actions</span> } @else { <span class="mut">not recorded - web steps start at the address as it is</span> }<span class="sp"></span>
-                      <button type="button" class="rec" (click)="webRecordLogin()" [disabled]="webBusy()">{{ webBusy() === 'rec' ? '● Recording… close the browser' : '● Record Login' }}</button>
+                      <button type="button" class="rec" (click)="webRecordLogin()" [disabled]="!!webBusy() || !webStNow()?.ready">{{ webBusy() === 'rec' ? '● Recording… close the browser' : '● Record Login' }}</button>
                       @if (webLoginCount()) { <button type="button" (click)="webTestLogin()" [disabled]="!!webBusy()">{{ webBusy() === 'test' ? 'Testing…' : 'Test Login' }}</button><button type="button" class="lnk" (click)="s.webLogin = ''" title="Forget the recorded login">Clear</button> }</div>
                       @if (webMsg(); as m) { <div [class.ok]="m.ok" [class.bad]="!m.ok" class="snmpmsg">{{ m.text }}</div> }
                       <div class="hint">Log in once in the browser that opens, then close it. Web steps with this app start logged in; when the login page shows again they log in by themselves. The password you type is never saved in the recording - it is the one above, in the keychain. Double-click the session to open the app, logged in.</div></div></div>
@@ -966,6 +971,21 @@ export class SessionEditor implements OnInit {
   // ---- web app: its recorded login ----
   readonly webBusy = signal<'' | 'rec' | 'test'>('');
   readonly webMsg = signal<{ ok: boolean; text: string } | null>(null);
+  readonly webSt = signal<WebStatus | null>(null);
+  readonly webSetupBusy = signal(false);
+  readonly webSetupLine = signal('');
+  private webStAsked = false;
+  webStNow() {
+    if (!this.webStAsked) { this.webStAsked = true; queueMicrotask(() => this.backend.webStatus().then(v => this.webSt.set(v)).catch(() => {})); }
+    return this.webSt();
+  }
+  async webSetup() {
+    this.webSetupBusy.set(true); this.webSetupLine.set('Starting…');
+    const off = this.backend.on('web:setup', (l: string) => this.webSetupLine.set(l));
+    try { await this.backend.webSetup(); this.webMsg.set({ ok: true, text: 'Playwright is ready - now Record Login.' }); }
+    catch (e) { this.webMsg.set({ ok: false, text: e instanceof Error ? e.message : String(e) }); }
+    finally { off(); this.webSetupBusy.set(false); this.webSt.set(await this.backend.webStatus().catch(() => null)); }
+  }
   webLoginCount() { try { return (JSON.parse(this.s?.webLogin || '[]') as unknown[]).length; } catch { return 0; } }
   async webRecordLogin() {
     if (!this.s) return;

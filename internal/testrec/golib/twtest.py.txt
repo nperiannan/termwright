@@ -76,6 +76,8 @@ def read_testbed(path, out):
                 stack.append((indent, k))
                 continue
             out[k] = v.strip("\"'")
+            if k.endswith(".session"):  # role: {session: …, port: …}: {{role}} is its session
+                out[k[:-len(".session")]] = out[k]
 
 
 def _vars(base):

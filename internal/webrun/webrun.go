@@ -156,7 +156,10 @@ type line struct {
 func (r Runner) start(ctx context.Context, job map[string]any) (*exec.Cmd, *bytes.Buffer, error) {
 	st := r.Status()
 	if st.Node == "" || !st.Ready {
-		return nil, nil, errors.New("web steps need Playwright: open a web step in the editor and click Set Up (" + st.Hint + ")")
+		if st.Node == "" {
+			return nil, nil, errors.New("web steps need Node.js: install it from nodejs.org (or brew install node), then click Set Up Playwright")
+		}
+		return nil, nil, errors.New("Playwright is not set up on this computer yet: click Set Up Playwright (it installs Playwright " + PlaywrightVersion + " and its Chromium once, about 150 MB)")
 	}
 	if err := os.WriteFile(filepath.Join(r.Dir, "runner.js"), runnerJS, 0o644); err != nil {
 		return nil, nil, err

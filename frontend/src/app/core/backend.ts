@@ -366,6 +366,10 @@ export class Backend {
   webDebugRestart() { return this.call<void>('WebDebugRestart'); }
   webDebugClose() { return this.call<void>('WebDebugClose'); }
   testsSaveWebBlock(name: string, description: string, acts: TestWebAction[]) { return this.call<string>('TestsSaveWebBlock', name, description, acts); }
+  testbedSetRole(file: string, role: string, session: string) { return this.call<void>('TestbedSetRole', file, role, session); }
+  testbedSetValue(file: string, role: string, key: string, value: string) { return this.call<void>('TestbedSetValue', file, role, key, value); }
+  testbedRenameRole(file: string, from: string, to: string) { return this.call<void>('TestbedRenameRole', file, from, to); }
+  testsRoles(files: string[]) { return this.call<{ role: string; session: string; deviceType?: string }[]>('TestsRoles', files); }
   testsImage(p: string) { return this.call<string>('TestsImage', p); }
   testsWebBlocks() { return this.call<TestProcInfo[]>('TestsWebBlocks'); }
   testStop() { return this.call<void>('TestStop'); }

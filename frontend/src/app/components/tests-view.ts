@@ -408,7 +408,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                         @for (s of listOf(d, ph.k); track $index; let i = $index; let lastI = $last) {
                           <div class="ed">
                             <div class="row"><b class="num">{{ i + 1 }}</b>
-                              @if (s.run) { <input class="ses" [(ngModel)]="s.run.session" placeholder="session" aria-label="Session" /><input class="cmdi" [(ngModel)]="s.run.command" placeholder="command" aria-label="Command" /> }
+                              @if (s.run) { <input class="ses" [(ngModel)]="s.run.session" placeholder="session" aria-label="Session" /><input class="cmdi" [(ngModel)]="s.run.command" placeholder="command" aria-label="Command" (contextmenu)="varMenu($event, s)" title="Select a part (a port, a VLAN…) and right-click: Make a Variable" /> }
                               @else if (s.http) { <input class="ses" [(ngModel)]="s.http.session" placeholder="API session (or a full URL)" aria-label="API session" /><select [(ngModel)]="s.http.method" aria-label="Method">@for (m of methods; track m) { <option [value]="m">{{ m }}</option> }</select><input class="cmdi" [(ngModel)]="s.http.url" placeholder="URL or /path" aria-label="URL" /> }
                               @else if (s.manual) { <span class="mut">manual</span><input class="cmdi" [(ngModel)]="s.manual.instruction" placeholder="what the person does or checks" aria-label="Instruction" /> }
                               @else if (s.upgrade) { <span class="mut">upgrade</span><input class="ses" [(ngModel)]="s.upgrade.session" placeholder="session" aria-label="Session" /><input class="cmdi" [(ngModel)]="s.upgrade.image" placeholder="image file or URL" aria-label="Image" /> }
@@ -614,11 +614,19 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                     <div class="tbg"><span class="fi"></span>{{ g.folder || 'Other values' }}<span class="mut">{{ g.items.length }}</span></div>
                     @for (d of g.items; track d.role) {
                       <div class="tbd" [class.val]="!d.session">
-                        <code class="dr">{{ d.role }}</code>
+                        <button type="button" class="lnk dr" (click)="renameRole(fp, d.role)" title="Rename the role - tests use {{ '{{' }}{{ d.role }}{{ '}}' }}"><code>{{ d.role }}</code></button>
                         @if (d.session) { <span class="dn ell" [title]="d.session">{{ d.name }}</span><span class="dh mut">{{ d.host }}</span><span class="dt">{{ d.deviceType || '-' }}</span><span class="dm mut ell">{{ d.model || '' }}</span> }
                         @else { <span class="dn ell">{{ d.value || '(empty)' }}</span><span class="dh mut">{{ d.value?.includes('/') ? 'not a saved session' : 'value' }}</span><span></span><span></span> }
                         <button type="button" class="lnk" (click)="removeRole(fp, d.role)" title="Take it out of the testbed">✕</button>
                       </div>
+                      @if (d.session) {
+                        <div class="tbvals">
+                          @for (kv of valuesOf(d); track kv.k) { <button type="button" class="chip" (click)="editValue(fp, d.role, kv.k, kv.v)" [title]="'Tests use {{' + d.role + '.' + kv.k + '}} - click to change'"><code>{{ kv.k }}</code> {{ kv.v }}</button> }
+                          @for (k of d.wanted ?? []; track k) { <button type="button" class="chip want" (click)="editValue(fp, d.role, k, '')" [title]="'The tests use {{' + d.role + '.' + k + '}} - set it for this device (else the default of the test is used)'"><code>{{ k }}</code> not set</button> }
+                          <button type="button" class="lnk" (click)="editValue(fp, d.role, '', '')" title="A value of this device for the tests, e.g. port = 1:2 or 1">+ Value</button>
+                          <span class="mut">also {{ '{{' }}{{ d.role }}.device_type{{ '}}' }}, .host, .model by themselves</span>
+                        </div>
+                      }
                     }
                   } @empty { <div class="empty mut">No roles yet: + Add Devices.</div> }
                 </div>
@@ -651,7 +659,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
           <datalist id="twsuites">@for (x of suiteDirs(); track x) { <option [value]="x"></option> }</datalist>
           <span class="mut">The browser opens logged in. Use the app as usual; Alt+click a text to check it shows. Close the window to finish - the test opens in the editor to look over and save.</span>
           <div class="row"><span class="sp"></span><button type="button" (click)="webRecDlg.set(null)">Cancel</button><button type="button" class="pri" (click)="startWebRec()" [disabled]="!wr.app || !wr.name.trim() || !webSt()?.ready">● Start Recording</button></div>
-          @if (webSt(); as ws) { @if (!ws.ready) { <span class="mut">{{ ws.hint }}</span> } }
+          @if (webSt(); as ws) { @if (!ws.ready) { <div class="row webst"><span>🌐 {{ ws.node ? 'Playwright is not set up on this computer yet.' : 'Node.js is not installed: install it from nodejs.org (or brew install node) first.' }}</span><span class="sp"></span>@if (ws.node) { <button type="button" class="pri" (click)="webSetup()" [disabled]="webBusy()">{{ webBusy() ? 'Setting up…' : 'Set Up Playwright' }}</button> }</div>@if (webBusy()) { <code class="mut">{{ webLine() }}</code> } } }
         </div>
       }
       @if (tbPick()) {
@@ -776,8 +784,20 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
           <h2>Run {{ runLabel() }}</h2>
           <span class="mut">{{ rf.length ? rf.length + (rf.length === 1 ? ' test' : ' tests') : 'every test in the folder' }}</span>
           @if (!multi()) {
-            <label class="fld"><span>Testbed - which devices</span><select [(ngModel)]="testbed"><option value="">The tests' own sessions</option>@for (b of tree()?.testbeds ?? []; track b) { <option [value]="b">{{ base(b) }}{{ lockText(b) }}</option> }</select>
+            <label class="fld"><span>Testbed - which devices</span><select [(ngModel)]="testbed" (ngModelChange)="loadRunMap()">@for (b of tree()?.testbeds ?? []; track b) { <option [value]="b">{{ base(b) }}{{ lockText(b) }}</option> }<option value="">The tests' own sessions</option></select>
               @if (testbed) { <small class="mut">{{ lockOf(testbed) && !lockOf(testbed)!.mine ? '🔒 in use by ' + lockOf(testbed)!.user + ' on ' + lockOf(testbed)!.host + ' - Run takes it over after asking' : '🔒 free - locked to you while the run lasts' }}</small> }</label>
+            @if (testbed && runRoles().length) {
+              <div class="fld rmap"><span>The test's devices on {{ base(testbed) }}</span>
+                @for (r of runRoles(); track r.role) {
+                  <div class="row"><code class="ell" [title]="'{{' + r.role + '}} - ' + r.session">{{ r.role }}</code><span class="mut">→</span>
+                    <select [ngModel]="runMapOf(r.role)" (ngModelChange)="mapRole(r.role, $event)" [class.miss]="!runMapOf(r.role)">
+                      <option value="">its own: {{ r.session.split('/').pop() }}</option>
+                      @for (d of runTbDevs(); track d.role) { @if (d.session) { <option [value]="d.session">{{ d.name }} ({{ d.role }}{{ d.deviceType ? ', ' + d.deviceType : '' }})</option> } }
+                    </select></div>
+                }
+                <small class="mut">A test's device not in the testbed runs on its own session. Choosing a device here adds it to the testbed under the test's name.</small>
+              </div>
+            }
             @if ((tree()?.testbeds?.length ?? 0) > 1) { <button type="button" class="lnk sm" (click)="multi.set(true); multiPick = testbed ? [testbed] : []">Run on several testbeds at the same time…</button> }
           } @else {
             <div class="fld"><span>Testbeds - each runs the tests at the same time</span>
@@ -879,6 +899,8 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
     .tbcol .fpick { flex: 1; max-height: none; } .tbbar { gap: 6px; } .tbname { display: flex !important; flex-direction: row !important; align-items: center; gap: 8px; max-width: 380px; } .tbname span { white-space: nowrap; }
     .dg, .tbg { display: flex; align-items: center; gap: 8px; padding: 7px 10px 4px; font-weight: 600; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .tbg { color: var(--text); font-size: 12.5px; padding-top: 12px; } .tbg .mut { font-weight: 400; }
     .dv, .tbd { display: grid; grid-template-columns: 18px minmax(120px, 1.4fr) 120px 90px minmax(80px, 1fr) minmax(110px, auto); align-items: center; gap: 10px; padding: 5px 10px 5px 28px; font-size: 12.5px; border-radius: 6px; cursor: pointer; }
+    .rmap .row { display: flex; gap: 6px; align-items: center; } .rmap code { max-width: 45%; } .rmap select { flex: 1; min-width: 0; } .rmap select.miss { border-color: #d29922; }
+    .tbvals { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 0 10px 8px 46px; font-size: 12px; } .tbvals .chip { border: 1px solid var(--border); background: none; border-radius: 10px; padding: 1px 8px; cursor: pointer; } .tbvals .chip.want { border-style: dashed; color: var(--muted); } button.dr { text-align: left; padding: 0; }
     .tbd { grid-template-columns: minmax(130px, auto) minmax(120px, 1.4fr) 120px 90px minmax(80px, 1fr) 24px; cursor: default; } .dv:hover, .tbd:hover { background: var(--hover); } .dv.on { background: color-mix(in srgb, var(--accent) 12%, transparent); } .dv.had { opacity: .6; }
     .dr { font: 11.5px var(--mono, monospace) !important; color: var(--muted) !important; background: none !important; padding: 0 !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .dt { font-size: 11.5px; } .tbd.val .dn { font-family: var(--mono, monospace); }
     .tbv { border: 1px solid var(--border); border-radius: 8px; padding: 4px 0 8px; overflow: auto; } .tbvbar { margin-bottom: 8px; gap: 6px; }
@@ -1561,6 +1583,52 @@ export class TestsView implements OnInit, OnDestroy {
     for (const d of this.tbDevs()) by.set(d.session ? d.folder ?? '' : '', [...(by.get(d.session ? d.folder ?? '' : '') ?? []), d]);
     return [...by.entries()].sort((a, b) => (a[0] === '' ? 1 : b[0] === '' ? -1 : a[0].localeCompare(b[0]))).map(([folder, items]) => ({ folder, items }));
   }
+  // ---- Make a Variable: a selected part of a command becomes {{name}} everywhere in the test ----
+  varMenu(ev: MouseEvent, s: TestStep) {
+    const el = ev.target as HTMLInputElement;
+    const text = (el.value ?? '').slice(el.selectionStart ?? 0, el.selectionEnd ?? 0).trim();
+    if (!text || text.includes('{{')) return;
+    ev.preventDefault();
+    this.ui.showMenu(ev, [{ label: tr('Make a Variable from "{0}"…', text.length > 30 ? text.slice(0, 30) + '…' : text), action: () => void this.makeVar(s, text) }]);
+  }
+  async makeVar(s: TestStep, text: string) {
+    const d = this.draft(); if (!d) return;
+    const role = /^\{\{\s*([\w-]+)\s*\}\}$/.exec(s.run?.session ?? '')?.[1];
+    const kind = /^\d+(:\d+)?([,-]\d+(:\d+)?)*$/.test(text) ? (text.includes(',') || text.includes('-') ? 'ports' : 'port') : /^\d{1,4}$/.test(text) ? 'vlan' : 'value';
+    const sugg = role ? role + '.' + kind : kind;
+    const name = (await this.ui.input(tr('Make a Variable'), tr('"{0}" becomes {{name}} in every step of the test, with "{0}" as its default. A name like {1} is a value of that device: each testbed can set its own (e.g. 1:2 on a stack, 2 on a standalone switch).', text, sugg), sugg))?.trim();
+    if (!name || !/^[A-Za-z_][\w.-]*$/.test(name)) return;
+    const esc = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp('(?<![\\w:/.-])' + esc + '(?![\\w:/-])', 'g');
+    let n = 0;
+    const sub = (v?: string) => { if (!v) return v; const out = v.replace(re, () => { n++; return '{{' + name + '}}'; }); return out; };
+    for (const st of [...(d.setup ?? []), ...(d.steps ?? []), ...(d.cleanup ?? [])]) {
+      if (st.run) st.run.command = sub(st.run.command) ?? '';
+      for (const e of st.expect ?? []) { e.contains = sub(e.contains); e.notContains = sub(e.notContains); e.equals = sub(e.equals); e.notEquals = sub(e.notEquals); }
+    }
+    d.vars = { ...(d.vars ?? {}), [name]: text };
+    this.touch();
+    this.ui.toast(tr('{{{0}}} in {1} places - default "{2}". Set it per device in the testbed.', name, n, text), 'success');
+  }
+  valuesOf(d: TestbedDevice) { return Object.entries(d.values ?? {}).sort().map(([k, v]) => ({ k, v })); }
+  async renameRole(fp: string, role: string) {
+    const to = (await this.ui.input(tr('Rename the Role'), tr('Tests use {{role}}: give it the name the tests use, e.g. dut or core.'), role))?.trim();
+    if (!to || to === role) return;
+    try { await this.backend.testbedRenameRole(fp, role, to); await this.openFile(fp); } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  async editValue(fp: string, role: string, key: string, cur: string) {
+    if (!key) {
+      const kv = await this.ui.input(tr('A Value of {0}', role), tr('name = value, e.g. port = 1:2 (a stack) or port = 1 (a standalone switch). Tests use {{{0}.port}}.', role), '');
+      if (!kv?.includes('=')) return;
+      key = kv.split('=')[0].trim(); cur = kv.slice(kv.indexOf('=') + 1).trim();
+      if (!key) return;
+    } else {
+      const v = await this.ui.input(tr('{0}.{1}', role, key), tr('The value for this device (empty: remove it).'), cur);
+      if (v === null || v === undefined) return;
+      cur = v.trim();
+    }
+    try { await this.backend.testbedSetValue(fp, role, key, cur); await this.openFile(fp); } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
   async removeRole(fp: string, role: string) {
     try { await this.backend.testbedChange(fp, [], [role]); await this.openFile(fp); } catch (e) { this.ui.toast(errText(e), 'error'); }
   }
@@ -1729,7 +1797,27 @@ export class TestsView implements OnInit, OnDestroy {
   target(s: TestStep) { return s.run?.session ?? s.http?.session ?? s.snmp?.session ?? ''; }
   shortDev(t: string) { return t.replace(/^\{\{\s*|\s*\}\}$/g, '').split('/').pop() ?? t; }
   runHint() { const v = this.view(); return v === 'go' ? 'Run: go test ./cases/...' : v === 'py' ? 'Run: python lib/python/run_tests.py' : v === 'tcl' ? 'Run: tclsh lib/tcl/run_tests.tcl' : ''; }
-  openRun(files: string[], label: string) { this.runFiles.set(files); this.runLabel.set(label); }
+  openRun(files: string[], label: string) {
+    this.runFiles.set(files); this.runLabel.set(label);
+    const tbs = this.tree()?.testbeds ?? [];
+    let last = ''; try { last = localStorage.getItem('tw.tests.testbed') ?? ''; } catch { /* none */ }
+    if (!tbs.includes(this.testbed)) this.testbed = tbs.includes(last) ? last : (tbs[0] ?? '');
+    this.runRoles.set([]);
+    if (files.length) void this.backend.testsRoles(files).then(r => this.runRoles.set(r ?? [])).catch(() => {});
+    void this.loadRunMap();
+  }
+  readonly runRoles = signal<{ role: string; session: string; deviceType?: string }[]>([]);
+  readonly runTbDevs = signal<TestbedDevice[]>([]);
+  async loadRunMap() {
+    try { localStorage.setItem('tw.tests.testbed', this.testbed); } catch { /* not kept */ }
+    this.runTbDevs.set(this.testbed ? (await this.backend.testbedDevices(this.testbed).catch(() => []) ?? []) : []);
+  }
+  runMapOf(role: string) { return this.runTbDevs().find(d => d.role === role)?.session ?? ''; }
+  async mapRole(role: string, session: string) {
+    if (!session) { await this.backend.testbedChange(this.testbed, [], [role]).catch(e => this.ui.toast(errText(e), 'error')); }
+    else { try { await this.backend.testbedSetRole(this.testbed, role, session); this.ui.toast(tr('{0} is {1} in {2}', role, session.split('/').pop() ?? '', this.base(this.testbed)), 'success'); } catch (e) { this.ui.toast(errText(e), 'error'); } }
+    await this.loadRunMap();
+  }
   readonly multi = signal(false);
   multiPick: string[] = [];
   toggleMulti(b: string) { this.multiPick = this.multiPick.includes(b) ? this.multiPick.filter(x => x !== b) : [...this.multiPick, b]; }

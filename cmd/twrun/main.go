@@ -298,3 +298,16 @@ func (d *driver) DeviceError(session, output string) string { return d.e.DeviceE
 func (d *driver) TGen(ctx context.Context, t testrec.TGenStep) (string, error) {
 	return d.e.TGen(ctx, standalone.TGenStep{Kind: t.Kind, Server: t.Server, Config: t.Config, Ports: t.Ports, Duration: t.Duration, Protocols: t.Protocols, Settle: t.Settle, Session: t.Session})
 }
+
+// Facts are an inventory device's facts for {{role.device_type}} and {{role.host}}.
+func (d *driver) Facts(session string) map[string]string {
+	dv, err := d.e.Device(session)
+	if err != nil {
+		return nil
+	}
+	h := dv.Host
+	if dv.WebURL != "" {
+		h = dv.WebURL
+	}
+	return map[string]string{"device_type": dv.DeviceType, "host": h, "name": session[strings.LastIndex(session, "/")+1:]}
+}

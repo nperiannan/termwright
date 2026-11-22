@@ -38,7 +38,8 @@ Web steps need **Node.js** (18 or later) on the computer that runs the tests.
 1. Install Node.js from [nodejs.org](https://nodejs.org) (macOS: `brew install node`).
 2. In Termwright open **Tests**, click **Record a Web Test** (or add a step with **+ More ▾ → Web Page
    (Playwright)**).
-3. If it says *Playwright is not set up on this computer*, click **Set Up Playwright**. It installs
+3. If it says *Playwright is not set up on this computer*, click **Set Up Playwright** - the button is
+   in the web app session (next to Login), in **Record a Web Test** and in every web step. It installs
    Playwright and its Chromium browser in Termwright's data folder (about 150 MB, once).
 
 ## 2. Save the web app as a session

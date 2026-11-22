@@ -219,6 +219,9 @@ func readTestbed(sc *bufio.Scanner, v map[string]string) {
 			continue
 		}
 		v[k] = strings.Trim(x, `"'`)
+		if r, ok := strings.CutSuffix(k, ".session"); ok { // role: {session: …, port: …}: {{role}} is its session
+			v[r] = v[k]
+		}
 	}
 }
 

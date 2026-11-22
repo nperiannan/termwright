@@ -329,3 +329,20 @@ func (a *App) TestsImage(p string) (string, error) {
 	}
 	return "data:" + mt + ";base64," + base64.StdEncoding.EncodeToString(b), nil
 }
+
+// Facts are a saved session's facts for {{role.device_type}}, {{role.host}}, {{role.model}}, {{role.version}}
+// and {{role.name}} in tests.
+func (d *testDriver) Facts(path string) map[string]string {
+	s, err := d.a.store.Get(path)
+	if err != nil {
+		return nil
+	}
+	out := map[string]string{"device_type": s.DeviceType, "host": s.Hostname, "name": s.Name}
+	if s.Protocol == session.ProtoWeb {
+		out["host"] = s.WebURL
+	}
+	if st := d.a.cfg.Get().DeviceFacts[path]; st != nil {
+		out["model"], out["version"] = st["Model"], st["Version"]
+	}
+	return out
+}
