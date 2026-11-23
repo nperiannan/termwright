@@ -72,7 +72,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                     <button type="button" class="recb" (click)="recordMore()"><i class="rdot"></i>Record a Test</button>
                     <button type="button" (click)="importManual()">Import Test Cases…</button>
                     <button type="button" (click)="writeWithAI()">✦ Write a Test with AI</button>
-                    <span class="mut">Import reads your test case sheet (Excel or CSV): Suite, Test, Step, Device, Expected.</span>
+                    <span class="mut">Import reads your test case sheet (Excel or CSV): Suite, Test, Step, Device, Expected - and Type web for web actions on a web app (click text=Log In, fill label=Email = {{ '{{' }}email{{ '}}' }}, expect Networks).</span>
                   </div>
                 } @else { <div class="empty-s">No tests match.</div> }
               }
@@ -809,8 +809,9 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
           <h3>Export Automation Suite</h3>
           <span class="mut">A zip with the tests and their code, the procedures, the library, the testbeds, a plan and a run script that writes JUnit XML and each test's run log.</span>
           <div class="fld"><span>How it runs</span>
-            <label class="radio" [class.on]="x.standalone && x.lang !== 'runner'"><input type="radio" name="twsa" [checked]="x.standalone && x.lang !== 'runner'" (change)="expMode(x, 'code')" /><span>On its own, as code - Termwright is not needed<small>Python or Go tests with a library that logs in to the devices itself (SSH, Telnet, REST APIs, SNMP, NETCONF, web pages). Procedures become functions you can call.</small></span></label>
+            <label class="radio" [class.on]="x.standalone && x.lang !== 'runner' && x.lang !== 'playwright'"><input type="radio" name="twsa" [checked]="x.standalone && x.lang !== 'runner' && x.lang !== 'playwright'" (change)="expMode(x, 'code')" /><span>On its own, as code - Termwright is not needed<small>Python or Go tests with a library that logs in to the devices itself (SSH, Telnet, REST APIs, SNMP, NETCONF, web pages). Procedures become functions you can call.</small></span></label>
             <label class="radio" [class.on]="x.lang === 'runner'"><input type="radio" name="twsa" [checked]="x.lang === 'runner'" (change)="expMode(x, 'runner')" /><span>On its own, with the twrun program - no code<small>The YAML tests and twrun for the chosen system: the same runs, reports, procedures, reruns and timeouts as in Termwright.</small></span></label>
+            <label class="radio" [class.on]="x.lang === 'playwright'"><input type="radio" name="twsa" [checked]="x.lang === 'playwright'" (change)="expMode(x, 'playwright')" /><span>Playwright tests (TypeScript) - the web steps<small>A Playwright Test project: each test's web steps as Playwright code you can read and change, the web apps' logins, test data rows. Run with <code>npx playwright test</code>; other steps are comments.</small></span></label>
             <label class="radio" [class.on]="!x.standalone"><input type="radio" name="twsa" [checked]="!x.standalone" (change)="expMode(x, 'termwright')" /><span>Through Termwright<small>Python, Go or TCL whose steps go through the app, or <code>termwright tests serve</code> on a server, which logs in with the saved sessions.</small></span></label>
             <small class="mut">Devices come from your sessions as inventory.yaml; passwords are never in the zip - environment variables (TW_PASSWORD…), the system keyring or a prompt.</small>
           </div>
@@ -819,9 +820,9 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
             @if (sel()) { <option value="sel">This test ({{ base(sel()) }})</option> }
             @for (p of tree()?.suites ?? []; track p.file) { <option [value]="p.file">Plan: {{ p.name }}</option> }
             <option value="all">Every test in the folder</option></select></label>
-          @if (x.lang !== 'runner') { <div class="segs"><span class="mut">Language</span>@for (l of (x.standalone ? ['python', 'go'] : ['python', 'go', 'tcl']); track l) { <button type="button" [class.on]="x.lang === l" (click)="x.lang = l">{{ l === 'python' ? 'Python' : l === 'go' ? 'Go' : 'TCL' }}</button> }</div> }
+          @if (x.lang !== 'runner' && x.lang !== 'playwright') { <div class="segs"><span class="mut">Language</span>@for (l of (x.standalone ? ['python', 'go'] : ['python', 'go', 'tcl']); track l) { <button type="button" [class.on]="x.lang === l" (click)="x.lang = l">{{ l === 'python' ? 'Python' : l === 'go' ? 'Go' : 'TCL' }}</button> }</div> }
           <div class="segs"><span class="mut">Runs on</span>@for (o of ['linux', 'mac', 'windows']; track o) { <button type="button" [class.on]="x.os === o" (click)="x.os = o">{{ o === 'mac' ? 'macOS' : o === 'linux' ? 'Linux' : 'Windows' }}</button> }</div>
-          <label class="fld"><span>Testbed - the devices it runs on by default</span><select [(ngModel)]="x.testbed"><option value="">The tests' own sessions</option>@for (b of tree()?.testbeds ?? []; track b) { <option [value]="b">{{ base(b) }}</option> }</select></label>
+          @if (x.lang !== 'playwright') { <label class="fld"><span>Testbed - the devices it runs on by default</span><select [(ngModel)]="x.testbed"><option value="">The tests' own sessions</option>@for (b of tree()?.testbeds ?? []; track b) { <option [value]="b">{{ base(b) }}</option> }</select></label> }
           <label class="fld"><span>Suite name</span><input [(ngModel)]="x.name" /></label>
           <div class="row"><span class="sp"></span><button type="button" (click)="exp.set(null)">Cancel</button><button type="button" class="savb" (click)="doExport()">Export…</button></div>
         </div>
@@ -1552,10 +1553,10 @@ export class TestsView implements OnInit, OnDestroy {
       this.ui.toast(tr('Wrote {0}', rel), 'success'); await this.load(); this.section.set('testbeds'); void this.openFile(rel);
     } catch (e) { this.ui.toast(errText(e), 'error'); }
   }
-  expMode(x: { lang: string; standalone: boolean }, m: 'code' | 'runner' | 'termwright') {
+  expMode(x: { lang: string; standalone: boolean }, m: 'code' | 'runner' | 'termwright' | 'playwright') {
     x.standalone = m !== 'termwright';
-    if (m === 'runner') x.lang = 'runner';
-    else if (x.lang === 'runner' || (m === 'code' && x.lang === 'tcl')) x.lang = 'python';
+    if (m === 'runner' || m === 'playwright') x.lang = m;
+    else if (x.lang === 'runner' || x.lang === 'playwright' || (m === 'code' && x.lang === 'tcl')) x.lang = 'python';
   }
   readonly exp = signal<{ what: string; lang: string; os: string; testbed: string; name: string; standalone: boolean } | null>(null);
   openExport() {
@@ -2654,7 +2655,7 @@ export class TestsView implements OnInit, OnDestroy {
     try { this.logView.set({ title, file, text: await this.backend.testFile(file) }); } catch (e) { this.ui.toast(errText(e), 'error'); }
   }
   async importManual() {
-    const dev = await this.ui.input(tr('Import Test Cases'), tr('Excel or CSV: the session for steps without a Device column (empty: such steps become manual steps). Postman or OpenAPI: the API session the requests go to (empty: full URLs). Then pick the file.'), '');
+    const dev = await this.ui.input(tr('Import Test Cases'), tr('Excel or CSV: the session for steps without a Device column (empty: such steps become manual steps); a row with Type web is a web action on the web app in Device (click text=Log In, fill label=Email = {{email}}, expect Networks). Postman or OpenAPI: the API session the requests go to (empty: full URLs). Then pick the file.'), '');
     if (dev === null || dev === undefined) return;
     try {
       const l = await this.backend.testImportManual(dev.trim());

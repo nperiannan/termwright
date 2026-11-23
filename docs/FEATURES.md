@@ -131,6 +131,7 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **Standalone export**: Python or Go code, or the twrun program with the YAML tests - runs without Termwright - SSH/Telnet/API/SNMP/NETCONF/web itself, inventory from your sessions, passwords from the environment or keyring; procedures as reusable functions.
 - **Spirent TestCenter / IxNetwork**: traffic runs as test steps through their REST APIs - configuration, chassis ports, protocols, per-stream loss and latency.
 - **Web steps (Playwright)**: record in the browser or pick from 32 actions - forms, uploads, downloads, pop-ups, tabs, iframes, waits, checks, read into variables, screenshots and traces; logins from saved sessions, kept between steps - set up from the step editor. [Guide](WEB_TESTING_GUIDE.md).
+- **Web tests from a sheet and as Playwright code**: import web test cases from Excel or CSV (*Type* `web`: `click text=Log In`, `fill label=Email = {{email}}`); export the web steps as a Playwright Test project in TypeScript (logins, test data, fallback targets) to run with `npx playwright test`.
 - **Web apps**: a Web App session (address, login recorded once, browser settings); Record a Web Test; step-by-step runs in a live browser with element picking; self-healing targets; reusable blocks; a picture after every action and a video of failures in the report; REST steps as the logged-in user. [Guide](WEB_TESTING_GUIDE.md).
 ## AI assistant and connector
 

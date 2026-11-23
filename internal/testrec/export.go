@@ -20,7 +20,7 @@ import (
 type ExportOptions struct {
 	// Files: tests, folders or suites/… plans (none: every test).
 	Files []string `json:"files,omitempty"`
-	// Lang: go, python or tcl.
+	// Lang: go, python, tcl, runner (twrun and the YAML tests) or playwright (the web steps as Playwright Test).
 	Lang string `json:"lang"`
 	// OS: linux, mac or windows - which run scripts to write.
 	OS string `json:"os"`
@@ -52,8 +52,9 @@ func (f Folder) Export(o ExportOptions) ([]byte, string, error) {
 	case "go", "python", "tcl":
 	case "runner": // the test files and the twrun program
 		o.Standalone = true
+	case "playwright": // the web steps as Playwright Test (TypeScript)
 	default:
-		return nil, "", fmt.Errorf("language %q: go, python, tcl or runner", o.Lang)
+		return nil, "", fmt.Errorf("language %q: go, python, tcl, runner or playwright", o.Lang)
 	}
 	switch o.OS {
 	case "linux", "mac", "windows":
@@ -86,6 +87,15 @@ func (f Folder) Export(o ExportOptions) ([]byte, string, error) {
 		}
 		_, err = w.Write(b)
 		return err
+	}
+	if o.Lang == "playwright" {
+		if err := f.exportPlaywright(o, cases, name, put); err != nil {
+			return nil, "", err
+		}
+		if err := z.Close(); err != nil {
+			return nil, "", err
+		}
+		return buf.Bytes(), name + "-playwright.zip", nil
 	}
 	if o.Standalone && o.Lang == "tcl" {
 		return nil, "", fmt.Errorf("a standalone suite is Python, Go or the runner program (TCL goes through Termwright)")

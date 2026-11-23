@@ -18,7 +18,7 @@ Commands that may hold a password, secret, community or key are not recorded. Dr
 
 ![Recording: three commands, the recorder on the right](screenshots/tests-guide/20-recording.png)
 
-**Already have test cases?** ⋯ → **Import Test Cases** reads a **Postman collection** or an **OpenAPI / Swagger** description (one test per request, folders and tags as suites, the status check from the test script, the saved example or the first 2xx answer - name the API session they go to), or a sheet (Excel or CSV) with the columns *Suite*, *Test*, *Step*, *Device*, *Expected* (and optionally *Type*: command, api, manual): each row becomes a step, rows of the same test become one test, a row without a device becomes a manual step, and quoted text in *Expected* (`"v200"`) becomes a check. Then run them, and add checks where the import could not.
+**Already have test cases?** ⋯ → **Import Test Cases** reads a **Postman collection** or an **OpenAPI / Swagger** description (one test per request, folders and tags as suites, the status check from the test script, the saved example or the first 2xx answer - name the API session they go to), or a sheet (Excel or CSV) with the columns *Suite*, *Test*, *Step*, *Device*, *Expected* (and optionally *Type*: command, api, manual or web - a web action such as `click text=Log In` on the web app in *Device*; see the web testing guide): each row becomes a step, rows of the same test become one test, a row without a device becomes a manual step, and quoted text in *Expected* (`"v200"`) becomes a check. Then run them, and add checks where the import could not.
 
 ## 2. Checks - mostly written for you
 

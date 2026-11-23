@@ -5171,7 +5171,7 @@ const ru: Record<string, string> = {
   'Procedure {0} made - call it from other tests with + More → Call a Procedure': 'Процедура {0} создана - вызывайте её из других тестов: + Ещё → Вызвать процедуру',
   'Table saved ({0}). Add checks on its values: Edit → + Check → table value, e.g. NAME=v200: VID = 200': 'Таблица сохранена ({0}). Добавьте проверки значений: Изменить → + Проверка → значение таблицы, например NAME=v200: VID = 200',
   'Import Test Cases': 'Импорт тестов',
-  'Excel or CSV: the session for steps without a Device column (empty: such steps become manual steps). Postman or OpenAPI: the API session the requests go to (empty: full URLs). Then pick the file.': 'Excel или CSV: сессия для шагов без столбца Device (пусто: такие шаги станут ручными). Postman или OpenAPI: API-сессия для запросов (пусто: полные URL). Затем выберите файл.',
+  'Excel or CSV: the session for steps without a Device column (empty: such steps become manual steps); a row with Type web is a web action on the web app in Device (click text=Log In, fill label=Email = {{email}}, expect Networks). Postman or OpenAPI: the API session the requests go to (empty: full URLs). Then pick the file.': 'Excel или CSV: сессия для шагов без столбца Device (пусто: такие шаги станут ручными); строка с Type web - веб-действие в веб-приложении из Device (click text=Log In, fill label=Email = {{email}}, expect Networks). Postman или OpenAPI: API-сессия для запросов (пусто: полные адреса). Затем выберите файл.',
   'Write the value, then < > or = and a number, e.g. CPU:\\s+(\\d+) < 80': 'Напишите значение, затем < > или = и число, например CPU:\\s+(\\d+) < 80',
   'Claude Code found: {0}. Choose the model and the effort below, or keep the defaults.': 'Найден Claude Code: {0}. Выберите модель и усилие ниже или оставьте по умолчанию.',
   'Backup saved to {0}': 'Резервная копия сохранена в {0}',
@@ -5357,6 +5357,9 @@ const ru: Record<string, string> = {
   'what this testbed is (exos, stack, l3…) - tests can require tags': 'что это за стенд (exos, stack, l3…) - тесты могут требовать теги',
   'For every test in {0} and its folders. Its folders, the test itself, the testbed and the run can still change them.': 'Для всех тестов в {0} и вложенных папках. Вложенные папки, сам тест, стенд и запуск могут их изменить.',
   'For every test. Folders, tests, testbeds and runs can still change them.': 'Для всех тестов. Папки, тесты, стенды и запуски могут их изменить.',
+  'Playwright tests (TypeScript) - the web steps': 'Тесты Playwright (TypeScript) - веб-шаги',
+  "A Playwright Test project: each test's web steps as Playwright code you can read and change, the web apps' logins, test data rows. Run with": 'Проект Playwright Test: веб-шаги каждого теста как код Playwright, который можно читать и менять, входы веб-приложений, строки тестовых данных. Запуск:',
+  '; other steps are comments.': '; остальные шаги - комментарии.',
 };
 
 export default ru;

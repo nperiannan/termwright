@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Playwright tests (TypeScript)**: Export… → *Playwright tests (TypeScript) - the web steps* writes a Playwright Test project: one spec per test with its web steps as Playwright code, the web apps' recorded logins (passwords from `TW_PASSWORD_<APP>`), test data rows, fallback targets; run with `npx playwright test` - no Termwright needed.
+- **Web test cases from a sheet**: Import Test Cases (Excel or CSV) takes rows with *Type* `web` - a web action on the web app in *Device* (`click text=Log In`, `fill label=Email = {{email}}`, `expect Networks`); rows in a row become one web step, quoted *Expected* text a check.
 - **Fixed**: on macOS, closing the browser window did not finish **Record Login** or **Record a Web Test** (the browser keeps running without windows there); the login is now also kept after the recording, so the next browser starts logged in.
 - **Fixed**: test browsers no longer stay behind (in the macOS Dock) when a recording or web step is stopped, times out or Termwright quits: the browser is closed before its runner ends.
 

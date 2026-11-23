@@ -302,6 +302,19 @@ open already logged in.
   The log shows `read vlan_name = voice`, and later steps can use `{{vlan_name}}`, e.g. to check the
   switch's CLI shows the same name.
 - Values read also show in the step's output, so step checks can test them.
+- **Web test cases from a sheet**: ⋯ → **Import Test Cases** takes an Excel or CSV sheet where a row with
+  *Type* `web` is a web action on the web app in *Device*:
+
+  | Test | Step | Device | Type | Expected |
+  |---|---|---|---|---|
+  | Add contact | goto /contacts | Apps/CRM | web | |
+  | Add contact | fill label=Full name = {{who}} | Apps/CRM | web | |
+  | Add contact | click #add | Apps/CRM | web | "Added" |
+
+  Web rows that follow each other become one web step; quoted text in *Expected* becomes a check. The step
+  is the action and its target as Termwright records them (`click text=Log In`, `fill label=Email = x`,
+  `select label=Site = Lab`, `press Enter`, `expect Networks`, `expect #out = Added`); a row that is not
+  an action (a sentence) becomes a manual step to fill in.
 
 ## 13. Frames, tabs, pop-ups and dialogs
 
@@ -446,6 +459,46 @@ Web steps run everywhere tests run:
 
 Values read into variables are passed on by Termwright and twrun; in Python and Go suites they show in
 the log. Blocks are expanded when the suite is exported.
+
+### Playwright tests (TypeScript)
+
+**Export… → Playwright tests (TypeScript) - the web steps** writes a Playwright Test project you can read,
+change and run with Playwright alone - no Termwright, no Termwright library:
+
+```
+crm-playwright/
+  tests/crm/add.spec.ts   one spec per test (cases/crm/add.yaml) - its web steps as Playwright code
+  tw.ts                   helpers: Termwright targets (label=, testid=, fallbacks), the login, {{values}}, data rows
+  apps.json               the web apps: address, user, recorded login - never a password
+  data/people.csv         test data (Excel files become CSV): a run per row
+  playwright.config.ts    reports: list, HTML and reports/junit.xml; pictures, video and trace of failures
+```
+
+A recorded step becomes plain Playwright:
+
+```ts
+await test.step("step 2 - web on Apps/CRM", async () => {
+  await p.goto(tw.url("Apps/CRM", "/contacts", v));
+  await tw.login(p, "Apps/CRM", v); // when the page asks to log in
+  await (await tw.find(p, "label=Full name", ["#contact-name"])).fill(tw.v("{{who}}", v));
+  await (await tw.find(p, "#add")).click();
+  await expect((await tw.find(p, "#out"))).toContainText(tw.v("Added {{who}}", v));
+});
+```
+
+Run it:
+
+```sh
+npm install
+npx playwright install chromium
+export TW_PASSWORD_CRM='…'      # the web app's password (TW_PASSWORD for all apps)
+npx playwright test
+```
+
+`TW_USER_<APP>` and `TW_URL_<APP>` change a web app's user and address (staging, production);
+`TW_VAR_<name>` a test value. Steps that are not web steps (device commands, API calls) are comments in the
+spec - run those with Termwright, twrun or a Python/Go suite. Tests without web steps are left out (the
+README lists them).
 
 ## 20. Worked examples
 
