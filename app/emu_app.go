@@ -3955,7 +3955,9 @@ func (a *App) emuPoll(force bool) emu.Status {
 				}
 			}
 		}
-		scripts[h] = a.emuFor(h).StatusScript(tails, ready)
+		if c := a.emuFor(h); c != nil { // the lab may have just been closed
+			scripts[h] = c.StatusScript(tails, ready)
+		}
 	}
 	emuLab.mu.Unlock()
 	// every host of the lab at once
