@@ -35,6 +35,7 @@ Test any web application with Playwright, a test framework you set up on screens
 
 ### Fixes
 
+- A rare crash when the emulator's status was read just as its lab was closed.
 - `{{port1}}` had no value when the test ran on a testbed with more devices than the test uses; it is now the port of the test's own device (also in exported Python and Go suites).
 - A command with a variable that has no value (`{{port1}}`) is no longer sent: the step fails and says where to set it.
 
