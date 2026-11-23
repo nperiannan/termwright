@@ -234,6 +234,15 @@ func (r Runner) start(ctx context.Context, job map[string]any) (*exec.Cmd, *byte
 	}
 	in, _ := json.Marshal(job)
 	c := exec.CommandContext(ctx, st.Node, filepath.Join(r.Dir, "runner.js"))
+	// stopped (Cancel, a timeout, the app quitting): ask the runner to close its browser first - a killed
+	// runner leaves the browser running (on macOS in the Dock); killed only if it does not end in 10 s
+	c.Cancel = func() error {
+		if err := c.Process.Signal(os.Interrupt); err != nil {
+			return c.Process.Kill()
+		}
+		return nil
+	}
+	c.WaitDelay = 10 * time.Second
 	c.Dir, c.Env, c.Stdin = r.Dir, r.env(st.Node), bytes.NewReader(append(in, '\n'))
 	var stderr bytes.Buffer
 	c.Stderr = &stderr

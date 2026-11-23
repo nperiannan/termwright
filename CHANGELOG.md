@@ -5,6 +5,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 ## Unreleased
 
 - **Fixed**: on macOS, closing the browser window did not finish **Record Login** or **Record a Web Test** (the browser keeps running without windows there); the login is now also kept after the recording, so the next browser starts logged in.
+- **Fixed**: test browsers no longer stay behind (in the macOS Dock) when a recording or web step is stopped, times out or Termwright quits: the browser is closed before its runner ends.
 
 ## 0.44.1 (2026-11-23)
 

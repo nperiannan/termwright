@@ -28,6 +28,15 @@ function viewport(v) {
   return m ? { width: +m[1], height: +m[2] } : undefined;
 }
 
+// every browser this runner started: closed before it exits, so none is left running (macOS keeps a
+// browser without windows in the Dock)
+const BROWSERS = [];
+async function quit(code) {
+  await Promise.all(BROWSERS.map(b => b.close().catch(() => {})));
+  process.exit(code);
+}
+for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(sig, () => quit(0));
+
 async function context(req, w, show) {
   const type = { firefox, webkit }[w.browser] || chromium;
   let browser;
@@ -36,6 +45,7 @@ async function context(req, w, show) {
     if (type !== chromium) throw e;
     browser = await chromium.launch({ headless: !show, channel: 'chrome' }).catch(() => chromium.launch({ headless: !show, channel: 'msedge' })).catch(() => { throw e; });
   }
+  BROWSERS.push(browser);
   const opts = { ignoreHTTPSErrors: !!w.insecure, viewport: viewport(w.viewport) };
   if (req.httpUser) opts.httpCredentials = { username: req.httpUser, password: req.httpPassword || '' };
   const statePath = w.state && req.stateDir ? path.join(req.stateDir, w.state.replace(/[^\w.-]+/g, '_') + '.json') : '';
@@ -382,7 +392,7 @@ async function serve(req, lines) {
   await recorder(S);
   if (req.trace) await S.ctx.tracing.start({ screenshots: true, snapshots: true });
   let busy = Promise.resolve();
-  const bye = async () => { await saveState(S); out({ closed: true }); process.exit(0); };
+  const bye = async () => { await saveState(S); out({ closed: true }); await quit(0); };
   closed(S).then(bye);
   const err = e => String(e && e.message || e).split('\n')[0];
   const handle = async c => {
@@ -420,6 +430,7 @@ async function serve(req, lines) {
   rl.on('line', l => { if (gotFirst) { const g = gotFirst; gotFirst = null; g(l); } else if (lines.take) lines.take(l); else lines.queue.push(l); });
   rl.on('close', () => { lines.ended = true; if (lines.onEnd) lines.onEnd(); });
   const req = JSON.parse(await firstLine);
-  if (req.serve) await serve(req, lines);
-  else if (req.record) await record(req); else await run(req);
-})().catch(e => { out({ i: -2, ok: false, error: String(e && e.message || e).split('\n')[0] }); process.exit(0); });
+  if (req.serve) { await serve(req, lines); return; } // runs until the browser closes (bye)
+  if (req.record) await record(req); else await run(req);
+  await quit(0);
+})().catch(e => { out({ i: -2, ok: false, error: String(e && e.message || e).split('\n')[0] }); return quit(0); });
