@@ -191,9 +191,38 @@ func TestSession(t *testing.T) {
 		t.Fatalf("recorded %+v", rec)
 	}
 	// the login was kept: a normal run starts logged in
-	out, err := r.Run(context.Background(), Step{URL: srv.URL, State: "app", Actions: []Action{{Do: "expect", Value: "Contacts"}}}, filepath.Join(dir, "shots"), 10, Extra{StateDir: x.StateDir})
-	if err != nil || !strings.Contains(out, "picture: ") {
+	out, err := r.Run(context.Background(), Step{URL: srv.URL, State: "app", Pictures: "all", Actions: []Action{{Do: "expect", Value: "Contacts"}}}, filepath.Join(dir, "shots"), 10, Extra{StateDir: x.StateDir})
+	if err != nil || !strings.Contains(out, "\npicture: ") {
 		t.Fatalf("%v\n%s", err, out)
+	}
+	// pictures: by default only of a failure - the page at the end is kept for the step's checks
+	shots := filepath.Join(dir, "shots2")
+	out, err = r.Run(context.Background(), Step{URL: srv.URL, State: "app", Actions: []Action{{Do: "expect", Value: "Contacts"}}}, shots, 10, Extra{StateDir: x.StateDir})
+	end := ""
+	for _, ln := range strings.Split(out, "\n") {
+		if p, ok := strings.CutPrefix(ln, EndPicture); ok {
+			end = p
+		}
+	}
+	if err != nil || strings.Contains(out, "\npicture: ") || end == "" {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if f := FailPicture(out, true); !strings.Contains(f, "screenshot: "+end) || strings.Contains(f, EndPicture) {
+		t.Fatal(f)
+	}
+	if f := FailPicture(out, false); strings.Contains(f, end) {
+		t.Fatal(f)
+	} else if _, err := os.Stat(end); err == nil {
+		t.Fatal("the picture of a passed step was kept")
+	}
+	// none: no picture, not even of a failure
+	out, err = r.Run(context.Background(), Step{URL: srv.URL, State: "app", Pictures: "none", Actions: []Action{{Do: "expect", Value: "Not there"}}}, shots, 3, Extra{StateDir: x.StateDir})
+	if err == nil || strings.Contains(out, "screenshot: ") || strings.Contains(out, EndPicture) {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	out, err = r.Run(context.Background(), Step{URL: srv.URL, State: "app", Actions: []Action{{Do: "expect", Value: "Not there"}}}, shots, 3, Extra{StateDir: x.StateDir})
+	if err == nil || !strings.Contains(out, "screenshot: ") {
+		t.Fatalf("a failed action has no screenshot: %v\n%s", err, out)
 	}
 	// without the state, the app's login runs by itself
 	out, err = r.Run(context.Background(), Step{URL: srv.URL, Actions: []Action{{Do: "expect", Value: "Contacts"}}}, filepath.Join(dir, "shots"), 10, Extra{Login: login})

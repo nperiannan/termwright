@@ -83,6 +83,7 @@ steps:
         - {do: read, target: 'h1', value: title}
         - {do: expect, value: Contacts}
 `), 0o644)
+	os.WriteFile(filepath.Join(d, "cases", "crm", "fail.yaml"), []byte("name: Missing text\nsteps:\n  - web:\n      login: Apps/CRM\n      url: /contacts\n      actions:\n        - {do: expect, value: Not on the page}\n"), 0o644)
 	os.WriteFile(filepath.Join(d, "cases", "crm", "cli.yaml"), []byte("name: CLI only\nsteps:\n  - run: {session: Lab/sw1, command: show vlan}\n"), 0o644)
 	login := []webrun.Action{{Do: "fill", Target: "label=User", Value: "{{username}}"}, {Do: "fill", Target: "label=Password", Value: "{{password}}"}, {Do: "click", Target: "text=Sign in"}}
 	dev := func(s string) (InventoryDevice, bool) {
@@ -126,12 +127,26 @@ steps:
 	if tc, err := exec.Command("npx", "--prefix", out, "tsc", "--noEmit", "-p", out).CombinedOutput(); err != nil { // the code type-checks
 		t.Fatalf("tsc: %v\n%s", err, tc)
 	}
-	cmd := exec.Command("npx", "playwright", "test", "--reporter=line")
+	cmd := exec.Command("npx", "playwright", "test", "--reporter=line", "tests/crm/add.spec.ts")
 	cmd.Dir = out
 	cmd.Env = append(os.Environ(), "TW_PASSWORD_CRM=pw1")
 	b, err := cmd.CombinedOutput()
 	if err != nil || !strings.Contains(string(b), "2 passed") || !strings.Contains(string(b), "healed: label=Full name -> #contact-name") {
 		t.Fatalf("%v\n%s", err, b)
+	}
+	// a check that fails: its step has the page as an attachment (FAIL_SHOTS on by default)
+	cmd = exec.Command("npx", "playwright", "test", "--reporter=json", "tests/crm/fail.spec.ts")
+	cmd.Dir = out
+	cmd.Env = append(os.Environ(), "TW_PASSWORD_CRM=pw1")
+	b, _ = cmd.Output()
+	if !strings.Contains(string(b), `"name": "step 1 - web on Apps/CRM - failed"`) || !strings.Contains(string(b), `"contentType": "image/png"`) || !strings.Contains(string(b), `"status": "failed"`) {
+		t.Fatalf("no screenshot of the failed step:\n%.3000s", b)
+	}
+	cmd = exec.Command("npx", "playwright", "test", "--reporter=json", "tests/crm/fail.spec.ts")
+	cmd.Dir = out
+	cmd.Env = append(os.Environ(), "TW_PASSWORD_CRM=pw1", "TW_FAIL_SHOTS=0")
+	if b, _ = cmd.Output(); strings.Contains(string(b), "- failed\"") {
+		t.Fatal("TW_FAIL_SHOTS=0 still attaches the failure screenshot")
 	}
 	t.Log(string(b))
 }

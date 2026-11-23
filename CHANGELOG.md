@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Pictures of web steps**: a picture of the page **when a step fails** - an action that fails, or a check of the step that is not on the page - on by default and shown in the run log right under the failed step; **after every action** is now off by default (bigger reports: Termwright asks before turning it on); *none* turns pictures off. Step editor: *Pictures - of a failure / after every action / none*.
+- **Playwright export: screenshots in the step**: a step that fails gets a screenshot attached inside that step of the Playwright report (on by default; `TW_FAIL_SHOTS=0`); *a screenshot after every step* is optional (off by default, asks first; `TW_STEP_SHOTS=1`).
 - **Playwright tests (TypeScript)**: Export… → *Playwright tests (TypeScript) - the web steps* writes a Playwright Test project: one spec per test with its web steps as Playwright code, the web apps' recorded logins (passwords from `TW_PASSWORD_<APP>`), test data rows, fallback targets; run with `npx playwright test` - no Termwright needed.
 - **Web test cases from a sheet**: Import Test Cases (Excel or CSV) takes rows with *Type* `web` - a web action on the web app in *Device* (`click text=Log In`, `fill label=Email = {{email}}`, `expect Networks`); rows in a row become one web step, quoted *Expected* text a check.
 - **Fixed**: on macOS, closing the browser window did not finish **Record Login** or **Record a Web Test** (the browser keeps running without windows there); the login is now also kept after the recording, so the next browser starts logged in.

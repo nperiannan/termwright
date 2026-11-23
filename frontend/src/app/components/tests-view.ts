@@ -202,6 +202,9 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                       @if (it.s!.error) { <span class="lerr">{{ it.s!.error }}</span> }
                       @else if (!it.s!.skipped && !it.s!.checks?.length) { <span class="lnote">no checks - passes when the device does not answer with an error</span> }
                     </div>
+                    @if (!it.s!.passed) { @for (p of failPics(it.s!.output); track p.path) {
+                      <button type="button" class="lshot" (click)="showPic(p.path)" title="The page when it failed - click to enlarge">@if (picUrl(p.path); as u) { <img [src]="u" alt="The page when it failed" /> } @else { <span class="mut">{{ p.label }}</span> }</button>
+                    } }
                   }
                 }
               }
@@ -491,7 +494,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                               <div class="row opts"><button type="button" class="lnk" (click)="(w.actions ??= []).push({ do: 'click', target: '' }); touch()">+ Action</button>
                                 <button type="button" class="rec" (click)="dw ? dbgRecord(w) : webRecord(w)" [disabled]="webRec() || dbgBusy() || !webSt()?.ready" [title]="dw ? 'Record in the open browser: the actions go after the selected one (or at the end)' : 'Opens the page in a browser: click, type and choose as usual (Alt+click a text to check it shows), then close the window - the actions are added here'">{{ webRec() ? (dw ? '■ Stop Recording' : '● Recording… close the browser to finish') : (dw ? '● Record from Here' : '● Record in Browser') }}</button>
                                 <button type="button" (click)="saveBlock(w)" [disabled]="!(w.actions?.length)" title="Save the selected actions (or all) as a block other web steps can use - they become one 'Use block' action here">Save as Block…</button><span class="sp"></span>
-                                <label title="Accept self-signed certificates (device web pages)"><input type="checkbox" [(ngModel)]="w.insecure" /> Self-signed certificate OK</label><label title="Show the browser window while it runs (default: hidden)"><input type="checkbox" [(ngModel)]="w.show" /> Show the browser</label><label title="Record a Playwright trace (every action with the page before and after) - open it with npx playwright show-trace"><input type="checkbox" [(ngModel)]="w.trace" /> Trace</label><label title="A picture after every action in the run report (off: only when an action fails)"><input type="checkbox" [ngModel]="w.pictures !== 'off'" (ngModelChange)="w.pictures = $event ? undefined : 'off'" /> Pictures</label></div>
+                                <label title="Accept self-signed certificates (device web pages)"><input type="checkbox" [(ngModel)]="w.insecure" /> Self-signed certificate OK</label><label title="Show the browser window while it runs (default: hidden)"><input type="checkbox" [(ngModel)]="w.show" /> Show the browser</label><label title="Record a Playwright trace (every action with the page before and after) - open it with npx playwright show-trace"><input type="checkbox" [(ngModel)]="w.trace" /> Trace</label><label title="Pictures of the page in the run report: of a failure - the action or check that failed, at its step (the default); after every action as well (bigger reports); or none">Pictures <select [ngModel]="w.pictures === 'all' || w.pictures === 'none' ? w.pictures : ''" (ngModelChange)="setPictures(w, $event, $any($event.target))"><option value="">of a failure</option><option value="all">after every action</option><option value="none">none</option></select></label></div>
                               <div class="row opts">
                                 <label title="A web app session (its address, login and settings), or any saved session whose user name and password fill {{ '{{' }}username}} and {{ '{{' }}password}}. A testbed role works too: {{ '{{' }}app}}. Passwords never go in the test.">Web app <input class="pin lg" [(ngModel)]="w.login" list="twsess" placeholder="session (optional)" /></label>
                                 @if (!isWebApp(w.login)) { <label title="Keep the login (cookies) under this name: the next web steps with the same name start logged in">Keep login as <input class="pin" [(ngModel)]="w.state" placeholder="e.g. xiq (optional)" /></label> }
@@ -822,6 +825,12 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
             <option value="all">Every test in the folder</option></select></label>
           @if (x.lang !== 'runner' && x.lang !== 'playwright') { <div class="segs"><span class="mut">Language</span>@for (l of (x.standalone ? ['python', 'go'] : ['python', 'go', 'tcl']); track l) { <button type="button" [class.on]="x.lang === l" (click)="x.lang = l">{{ l === 'python' ? 'Python' : l === 'go' ? 'Go' : 'TCL' }}</button> }</div> }
           <div class="segs"><span class="mut">Runs on</span>@for (o of ['linux', 'mac', 'windows']; track o) { <button type="button" [class.on]="x.os === o" (click)="x.os = o">{{ o === 'mac' ? 'macOS' : o === 'linux' ? 'Linux' : 'Windows' }}</button> }</div>
+          @if (x.lang === 'playwright') {
+            <div class="fld"><span>Pictures in the report - in the step they belong to</span>
+              <label class="chk"><input type="checkbox" [(ngModel)]="x.failShots" /> A screenshot of a step that fails (a check not found, an action that fails)</label>
+              <label class="chk"><input type="checkbox" [ngModel]="x.stepShots" (ngModelChange)="setStepShots(x, $event, $any($event.target))" /> A screenshot after every step - bigger reports</label>
+              <small class="mut">Also when running: TW_FAIL_SHOTS=0 or TW_STEP_SHOTS=1.</small></div>
+          }
           @if (x.lang !== 'playwright') { <label class="fld"><span>Testbed - the devices it runs on by default</span><select [(ngModel)]="x.testbed"><option value="">The tests' own sessions</option>@for (b of tree()?.testbeds ?? []; track b) { <option [value]="b">{{ base(b) }}</option> }</select></label> }
           <label class="fld"><span>Suite name</span><input [(ngModel)]="x.name" /></label>
           <div class="row"><span class="sp"></span><button type="button" (click)="exp.set(null)">Cancel</button><button type="button" class="savb" (click)="doExport()">Export…</button></div>
@@ -1028,6 +1037,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
     .optbar { gap: 10px; align-items: center; } .optbar .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; } .optbar .seg button { border: 0; border-radius: 0; padding: 2px 10px; font-size: 11.5px; background: none; color: var(--muted); }
     .optbar .seg button.on { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--text); } .optbar .lnk.on { color: var(--accent); } .optbar > .lnk { max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .optbar { flex-wrap: nowrap !important; } .optpanel { border: 1px dashed var(--border); border-radius: 8px; padding: 6px 10px; margin-left: 24px; }
     input.exp, input.exp::placeholder { color: var(--muted); opacity: .75; }
+    .lshot { display: block; margin: 4px 0 8px 18px; padding: 0; border: 1px solid #f8514966; border-radius: 6px; background: none; cursor: zoom-in; max-width: 480px; } .lshot img { display: block; width: 100%; border-radius: 6px; }
     .tbmeta { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; } .tbmeta .lbl { width: 80px; flex: none; } .tbmeta .grow { flex: 1; }
     .tagc { display: inline-flex; align-items: center; white-space: nowrap; border: 1px solid var(--border); border-radius: 10px; padding: 1px 8px; font-size: 12px; } .tagc .x { background: none; border: 0; color: var(--muted); padding: 0 0 0 2px; cursor: pointer; } .tagin { width: 90px; }
     .lkh { margin-top: 4px; font-size: 12.5px; } .lk { display: grid; grid-template-columns: minmax(0,1fr) 120px 18px minmax(0,1fr) 120px 28px; gap: 6px; align-items: center; }
@@ -1381,6 +1391,14 @@ export class TestsView implements OnInit, OnDestroy {
   }
   recordMore() { this.rec.start(); }
   // ---- pictures of web steps (after each action, and of a failure) ----
+  async setPictures(w: { pictures?: string }, v: string, el?: HTMLSelectElement) {
+    if (v === 'all' && !(await this.ui.confirm(tr('A Picture After Every Action?'), tr('Every action of this step adds a picture to the run report: reports get bigger and runs use more memory and disk. Pictures of a failure are taken either way.'), tr('Take Them')))) {
+      if (el) el.value = w.pictures === 'none' ? 'none' : '';
+      return;
+    }
+    w.pictures = v || undefined; this.touch();
+  }
+  failPics(out?: string) { return this.picsOf(out).filter(p => p.fail); }
   private picCache = signal<Record<string, string>>({});
   private picAsked = new Set<string>();
   readonly bigPic = signal('');
@@ -1558,16 +1576,23 @@ export class TestsView implements OnInit, OnDestroy {
     if (m === 'runner' || m === 'playwright') x.lang = m;
     else if (x.lang === 'runner' || x.lang === 'playwright' || (m === 'code' && x.lang === 'tcl')) x.lang = 'python';
   }
-  readonly exp = signal<{ what: string; lang: string; os: string; testbed: string; name: string; standalone: boolean } | null>(null);
+  readonly exp = signal<{ what: string; lang: string; os: string; testbed: string; name: string; standalone: boolean; failShots?: boolean; stepShots?: boolean } | null>(null);
   openExport() {
     const plat = navigator.platform.toLowerCase(), os = plat.includes('win') ? 'windows' : plat.includes('mac') ? 'mac' : 'linux';
     const what = this.picked().length ? 'picked' : this.sel() ? 'sel' : 'all';
-    this.exp.set({ what, lang: 'python', standalone: true, os, testbed: this.testbed || '', name: (this.tree()?.root ?? 'termwright-suite').split(/[\\/]/).pop() || 'termwright-suite' });
+    this.exp.set({ what, lang: 'python', standalone: true, failShots: true, stepShots: false, os, testbed: this.testbed || '', name: (this.tree()?.root ?? 'termwright-suite').split(/[\\/]/).pop() || 'termwright-suite' });
+  }
+  async setStepShots(x: { stepShots?: boolean }, on: boolean, el?: HTMLInputElement) {
+    if (on && !(await this.ui.confirm(tr('A Screenshot After Every Step?'), tr('Every step adds a full-page screenshot to the Playwright report: reports get bigger and runs use more memory and disk. Screenshots of a failure are taken either way.'), tr('Take Them')))) {
+      if (el) el.checked = false;
+      x.stepShots = false; return;
+    }
+    x.stepShots = on;
   }
   async doExport() {
     const x = this.exp(); if (!x) return;
     const files = x.what === 'picked' ? this.picked() : x.what === 'sel' ? [this.sel()] : x.what === 'all' ? [] : [x.what];
-    try { const p = await this.backend.testsExport({ files, lang: x.lang, os: x.os, testbed: x.testbed, name: x.name, standalone: x.standalone || x.lang === 'runner' }); if (p) { this.exp.set(null); this.ui.toast(tr('Exported {0}', p), 'success'); } }
+    try { const p = await this.backend.testsExport({ files, lang: x.lang, os: x.os, testbed: x.testbed, name: x.name, standalone: x.standalone || x.lang === 'runner', noFailShots: x.failShots === false, stepShots: !!x.stepShots }); if (p) { this.exp.set(null); this.ui.toast(tr('Exported {0}', p), 'success'); } }
     catch (e) { this.ui.toast(errText(e), 'error'); }
   }
   async newTestbed() {

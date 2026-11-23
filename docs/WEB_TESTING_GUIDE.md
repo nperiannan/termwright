@@ -4,7 +4,7 @@ Termwright tests can drive a web browser with [Playwright](https://playwright.de
 application**, not only device GUIs: a CRM, a portal, a controller, your own product. You record or pick
 the actions; you do not write code. Compared with plain Playwright you get a saved login per app, a
 recorder, element picking, step-by-step runs in a live browser, self-healing targets, reusable blocks,
-a picture after every action in the report - and the same test can also use the CLI, REST, SNMP and
+the page of a failure in the report (and, if you want, a picture after every action) - and the same test can also use the CLI, REST, SNMP and
 NETCONF steps.
 
 - [1. Set up (once)](#1-set-up-once)
@@ -119,7 +119,7 @@ You can also record into any existing web step: **● Record in Browser** (or, w
 | **Trace** | Record a Playwright trace of the whole step ([16](#16-the-run-report-pictures-video-trace)). |
 | **Web app** | The web app session (its address, login and settings) - or any saved session whose user name and password fill `{{username}}` / `{{password}}`. A testbed role works too: `{{app}}`. |
 | **Keep login as** | (sessions that are not web apps) keep the cookies under this name: the next web steps with the same name start logged in. Web apps do this by themselves. |
-| **Pictures** | A picture after every action in the run report (off: only when an action fails). |
+| **Pictures** | *of a failure* (the default): the page when an action or a check of the step fails, shown at that step; *after every action*: also a picture after each action (bigger reports - it asks first); *none*: no pictures at all. |
 | **Size** | The page size, e.g. `1280x800`, or `390x844` to see a phone layout. |
 | **Checks** | The usual checks of a step; they look at the step's output (see [10](#10-checks)). |
 
@@ -348,12 +348,15 @@ Actions already wait for their target. When a page needs more:
 
 Each run keeps, in its report folder (`reports/<run>/web/`):
 
-- a **picture after every action** (turn off with *Pictures* on the step),
-- the **screenshot** of the moment an action failed (red frame),
+- the **screenshot** of a failure (red frame): the moment an action failed, or the page when a check of
+  the step was not found on it (`contains "VLAN 200 saved"`) - on by default; *Pictures: none* turns it off,
+- a **picture after every action**, when the step's *Pictures* is *after every action* (off by default:
+  it makes reports bigger and runs use more memory - Termwright asks before turning it on),
 - a **video** of a failed step (`.webm`),
 - the **trace**, when *Trace* is ticked.
 
-In Termwright the step's result shows the pictures as a strip - click one to enlarge it:
+In Termwright the step's result shows the pictures as a strip, and the run log shows the failure screenshot
+right under the failed step - click one to enlarge it:
 
 ![Pictures of a run](screenshots/web-guide/08-run-pictures.png)
 
@@ -471,7 +474,7 @@ crm-playwright/
   tw.ts                   helpers: Termwright targets (label=, testid=, fallbacks), the login, {{values}}, data rows
   apps.json               the web apps: address, user, recorded login - never a password
   data/people.csv         test data (Excel files become CSV): a run per row
-  playwright.config.ts    reports: list, HTML and reports/junit.xml; pictures, video and trace of failures
+  playwright.config.ts    reports: list, HTML and reports/junit.xml; video and trace of failures
 ```
 
 A recorded step becomes plain Playwright:
@@ -494,6 +497,11 @@ npx playwright install chromium
 export TW_PASSWORD_CRM='…'      # the web app's password (TW_PASSWORD for all apps)
 npx playwright test
 ```
+
+**Pictures:** a step that fails (a check not found, an action that fails) gets a screenshot of the page,
+attached *inside that step* of the Playwright report - on by default (*A screenshot of a step that fails*
+in the Export dialog; `TW_FAIL_SHOTS=0` turns it off when running). *A screenshot after every step* is off by
+default (bigger reports; the dialog asks first; `TW_STEP_SHOTS=1` turns it on when running).
 
 `TW_USER_<APP>` and `TW_URL_<APP>` change a web app's user and address (staging, production);
 `TW_VAR_<name>` a test value. Steps that are not web steps (device commands, API calls) are comments in the

@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 )
@@ -205,6 +206,7 @@ type line struct {
 	Note    string `json:"note"`
 	Error   string `json:"error"`
 	Shot    string `json:"shot"`
+	End     string `json:"end"` // the page when the actions were done (a failed check of the step shows it)
 	Trace   string `json:"trace"`
 	Done    bool   `json:"done"`
 	URL     string `json:"url"`
@@ -285,6 +287,9 @@ func (r Runner) Run(ctx context.Context, w Step, shots string, timeout int, x ..
 		case l.Done:
 			for _, rd := range l.Reads {
 				fmt.Fprintf(&log, "read %s = %s\n", rd.Name, rd.Value)
+			}
+			if l.End != "" {
+				fmt.Fprintf(&log, "%s%s\n", EndPicture, l.End)
 			}
 			fmt.Fprintf(&log, "page: %s  %s\n--- page text ---\n%s\n", l.Title, l.URL, l.Text)
 		case l.OK:
@@ -404,7 +409,8 @@ type Step struct {
 	Viewport string `yaml:"viewport,omitempty" json:"viewport,omitempty"`
 	// Trace: record a Playwright trace (reports/web-shots/trace-….zip: npx playwright show-trace).
 	Trace bool `yaml:"trace,omitempty" json:"trace,omitempty"`
-	// Pictures: "" - a picture after every action (in the report); "off" - only when an action fails.
+	// Pictures: "" (or "off") - a picture only of a failure (an action or a check of the step that fails);
+	// "all" - also a picture after every action (bigger reports); "none" - no pictures, not even of a failure.
 	Pictures string   `yaml:"pictures,omitempty" json:"pictures,omitempty"`
 	Actions  []Action `yaml:"actions,omitempty" json:"actions,omitempty"`
 }
@@ -426,7 +432,7 @@ func (x Extra) job(w Step, shots string, timeout int) map[string]any {
 	}
 	return map[string]any{"step": w, "shots": shots, "timeout": timeout, "root": x.Root, "stateDir": x.StateDir,
 		"httpUser": x.HTTPUser, "httpPassword": x.HTTPPassword, "login": x.Login, "prefix": pre,
-		"pictures": w.Pictures != "off" && shots != "", "video": !x.NoVideo && !w.Show && shots != ""}
+		"pictures": w.Pictures == "all" && shots != "", "failShot": w.Pictures != "none" && shots != "", "video": !x.NoVideo && !w.Show && shots != ""}
 }
 
 // Pick is the element a person clicked to choose a target: the target and its fallbacks.
@@ -512,3 +518,31 @@ func WithLogin(w Step, user, password string) Step {
 
 // RunnerJS is the Node.js script that runs web steps (exported suites carry it).
 func RunnerJS() []byte { return runnerJS }
+
+// EndPicture starts the output line of the page's picture when a web step's actions were done: when a
+// check of the step fails it becomes its failure screenshot, else it goes (FailPicture).
+const EndPicture = "end picture: "
+
+// FailPicture: a web step's output after its checks - a failed one keeps the page at the end as the failure
+// screenshot ("screenshot: …", in the report at the step); a passed one drops it (and its file, unless it
+// is also the picture of the last action).
+func FailPicture(out string, failed bool) string {
+	if !strings.Contains(out, EndPicture) {
+		return out
+	}
+	lines := strings.Split(out, "\n")
+	keep := lines[:0]
+	for _, ln := range lines {
+		p, ok := strings.CutPrefix(ln, EndPicture)
+		if !ok {
+			keep = append(keep, ln)
+			continue
+		}
+		if failed {
+			keep = append(keep, "screenshot: "+p)
+		} else if !slices.Contains(lines, "picture: "+p) {
+			_ = os.Remove(p)
+		}
+	}
+	return strings.Join(keep, "\n")
+}

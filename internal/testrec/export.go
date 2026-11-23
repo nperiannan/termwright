@@ -36,6 +36,9 @@ type ExportOptions struct {
 	Runners map[string][]byte `json:"-"`
 	// Version: the Termwright release the run script downloads twrun from ("nightly" for development builds).
 	Version string `json:"-"`
+	// NoFailShots, StepShots (Playwright): no screenshot of a failed step; a screenshot after every step.
+	NoFailShots bool `json:"noFailShots,omitempty"`
+	StepShots   bool `json:"stepShots,omitempty"`
 	// Device: the app's saved sessions for the inventory (session path → device; false when it is not one).
 	Device func(session string) (InventoryDevice, bool) `json:"-"`
 }

@@ -5360,6 +5360,16 @@ const ru: Record<string, string> = {
   'Playwright tests (TypeScript) - the web steps': 'Тесты Playwright (TypeScript) - веб-шаги',
   "A Playwright Test project: each test's web steps as Playwright code you can read and change, the web apps' logins, test data rows. Run with": 'Проект Playwright Test: веб-шаги каждого теста как код Playwright, который можно читать и менять, входы веб-приложений, строки тестовых данных. Запуск:',
   '; other steps are comments.': '; остальные шаги - комментарии.',
+  'A Picture After Every Action?': 'Снимок после каждого действия?',
+  'Every action of this step adds a picture to the run report: reports get bigger and runs use more memory and disk. Pictures of a failure are taken either way.': 'Каждое действие этого шага добавит снимок в отчёт: отчёты станут больше, запуски будут использовать больше памяти и диска. Снимки сбоев делаются в любом случае.',
+  'Take Them': 'Делать',
+  'of a failure': 'при сбое',
+  'after every action': 'после каждого действия',
+  'A Screenshot After Every Step?': 'Снимок экрана после каждого шага?',
+  'Every step adds a full-page screenshot to the Playwright report: reports get bigger and runs use more memory and disk. Screenshots of a failure are taken either way.': 'Каждый шаг добавит снимок всей страницы в отчёт Playwright: отчёты станут больше, запуски будут использовать больше памяти и диска. Снимки сбоев делаются в любом случае.',
+  'Pictures in the report - in the step they belong to': 'Снимки в отчёте - в шаге, к которому они относятся',
+  'A screenshot of a step that fails (a check not found, an action that fails)': 'Снимок шага со сбоем (проверка не найдена, действие не выполнено)',
+  'A screenshot after every step - bigger reports': 'Снимок после каждого шага - отчёты больше',
 };
 
 export default ru;

@@ -131,7 +131,7 @@ func PlaywrightSpec(c Case, depth int, data string, apps map[string]*pwApp) (str
 			if w.Login != "" {
 				label += " on " + w.Login
 			}
-			fmt.Fprintf(&b, "\n%sawait test.step(%s, async () => {\n", in, tsStr("step "+n+" - "+label))
+			fmt.Fprintf(&b, "\n%sawait tw.step(%s, () => p, async () => {\n", in, tsStr("step "+n+" - "+label))
 			in2 := in + "  "
 			if st.If != "" {
 				fmt.Fprintf(&b, "%s// Termwright runs this step only when: %s\n", in2, st.If)
@@ -345,7 +345,7 @@ const pwTSConfig = `{
 
 const pwHelper = `// Helpers of the tests Termwright wrote: targets as Termwright records them, the web apps' logins,
 // {{variables}} and test data. Passwords come from the environment, never from a file.
-import { expect, type BrowserContext, type Locator, type Page } from '@playwright/test';
+import { test, expect, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import apps from './apps.json';
@@ -353,6 +353,12 @@ import apps from './apps.json';
 type Action = { do: string; target?: string; value?: string };
 type App = { url: string; user?: string; userEnv: string; passwordEnv: string; urlEnv: string; login?: Action[] };
 const APPS = apps as Record<string, App>;
+
+// Pictures in the report, in the step they belong to: of a failed step (TW_FAIL_SHOTS=0: none) and after
+// every step (TW_STEP_SHOTS=1; bigger reports).
+const env = (k: string, d: boolean) => (process.env[k] ? !['0', 'false', 'no', 'off'].includes(process.env[k]!.toLowerCase()) : d);
+const FAIL_SHOTS = env('TW_FAIL_SHOTS', __FAIL_SHOTS__);
+const STEP_SHOTS = env('TW_STEP_SHOTS', __STEP_SHOTS__);
 
 function app(name: string): App {
   const a = APPS[name];
@@ -496,6 +502,17 @@ export const tw = {
     return next;
   },
 
+  /** A step of the test: on a failure (and after every step with STEP_SHOTS) the page is attached to it. */
+  async step(name: string, page: () => Page, body: () => Promise<void>): Promise<void> {
+    await test.step(name, async () => {
+      const shot = async (what: string) => {
+        try { await test.info().attach(name + ' - ' + what, { body: await page().screenshot({ fullPage: true }), contentType: 'image/png' }); } catch { /* no page */ }
+      };
+      try { await body(); } catch (e) { if (FAIL_SHOTS) await shot('failed'); throw e; }
+      if (STEP_SHOTS) await shot('done');
+    });
+  },
+
   re(s: string): string {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   },
@@ -612,7 +629,7 @@ func (f Folder) exportPlaywright(o ExportOptions, cases []string, name string, p
 		"package.json":         fmt.Sprintf(pwPackage, name, PlaywrightVersion),
 		"playwright.config.ts": pwConfig,
 		"tsconfig.json":        pwTSConfig,
-		"tw.ts":                pwHelper,
+		"tw.ts":                strings.NewReplacer("__FAIL_SHOTS__", strconv.FormatBool(!o.NoFailShots), "__STEP_SHOTS__", strconv.FormatBool(o.StepShots)).Replace(pwHelper),
 		"apps.json":            string(aj) + "\n",
 		".gitignore":           "node_modules/\ntest-results/\nplaywright-report/\nreports/\ndownloads/\n",
 		"README.md":            fmt.Sprintf(pwReadme, name, env.String(), note),

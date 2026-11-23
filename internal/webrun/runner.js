@@ -213,18 +213,26 @@ async function run(req) {
   let i = -1;
   try {
     await start(S, req, w);
+    let last = '';
     for (i = 0; i < (w.actions || []).length; i++) {
       const { note, healed } = await act(S, req, w.actions[i]);
-      out({ i, ok: true, note, healed, pic: await picture(S, req, i) });
+      last = await picture(S, req, i);
+      out({ i, ok: true, note, healed, pic: last });
     }
     await saveState(S);
     const text = (await S.page.innerText('body').catch(() => '')).slice(0, 20000);
-    out({ done: true, url: S.page.url(), title: await S.page.title(), text, reads: S.reads, dialogs: S.dialogs });
+    // the page at the end: the step's checks run on it - a failed check shows this picture
+    let end = '';
+    if (req.failShot && req.shots) {
+      end = last;
+      if (!end) { const p = path.join(req.shots, (req.prefix || 'web') + '-end-' + Date.now() + '.png'); end = await S.page.screenshot({ path: p, fullPage: true }).then(() => p, () => ''); }
+    }
+    out({ done: true, url: S.page.url(), title: await S.page.title(), text, reads: S.reads, dialogs: S.dialogs, end });
     if (w.trace) await S.ctx.tracing.stop({ path: path.join(req.shots, 'trace-' + Date.now() + '.zip') });
     await S.ctx.close().catch(() => {});
   } catch (e) {
     let p = '', tr = '', vid = '';
-    try { const pp = path.join(req.shots, 'failed-' + Date.now() + '.png'); await S.page.screenshot({ path: pp, fullPage: true }); p = pp; } catch { /* no page */ }
+    if (req.failShot !== false) try { const pp = path.join(req.shots, 'failed-' + Date.now() + '.png'); await S.page.screenshot({ path: pp, fullPage: true }); p = pp; } catch { /* no page */ }
     if (w.trace) { tr = path.join(req.shots, 'trace-failed-' + Date.now() + '.zip'); try { await S.ctx.tracing.stop({ path: tr }); } catch { tr = ''; } }
     if (S.videoDir) {
       const v = S.page && S.page.video(); await S.ctx.close().catch(() => {});
