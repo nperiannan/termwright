@@ -341,7 +341,12 @@ async function recorder(S) {
   S.setRec = async on => { S.rec = on; for (const p of S.pages) await p.evaluate(v => window.__twSetRec && window.__twSetRec(v), on).catch(() => {}); };
 }
 
-const closed = S => new Promise(resolve => { S.browser.on('disconnected', resolve); S.ctx.on('close', resolve); S.ctx.on('page', p => p.on('close', () => { if (S.ctx.pages().length === 0) resolve(); })); });
+// closed: the person closed the browser - or its last window (on macOS the browser keeps running then)
+const closed = S => new Promise(resolve => {
+  S.browser.on('disconnected', resolve); S.ctx.on('close', resolve);
+  const watch = p => p.on('close', () => { if (S.ctx.pages().length === 0) resolve(); });
+  S.ctx.pages().forEach(watch); S.ctx.on('page', watch);
+});
 
 async function drive(S, list) { // tests: do these as a person would
   for (const d of list) {
@@ -364,6 +369,7 @@ async function record(req) {
   await S.setRec(true);
   if (req.drive) { await drive(S, req.drive); out({ done: true, url: S.page.url() }); await S.browser.close(); return; }
   await closed(S);
+  await saveState(S); // logged in now: the next browser starts logged in
   out({ done: true });
   await S.browser.close().catch(() => {});
 }

@@ -2,6 +2,10 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## Unreleased
+
+- **Fixed**: on macOS, closing the browser window did not finish **Record Login** or **Record a Web Test** (the browser keeps running without windows there); the login is now also kept after the recording, so the next browser starts logged in.
+
 ## 0.44.1 (2026-11-23)
 
 Test any web application with Playwright, a test framework you set up on screens (testbeds with ports, tags and links, defaults per folder of tests, what a test needs), and a cleaner test editor.
