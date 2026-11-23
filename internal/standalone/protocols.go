@@ -49,7 +49,12 @@ func (e *Engine) HTTP(ctx context.Context, r HTTPRequest) (int, string, error) {
 		if err != nil {
 			return 0, "", err
 		}
-		if !schemeRe.MatchString(u) {
+		if strings.EqualFold(d.Protocol, "web") { // a web app: as the user its web steps logged in
+			u = webrun.Join(d.WebURL, u)
+			if c := webrun.Cookies(webrun.StatePath(filepath.Join(e.Root, ".web-state"), "app-"+d.Session), u); c != "" && hdr.Get("Cookie") == "" {
+				hdr.Set("Cookie", c)
+			}
+		} else if !schemeRe.MatchString(u) {
 			u = strings.TrimRight(d.BaseURL, "/") + "/" + strings.TrimLeft(u, "/")
 		}
 		insecure = d.Insecure
@@ -420,7 +425,25 @@ func (e *Engine) Web(ctx context.Context, w webrun.Step, timeout int) (string, e
 	if timeout <= 0 {
 		timeout = 30
 	}
-	return e.WebRunner().Run(ctx, w, filepath.Join(e.Root, "reports", "web-shots"), timeout)
+	x := webrun.Extra{Root: e.Root, StateDir: filepath.Join(e.Root, ".web-state")}
+	if w.Login != "" {
+		d, err := e.Device(w.Login)
+		if err != nil {
+			return "", err
+		}
+		pw, err := e.Secret(d, "password")
+		if err != nil {
+			return "", err
+		}
+		if strings.EqualFold(d.Protocol, "web") {
+			w, x = webrun.ForApp(w, webrun.App{Name: d.Session, URL: d.WebURL, Browser: d.Browser, Viewport: d.Viewport, Insecure: d.Insecure,
+				User: d.Username, Password: pw, Login: d.WebLogin}, x)
+		} else {
+			x.HTTPUser, x.HTTPPassword = d.Username, pw
+			w = webrun.WithLogin(w, d.Username, pw)
+		}
+	}
+	return e.WebRunner().Run(ctx, w, filepath.Join(e.Root, "reports", "web-shots"), timeout, x)
 }
 
 // ---- tables ----

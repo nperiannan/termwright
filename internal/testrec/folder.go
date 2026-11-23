@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -134,7 +135,8 @@ func (f Folder) List() []CaseInfo {
 
 func isCaseFile(p string) bool {
 	e := strings.ToLower(filepath.Ext(p))
-	return e == ".yaml" || e == ".yml"
+	b := strings.ToLower(filepath.Base(p))
+	return (e == ".yaml" || e == ".yml") && b != "defaults.yaml" && b != "defaults.yml"
 }
 
 // path makes rel a path inside the folder; a path leaving it is refused.
@@ -174,6 +176,7 @@ func (f Folder) Load(rel string) (Case, error) {
 	if c.Name == "" {
 		c.Name = strings.TrimSuffix(filepath.Base(p), filepath.Ext(p))
 	}
+	c.file = filepath.ToSlash(rel)
 	return c, nil
 }
 
@@ -569,6 +572,7 @@ func (f Folder) RunFilesWith(ctx context.Context, files []string, d Driver, vars
 	if err := os.MkdirAll(abs, 0o755); err != nil {
 		return rep, err
 	}
+	moveWebFiles(&rep, abs)
 	f.writeLogs(&rep, abs)
 	j, _ := json.MarshalIndent(rep, "", "  ")
 	for name, b := range map[string][]byte{"result.json": j, "junit.xml": JUnit(rep), "report.html": HTML(rep), "results.xlsx": XLSX(rep), "report.pdf": PDFReport(rep)} {
@@ -725,6 +729,23 @@ func (f Folder) Testbed(rel string) (map[string]string, error) {
 			for k, x := range t {
 				walk(strings.TrimPrefix(prefix+"."+k, "."), x)
 			}
+			if s, ok := t["session"].(string); ok && prefix != "" { // role: {session: …, port: …}
+				out[prefix] = s
+			} else if x, ok := t["value"]; ok && prefix != "" { // port1: {value: "1:2", speed: 10G}
+				out[prefix] = fmt.Sprint(x)
+			}
+		case []any:
+			if prefix == "tags" { // the testbed's tags (tests can require them)
+				var tags []string
+				for _, x := range t {
+					tags = append(tags, fmt.Sprint(x))
+				}
+				out["testbed.tags"] = strings.Join(tags, ",")
+				return
+			}
+			for i, x := range t {
+				walk(prefix+"."+strconv.Itoa(i+1), x)
+			}
 		case nil:
 			out[prefix] = ""
 		default:
@@ -778,9 +799,9 @@ func (f Folder) WriteTestbed(name string, sessions []string, comment string) (st
 	return rel, os.WriteFile(p, []byte(b.String()), 0o644)
 }
 
-// ChangeTestbed adds sessions to a testbed (each a role named after it) and takes roles out; its other
-// values and its comments stay. A testbed with groups (nested values) is changed in its YAML only.
-func (f Folder) ChangeTestbed(rel string, add, removeRoles []string) error {
+// EditTestbed changes a testbed file: edit gets its values (a role is a session path, or a group with
+// "session" and the role's own values); the comment lines at its top are kept.
+func (f Folder) EditTestbed(rel string, edit func(m map[string]any) error) error {
 	if !strings.Contains(rel, "/") {
 		rel = "testbeds/" + rel
 	}
@@ -788,38 +809,15 @@ func (f Folder) ChangeTestbed(rel string, add, removeRoles []string) error {
 	if err != nil {
 		return err
 	}
-	var raw map[string]any
-	if err := yaml.Unmarshal([]byte(txt), &raw); err != nil {
+	m := map[string]any{}
+	if err := yaml.Unmarshal([]byte(txt), &m); err != nil {
 		return fmt.Errorf("%s: %w", rel, err)
 	}
-	m := map[string]string{}
-	for k, v := range raw {
-		switch t := v.(type) {
-		case map[string]any, []any:
-			return fmt.Errorf("%s has groups of values: change it in its YAML", rel)
-		case nil:
-			m[k] = ""
-		default:
-			m[k] = fmt.Sprint(t)
-		}
+	if m == nil {
+		m = map[string]any{}
 	}
-	for _, r := range removeRoles {
-		delete(m, r)
-	}
-	have := map[string]bool{}
-	for _, v := range m {
-		have[v] = true
-	}
-	for _, s := range add {
-		if have[s] {
-			continue
-		}
-		r := RoleName(s)
-		for i := 2; m[r] != ""; i++ {
-			r = RoleName(s) + "_" + strconv.Itoa(i)
-		}
-		m[r] = s
-		have[s] = true
+	if err := edit(m); err != nil {
+		return err
 	}
 	var b strings.Builder
 	for _, line := range strings.Split(txt, "\n") {
@@ -834,10 +832,117 @@ func (f Folder) ChangeTestbed(rel string, add, removeRoles []string) error {
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		y, _ := yaml.Marshal(map[string]string{k: m[k]})
+		y, _ := yaml.Marshal(map[string]any{k: m[k]})
 		b.Write(y)
 	}
 	return f.SaveText(rel, b.String())
+}
+
+// roleSession is a testbed value's session: the value, or a group's "session".
+func roleSession(v any) string {
+	if g, ok := v.(map[string]any); ok {
+		s, _ := g["session"].(string)
+		return s
+	}
+	if v == nil {
+		return ""
+	}
+	return fmt.Sprint(v)
+}
+
+// ChangeTestbed adds sessions to a testbed (each a new role named after it) and removes roles.
+func (f Folder) ChangeTestbed(rel string, add, removeRoles []string) error {
+	return f.EditTestbed(rel, func(m map[string]any) error {
+		for _, r := range removeRoles {
+			delete(m, r)
+		}
+		have := map[string]bool{}
+		for _, v := range m {
+			have[roleSession(v)] = true
+		}
+		for _, s := range add {
+			if have[s] {
+				continue
+			}
+			r := RoleName(s)
+			for i := 2; m[r] != nil; i++ {
+				r = RoleName(s) + "_" + strconv.Itoa(i)
+			}
+			m[r] = s
+			have[s] = true
+		}
+		return nil
+	})
+}
+
+var roleRe = regexp.MustCompile(`^[A-Za-z_][\w-]*$`)
+
+// SetTestbedRole makes role a session in a testbed (its own values are kept).
+func (f Folder) SetTestbedRole(rel, role, sess string) error {
+	if !roleRe.MatchString(role) {
+		return fmt.Errorf("%q: a role is letters, digits and _", role)
+	}
+	return f.EditTestbed(rel, func(m map[string]any) error {
+		if g, ok := m[role].(map[string]any); ok {
+			g["session"] = sess
+			return nil
+		}
+		m[role] = sess
+		return nil
+	})
+}
+
+// SetTestbedValue sets one of a role's values ({{role.key}}); an empty value removes it.
+func (f Folder) SetTestbedValue(rel, role, key, value string) error {
+	if !roleRe.MatchString(key) {
+		return fmt.Errorf("%q: a name is letters, digits and _", key)
+	}
+	return f.EditTestbed(rel, func(m map[string]any) error {
+		g, ok := m[role].(map[string]any)
+		if !ok {
+			if m[role] == nil {
+				return fmt.Errorf("no role %s in the testbed", role)
+			}
+			g = map[string]any{"session": roleSession(m[role])}
+		}
+		if pm, ok := g[key].(map[string]any); ok { // a port with properties: its value
+			if value == "" {
+				delete(pm, "value")
+			} else {
+				pm["value"] = value
+			}
+		} else if value == "" {
+			delete(g, key)
+		} else {
+			g[key] = value
+		}
+		if len(g) == 1 && g["session"] != nil {
+			m[role] = g["session"]
+		} else {
+			m[role] = g
+		}
+		return nil
+	})
+}
+
+// RenameTestbedRole gives a role another name.
+func (f Folder) RenameTestbedRole(rel, from, to string) error {
+	if !roleRe.MatchString(to) {
+		return fmt.Errorf("%q: a role is letters, digits and _", to)
+	}
+	return f.EditTestbed(rel, func(m map[string]any) error {
+		if m[from] == nil {
+			return fmt.Errorf("no role %s", from)
+		}
+		if m[to] != nil && from != to {
+			return fmt.Errorf("%s is already a role", to)
+		}
+		m[to] = m[from]
+		if from != to {
+			delete(m, from)
+		}
+		return nil
+	})
 }
 
 func exists(p string) bool { _, err := os.Stat(p); return err == nil }

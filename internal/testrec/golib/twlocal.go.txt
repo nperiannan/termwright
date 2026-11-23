@@ -22,28 +22,48 @@ var (
 	engErr  error
 )
 
+func engine() (*standalone.Engine, error) {
+	engOnce.Do(func() {
+		root, _ := os.Getwd()
+		for d := root; ; d = filepath.Dir(d) {
+			if _, err := os.Stat(filepath.Join(d, "inventory.yaml")); err == nil {
+				root = d
+				break
+			}
+			if filepath.Dir(d) == d {
+				break
+			}
+		}
+		eng, engErr = standalone.Open(root)
+		if eng != nil {
+			eng.Ask = standalone.AskTerminal
+		}
+	})
+	return eng, engErr
+}
+
 func init() {
 	LocalStep = func(step map[string]any) ([]byte, error) {
-		engOnce.Do(func() {
-			root, _ := os.Getwd()
-			for d := root; ; d = filepath.Dir(d) {
-				if _, err := os.Stat(filepath.Join(d, "inventory.yaml")); err == nil {
-					root = d
-					break
-				}
-				if filepath.Dir(d) == d {
-					break
-				}
-			}
-			eng, engErr = standalone.Open(root)
-			if eng != nil {
-				eng.Ask = standalone.AskTerminal
-			}
-		})
-		if engErr != nil {
-			return nil, engErr
+		e, err := engine()
+		if err != nil {
+			return nil, err
 		}
 		b, _ := json.Marshal(step)
-		return json.Marshal(eng.Execute(context.Background(), b))
+		return json.Marshal(e.Execute(context.Background(), b))
+	}
+	DeviceFacts = func(session string) map[string]string {
+		e, err := engine()
+		if err != nil {
+			return nil
+		}
+		d, err := e.Device(session)
+		if err != nil {
+			return nil
+		}
+		f := map[string]string{"device_type": d.DeviceType, "host": d.Host, "slots": d.Slots}
+		if d.Stack {
+			f["stack"] = "true"
+		}
+		return f
 	}
 }

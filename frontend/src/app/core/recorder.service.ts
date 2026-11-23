@@ -382,7 +382,9 @@ export class Recorder {
     if (await this.backend.testFile(file).then(() => true).catch(() => false)
       && !(await this.ui.confirm(tr('Replace the Test?'), tr('{0} is already there.', file), tr('Replace'), true))) return false;
     try {
-      const rel = await this.backend.testSave(file, this.testCase());
+      let tc = this.testCase();
+      try { const r = await this.backend.testsUsePortVars(tc), n = r.changed; if (n) { tc = r.case; this.ui.toast(tr('{0} port numbers are now port variables ({{role.port1}}…) - each testbed sets its own', n), 'info'); } } catch { /* kept as recorded */ }
+      const rel = await this.backend.testSave(file, tc);
       this.ui.toast(tr('Saved {0}', rel), 'success');
       this.stop();
       return true;

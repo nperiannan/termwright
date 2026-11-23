@@ -22,6 +22,7 @@ const (
 	ProtoWOL     = "WOL"     // Wake-on-LAN: wakes the device, then watches it (no terminal)
 	ProtoAPI     = "API"     // a REST API: opened in the API client (no terminal)
 	ProtoSNMP    = "SNMP"    // a device reached only by SNMP: opened in the SNMP Browser (no terminal)
+	ProtoWeb     = "Web"     // a web app (HTTP/HTTPS): opened in a browser with Playwright, for web tests (no terminal)
 )
 
 // Keys used in the interoperable session file format. Keys prefixed with
@@ -150,6 +151,11 @@ const (
 	kAPILogin     = "Termwright API Login"
 	kAPITokenPath = "Termwright API Token Path"
 	kAPITokenURL  = "Termwright API Token URL"
+	kWebURL       = "Termwright Web URL"
+	kWebInsecure  = "Termwright Web Any Certificate"
+	kWebBrowser   = "Termwright Web Browser"
+	kWebViewport  = "Termwright Web Size"
+	kWebLogin     = "Termwright Web Login"
 	kAPIClientID  = "Termwright API Client ID"
 	kAPIScope     = "Termwright API Scope"
 	kAPIInsecure  = "Termwright API Any Certificate"
@@ -329,6 +335,11 @@ type Session struct {
 	APILogin     string   `json:"apiLogin,omitempty"`     // login: the login request, "POST /auth/token"
 	APITokenPath string   `json:"apiTokenPath,omitempty"` // login: where the token is in the answer ("token", "data.access_token"; "" finds it)
 	APITokenURL  string   `json:"apiTokenUrl,omitempty"`  // oauth2: the token endpoint (client credentials, or password with a user)
+	WebURL       string   `json:"webUrl,omitempty"`       // web app: its address (web steps' paths go after it)
+	WebInsecure  bool     `json:"webInsecure,omitempty"`  // web app: accept any TLS certificate
+	WebBrowser   string   `json:"webBrowser,omitempty"`   // web app: chromium (""), firefox or webkit
+	WebViewport  string   `json:"webViewport,omitempty"`  // web app: page size, e.g. 1280x800
+	WebLogin     string   `json:"webLogin,omitempty"`     // web app: the recorded login (JSON actions; the password is {{password}})
 	APIClientID  string   `json:"apiClientId,omitempty"`  // oauth2
 	APIScope     string   `json:"apiScope,omitempty"`     // oauth2
 	APIInsecure  bool     `json:"apiInsecure,omitempty"`  // accept any TLS certificate
@@ -491,6 +502,11 @@ func FromFile(path string, f *sessionfile.File) Session {
 	s.APILogin = f.Str(kAPILogin, "")
 	s.APITokenPath = f.Str(kAPITokenPath, "")
 	s.APITokenURL = f.Str(kAPITokenURL, "")
+	s.WebURL = f.Str(kWebURL, "")
+	s.WebInsecure = f.Bool(kWebInsecure, false)
+	s.WebBrowser = f.Str(kWebBrowser, "")
+	s.WebViewport = f.Str(kWebViewport, "")
+	s.WebLogin = f.Str(kWebLogin, "")
 	s.APIClientID = f.Str(kAPIClientID, "")
 	s.APIScope = f.Str(kAPIScope, "")
 	s.APIInsecure = f.Bool(kAPIInsecure, false)
@@ -876,6 +892,11 @@ func (s Session) Apply(f *sessionfile.File) {
 	setOptStr(f, kAPILogin, s.APILogin)
 	setOptStr(f, kAPITokenPath, s.APITokenPath)
 	setOptStr(f, kAPITokenURL, s.APITokenURL)
+	setOptStr(f, kWebURL, s.WebURL)
+	setOptBool(f, kWebInsecure, s.WebInsecure)
+	setOptStr(f, kWebBrowser, s.WebBrowser)
+	setOptStr(f, kWebViewport, s.WebViewport)
+	setOptStr(f, kWebLogin, s.WebLogin)
 	setOptStr(f, kAPIClientID, s.APIClientID)
 	setOptStr(f, kAPIScope, s.APIScope)
 	setOptBool(f, kAPIInsecure, s.APIInsecure)

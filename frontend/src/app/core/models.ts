@@ -22,6 +22,8 @@ export interface Session {
   /** SNMP (the browser, the map and discovery): version '' = v2c, '1', '2c', '3'; the community and v3 passwords are in the credential store. */
   /** REST API session (protocol 'API'): the secret and secret variables' values are in the credential store. */
   apiBaseUrl?: string; apiAuth?: string; apiKeyName?: string; apiKeyIn?: string; apiLogin?: string; apiTokenPath?: string; apiTokenUrl?: string;
+  /** Web app session (protocol 'Web'): address, browser settings and the recorded login (JSON actions). */
+  webUrl?: string; webInsecure?: boolean; webBrowser?: string; webViewport?: string; webLogin?: string;
   apiClientId?: string; apiScope?: string; apiInsecure?: boolean; apiCaFile?: string; apiVars?: APIVar[];
   snmpVersion?: string; snmpPort?: number; snmpHost?: string; snmpUser?: string; snmpAuth?: string; snmpPriv?: string; snmpContext?: string; snmpWrite?: boolean;
   environment?: string; rdpDomain?: string; rdpFullScreen?: boolean; rdpSize?: string; vncViewOnly?: boolean; keywordSet: string; fontFamily: string; fontSize: number; backspace: '' | 'bs'; logonScript: string; serialDtr: boolean; serialRts: boolean;
@@ -234,7 +236,7 @@ export interface ImportSource { app: string; path: string; what: string; }
 
 export interface FileFilter { displayName: string; pattern: string; }
 
-export const PROTOCOLS = ['SSH2', 'Telnet', 'Serial', 'Local Shell', 'Raw', 'Console', 'RDP', 'VNC', 'WOL', 'API', 'SNMP'] as const;
+export const PROTOCOLS = ['SSH2', 'Telnet', 'Serial', 'Local Shell', 'Raw', 'Console', 'RDP', 'VNC', 'WOL', 'API', 'SNMP', 'Web'] as const;
 /** Console server access methods (Console sessions). */
 export const CONSOLE_METHODS: { id: string; label: string }[] = [
   { id: 'opengear-ssh', label: 'SSH as user:portNN (Opengear)' },
@@ -271,7 +273,7 @@ export const BAUD_RATES = [300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115
 
 /** How a protocol is named in the protocol choice. */
 export function protoLabel(p: string): string {
-  return ({ SSH2: 'SSH', WOL: 'Wake-on-LAN', API: 'REST API', 'Local Shell': 'Local Shell' } as Record<string, string>)[p] ?? p;
+  return ({ SSH2: 'SSH', WOL: 'Wake-on-LAN', API: 'REST API', Web: 'Web App', 'Local Shell': 'Local Shell' } as Record<string, string>)[p] ?? p;
 }
 
 export function defaultPort(protocol: string): number {
@@ -592,6 +594,8 @@ export interface TestExpect { agg?: 'min' | 'max' | 'avg' | 'delta' | 'rate'; sc
 export interface TestTableExpect { where?: Record<string, string>; column?: string; rows?: number; equals?: string; notEquals?: string; matches?: string; greater?: number; less?: number; exists?: boolean; }
 export interface TestTable { header: string[]; rows: string[][]; }
 export interface TestStep {
+  /** '' = the test's defaults, 'custom' = its own options only, 'none' = no options. */
+  options?: string;
   call?: { proc: string; with?: Record<string, string> };
   web?: TestWeb;
   tgen?: { kind: string; server: string; config?: string; ports?: string[]; duration?: number; protocols?: boolean; settle?: number; session?: string };
@@ -603,7 +607,11 @@ export interface TestStep {
   expect?: TestExpect[]; save?: { var: string; field?: string; json?: string; oid?: string; where?: Record<string, string>; column?: string }[]; timeout?: number; continueOnFail?: boolean; ignoreErrors?: boolean;
   expected?: string; manual?: { instruction: string }; traffic?: { test: string }; upgrade?: { session: string; image: string }; wait?: number; if?: string; retry?: { timeout?: number; interval?: number }; loop?: { var: string; values?: string[]; range?: string; from?: string; steps: TestStep[] };
 }
-export interface TestCase { data?: string; qtest?: { testCase: string }; name?: string; description?: string; tags?: string[]; dependsOn?: string[]; watch?: { syslog?: string[]; traps?: string[]; devices?: string[] }; configDiff?: boolean; configIgnore?: string[]; vars?: Record<string, string>; params?: Record<string, string>[]; restore?: ('config' | 'lab')[]; setup?: TestStep[]; steps: TestStep[]; cleanup?: TestStep[]; }
+export interface TestStepOptions { timeout?: number; wait?: number; retry?: { timeout?: number; interval?: number }; continueOnFail?: boolean; ignoreErrors?: boolean; }
+export interface TestRequirement { deviceType?: string; stack?: boolean; ports?: number; model?: string; tags?: string[]; }
+export interface TestSuiteDefaults { vars?: Record<string, string>; stepOptions?: TestStepOptions; }
+export interface TestbedMeta { tags: string[]; description?: string; links: string[]; }
+export interface TestCase { requires?: Record<string, TestRequirement>; defaults?: TestStepOptions; data?: string; qtest?: { testCase: string }; name?: string; description?: string; tags?: string[]; dependsOn?: string[]; watch?: { syslog?: string[]; traps?: string[]; devices?: string[] }; configDiff?: boolean; configIgnore?: string[]; vars?: Record<string, string>; params?: Record<string, string>[]; restore?: ('config' | 'lab')[]; setup?: TestStep[]; steps: TestStep[]; cleanup?: TestStep[]; }
 export interface TestCaseInfo { file: string; name: string; description?: string; tags?: string[]; steps: number; error?: string; }
 export interface TestCheckResult { what: string; passed: boolean; got?: string; }
 export interface TestStepResult { vars?: Record<string, string>; name: string; kind: string; phase?: '' | 'setup' | 'cleanup' | 'restore'; target?: string; sent?: string; status?: number; output?: string; ms: number; passed: boolean; skipped?: boolean; unchecked?: boolean; error?: string; checks?: TestCheckResult[]; table?: TestTable; expected?: string; }
@@ -641,7 +649,9 @@ export interface TemplateSpec { kind: 'table' | 'fields'; header?: string; colum
 
 export interface TestTrends { runs: { dir: string; at: string; passed: number; failed: number; skipped: number; flaky: number; ms: number; testbed?: string; version?: string }[]; tests: { file: string; case: string; runs: number; failures: number; flips: number; flaky: number; last?: string }[]; versions: { version: string; passed: number; total: number }[]; }
 export interface TestBooking { id: string; testbed: string; from: string; to: string; who: string; why?: string; mine?: boolean; }
-export interface TestWebAction { do: string; target?: string; value?: string; }
-export interface TestWeb { url?: string; browser?: string; show?: boolean; insecure?: boolean; actions?: TestWebAction[]; }
+export interface TestWebAction { do: string; target?: string; value?: string; secret?: boolean; alt?: string[]; with?: Record<string, string>; }
+export interface WebResult { i: number; ok: boolean; note?: string; error?: string; healed?: string; }
+export interface WebPick { target: string; alt?: string[]; text?: string; tag?: string; }
+export interface TestWeb { url?: string; browser?: string; show?: boolean; insecure?: boolean; state?: string; login?: string; viewport?: string; trace?: boolean; pictures?: string; actions?: TestWebAction[]; }
 export interface WebStatus { node?: string; version?: string; ready: boolean; dir: string; hint?: string; }
-export interface TestbedDevice { role: string; session?: string; folder?: string; name?: string; host?: string; deviceType?: string; model?: string; protocol?: string; value?: string; }
+export interface TestbedDevice { role: string; session?: string; folder?: string; name?: string; host?: string; deviceType?: string; model?: string; protocol?: string; value?: string; values?: Record<string, string>; wanted?: string[]; ports?: { name: string; value: string; set?: boolean; props?: Record<string, string> }[]; }

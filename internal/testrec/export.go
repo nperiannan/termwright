@@ -289,6 +289,8 @@ func sessionOfStep(st Step) string {
 		return st.SNMP.Session
 	case st.Netconf != nil:
 		return st.Netconf.Session
+	case st.Web != nil:
+		return st.Web.Login
 	}
 	return ""
 }
@@ -368,7 +370,8 @@ textfsm>=1.1
 PyYAML>=6.0
 # optional:
 # ncclient>=0.6      NETCONF steps
-# playwright>=1.40   web steps (then: playwright install chromium)
+# web steps use Node.js and Playwright (not pip): npm install --prefix .playwright playwright
+#   && npx --prefix .playwright playwright install chromium
 # keyring>=24        passwords from the system keyring
 # SNMP steps use the net-snmp commands (apt install snmp / brew install net-snmp)
 `
@@ -507,7 +510,7 @@ func exportReadme(o ExportOptions, name string, n int) string {
 	}
 	if o.Standalone {
 		return "# " + name + "\n\n" + fmt.Sprintf("%d Termwright tests as a %s suite that runs on its own - Termwright is not needed.\n\n", n, lang) +
-			"## Run\n\n1. Install Python 3.8 or later, then `python3 -m pip install -r requirements.txt` (paramiko, textfsm, PyYAML;\n   ncclient, playwright and keyring are optional; SNMP steps use the net-snmp commands).\n" +
+			"## Run\n\n1. Install Python 3.8 or later, then `python3 -m pip install -r requirements.txt` (paramiko, textfsm, PyYAML;\n   ncclient and keyring are optional; SNMP steps use the net-snmp commands; web steps need Node.js and\n   `npm install --prefix .playwright playwright && npx --prefix .playwright playwright install chromium`).\n" +
 			"2. Check `inventory.yaml`: each session the tests use, with its host, protocol, port, user name and device type.\n" +
 			"3. Give the passwords - never written in this folder: `export TW_PASSWORD=...` for all devices, or\n   `TW_PASSWORD_<NAME>` per device (the session's last part in capitals, other characters as `_`), or the system\n   keyring (service `termwright`), or type them when asked.\n" +
 			"4. Run `" + run + "` - or `" + run + " testbeds/<other>.yaml` for other devices (default: " + tbs + ").\n\n" +

@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/termwright/termwright/internal/webrun"
 )
 
 //go:embed golib/*.txt
@@ -33,7 +35,8 @@ func GoLibFiles() map[string][]byte {
 	rd := func(n string) []byte { b, _ := golib.ReadFile("golib/" + n); return b }
 	return map[string][]byte{"go.mod": rd("go.mod.txt"), "lib/twtest/twtest.go": rd("twtest.go.txt"), "lib/junit/main.go": rd("junit.go.txt"),
 		"lib/python/twtest.py": rd("twtest.py.txt"), "lib/python/twlocal.py": rd("twlocal.py.txt"), "lib/python/run_tests.py": rd("run_tests.py.txt"),
-		"lib/tcl/twtest.tcl": rd("twtest.tcl.txt"), "lib/tcl/run_tests.tcl": rd("run_tests.tcl.txt")}
+		"lib/python/web_runner.js": webrun.RunnerJS(),
+		"lib/tcl/twtest.tcl":       rd("twtest.tcl.txt"), "lib/tcl/run_tests.tcl": rd("run_tests.tcl.txt")}
 }
 
 // GoFile is the generated Go test file of a case file: cases/vlan/add.yaml → cases/vlan/add_test.go.
@@ -71,6 +74,9 @@ func GenerateGo(c Case, caseFile string) ([]byte, error) {
 		fmt.Fprintf(&b, "\ttwtest.Params(t, %s, []map[string]string{\n%s,\n}, func(tw *twtest.T) {\n", goMap(c.Vars), strings.Join(ps, ",\n"))
 	} else {
 		fmt.Fprintf(&b, "\ttw := twtest.New(t, %s)\n", goMap(c.Vars))
+	}
+	if req := RequireMap(c); len(req) > 0 {
+		fmt.Fprintf(&b, "\ttw.Require(%s)\n", goMap(req))
 	}
 	if len(c.Restore) > 0 {
 		var ks, ss []string
@@ -558,4 +564,31 @@ func goMapOrEmpty(m map[string]string) string {
 		return "map[string]string{}"
 	}
 	return goMap(m)
+}
+
+// RequireMap is a test's requirements as role.what values (for the generated code).
+func RequireMap(c Case) map[string]string {
+	out := map[string]string{}
+	for r, q := range c.Requires {
+		n := len(out)
+		if q.DeviceType != "" {
+			out[r+".device_type"] = q.DeviceType
+		}
+		if q.Model != "" {
+			out[r+".model"] = q.Model
+		}
+		if q.Stack != nil {
+			out[r+".stack"] = strconv.FormatBool(*q.Stack)
+		}
+		if q.Ports > 0 {
+			out[r+".ports"] = strconv.Itoa(q.Ports)
+		}
+		if len(q.Tags) > 0 {
+			out[r+".tags"] = strings.Join(q.Tags, ",")
+		}
+		if len(out) == n { // only that the role is there
+			out[r+".device_type"] = ""
+		}
+	}
+	return out
 }

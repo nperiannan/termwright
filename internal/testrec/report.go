@@ -129,6 +129,7 @@ body{font:14px system-ui,sans-serif;margin:24px;background:#0f1319;color:#dfe5ee
 .warn{color:#e0a030}details{border:1px solid #2a3240;border-radius:8px;margin:8px 0;padding:6px 12px;background:#151b23}summary{cursor:pointer;font-weight:600}
 details.out{border:0;padding:0;margin:4px 0 0;background:none}details.out summary{font-weight:400;color:#8a95a5;font-size:12px}
 table{border-collapse:collapse;width:100%;margin:8px 0}td{padding:4px 8px;border-top:1px solid #2a3240;vertical-align:top}
+.shots{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.shots img{height:72px;border-radius:4px;border:1px solid #2a3240}.shots img.fail{height:120px;border:2px solid #ef6161}.shots video{height:120px;border-radius:4px}
 pre{white-space:pre-wrap;background:#0b0f14;padding:8px;border-radius:6px;max-height:320px;overflow:auto;font-size:12px}
 @media (prefers-color-scheme: light){body{background:#f6f7f9;color:#1d2330}details{background:#fff;border-color:#dde2ea}td{border-color:#e5e8ee}pre{background:#f0f2f5}}
 </style></head><body>`)
@@ -202,6 +203,7 @@ pre{white-space:pre-wrap;background:#0b0f14;padding:8px;border-radius:6px;max-he
 			if st.Unchecked && st.Passed {
 				b.WriteString(`<div class="mut">ran - nothing checked</div>`)
 			}
+			b.WriteString(webMedia(st.Output))
 			if !st.Passed && !st.Skipped && st.Output != "" {
 				fmt.Fprintf(&b, `<pre>%s</pre>`, e(st.Output))
 			} else if st.Output != "" {

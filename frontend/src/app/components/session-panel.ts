@@ -341,6 +341,7 @@ export class SessionPanel {
       this.error.set('');
       this.pwState.set('');
       this.pwOpen.set(!e.oldPath);
+      if (e.oldPath && this.s?.protocol === 'Web') { queueMicrotask(() => this.more('')); return; } // its settings are on the full editor's page
       if (e.oldPath) {
         this.backend.sessionPasswordState(e.oldPath).then(st => {
           this.pwState.set(st);
@@ -404,7 +405,7 @@ export class SessionPanel {
   setProto(p: string) {
     if (!this.s) return;
     this.s.protocol = p;
-    if (p === 'API' || p === 'SNMP') { this.s.deviceType = ''; this.more(''); return; } // their settings are on the full editor's pages
+    if (p === 'API' || p === 'SNMP' || p === 'Web') { this.s.deviceType = ''; this.more(''); return; } // their settings are on the full editor's pages
     if (p === 'WOL') { this.s.deviceType = ''; if (!this.s.wolNetwork && this.s.hostname) this.s.wolNetwork = this.s.hostname.replace(/\.\d+$/, '.0/24'); }
     this.s.port = defaultPort(p) || this.s.port;
     if (p === 'Console' && !this.s.consoleMethod) { this.s.consoleMethod = 'opengear-ssh'; this.s.initialCr = true; }

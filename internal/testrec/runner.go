@@ -185,6 +185,13 @@ func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt 
 	for k, x := range vars {
 		v[k] = x
 	}
+	addFacts(d, v, vars, caseRoles(c))
+	addLinks(v)
+	if why := unmet(c, v); why != "" { // the testbed does not have what the test needs
+		r.Passed, r.Skipped, r.Error = false, true, "skipped: "+why
+		r.Ms = time.Since(r.Start).Milliseconds()
+		return r
+	}
 	// restore: save the devices' state first; put it back after the cleanup
 	var restore func(context.Context) []StepResult
 	if len(c.Restore) > 0 {
@@ -241,8 +248,13 @@ func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt 
 		}
 	}
 	stepping := opt.StepMode
+	var notNeeded map[int]string // cleanup steps whose configuration never ran
 	run := func(list []Step, phase string, always bool) {
 		for i, st := range list {
+			if phase == "cleanup" && notNeeded[i] != "" {
+				r.Steps = append(r.Steps, StepResult{Name: Fill(stepName(st, i), v), Kind: stepKind(st), Phase: phase, Skipped: true, Passed: true, Error: notNeeded[i]})
+				continue
+			}
 			if phase == "" && ((opt.From > 0 && i+1 < opt.From) || (opt.Only > 0 && i+1 != opt.Only)) {
 				why := fmt.Sprintf("not run: this run started at step %d", opt.From)
 				if opt.Only > 0 {
@@ -350,6 +362,7 @@ func RunWith(ctx context.Context, c Case, d Driver, vars map[string]string, opt 
 	case opt.Cleanup == CleanupAuto && len(c.Cleanup) == 0:
 		run(autoUndo(c, r.Steps, d, v), "cleanup", true)
 	default:
+		notNeeded = cleanupNotNeeded(c, r.Steps, d, v)
 		run(c.Cleanup, "cleanup", true)
 	}
 	if mark != nil {
@@ -631,6 +644,10 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 		err = errors.New("a step has one of run, http and snmp")
 	case st.Run != nil:
 		sr.Target, sr.Sent = Fill(st.Run.Session, v), Fill(st.Run.Command, v)
+		if m := varRe.FindString(sr.Target + " " + sr.Sent); m != "" { // not sent with a hole in it
+			err = fmt.Errorf("%s has no value: set it in the test (Defaults), the testbed or the Run panel", m)
+			break
+		}
 		out, err = d.Command(sctx, sr.Target, sr.Sent, st.Run.Prompt)
 		if de, ok := d.(DeviceErrors); ok && err == nil && !st.Run.IgnoreErrors {
 			if line := de.DeviceError(sr.Target, out); line != "" {
@@ -698,7 +715,7 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 			err = errors.New("this runner cannot drive Spirent TestCenter or IxNetwork")
 		}
 	case st.Web != nil:
-		w := fillWeb(*st.Web, v)
+		w := FillWeb(*st.Web, v)
 		sr.Target, sr.Sent = "browser", WebText(w)
 		if wd, ok := d.(WebDriver); ok {
 			out, err = wd.Web(sctx, w)
@@ -757,6 +774,15 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 		}
 		if ok && s.Var != "" {
 			v[s.Var] = val
+		}
+	}
+	if st.Web != nil && sr.Passed { // web "read" actions: variables for later steps
+		for _, ln := range strings.Split(out, "\n") {
+			if rest, ok := strings.CutPrefix(ln, "read "); ok {
+				if k, val, ok := strings.Cut(rest, " = "); ok && !strings.Contains(k, " ") {
+					v[k] = val
+				}
+			}
 		}
 	}
 	return sr
@@ -1236,3 +1262,139 @@ func TryChecks(expects []Expect, out string, status int, vars map[string]string)
 	}
 	return res
 }
+
+// Facter is a driver that knows a saved session's facts (device_type, host, model, name).
+type Facter interface {
+	Facts(session string) map[string]string
+}
+
+// addFacts gives each variable that is a saved session its facts as {{role.device_type}}, {{role.host}},
+// {{role.model}}, {{role.name}} and its ports {{role.port1}}…{{role.port8}} - unless the test, the
+// testbed or the run sets them.
+func addFacts(d Driver, v, explicit map[string]string, own ...map[string]bool) {
+	f, ok := d.(Facter)
+	if !ok {
+		return
+	}
+	keys := make([]string, 0, len(v))
+	for k := range v {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var withPorts []string
+	for _, k := range keys {
+		x := v[k]
+		if strings.Contains(k, ".") || x == "" || strings.Contains(x, "{{") {
+			continue
+		}
+		fs := f.Facts(x)
+		if fs == nil {
+			continue
+		}
+		for fk, fv := range fs {
+			if _, set := v[k+"."+fk]; !set {
+				v[k+"."+fk] = fv
+			}
+		}
+		addPorts(k, v, explicit)
+		if v[k+".port1"] != "" {
+			withPorts = append(withPorts, k)
+		}
+	}
+	if len(withPorts) > 1 && len(own) > 0 && own[0] != nil { // a testbed with more devices than the test uses
+		var mine []string
+		for _, k := range withPorts {
+			if own[0][k] {
+				mine = append(mine, k)
+			}
+		}
+		withPorts = mine
+	}
+	if len(withPorts) == 1 { // one device: {{port1}} … and {{ports}} are its ports too
+		aliasPorts(withPorts[0], v, explicit)
+	}
+}
+
+// caseRoles: the devices a test itself names - its own variables and the {{role}} its steps run on.
+func caseRoles(c Case) map[string]bool {
+	out := map[string]bool{}
+	for k := range c.Vars {
+		if !strings.Contains(k, ".") {
+			out[k] = true
+		}
+	}
+	for _, list := range [][]Step{c.Setup, c.Steps, c.Cleanup} {
+		for _, st := range list {
+			if st.Run != nil {
+				if r := strings.TrimSpace(st.Run.Session); strings.HasPrefix(r, "{{") && strings.HasSuffix(r, "}}") {
+					out[strings.TrimSpace(r[2:len(r)-2])] = true
+				}
+			}
+		}
+	}
+	return out
+}
+
+// aliasPorts makes a role's port variables also {{port1}}…, {{ports}} (a test with one device).
+func aliasPorts(k string, v, explicit map[string]string) {
+	for key, x := range v {
+		if p, ok := strings.CutPrefix(key, k+"."); ok && (p == "ports" || strings.HasPrefix(p, "port") && strings.Trim(p[4:], "0123456789") == "" && p != "port") {
+			if explicit[p] == "" {
+				v[p] = x
+			}
+		}
+	}
+}
+
+// cleanupNotNeeded: the cleanup steps that undo a configuration command that never took effect (it was not
+// reached, or the device refused it) - by index, with why. A cleanup step is matched to a configuration
+// step when the device type's undo of that step is the cleanup command; one that matches nothing always runs.
+func cleanupNotNeeded(c Case, done []StepResult, d Driver, v map[string]string) map[int]string {
+	u, ok := d.(Undoer)
+	if !ok || len(c.Cleanup) == 0 {
+		return nil
+	}
+	ran := map[string]bool{}
+	for _, sr := range done {
+		if sr.Kind == "run" && !sr.Skipped && sr.Error == "" {
+			ran[sr.Target+"\x00"+sr.Sent] = true
+		}
+	}
+	type cfg struct {
+		cmd string
+		ran bool
+	}
+	undo := map[string][]cfg{} // session + undo command -> the configuration commands it undoes
+	for _, list := range [][]Step{c.Setup, c.Steps} {
+		for _, st := range list {
+			if st.Run == nil {
+				continue
+			}
+			s, cmd := Fill(st.Run.Session, v), Fill(st.Run.Command, v)
+			if x := u.UndoOf(s, cmd); x != "" {
+				k := s + "\x00" + norm(x)
+				undo[k] = append(undo[k], cfg{cmd, ran[s+"\x00"+cmd]})
+			}
+		}
+	}
+	out := map[int]string{}
+	for i, st := range c.Cleanup {
+		if st.Run == nil {
+			continue
+		}
+		cs := undo[Fill(st.Run.Session, v)+"\x00"+norm(Fill(st.Run.Command, v))]
+		if len(cs) == 0 {
+			continue
+		}
+		any := false
+		for _, x := range cs {
+			any = any || x.ran
+		}
+		if !any {
+			out[i] = "not needed: \"" + cs[0].cmd + "\" did not configure anything (it did not run, or the device refused it)"
+		}
+	}
+	return out
+}
+
+func norm(s string) string { return strings.Join(strings.Fields(s), " ") }

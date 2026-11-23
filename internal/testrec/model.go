@@ -6,6 +6,7 @@ package testrec
 
 // Case is one test: steps run in order with their checks.
 type Case struct {
+	file string // where it was loaded from (for its suite's defaults.yaml)
 	// Name of the test (default: the file name).
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
 	// Description: what it checks.
@@ -25,6 +26,11 @@ type Case struct {
 	// difference fails the test (lines matching ConfigIgnore do not count).
 	ConfigDiff   bool     `yaml:"configDiff,omitempty" json:"configDiff,omitempty"`
 	ConfigIgnore []string `yaml:"configIgnore,omitempty" json:"configIgnore,omitempty"`
+	// Defaults: the step options most steps share (timeout, wait, retry, go on when it fails, ignore
+	// device errors), set once; a step uses them unless it has its own (options: custom) or none.
+	Defaults *StepOptions `yaml:"defaults,omitempty" json:"defaults,omitempty"`
+	// Requires: what the test needs of each device role ({{role}}); a testbed without it skips the test.
+	Requires map[string]Requirement `yaml:"requires,omitempty" json:"requires,omitempty"`
 	// Vars: values used as {{name}} in the steps; a run's own values win.
 	Vars map[string]string `yaml:"vars,omitempty" json:"vars,omitempty"`
 	// Params: the test runs once per entry, with its values as {{variables}} (data-driven tests);
@@ -94,6 +100,9 @@ type Step struct {
 	TGen *TGenStep `yaml:"tgen,omitempty" json:"tgen,omitempty"`
 	// Web: drive a browser with Playwright (open a page, click, fill, check text, screenshot).
 	Web *WebStep `yaml:"web,omitempty" json:"web,omitempty"`
+	// Options: which step options apply - "" the test's Defaults (a step with options of its own keeps
+	// them), "custom" only its own, "none" neither.
+	Options string `yaml:"options,omitempty" json:"options,omitempty"`
 	// Sample: run the step several times; checks with agg (min, max, avg, delta, rate) look at all the
 	// values, the others at the last answer.
 	Sample *Sample `yaml:"sample,omitempty" json:"sample,omitempty"`
@@ -224,6 +233,15 @@ type Save struct {
 	Column string            `yaml:"column,omitempty" json:"column,omitempty"`
 }
 
+// StepOptions are the step options a test sets once for its steps (Case.Defaults).
+type StepOptions struct {
+	Timeout        int     `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	Wait           float64 `yaml:"wait,omitempty" json:"wait,omitempty"`
+	Retry          *Retry  `yaml:"retry,omitempty" json:"retry,omitempty"`
+	ContinueOnFail bool    `yaml:"continueOnFail,omitempty" json:"continueOnFail,omitempty"`
+	IgnoreErrors   bool    `yaml:"ignoreErrors,omitempty" json:"ignoreErrors,omitempty"`
+}
+
 // Retry repeats a step until its checks pass.
 type Retry struct {
 	// Timeout: give up after this many seconds (default 60).
@@ -298,4 +316,21 @@ type NetconfStep struct {
 type Sample struct {
 	Count    int     `yaml:"count" json:"count"`
 	Interval float64 `yaml:"interval,omitempty" json:"interval,omitempty"`
+}
+
+// Requirement is what a test needs of a device role: its device type (EXOS, VOSS - a part of it), a stack
+// or not, how many test ports, a model (a part of it), and testbed tags (all of them).
+type Requirement struct {
+	DeviceType string   `yaml:"device_type,omitempty" json:"deviceType,omitempty"`
+	Stack      *bool    `yaml:"stack,omitempty" json:"stack,omitempty"`
+	Ports      int      `yaml:"ports,omitempty" json:"ports,omitempty"`
+	Model      string   `yaml:"model,omitempty" json:"model,omitempty"`
+	Tags       []string `yaml:"tags,omitempty" json:"tags,omitempty"`
+}
+
+// Defaults are a folder's defaults.yaml: values and step options for every test in it and below (a
+// test's own win; the deeper folder wins over the one above).
+type Defaults struct {
+	Vars        map[string]string `yaml:"vars,omitempty" json:"vars,omitempty"`
+	StepOptions *StepOptions      `yaml:"step_options,omitempty" json:"stepOptions,omitempty"`
 }

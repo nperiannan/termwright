@@ -82,6 +82,9 @@ func GeneratePython(c Case, caseFile string) ([]byte, error) {
 		doc += ": " + oneLine(c.Description)
 	}
 	fmt.Fprintf(&b, "    %s\n\n    VARS = %s\n", pyStr(doc), pyDict(c.Vars))
+	if req := RequireMap(c); len(req) > 0 {
+		fmt.Fprintf(&b, "    REQUIRES = %s\n", pyDict(req))
+	}
 	if len(c.Params) > 0 {
 		var ps []string
 		for _, p := range c.Params {

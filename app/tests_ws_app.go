@@ -4,7 +4,9 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"slices"
 	"sort"
+	"strconv"
 
 	"context"
 	"errors"
@@ -20,7 +22,9 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/termwright/termwright/internal/secrets"
+	"github.com/termwright/termwright/internal/session"
 	"github.com/termwright/termwright/internal/testrec"
+	"github.com/termwright/termwright/internal/webrun"
 )
 
 // The Tests view: the tests folder's tree, opening or cloning a folder, reading and saving the YAML,
@@ -393,6 +397,41 @@ type TestbedDevice struct {
 	Protocol   string `json:"protocol,omitempty"`
 	// Value: a value that is not a saved session (an address, a VLAN number…).
 	Value string `json:"value,omitempty"`
+	// Values: the role's own values ({{role.port}}); Wanted: the ones the tests use that it does not set.
+	Values map[string]string `json:"values,omitempty"`
+	Wanted []string          `json:"wanted,omitempty"`
+	// Ports: port1…port8 - the testbed's when it sets them, else the device type's (Set false).
+	Ports []TestbedPort `json:"ports,omitempty"`
+}
+
+// TestbedPort is one of a device's port variables.
+type TestbedPort struct {
+	Name  string            `json:"name"`
+	Value string            `json:"value"`
+	Set   bool              `json:"set,omitempty"`
+	Props map[string]string `json:"props,omitempty"` // speed, to …
+}
+
+// portsOf: a device's port1…portN (N: role.port_count, else 8), the role's own values first, else the defaults of its device type.
+func (a *App) portsOf(path, deviceType string, values map[string]string) []TestbedPort {
+	stack := values["stack"] == "true" || values["slot"] != "" || a.isStack(path)
+	count, _ := strconv.Atoi(values["port_count"])
+	if count <= 0 {
+		count = testrec.PortCount
+	}
+	def := testrec.DefaultPorts(deviceType, stack, values["slot"], count, a.slotsOf(path))
+	var out []TestbedPort
+	for i := 1; i <= count; i++ {
+		n := "port" + strconv.Itoa(i)
+		p := TestbedPort{Name: n}
+		if v := values[n]; v != "" {
+			p.Value, p.Set = v, true
+		} else if i <= len(def) {
+			p.Value = def[i-1]
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 // TestbedDevices lists a testbed's roles with their sessions (folder, name, address, device type, model).
@@ -406,17 +445,56 @@ func (a *App) TestbedDevices(file string) ([]TestbedDevice, error) {
 		return nil, err
 	}
 	facts := a.cfg.Get().DeviceFacts
+	used := testsRoleValues(f)
 	out := []TestbedDevice{}
 	for role, v := range m {
+		if r, _, ok := strings.Cut(role, "."); ok && (m[r] != "" || r == "links" || r == "testbed") {
+			continue // a role's own value (listed with the role), a link or the testbed's tags
+		}
 		d := TestbedDevice{Role: role}
 		if s, err := a.store.Get(v); err == nil && v != "" {
 			d.Session, d.Folder, d.Name, d.Host, d.DeviceType, d.Protocol = v, s.Folder, s.Name, s.Hostname, s.DeviceType, s.Protocol
+			if s.Protocol == session.ProtoWeb {
+				d.Host = s.WebURL
+			}
 			if st := facts[v]; st != nil {
 				d.Model = st["Model"]
+			}
+			for k, x := range m {
+				if r, key, ok := strings.Cut(k, "."); ok && r == role && key != "session" && !strings.Contains(key, ".") {
+					if d.Values == nil {
+						d.Values = map[string]string{}
+					}
+					d.Values[key] = x
+				}
 			}
 		} else {
 			d.Value = v
 		}
+		if d.Session != "" {
+			d.Ports = a.portsOf(d.Session, d.DeviceType, d.Values)
+			for i := range d.Ports { // a port's own properties: role.port1.speed …
+				for k, x := range m {
+					if p, ok := strings.CutPrefix(k, role+"."+d.Ports[i].Name+"."); ok && p != "value" {
+						if d.Ports[i].Props == nil {
+							d.Ports[i].Props = map[string]string{}
+						}
+						d.Ports[i].Props[p] = x
+					}
+				}
+			}
+			for k := range d.Values {
+				if portVar.MatchString(k) || k == "port_count" || k == "ports" {
+					delete(d.Values, k)
+				}
+			}
+		}
+		for _, k := range used {
+			if r, key, _ := strings.Cut(k, "."); d.Session != "" && r == role && d.Values[key] == "" && !portVar.MatchString(key) && !slices.Contains(d.Wanted, key) {
+				d.Wanted = append(d.Wanted, key)
+			}
+		}
+		sort.Strings(d.Wanted)
 		out = append(out, d)
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -678,6 +756,8 @@ func (a *App) inventoryDevice(path string) (testrec.InventoryDevice, bool) {
 		d.Protocol, d.BaseURL, d.Auth, d.KeyName, d.Insecure = "api", s.APIBaseURL, s.APIAuth, s.APIKeyName, s.APIInsecure
 	case "telnet", "telnet/tls":
 		d.Protocol = "telnet"
+	case "web":
+		d.Protocol, d.WebURL, d.Browser, d.Viewport, d.Insecure, d.WebLogin = "web", s.WebURL, s.WebBrowser, s.WebViewport, s.WebInsecure, webrun.ParseLogin(s.WebLogin)
 	default:
 		d.Protocol = "ssh"
 	}
@@ -696,6 +776,7 @@ func (a *App) inventoryDevice(path string) (testrec.InventoryDevice, bool) {
 			}
 		}
 	}
+	d.Stack, d.Slots = a.isStack(path), a.slotsOf(path)
 	if s.SNMPVersion != "" || s.SNMPUser != "" {
 		d.SNMPVer, d.SNMPHost, d.SNMPPort, d.SNMPUser, d.SNMPAuth, d.SNMPPriv = s.SNMPVersion, s.SNMPHost, s.SNMPPort, s.SNMPUser, s.SNMPAuth, s.SNMPPriv
 	}
@@ -748,6 +829,307 @@ func (a *App) twrunBinaries(ctx context.Context, goos string) map[string][]byte 
 		}
 		if len(found) > 1<<20 {
 			out[name] = found
+		}
+	}
+	return out
+}
+
+var portVar = regexp.MustCompile(`^port[0-9]+$`)
+
+var roleValueRe = regexp.MustCompile(`\{\{\s*([A-Za-z_][\w-]*)\.([A-Za-z_][\w-]*)\s*\}\}`)
+
+// factNames are the values every saved-session role has by itself.
+var factNames = map[string]bool{"device_type": true, "host": true, "model": true, "version": true, "name": true, "session": true}
+
+// testsRoleValues: the role values ({{role.key}}) the tests use, as "role.key".
+func testsRoleValues(f testrec.Folder) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, c := range f.List() {
+		b, err := os.ReadFile(filepath.Join(f.Root, filepath.FromSlash(c.File)))
+		if err != nil {
+			continue
+		}
+		for _, m := range roleValueRe.FindAllStringSubmatch(string(b), -1) {
+			if k := m[1] + "." + m[2]; !factNames[m[2]] && !seen[k] {
+				seen[k] = true
+				out = append(out, k)
+			}
+		}
+	}
+	return out
+}
+
+// TestbedSetRole makes a role of a testbed a saved session (a test's role mapped to a device).
+func (a *App) TestbedSetRole(file, role, sess string) error {
+	f, err := a.testsFolder()
+	if err != nil {
+		return err
+	}
+	if err := mayEdit(f); err != nil {
+		return err
+	}
+	if _, err := a.store.Get(sess); err != nil {
+		return fmt.Errorf("no saved session %s", sess)
+	}
+	return f.SetTestbedRole(file, role, sess)
+}
+
+// TestbedSetValue sets one of a role's values in a testbed ({{role.key}}, e.g. its port); "" removes it.
+func (a *App) TestbedSetValue(file, role, key, value string) error {
+	f, err := a.testsFolder()
+	if err != nil {
+		return err
+	}
+	if err := mayEdit(f); err != nil {
+		return err
+	}
+	return f.SetTestbedValue(file, role, key, value)
+}
+
+// TestbedRenameRole renames a role of a testbed.
+func (a *App) TestbedRenameRole(file, from, to string) error {
+	f, err := a.testsFolder()
+	if err != nil {
+		return err
+	}
+	if err := mayEdit(f); err != nil {
+		return err
+	}
+	return f.RenameTestbedRole(file, from, strings.TrimSpace(to))
+}
+
+// TestRole is a device a test uses: its role and the session it uses by default.
+type TestRole struct {
+	Role       string `json:"role"`
+	Session    string `json:"session"`
+	DeviceType string `json:"deviceType,omitempty"`
+}
+
+// TestsRoles lists the roles of tests: their variables that are saved sessions.
+func (a *App) TestsRoles(files []string) []TestRole {
+	f, err := a.testsFolder()
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	out := []TestRole{}
+	for _, file := range files {
+		c, err := f.Load(file)
+		if err != nil {
+			continue
+		}
+		keys := make([]string, 0, len(c.Vars))
+		for k := range c.Vars {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			v := c.Vars[k]
+			if seen[k] || strings.Contains(k, ".") {
+				continue
+			}
+			if s, err := a.store.Get(v); err == nil {
+				seen[k] = true
+				out = append(out, TestRole{Role: k, Session: v, DeviceType: s.DeviceType})
+			}
+		}
+	}
+	return out
+}
+
+// TestbedMeta is what a testbed says about itself: its tags (tests can require them), its description and
+// the links between its devices ("dut.port1 - peer.port3").
+type TestbedMeta struct {
+	Tags        []string `json:"tags"`
+	Description string   `json:"description,omitempty"`
+	Links       []string `json:"links"`
+}
+
+// TestbedInfo reads a testbed's tags, description and links.
+func (a *App) TestbedInfo(file string) (TestbedMeta, error) {
+	out := TestbedMeta{Tags: []string{}, Links: []string{}}
+	f, err := a.testsFolder()
+	if err != nil {
+		return out, err
+	}
+	err = f.EditTestbed(file, func(m map[string]any) error {
+		for _, x := range asList(m["tags"]) {
+			out.Tags = append(out.Tags, x)
+		}
+		out.Links = append(out.Links, asList(m["links"])...)
+		if d, ok := m["description"].(string); ok {
+			out.Description = d
+		}
+		return errNoChange
+	})
+	if errors.Is(err, errNoChange) {
+		err = nil
+	}
+	return out, err
+}
+
+var errNoChange = errors.New("no change")
+
+func asList(v any) []string {
+	var out []string
+	if l, ok := v.([]any); ok {
+		for _, x := range l {
+			out = append(out, fmt.Sprint(x))
+		}
+	}
+	return out
+}
+
+// TestbedSetInfo writes a testbed's tags, description and links (links as "dut.port1 - peer.port3").
+func (a *App) TestbedSetInfo(file string, meta TestbedMeta) error {
+	f, err := a.testsFolder()
+	if err != nil {
+		return err
+	}
+	if err := mayEdit(f); err != nil {
+		return err
+	}
+	for _, l := range meta.Links {
+		if p := strings.Fields(strings.ReplaceAll(l, " - ", " ")); len(p) != 2 || !strings.Contains(p[0], ".") || !strings.Contains(p[1], ".") {
+			return fmt.Errorf("link %q: write it as role.port - role.port, e.g. dut.port1 - peer.port1", l)
+		}
+	}
+	return f.EditTestbed(file, func(m map[string]any) error {
+		set := func(k string, l []string) {
+			if len(l) == 0 {
+				delete(m, k)
+				return
+			}
+			x := make([]any, len(l))
+			for i, s := range l {
+				x[i] = s
+			}
+			m[k] = x
+		}
+		set("tags", meta.Tags)
+		set("links", meta.Links)
+		if strings.TrimSpace(meta.Description) == "" {
+			delete(m, "description")
+		} else {
+			m["description"] = strings.TrimSpace(meta.Description)
+		}
+		return nil
+	})
+}
+
+// TestbedSetPortProp sets a property of a device's test port (speed, to…); "" removes it.
+func (a *App) TestbedSetPortProp(file, role, port, key, value string) error {
+	f, err := a.testsFolder()
+	if err != nil {
+		return err
+	}
+	if err := mayEdit(f); err != nil {
+		return err
+	}
+	return f.EditTestbed(file, func(m map[string]any) error {
+		g, ok := m[role].(map[string]any)
+		if !ok {
+			if m[role] == nil {
+				return fmt.Errorf("no role %s", role)
+			}
+			g = map[string]any{"session": fmt.Sprint(m[role])}
+			m[role] = g
+		}
+		pm, ok := g[port].(map[string]any)
+		if !ok {
+			pm = map[string]any{}
+			if g[port] != nil {
+				pm["value"] = fmt.Sprint(g[port])
+			}
+		}
+		if value == "" {
+			delete(pm, key)
+		} else {
+			pm[key] = value
+		}
+		switch {
+		case len(pm) == 0:
+			delete(g, port)
+		case len(pm) == 1 && pm["value"] != nil:
+			g[port] = pm["value"]
+		default:
+			g[port] = pm
+		}
+		return nil
+	})
+}
+
+// TestsSuiteDefaults reads a folder's defaults.yaml ("" = the tests folder): values and step options for
+// every test in it and below.
+func (a *App) TestsSuiteDefaults(dir string) (testrec.Defaults, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return testrec.Defaults{}, err
+	}
+	return f.LoadSuiteDefaults(dir), nil
+}
+
+// TestsSaveSuiteDefaults writes a folder's defaults.yaml.
+func (a *App) TestsSaveSuiteDefaults(dir string, d testrec.Defaults) error {
+	f, err := a.testsFolder()
+	if err != nil {
+		return err
+	}
+	if err := mayEdit(f); err != nil {
+		return err
+	}
+	return f.SaveSuiteDefaults(dir, d)
+}
+
+// SuiteDefaultsView is a folder's own defaults and what it gets from the folders above.
+type SuiteDefaultsView struct {
+	Own       testrec.Defaults `json:"own"`
+	Inherited testrec.Defaults `json:"inherited"`
+}
+
+// TestsDefaultsView reads a folder's defaults.yaml with what it inherits ("" = all tests).
+func (a *App) TestsDefaultsView(dir string) (SuiteDefaultsView, error) {
+	f, err := a.testsFolder()
+	if err != nil {
+		return SuiteDefaultsView{}, err
+	}
+	return SuiteDefaultsView{Own: f.LoadSuiteDefaults(dir), Inherited: f.InheritedDefaults(dir)}, nil
+}
+
+// SkipPreview is a test the chosen testbed will skip, and why.
+type SkipPreview struct {
+	File string `json:"file"`
+	Case string `json:"case"`
+	Why  string `json:"why"`
+}
+
+// TestsWillSkip lists the tests (all when files is empty) a testbed does not have what they need.
+func (a *App) TestsWillSkip(files []string, testbed string) []SkipPreview {
+	out := []SkipPreview{}
+	f, err := a.testsFolder()
+	if err != nil {
+		return out
+	}
+	vars := map[string]string{}
+	if testbed != "" {
+		if tb, err := f.Testbed(testbed); err == nil {
+			vars = tb
+		}
+	}
+	if len(files) == 0 {
+		for _, c := range f.List() {
+			files = append(files, c.File)
+		}
+	}
+	d := &testDriver{a: a}
+	for _, file := range files {
+		c, err := f.Load(file)
+		if err != nil {
+			continue
+		}
+		if why := f.Unmet(c, vars, d); why != "" {
+			out = append(out, SkipPreview{File: file, Case: c.Name, Why: why})
 		}
 	}
 	return out

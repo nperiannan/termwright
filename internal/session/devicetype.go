@@ -95,6 +95,8 @@ type FactRule struct {
 	Command string `json:"command"`
 	Regex   string `json:"regex"`
 	Every   bool   `json:"every"`
+	// All: every match, its groups joined by ":" and the matches by "," (e.g. a stack's slots "1:28,2:28").
+	All bool `json:"all,omitempty"`
 }
 
 func fact(name, cmd, re string, every bool) FactRule {
@@ -122,6 +124,7 @@ func BuiltinFacts(name string) []FactRule {
 			fact("Serial", "show version", `^Switch\s*:\s*\S+\s+(\S+)`, false),
 			fact("MAC", "show switch", `System MAC:\s*`+mac, false),
 			fact("Uptime", "show switch", `System UpTime:\s*(.+?)\s*$`, true),
+			{Name: "Slots", Command: "show slot", Regex: `^Slot-(\d+)\s+\S+\s+\S+\s+Operational\s+(\d+)`, Every: true, All: true},
 		}
 	case "CISCO IOS":
 		return []FactRule{

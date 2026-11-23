@@ -42,6 +42,8 @@ A step **without checks** only proves that the device accepted the command - als
 
 ## 3. Clean up
 
+The cleanup only undoes what the test configured: a cleanup step that undoes a configuration command (by the device type's undo rules - `delete vlan v1000` for `create vlan v1000 tag 1000`) is skipped as *not needed* when that command never took effect, because the test failed before it or the device refused it. Cleanup steps that undo nothing the test did (or that the rules do not know) always run.
+
 For every change the recorder puts its undo into the **Cleanup** as you record - from the device type's **Undo rules** (`create vlan v42` → `delete vlan v42`), the DELETE of a POST, or the old value of an SNMP set - the last change first (*Options → Add the undo of each change to the cleanup* turns it off; then **↩ cleanup: … + add** suggests it instead). A change without an undo rule shows no undo: add the rule in Global Options → Device Types, or record the undo in **Cleanup**; **✦ Cleanup with AI** asks the assistant. Record more in **Cleanup**, ideally a show with *does not contain* at the end.
 
 Whether a run cleans up is chosen **per run** (section 6): with *No cleanup*, tests build on what earlier ones configured. *Options → Afterwards put back* adds a safety net: the **configuration** (the device type's *Test save / restore* commands, built in for NX-OS, Cisco IOS and EXOS) or a **lab snapshot** of emulated lab switches.
@@ -59,6 +61,8 @@ A test shows its setup, steps and cleanup as a table - device, command, its chec
 **⋯** on a test: **Rename…**, **Duplicate…**, **Tags…**, **Depends On…**, **qTest Test Case…**, Open in VS Code, **Delete…** (moves the test and its code to `.removed/` - nothing is erased). **History** shows its past results (section 8); **Code** shows the YAML (editable) and the generated Go, Python and TCL.
 
 ## 5. Edit
+
+The editor starts with the test's **Devices** (`{{role}}` → the session it was recorded on; **Rename** changes it in every step - a test with one device does not repeat it in the steps) and its **Step options**: a timeout, a wait, retry until it passes, go on when a step fails, ignore device errors - set once. Each step then chooses **Default** (the test's options), **Custom** (its own, shown only for that step) or **None** (runs once; a failure stops the test). Run only if…, parse into a table, sample over time and the expected result in words are behind **⚙ More**; **+ check** adds a check, and clicking a check changes it.
 
 **✎ Edit** changes the test without YAML (**+ More** adds an API request, a step from a curl command, a manual step, a wait, a loop, an upgrade or a traffic test; a failed step's **Compare with the last pass** shows which output lines changed): each step's session and command (method and URL, image, traffic test), timeout, *Go on when it fails*, **Wait** (seconds before it), **If** (`{{vlan}} != 1`; `==`, `!=`, `contains`, `~`, `>`, `<`), **Retry until it passes** (for links coming up or routes converging), *Ignore device errors*, **Parse** (`auto` for a table); ↑ ↓ ✕; **+ Step**, **+ Wait**, **+ Upgrade**, **+ Traffic**, **+ Loop** per section; checks with × and **+ Check** (also *table value*: `VLAN_ID=200: STATUS = active`).
 
@@ -111,6 +115,108 @@ Every run is kept in `reports/history.jsonl`. A test's **History** tab shows its
 A **testbed** maps the roles to sessions: the recorder saves sessions as roles (`access-sw7` → `{{access_sw7}}`), and a testbed points them at other devices. **Testbeds → + New** writes one from a session folder (the emulated lab's, another site's); testbeds open and save in place and show their lock with *Release*.
 
 **Tags** (⋯ → Tags…) group tests across suites; the tag chips filter the list and *Run shown…* runs what is shown. A **plan** (`suites/<name>.yaml`: tests as files, suite folders or other plans, narrowed by tags) is a named set to run together; select tests and **Save as plan…**, then run it from **Plans** at the top of the list. `params: [{vlan: "42"}, {vlan: "100"}]` runs a test once per entry.
+
+### Ports and values that differ per device
+
+A recorded test has the device's ports in plain text: `configure vlan v1000 add ports 1:2 tagged` is right
+for a stack (slot:port) but not for a standalone switch (`2`) or a VOSS switch (`1/2`). So every device of a
+testbed has **port variables**, and tests use those instead of numbers:
+
+| Device | port1 … port8 by default |
+|---|---|
+| EXOS standalone | 2 … 9 |
+| EXOS stack | 1:2 … 1:9 (the first operational slot; port 1 is left for the uplink) |
+| VOSS | 1/1 … 1/8 |
+
+- **Recording maps them for you**: when a recording is saved, the device's ports in it (`1:2`, `1:3` on a
+  stack) become `{{role.port1}}`, `{{role.port2}}` … in the commands and checks. For older tests:
+  ⋯ → **Use Port Variables**. Plain numbers are only taken after `port`/`ports` in a command, so a VLAN tag
+  is never mistaken for a port.
+- **One device, short names**: a test with one device uses `{{port1}}` … `{{port8}}` and `{{ports}}`; with
+  several, `{{core.port1}}`, `{{access.port1}}`. (Type two braces: `{port1}` is plain text - ⋯ → **Use Port
+  Variables** also mends those.)
+- **Insert, don't type**: right-click a command or the check box → the variables the step can use, with
+  their values (`{{port1}}  1:2`), and **New Variable…** (name = value). Click a check to change it: it moves
+  to the box on the right; **+ Check** puts it back.
+- **Each testbed sets its own**: a testbed shows each device as a card with its **Test ports** - grey
+  boxes are the defaults of the device type, blue ones are set in the testbed. Type `1:11` in port1 and it
+  is used from then on; **Reset** goes back. **＋ / −** add or remove ports (8 by default) - e.g. 48 for a
+  snake test, which uses `{{role.ports}}` (all of them, comma-separated). On a stack the defaults go on to
+  the next slot past the last port of a slot.
+- **Stack or standalone** comes from the device: `show switch` (*System Type … (Stack)*) and `show slot`
+  (the operational slots and their ports), read with the device facts; a `slot` value on the device
+  starts the ports in that slot.
+- **Before a run** the Run panel shows each device of the test, where it runs and its ports (**Change**):
+  with a testbed, a change is saved in the testbed; with the tests' own sessions it is for this run.
+- **Exported suites** (twrun, Python, Go) give the same defaults: `inventory.yaml` carries the device type,
+  `stack` and `slots`.
+
+**Other values** of a device (a slot, a VLAN, an uplink) are name/value rows on its card; tests use
+`{{role.name}}`, and the card lists the ones the tests use that the device does not set. Every device also
+has `{{role.device_type}}`, `{{role.host}}`, `{{role.model}}`, `{{role.version}}` and `{{role.name}}`, so
+steps can say **If** `{{dut.device_type}} == VOSS`. **Make a Variable** (select text in a command,
+right-click) turns any other value into a variable.
+
+**Roles**: tests use the names they were recorded with (`{{stack_x440g2_24x_10g4_stack}}`); a testbed's
+devices can be renamed to match, or the Run panel maps them: choose a device of the testbed for each of the
+test's devices and it is added to the testbed under the test's name. Testbeds are listed first in Run, and
+the last one used is chosen.
+
+### How the parts fit: the automation framework
+
+A test says **what** to do with names; a testbed says **which** real devices and ports those names are.
+Values come from five places; the later one wins:
+
+1. **All tests** - `defaults.yaml` in the tests folder
+2. **The suite** - `defaults.yaml` in a folder of tests (`cases/l2/defaults.yaml`), for every test in it and below
+3. **The test** - its own values and step options
+4. **The testbed** - its devices, their ports and values
+5. **The run** - what the Run panel changes
+
+**In the app:** click ⚙ on a folder in the test list (or ⋯ → **Defaults for All Tests…**). The dialog shows the
+order, the folder's own values (editable) and the ones it gets from above (grey), and its step options.
+
+A `defaults.yaml` holds values and step options:
+
+```yaml
+vars: { vlan: "200", site: lab }
+step_options: { timeout: 30, retry: { timeout: 60 } }
+```
+
+**Testbeds** describe themselves and how their devices are cabled. On the testbed page: **Description**, **Tags**
+(type and press Enter), **Links between devices** (pick device and port on each side, **+ Link**), and click a
+port's name (port1…) to give it properties. Or in YAML:
+
+```yaml
+description: Two EXOS switches, stack + standalone
+tags: [exos, stack, l3]
+dut:
+  session: Discovered-10.127.34.x/EXOS/10.127.34.176
+  port1: { value: "1:2", speed: 10G }
+peer: Discovered-10.127.34.x/EXOS/10.127.34.72
+links:
+  - dut.port1 - peer.port1
+  - dut.port2 - peer.port2
+```
+
+A link gives `{{dut.to.peer}}` (dut's port facing peer), `{{peer.to.dut}}` and `{{dut.links.peer}}` (all of
+them, comma-separated) - so a LAG or routing test finds its ports on any testbed. A port can carry
+properties: `{{dut.port1.speed}}`.
+
+**Tests say what they need**, and a testbed that does not have it **skips** the test with the reason
+(it is not a failure):
+
+```yaml
+requires:
+  dut: { device_type: EXOS, stack: true, ports: 2, tags: [l3] }
+  peer: { ports: 1 }
+```
+
+In the editor, the **Needs** line under each device in the Devices panel sets this; the Run panel lists the
+tests the chosen testbed will skip before you start.
+
+Passwords and tokens are never values: they stay in the keychain (or `TW_PASSWORD_<NAME>`), whatever the
+testbed. Termwright, twrun and exported Python and Go suites all read the same files the same way.
 
 ## 10. Tables from command output
 
@@ -198,7 +304,7 @@ In a test: **+ More → Call a Procedure**, choose it and fill the parameters (`
 
 **Booking a testbed.** Testbeds → **📅 Calendar** shows the week, one row per testbed. Double-click a row (or **+ Book**), pick the times and say why. While it is booked, other people's runs ask before taking it and their schedules are refused. Commit `bookings.yaml` so the team sees the bookings.
 
-**Web pages (Playwright).** + More → **Web Page (Playwright)**. Give the address, then actions: *Click*, *Type into*, *Press key*, *Choose option*, *Tick*, *Check it shows*, *Check it is gone*, *Wait for*, *Go to address*, *Screenshot*. Targets: `text=Sign in`, `#user`, `role=button[name="Save"]`, `label=Password`, `placeholder=Search` or an XPath. The first time, **Set Up Playwright** installs Playwright and its Chromium (Node.js is needed). Tick *Self-signed certificate OK* for device web pages. The output is the action log and the page's text, so a *contains* check works on what the page shows; a failed action saves a screenshot in `reports/web-shots`.
+**Web pages (Playwright).** + More → **Web Page (Playwright)**. Give the address, then click **● Record in Browser** and use the site - the actions are written for you - or pick actions from the list (click, type, choose, tick, upload, download, pop-ups, tabs, waits, checks, read into a variable, screenshot). Targets: `text=Sign in`, `#user`, `role=button[name="Save"]`, `label=Password`, `placeholder=Search`, `testid=save`, `frame=#main >> …` or an XPath. **Login** takes the user name and password from a saved session. Any web application can be a **Web App session** with its login recorded once, and **Record a Web Test** starts from it. The full step-by-step guide: [Web GUI Testing Guide](WEB_TESTING_GUIDE.md). The first time, **Set Up Playwright** installs Playwright and its Chromium (Node.js is needed). Tick *Self-signed certificate OK* for device web pages. The output is the action log and the page's text, so a *contains* check works on what the page shows; a failed action saves a screenshot in `reports/web-shots`.
 
 **Spirent TestCenter and IxNetwork.** + More → **Spirent / IxNetwork Traffic Run** runs traffic on a commercial traffic generator through its REST API: it loads a saved configuration from the tests folder (STC `.xml` / `.tcc`, IxNetwork `.ixncfg` / `.json`), connects its ports to the chassis ports you list (`10.1.1.5/1/1`), optionally starts the protocols, sends the traffic for the seconds you choose and reads every stream's counters. The server is an **API session** (its base URL - an STC LabServer / REST server, or the IxNetwork API server - with the user name and password) or an address. The result is JSON, so checks read like `loss < 0.01`, `streams[0].loss < 0.1`, `streams[1].latencyUs < 50` or `rx > 0`:
 
@@ -244,11 +350,11 @@ The library is also what you build on: besides run, http, snmp and the checks, i
 - **On its own, with the twrun program** - the YAML tests as they are, and `bin/twrun` for the chosen system. twrun runs them exactly like Termwright (checks, procedures, data, reruns, timeouts) and writes the same reports. `twrun check` tries every login; `twrun setup-web` installs Playwright for web steps.
 - **Through Termwright** - the steps go through the app or `termwright tests serve`.
 
-REST API steps use the API sessions of `inventory.yaml` (base URL, basic / bearer / API-key login; the password in `TW_PASSWORD_<NAME>`, a token in `TW_TOKEN_<NAME>`). Web steps need Playwright: in Python `pip install playwright && playwright install chromium`; in Go and twrun Node.js and `twrun setup-web` (or `npm install --prefix .playwright playwright`).
+REST API steps use the API sessions of `inventory.yaml` (base URL, basic / bearer / API-key login; the password in `TW_PASSWORD_<NAME>`, a token in `TW_TOKEN_<NAME>`). Web steps need Node.js and Playwright: with twrun `twrun setup-web`; in Python and Go suites `npm install --prefix .playwright playwright && npx --prefix .playwright playwright install chromium`.
 
 For the Python suite: The suite then logs in to the devices itself and needs no Termwright on that computer:
 
-1. `python3 -m pip install -r requirements.txt` (paramiko, textfsm, PyYAML; ncclient, playwright and keyring are optional; SNMP steps use the net-snmp commands).
+1. `python3 -m pip install -r requirements.txt` (paramiko, textfsm, PyYAML; ncclient and keyring are optional; web steps need Node.js and Playwright; SNMP steps use the net-snmp commands).
 2. `inventory.yaml` lists every session the tests use - host, protocol (ssh, telnet, api), port, user name, device type, API and SNMP settings, jump host. Change it to run on other devices.
 3. Passwords are never written: set `TW_PASSWORD` (all devices) or `TW_PASSWORD_<NAME>` (the session's last part in capitals, other characters as `_`), keep them in the system keyring (service `termwright`, user = the session), or type them when asked. API tokens: `TW_TOKEN_<NAME>`; SNMP communities: `TW_COMMUNITY_<NAME>`.
 4. `./run.sh` (or `run.cmd`) - reports in `reports/<date-time>/` as above.

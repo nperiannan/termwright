@@ -145,6 +145,10 @@ func run(args []string) int {
 				fmt.Printf("  -  %-40s API %s (not logged in to)\n", d.Session, d.BaseURL)
 				continue
 			}
+			if strings.EqualFold(d.Protocol, "web") {
+				fmt.Printf("  -  %-40s web app %s (logged in to by its web steps)\n", d.Session, d.WebURL)
+				continue
+			}
 			c, cancel := context.WithTimeout(ctx, 45*time.Second)
 			_, err := e.Command(c, d.Session, "", "", 15*time.Second)
 			cancel()
@@ -293,4 +297,24 @@ func (d *driver) DeviceError(session, output string) string { return d.e.DeviceE
 
 func (d *driver) TGen(ctx context.Context, t testrec.TGenStep) (string, error) {
 	return d.e.TGen(ctx, standalone.TGenStep{Kind: t.Kind, Server: t.Server, Config: t.Config, Ports: t.Ports, Duration: t.Duration, Protocols: t.Protocols, Settle: t.Settle, Session: t.Session})
+}
+
+// Facts are an inventory device's facts for {{role.device_type}} and {{role.host}}.
+func (d *driver) Facts(session string) map[string]string {
+	dv, err := d.e.Device(session)
+	if err != nil {
+		return nil
+	}
+	h := dv.Host
+	if dv.WebURL != "" {
+		h = dv.WebURL
+	}
+	out := map[string]string{"device_type": dv.DeviceType, "host": h, "name": session[strings.LastIndex(session, "/")+1:]}
+	if dv.Stack || strings.Contains(strings.ToLower(session), "stack") {
+		out["stack"] = "true"
+	}
+	if dv.Slots != "" {
+		out["slots"] = dv.Slots
+	}
+	return out
 }
