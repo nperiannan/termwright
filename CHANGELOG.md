@@ -2,7 +2,7 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
-## Unreleased
+## 0.44.1 (2026-11-23)
 
 - **Fixed**: `{{port1}}` had no value when the test ran on a testbed with more devices than the test uses; it is now the port of the test's own device (also in exported Python and Go suites).
 - **Framework**: values and step options in `defaults.yaml` - for all tests (the tests folder) and for a suite (a folder of tests); the order is all tests, suite, test, testbed, run. Testbeds have a description, **tags** and **links** between devices (`dut.port1 - peer.port1` gives `{{dut.to.peer}}`, `{{peer.to.dut}}`, `{{dut.links.peer}}`); ports can have properties (`{{dut.port1.speed}}`). Tests can say what they need (`requires:` device type, stack, number of ports, model, testbed tags); a testbed without it skips the test with the reason. The same in twrun and exported Python and Go suites.

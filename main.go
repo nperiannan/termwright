@@ -28,7 +28,7 @@ var openapi []byte
 var scripts embed.FS
 
 // Version is set at build time with -ldflags "-X main.Version=x.y.z".
-var Version = "0.44.0-dev"
+var Version = "0.44.1-dev"
 
 // App is the app as the window calls it (window.go.main.App).
 type App struct{ *app.App }
