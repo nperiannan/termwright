@@ -506,10 +506,10 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       t.options.theme = theme;
       this.compileKeywords();
       this.host().nativeElement.parentElement?.style.setProperty('--term-bg', String(t.options.theme.background));
-      this.scheduleFit();
+      this.scheduleFit(true);
     });
     effect(() => {
-      if (this.visible()) this.scheduleFit();
+      if (this.visible()) this.scheduleFit(true);
     });
     effect(() => {
       if (this.visible() && this.tabs.activeId() === this.tab().id) { setTimeout(() => this.term?.focus(), 0); this.pubCaret(); }
@@ -712,7 +712,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
 
     this.ro = new ResizeObserver(() => this.scheduleFit());
     this.ro.observe(this.host().nativeElement);
-    this.doFit();
+    this.doFit(true);
     this.tabs.patch(id, { cols: term.cols, rows: term.rows });
     this.tabs.start(id);
     if (this.visible()) term.focus();
@@ -803,14 +803,35 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     this.hl = [...kept.values()];
   }
 
-  private scheduleFit() {
+  private scheduleFit(force = false) {
     clearTimeout(this.fitTimer);
-    this.fitTimer = setTimeout(() => this.doFit(), 30);
+    this.fitForce ||= force;
+    this.fitTimer = setTimeout(() => { const f = this.fitForce; this.fitForce = false; this.doFit(f); }, 30);
   }
+  private fitForce = false;
+  /** The terminal box when it was last fitted, and the sizes of the last fits (to see a flip-flop). */
+  private lastBox = { w: 0, h: 0 };
+  private fits: { size: string; cols: number; rows: number; at: number }[] = [];
 
-  private doFit() {
+  /** Fits the terminal to its box. force: the font or the look changed (the box may be the same). Only a real
+   * change of the box resizes it, and a box on the edge of a column (the Files panel's split view on macOS)
+   * that makes it flip between two sizes settles on the smaller one - every resize makes the shell redraw. */
+  private doFit(force = false) {
     const el = this.host()?.nativeElement;
-    if (!this.fit || !el || el.offsetWidth === 0 || el.offsetHeight === 0) return;
+    if (!this.fit || !this.term || !el || el.offsetWidth === 0 || el.offsetHeight === 0) return;
+    const w = el.clientWidth, h = el.clientHeight;
+    if (!force && w === this.lastBox.w && h === this.lastBox.h) return; // the same box: nothing to do
+    this.lastBox = { w, h };
+    let p: { cols: number; rows: number } | undefined;
+    try { p = this.fit.proposeDimensions(); } catch { return; /* not yet rendered */ }
+    if (!p || !p.cols || !p.rows || (p.cols === this.term.cols && p.rows === this.term.rows)) return;
+    const now = Date.now();
+    this.fits = [...this.fits.filter(f => now - f.at < 3000), { size: p.cols + 'x' + p.rows, cols: p.cols, rows: p.rows, at: now }];
+    if (!force && this.fits.length >= 4 && new Set(this.fits.map(f => f.size)).size <= 2) {
+      const cols = Math.min(...this.fits.map(f => f.cols)), rows = Math.min(...this.fits.map(f => f.rows));
+      if (cols !== this.term.cols || rows !== this.term.rows) this.term.resize(cols, rows);
+      return;
+    }
     try { this.fit.fit(); } catch { /* not yet rendered */ }
   }
 

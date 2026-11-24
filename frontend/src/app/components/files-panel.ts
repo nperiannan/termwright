@@ -332,7 +332,7 @@ export class FilesPanel implements OnDestroy {
     await this.load(d);
     const t = this.live();
     if (this.cdTerm() && this.followable() && t.state === 'connected' && this.dir() === d && t.cwd !== d && this.tabs.atPrompt(t.id))
-      void this.backend.sendInput(t.id, ` cd '${d.replace(/'/g, `'\\''`)}'\r`);
+      void this.backend.sendInput(t.id, this.cdLine(d));
   }
   async up() {
     const d = this.dir();
