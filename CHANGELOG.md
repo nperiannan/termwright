@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **New tagline**: *Open-source network engineering, automation and testing platform* - on the start page and in the README.
+
 ## 0.44.4 (2026-11-24)
 
 - **Web page size presets**: a web app's page size (and a web step's) is chosen from qHD 960×540, HD 1280×720, Full HD 1920×1080, 2K 2560×1440, 3K 2880×1620, 4K 3840×2160 or Custom… (your own width × height).

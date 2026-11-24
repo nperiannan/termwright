@@ -242,7 +242,7 @@ const ru: Record<string, string> = {
   'More': 'Ещё',
   'Workspaces': 'Рабочие области',
   'Built for the people who design, operate, and troubleshoot networks.': 'Для тех, кто проектирует, эксплуатирует сети и устраняет в них неполадки.',
-  'AI-powered network access, automation, monitoring, emulation and reservation platform': 'Платформа с ИИ для доступа к сетям, автоматизации, мониторинга, эмуляции и бронирования',
+  'Open-source network engineering, automation and testing platform': 'Открытая платформа для сетевой инженерии, автоматизации и тестирования',
   'The open-source terminal and session manager for network and infrastructure teams.': 'Терминал и менеджер сессий с открытым исходным кодом для сетевых и инфраструктурных команд.',
   'Version': 'Версия',
   '· {0} available': '· доступна {0}',
