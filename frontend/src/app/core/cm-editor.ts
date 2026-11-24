@@ -4,7 +4,7 @@
 import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection, highlightSpecialChars } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
-import { HighlightStyle, StreamLanguage, syntaxHighlighting, foldGutter, foldKeymap, bracketMatching, indentOnInput, type StreamParser } from '@codemirror/language';
+import { HighlightStyle, StreamLanguage, forceParsing, syntaxHighlighting, foldGutter, foldKeymap, bracketMatching, indentOnInput, type StreamParser } from '@codemirror/language';
 import { highlightSelectionMatches, openSearchPanel, search, searchKeymap } from '@codemirror/search';
 import { tags as t } from '@lezer/highlight';
 import { json } from '@codemirror/lang-json';
@@ -73,7 +73,36 @@ const configParser: StreamParser<unknown> = {
   },
 };
 
-const CODE: Record<string, StreamParser<unknown>> = { go, py: python, js: javascript, mjs: javascript, ts: typescript, tcl, exp: tcl, toml } as Record<string, StreamParser<unknown>>;
+/** VS Code tells names apart: control words purple, function and method calls yellow, types teal. CodeMirror's
+ * old modes call every name a "variable" (and Go's calls the dot in a.b a number) - this sorts them out. */
+function vsLike<S>(p: StreamParser<S>, o: { control: string; types?: string }): StreamParser<S> {
+  const control = new Set(o.control.split(' ')), types = new Set((o.types ?? '').split(' '));
+  const name = /^(variable|def|property|variableName|variable-2|variable-3)/;
+  return {
+    ...p,
+    token(s, st) {
+      const start = s.pos, style = p.token(s, st), w = s.current();
+      if (w === '.') return 'punctuation';
+      if (!style) return style;
+      if (style === 'keyword' && control.has(w)) return 'controlKeyword';
+      if ((style === 'keyword' || style === 'builtin' || style === 'variable') && types.has(w)) return 'typeName';
+      const call = s.match(/^\s*\(/, false);
+      if ((style === 'atom' || style === 'builtin') && call) return 'variableName.function';
+      if (style === 'builtin') return 'typeName';
+      if (name.test(style)) {
+        if (call) return 'variableName.function';
+        if (/^[A-Z]/.test(w) && (s.string.charAt(start - 1) === '.' || s.match(/^\s*\{/, false))) return 'typeName';
+      }
+      return style;
+    },
+  };
+}
+const GO = vsLike(go, { control: 'if else for range return switch case default break continue go defer select goto fallthrough',
+  types: 'bool byte complex64 complex128 error float32 float64 int int8 int16 int32 int64 rune string uint uint8 uint16 uint32 uint64 uintptr any comparable' });
+const PY = vsLike(python, { control: 'if elif else for while return break continue pass try except finally raise with yield await import from as in is not and or' });
+const JS = vsLike(javascript, { control: 'if else for while do return break continue switch case default try catch finally throw await yield import export from' });
+const TS = vsLike(typescript, { control: 'if else for while do return break continue switch case default try catch finally throw await yield import export from' });
+const CODE: Record<string, StreamParser<unknown>> = { go: GO, py: PY, js: JS, mjs: JS, ts: TS, tcl, exp: tcl, toml } as Record<string, StreamParser<unknown>>;
 
 function language(kind: FileKind, name: string): Extension {
   const ext = name.toLowerCase().split('.').pop() ?? '';
@@ -86,7 +115,7 @@ function language(kind: FileKind, name: string): Extension {
       if (l === 'json') return json().language;
       if (l === 'yaml' || l === 'yml') return yaml().language;
       if (l === 'xml' || l === 'html') return xml().language;
-      const m: Record<string, StreamParser<unknown>> = { go, python, py: python, sh: shell, bash: shell, shell, zsh: shell, js: javascript, javascript, ts: typescript, typescript, tcl, toml, ini: properties } as Record<string, StreamParser<unknown>>;
+      const m: Record<string, StreamParser<unknown>> = { go: GO, golang: GO, python: PY, py: PY, sh: shell, bash: shell, shell, zsh: shell, js: JS, javascript: JS, ts: TS, typescript: TS, tcl, toml, ini: properties } as Record<string, StreamParser<unknown>>;
       if (m[l]) return StreamLanguage.define(m[l]);
       if (l === 'yang') return StreamLanguage.define(yangParser);
       if (l === 'log') return StreamLanguage.define(logParser);
@@ -144,6 +173,16 @@ const theme = EditorView.theme({
   '.cm-panels': { backgroundColor: 'var(--panel)', color: 'var(--text)' },
   '.cm-panels.cm-panels-top': { borderBottom: '1px solid var(--border)' },
   '.cm-panel input, .cm-panel button, .cm-panel label': { fontSize: '12px' },
+  // the find bar, as VS Code's (CodeMirror's own is light: white buttons in the dark theme)
+  '.cm-panel.cm-search': { padding: '6px 10px', backgroundColor: v('head'), color: v('fg') },
+  '.cm-textfield': { backgroundColor: v('bg'), color: v('fg'), border: '1px solid ' + v('bd'), borderRadius: '4px', padding: '3px 7px', outline: 'none' },
+  '.cm-textfield:focus': { borderColor: v('status') },
+  '.cm-button': { backgroundImage: 'none', backgroundColor: v('btn'), color: v('fg'), border: '1px solid ' + v('bd'), borderRadius: '4px', padding: '2px 10px', cursor: 'pointer' },
+  '.cm-button:hover': { backgroundColor: v('btn-hover') },
+  '.cm-button:active': { backgroundImage: 'none', backgroundColor: v('btn-hover') },
+  '.cm-panel.cm-search label': { color: v('fg') },
+  '.cm-panel.cm-search input[type=checkbox]': { accentColor: v('status') },
+  '.cm-panel.cm-search [name=close]': { color: v('fg'), backgroundColor: 'transparent', border: 'none', fontSize: '16px', cursor: 'pointer' },
   '.cm-foldGutter span': { color: v('lineno') },
   '.cm-foldPlaceholder': { backgroundColor: v('line'), border: 'none', color: v('lineno') },
 });
@@ -183,6 +222,14 @@ export function createEditor(host: HTMLElement, o: { text: string; kind: FileKin
       ],
     }),
   });
+  // colour the whole file now, not only around what is on screen: a jump through a long file (Go, logs…)
+  // otherwise left stretches without colours; what one go does not finish is done in the next ones
+  const parseAll = () => {
+    let n = 0;
+    const step = () => { if (!view.dom.isConnected || forceParsing(view, view.state.doc.length, 150) || ++n > 40) return; setTimeout(step, 30); };
+    setTimeout(step, 0);
+  };
+  parseAll();
   return {
     view,
     text: () => view.state.doc.toString(),
@@ -190,6 +237,7 @@ export function createEditor(host: HTMLElement, o: { text: string; kind: FileKin
       const top = view.scrollDOM.scrollTop;
       view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: s } });
       if (keepScroll) view.scrollDOM.scrollTop = top;
+      parseAll();
     },
     setReadOnly: r => view.dispatch({ effects: ro.reconfigure([EditorState.readOnly.of(r), EditorView.editable.of(!r)]) }),
     setWrap: w => view.dispatch({ effects: wrap.reconfigure(w ? EditorView.lineWrapping : []) }),

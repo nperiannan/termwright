@@ -4,6 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Fixed**: the file viewer left parts of long files without colours (it coloured lazily, around the screen) - the whole file is coloured when it opens; Go, Python and JavaScript names as in VS Code (calls yellow, types teal, control words purple); the find bar is dark in the dark theme.
 - **Fixed**: with the Files panel open the terminal flickered: on macOS the split view sat on the edge of a column, so the terminal flipped between two widths (201 / 202 columns) several times a second and the shell redrew each time. The terminal now resizes only when its box really changes, and settles on the smaller size if it starts flipping. Opening a folder in a Local Shell's Files panel `cd`s with PowerShell's syntax on Windows.
 - **Files panel for Local Shell tabs**: *This Mac* / *This PC* / *This computer* - the same Files panel as SSH tabs, on this computer's disk (served inside Termwright, no network): follows `cd` (bash, zsh, PowerShell), opening a folder `cd`s the shell, Show in Finder/Explorer, Copy To…, **Move to Trash** (Recycle Bin), the drives on Windows.
 - **File viewer looks like VS Code**: its Dark+ / Light+ colours for JSON, YAML, Markdown, XML and the rest (following the app's theme), its editor font, a clear toolbar and a status line (line, column, type, encoding); **Markdown** in colour with a **Preview**; the viewer is wider and can be resized by dragging its edge.
