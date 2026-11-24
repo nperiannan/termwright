@@ -821,26 +821,46 @@ export class TerminalView implements AfterViewInit, OnDestroy {
   private lastBox = { w: 0, h: 0 };
   private fits: { size: string; cols: number; rows: number; at: number }[] = [];
 
-  /** Fits the terminal to its box. force: the font or the look changed (the box may be the same). Only a real
-   * change of the box resizes it, and a box on the edge of a column (the Files panel's split view on macOS)
-   * that makes it flip between two sizes settles on the smaller one - every resize makes the shell redraw. */
+  /** The box when the terminal last got smaller: it grows back only when the box gained a whole cell since. */
+  private shrunk = { w: 0, h: 0 };
+  /** A size it settled on after flipping between two: kept while the fits keep proposing those two. */
+  private pinned?: { a: string; b: string; cols: number; rows: number; until: number };
+
+  /** Fits the terminal to its box. force: the font or the look changed (the box may be the same).
+   * A box on the edge of a column (the Files panel's split view on macOS: 201 / 202 columns) made the terminal
+   * and the layout push each other back and forth, and the shell redrew on every resize. So: only a real change of
+   * the box fits again; after shrinking it grows back only when the box gained a whole cell (hysteresis); and a
+   * size that goes A → B → A within 10 s settles on the smaller of the two. */
   private doFit(force = false) {
-    const el = this.host()?.nativeElement;
-    if (!this.fit || !this.term || !el || el.offsetWidth === 0 || el.offsetHeight === 0) return;
+    const el = this.host()?.nativeElement, t = this.term;
+    if (!this.fit || !t || !el || el.offsetWidth === 0 || el.offsetHeight === 0) return;
     const w = el.clientWidth, h = el.clientHeight;
     if (!force && w === this.lastBox.w && h === this.lastBox.h) return; // the same box: nothing to do
     this.lastBox = { w, h };
     let p: { cols: number; rows: number } | undefined;
     try { p = this.fit.proposeDimensions(); } catch { return; /* not yet rendered */ }
-    if (!p || !p.cols || !p.rows || (p.cols === this.term.cols && p.rows === this.term.rows)) return;
-    const now = Date.now();
-    this.fits = [...this.fits.filter(f => now - f.at < 3000), { size: p.cols + 'x' + p.rows, cols: p.cols, rows: p.rows, at: now }];
-    if (this.fits.length >= 4 && new Set(this.fits.map(f => f.size)).size <= 2) {
-      const cols = Math.min(...this.fits.map(f => f.cols)), rows = Math.min(...this.fits.map(f => f.rows));
-      if (cols !== this.term.cols || rows !== this.term.rows) this.term.resize(cols, rows);
-      return;
+    if (!p || !p.cols || !p.rows) return;
+    let { cols, rows } = p;
+    if (!force) {
+      const cw = w / Math.max(1, t.cols), ch = h / Math.max(1, t.rows);
+      if (cols > t.cols && this.shrunk.w && w < this.shrunk.w + cw) cols = t.cols;
+      if (rows > t.rows && this.shrunk.h && h < this.shrunk.h + ch) rows = t.rows;
     }
-    try { this.fit.fit(); } catch { /* not yet rendered */ }
+    const now = Date.now(), size = cols + 'x' + rows;
+    if (this.pinned && now < this.pinned.until && (size === this.pinned.a || size === this.pinned.b)) { cols = this.pinned.cols; rows = this.pinned.rows; }
+    else {
+      this.pinned = undefined;
+      this.fits = [...this.fits.filter(f => now - f.at < 10000), { size, cols, rows, at: now }].slice(-6);
+      const [x, y, z] = this.fits.slice(-3);
+      if (z && x.size === z.size && y.size !== x.size) { // A → B → A: it is flipping
+        this.pinned = { a: x.size, b: y.size, cols: Math.min(x.cols, y.cols), rows: Math.min(x.rows, y.rows), until: now + 10000 };
+        cols = this.pinned.cols; rows = this.pinned.rows;
+      }
+    }
+    if (cols === t.cols && rows === t.rows) return;
+    if (cols < t.cols) this.shrunk.w = w;
+    if (rows < t.rows) this.shrunk.h = h;
+    t.resize(cols, rows);
   }
 
   onContextMenu(ev: MouseEvent) {
