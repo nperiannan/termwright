@@ -35,6 +35,21 @@ func TestLoginTrailingClick(t *testing.T) {
 	if err != nil || !strings.Contains(out, "logged in") || !strings.Contains(out, "skipped: click text=Dashboard") {
 		t.Fatal(err, out)
 	}
+	// a login form drawn 3 s after the page loaded (single sign-on pages) is still filled in
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if c, err := r.Cookie("sid"); err == nil && c.Value == "ok" {
+			fmt.Fprint(w, `<html><title>App</title><body><h1>Home</h1></body></html>`)
+			return
+		}
+		fmt.Fprint(w, `<html><body><div id="f"></div><script>setTimeout(() => { document.getElementById('f').innerHTML = '<label>User <input id="u"></label><label>Password <input type="password" id="p"></label><button onclick="if(document.getElementById(\'p\').value===\'pw1\'){document.cookie=\'sid=ok;path=/\';location.reload()}">Sign in</button>'; }, 3000)</script></body></html>`)
+	}))
+	defer slow.Close()
+	app2 := app
+	app2.URL = slow.URL
+	w, x = ForApp(Step{}, app2, Extra{Root: dir, StateDir: filepath.Join(dir, "state3")})
+	if out, err := (Runner{Dir: dir}).Run(ctx, w, "", 5, x); err != nil || !strings.Contains(out, "logged in") {
+		t.Fatal("slow login form:", err, out)
+	}
 	// a failure before the password is sent still fails
 	app.Login = []Action{{Do: "fill", Target: "label=User", Value: "{{username}}"}, {Do: "click", Target: "text=Next"}, {Do: "fill", Target: "label=Password", Value: "{{password}}"}}
 	w, x = ForApp(Step{}, app, Extra{Root: dir, StateDir: filepath.Join(dir, "state2")})

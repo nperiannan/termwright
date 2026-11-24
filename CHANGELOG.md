@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Web app login on slow sign-in pages**: the login waited only 2.5 s for its first field, so a single sign-on page that redirects and draws its form later stayed empty. It now waits until the page settles (up to 20 s) before deciding no login is needed.
+
 - **macOS: copied text pastes correctly**: with Termwright started from the Finder or the Dock, copying text with symbols (✅, ✓, —) pasted junk such as `,úÖ` - the clipboard read it as Mac Roman. It is copied as UTF-8 now.
 
 ## 0.44.3 (2026-11-24)
