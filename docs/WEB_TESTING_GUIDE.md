@@ -625,6 +625,8 @@ web:
 | `{{password}}` typed literally | Choose the step's **Web app** (or login session). |
 | *the app's login (fill label=Email): …* | The login page changed: **Record Login** again on the web app session, then **Test Login**. |
 | A step keeps logging in | The app's cookies expire quickly, or the login's first field is also on other pages - that is fine; it only logs in when that field shows. |
+| A test browser stays open (in the Dock on macOS) after a run or after Termwright quit | **Tests → Close Test Browsers…**, **Close Test Browsers** in a web app session, or **Close Them** in *Record a Web Test*. It closes only the browsers Termwright started for web tests (Chrome for Testing, Chromium, or the Chrome/Edge a step used) - never your own browsers - and keeps a recording or step-by-step browser that is open now. Termwright also says so when it starts and finds some (macOS, Windows, Linux). |
+| Opening a web app closes its browser | Fixed: the browser now stays open and the message says which login action failed - log in by hand or **Record Login** again. |
 | ⌖ Pick does nothing | Click in the browser window that opened (it may be behind Termwright); Esc cancels. |
 | Logged out between steps | Use a web app session (it keeps the login), or give every web step the same **Keep login as**. |
 | Recording records too much | Delete the extra actions with ✕ - hovering, scrolling and clicks on empty space are not recorded. |

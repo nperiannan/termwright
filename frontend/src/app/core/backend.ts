@@ -354,6 +354,8 @@ export class Backend {
   testSaveBooking(b: TestBooking) { return this.call<TestBooking>('TestSaveBooking', b); }
   testRemoveBooking(id: string) { return this.call<void>('TestRemoveBooking', id); }
   webStatus() { return this.call<WebStatus>('WebStatus'); }
+  webLeftovers() { return this.call<{ pid: number; name: string; started: string }[]>('WebLeftovers'); }
+  webCloseLeftovers() { return this.call<number>('WebCloseLeftovers'); }
   webSetup() { return this.call<void>('WebSetup'); }
   webRecord(w: TestWeb) { return this.call<TestWebAction[]>('WebRecord', w); }
   webRecordLogin(path: string, url: string, user: string) { return this.call<TestWebAction[]>('WebRecordLogin', path, url, user); }

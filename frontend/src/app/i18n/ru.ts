@@ -5414,6 +5414,21 @@ const ru: Record<string, string> = {
   'Close Without Saving?': 'Закрыть без сохранения?',
   'Save Invalid JSON?': 'Сохранить неверный JSON?',
   'Copied the whole file': 'Скопирован весь файл',
+  'No test browsers are open': 'Тестовые браузеры не открыты',
+  'started {0}': 'запущен {0}',
+  'Close 1 test browser?': 'Закрыть 1 тестовый браузер?',
+  'Close {0} test browsers?': 'Закрыть тестовые браузеры ({0})?',
+  'Only browsers Termwright started for web tests. Your own Chrome, Edge and Safari are not touched. A recording or step-by-step run that is open now is kept.': 'Только браузеры, запущенные Termwright для веб-тестов. Ваши Chrome, Edge и Safari не затрагиваются. Открытая сейчас запись или пошаговый запуск сохраняется.',
+  'Close Them': 'Закрыть их',
+  'Closed 1 test browser': 'Закрыт 1 тестовый браузер',
+  'Closed {0} test browsers': 'Закрыто тестовых браузеров: {0}',
+  '1 test browser from an earlier run is still open.': '1 тестовый браузер с прошлого запуска всё ещё открыт.',
+  '{0} test browsers from earlier runs are still open.': 'Тестовые браузеры с прошлых запусков всё ещё открыты: {0}.',
+  ' test browsers from earlier runs are still open.': ' тестовых браузеров с прошлых запусков всё ещё открыты.',
+  'Close Test Browsers...': 'Закрыть тестовые браузеры...',
+  'Close Test Browsers': 'Закрыть тестовые браузеры',
+  'Close test browsers Termwright started that were left open': 'Закрыть оставшиеся открытыми тестовые браузеры Termwright',
+  'web runner': 'веб-исполнитель',
 };
 
 export default ru;
