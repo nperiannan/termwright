@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Telnet and serial log in like SSH with a device type**: the device type's login steps match the prompt in any case and also at the usual Username:/Password: prompts, a device that asks only for a password gets it, and a device type without login steps still logs in with its username and password. Before, an unanswered prompt left the device to time out and close the connection.
+
 - **Close Test Browsers**: test browsers left running by web steps (in the Dock on macOS) are closed from Tests → Close Test Browsers…, the web app session (next to Test Login) or Record a Web Test. Only the browsers Termwright started - never your own - and a recording or step-by-step browser open now is kept. Termwright says so on start when it finds some. macOS, Windows and Linux.
 
 - Web apps: opening a web app (double-click) no longer closes its browser after a few seconds when the page is slow or the recorded login fails - pages get 30 s, the browser stays open and the message says what failed, so you can log in by hand or record the login again.
