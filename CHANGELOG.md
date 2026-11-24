@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.44.4 (2026-11-24)
+
 - **Web page size presets**: a web app's page size (and a web step's) is chosen from qHD 960×540, HD 1280×720, Full HD 1920×1080, 2K 2560×1440, 3K 2880×1620, 4K 3840×2160 or Custom… (your own width × height).
 
 - **Recording logins on sign-in pages built of web components** (shadow DOM, e.g. ExtremeCloud single sign-on): what was typed in the Email and Password fields was not recorded - only clicks on the fields - so the login never filled them in. Typing in such fields is recorded now, by the field's label, and an id made anew on every page load is no longer used as a target. **Record Login again** on such web apps.
