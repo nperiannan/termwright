@@ -4,6 +4,21 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.44.4 (2026-11-24)
+
+- **Web page size presets**: a web app's page size (and a web step's) is chosen from qHD 960×540, HD 1280×720, Full HD 1920×1080, 2K 2560×1440, 3K 2880×1620, 4K 3840×2160 or Custom… (your own width × height).
+
+- **Recording logins on sign-in pages built of web components** (shadow DOM, e.g. ExtremeCloud single sign-on): what was typed in the Email and Password fields was not recorded - only clicks on the fields - so the login never filled them in. Typing in such fields is recorded now, by the field's label, and an id made anew on every page load is no longer used as a target. **Record Login again** on such web apps.
+
+- **Command suggestions in the terminal**: Ctrl+Space at the prompt lists the tab's device type commands - your history (most used, then newest) and its Command Library - that start with what is typed; Tab fills in, Enter runs, Shift+Delete forgets one. A tab without a device type asks whose history to use (a device type, all, or this session) and can set it as the session's device type. Settings → Terminal sets the key or turns it off.
+- **Opening a web app waits 30 s for its login page**; if none shows, a message says so and asks you to log in by hand in the browser (and to Record Login again).
+
+- **Web app: why it did not log in**: when a web app opens without logging in, a message names the login's first field and the page it was not found on (e.g. *label=Email did not show on …/ws-login/*).
+
+- **Web app login on slow sign-in pages**: the login waited only 2.5 s for its first field, so a single sign-on page that redirects and draws its form later stayed empty. It now waits until the page settles (up to 20 s) before deciding no login is needed.
+
+- **macOS: copied text pastes correctly**: with Termwright started from the Finder or the Dock, copying text with symbols (✅, ✓, —) pasted junk such as `,úÖ` - the clipboard read it as Mac Roman. It is copied as UTF-8 now.
+
 ## 0.44.3 (2026-11-24)
 
 - **Web app login**: a click recorded after the password was sent (on the app's first page, e.g. *Dashboard*) no longer fails the login when that page differs - it is tried and skipped. Before, Test Login and opening the app stopped with *the app's login (click text=Dashboard): Timeout*.

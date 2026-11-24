@@ -52,7 +52,7 @@ A web app is saved like a device: in the session list, **+ New**, protocol **Mor
 |---|---|
 | **Address** | `https://crm-staging.example.com` - web steps' paths (`/contacts`) go after it |
 | **User / Password** | the account the tests use; the password is kept in the system keychain |
-| **Browser, Page size** | Chromium (default), Firefox or WebKit; e.g. `1280x800` |
+| **Browser, Page size** | Chromium (default), Firefox or WebKit; the page size is a screen resolution - qHD 960×540, HD 1280×720, Full HD 1920×1080, 2K 2560×1440, 3K 2880×1620, 4K 3840×2160 - or **Custom…** with your own, e.g. `1600x900` |
 | **Self-signed certificate OK** | for test servers with their own certificates |
 | **Login → ● Record Login** | a browser opens at the address: log in as usual, then close it |
 
@@ -120,7 +120,7 @@ You can also record into any existing web step: **● Record in Browser** (or, w
 | **Web app** | The web app session (its address, login and settings) - or any saved session whose user name and password fill `{{username}}` / `{{password}}`. A testbed role works too: `{{app}}`. |
 | **Keep login as** | (sessions that are not web apps) keep the cookies under this name: the next web steps with the same name start logged in. Web apps do this by themselves. |
 | **Pictures** | *of a failure* (the default): the page when an action or a check of the step fails, shown at that step; *after every action*: also a picture after each action (bigger reports - it asks first); *none*: no pictures at all. |
-| **Size** | The page size, e.g. `1280x800`, or `390x844` to see a phone layout. |
+| **Size** | The page size: a screen resolution (qHD to 4K) or **Custom…**, e.g. `390x844` to see a phone layout; *As the app* uses the web app's. |
 | **Checks** | The usual checks of a step; they look at the step's output (see [10](#10-checks)). |
 
 In the YAML file the step looks like this:

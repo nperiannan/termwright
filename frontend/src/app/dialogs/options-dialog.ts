@@ -32,7 +32,7 @@ const SEARCH: [Page, string, string][] = [
   ['general', 'Show Connect Bar', 'toolbar quick connect'], ['general', 'Show the menu bar inside the window', 'menu'],
   ['terminal', 'Font', 'typeface monospace'], ['terminal', 'Font size', 'zoom text size'], ['terminal', 'Color scheme', 'colours theme terminal'],
   ['terminal', 'Use this scheme for all sessions', 'force override'], ['terminal', 'Cursor', 'block underline bar'], ['terminal', 'Blink', 'cursor'],
-  ['terminal', 'Scrollback lines', 'history buffer'], ['terminal', 'Terminal bar', 'timestamps auto scroll clear screen'], ['terminal', 'Copy on select', 'clipboard mouse'], ['terminal', 'Paste on right-click', 'mouse clipboard'],
+  ['terminal', 'Scrollback lines', 'history buffer'], ['terminal', 'Terminal bar', 'timestamps auto scroll clear screen'], ['terminal', 'Copy on select', 'clipboard mouse'], ['terminal', 'Paste on right-click', 'mouse clipboard'], ['terminal', 'Command suggestions', 'ctrl+space history autocomplete device type'],
   ['terminal', 'Paste line delay', 'slow paste milliseconds'],
   ['schemes', 'Scheme', 'colour scheme custom colors palette'], ['envs', 'Environments', 'environment production staging test development colour tag folder'], ['keywords', 'Default set', 'keyword highlighting highlight words colour'],
   ['keymap', 'Key Map', 'shortcut keyboard binding hotkey'], ['buttons', 'Button Bar', 'buttons send command'],
@@ -254,6 +254,14 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 <div class="checks">
                   <label><input type="checkbox" name="cos" [(ngModel)]="s.copyOnSelect" /> Copy on select</label>
                   <label><input type="checkbox" name="rcp" [(ngModel)]="s.rightClickPaste" /> Paste on right-click (Shift+right-click opens the menu)</label>
+                </div>
+                <label>Command suggestions</label>
+                <div class="checks">
+                  <label><select name="sugk" [ngModel]="s.suggestKey || 'Ctrl+Space'" (ngModelChange)="s.suggestKey = $event === 'Ctrl+Space' ? '' : $event">
+                    <option value="Ctrl+Space">Ctrl+Space</option><option value="Ctrl+Shift+Space">Ctrl+Shift+Space</option><option value="Alt+Space">Alt+Space</option><option value="Ctrl+;">Ctrl+;</option><option value="off">Off</option>
+                  </select> <span class="muted">another key if Ctrl+Space switches your input language</span></label>
+                  <label><input type="checkbox" name="sugl" [ngModel]="!s.suggestNoLibrary" (ngModelChange)="s.suggestNoLibrary = !$event" /> Also the Command Library</label>
+                  <label><input type="checkbox" name="sugu" [(ngModel)]="s.suggestUntyped" /> Also commands of sessions without a device type</label>
                 </div>
                 <label>Paste line delay</label>
                 <div class="row"><input name="pld" type="number" min="0" class="short" [(ngModel)]="s.pasteLineDelayMs" /> ms between lines (0 = off; useful for slow network devices)</div>

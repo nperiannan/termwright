@@ -434,7 +434,7 @@ func (x Extra) job(w Step, shots string, timeout int) map[string]any {
 		pre = "web-" + time.Now().Format("150405.000")
 	}
 	return map[string]any{"step": w, "shots": shots, "timeout": timeout, "root": x.Root, "stateDir": x.StateDir,
-		"httpUser": x.HTTPUser, "httpPassword": x.HTTPPassword, "login": x.Login, "prefix": pre,
+		"httpUser": x.HTTPUser, "httpPassword": x.HTTPPassword, "login": x.Login, "prefix": pre, "person": x.Person,
 		"pictures": w.Pictures == "all" && shots != "", "failShot": w.Pictures != "none" && shots != "", "video": !x.NoVideo && !w.Show && shots != ""}
 }
 

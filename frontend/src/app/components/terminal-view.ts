@@ -18,6 +18,7 @@ import { accountChoice, defaultLogin } from '../core/accounts';
 import { DeviceIcon, deviceKindOf } from './device-icon';
 import { Icon } from './icon';
 import { History, commandOfLine } from '../core/history.service';
+import { SuggestItem, termSuggestions, whenText } from '../core/term-suggest';
 import { Recorder, ExpectKind } from '../core/recorder.service';
 import { FormsModule } from '@angular/forms';
 
@@ -151,6 +152,29 @@ function b64ToBytes(b64: string): Uint8Array {
         @if (f.hint) { <div class="fhint">{{ f.hint }}</div> }
         <div class="facts">@for (a of f.actions; track a) { <button type="button" [class.primary]="$first" (click)="runFix(a)">{{ labels[a] }}</button> }</div>
       </div>
+    }
+    @if (sug(); as g) {
+      <div class="tsug" [style.left.px]="g.x" [style.top.px]="g.y" [class.up]="g.up" (mousedown)="$event.preventDefault()" role="listbox" aria-label="Command suggestions">
+        <div class="tsh">
+          @if (g.known) { <span class="tchip">{{ g.source }}</span><span>{{ g.typed ? tr('history and Command Library') : tr('most used') }}@if (g.typed && g.total) { · {{ tr('{0} of {1}', g.items.length, g.total) }} }</span> }
+          @else {
+            <span>{{ tr('History of') }}</span>
+            <select [ngModel]="g.source" (ngModelChange)="sugSource($event)" (keydown)="$event.stopPropagation()">
+              @for (d of sugTypes(); track d) { <option [value]="d">{{ d }}</option> }
+              <option value="*">{{ tr('All device types') }}</option><option value="@">{{ tr('This session only') }}</option>
+            </select>
+            <span class="tmut">· {{ tr('not known for this tab') }}</span><span class="tsp"></span>
+            @if (g.source !== '*' && g.source !== '@' && tab().session.path) { <label class="tmut"><input type="checkbox" (change)="sugSetType(g.source)" /> {{ tr('set as this session\'s device type') }}</label> }
+          }
+        </div>
+        @for (it of g.items; track it.cmd; let i = $index) {
+          <div class="tit" [class.sel]="i === g.sel" role="option" (mouseenter)="sugSel(i)" (click)="sugTake(i, false)">
+            <span class="tc"><b>{{ it.cmd.slice(0, g.typed.length) }}</b>{{ it.cmd.slice(g.typed.length) }}</span>
+            <span class="tw">@if (it.library) { <span class="tlib">{{ tr('library') }}</span> } @else { {{ it.count }}×@if (g.typed && it.time) { · {{ when(it.time) }} } }</span>
+          </div>
+        } @empty { <div class="tmut tempty">{{ g.typed ? tr('No commands start with "{0}"', g.typed) : tr('No commands remembered yet') }}</div> }
+        <div class="tsf"><kbd>↑</kbd><kbd>↓</kbd> {{ tr('choose') }} · <kbd>Tab</kbd> {{ tr('fill in (not run)') }} · <kbd>Enter</kbd> {{ tr('fill in and run') }} · <kbd>Esc</kbd> {{ tr('close') }} · <kbd>⇧Del</kbd> {{ tr('forget this one') }}</div>
+      </div>
     }`,
   styles: [`
     .ccard-wrap { position: absolute; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; background: var(--term-bg, var(--bg)); }
@@ -179,6 +203,20 @@ function b64ToBytes(b64: string): Uint8Array {
         summary { cursor: pointer; } code { display: block; margin-top: 6px; padding: 6px 8px; border-radius: var(--r-sm, 6px); background: var(--surface-2, var(--bg)); font-family: var(--mono); word-break: break-word; color: var(--muted); } }
       .eacts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 14px; .eclose { margin-right: auto; } } }
     :host { display: flex; flex-direction: column; position: absolute; inset: 0; padding: 4px 0 0 6px; background: var(--term-bg); }
+    .tsug { position: absolute; z-index: 8; width: min(560px, calc(100% - 24px)); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow, 0 10px 28px #000b);
+      font-size: calc(12px * var(--ui-scale, 1)); color: var(--text); overflow: hidden; }
+    .tsug .tsh { display: flex; gap: 8px; align-items: center; padding: 5px 10px; border-bottom: 1px solid var(--border); color: var(--muted); }
+    .tsug .tsh select { font: inherit; padding: 1px 4px; background: var(--input-bg, var(--bg)); color: var(--text); border: 1px solid var(--border); border-radius: 5px; }
+    .tsug .tchip { border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 0 6px; font-size: .92em; }
+    .tsug .tsp { flex: 1; } .tsug .tmut { color: var(--muted); } .tsug label { display: flex; gap: 4px; align-items: center; }
+    .tsug .tit { display: flex; gap: 10px; padding: 3px 10px; cursor: default; font-family: var(--mono, ui-monospace, Menlo, monospace); }
+    .tsug .tit.sel { background: var(--hover); box-shadow: inset 2px 0 0 var(--accent); }
+    .tsug .tc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .tsug .tc b { font-weight: 700; }
+    .tsug .tw { color: var(--muted); font-family: system-ui, sans-serif; font-size: .92em; white-space: nowrap; }
+    .tsug .tlib { border: 1px solid var(--border); border-radius: 7px; padding: 0 5px; }
+    .tsug .tempty { padding: 6px 10px; }
+    .tsug .tsf { padding: 4px 10px; border-top: 1px solid var(--border); color: var(--muted); font-size: .92em; }
+    .tsug kbd { font: inherit; font-size: .92em; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: var(--text); }
     .term-host { width: 100%; flex: 1; min-height: 0; }
     .paused { position: absolute; right: 18px; bottom: 44px; z-index: 4; display: flex; gap: 8px; align-items: center; padding: 4px 6px 4px 10px; border-radius: 6px;
       background: var(--panel); color: var(--text); border: 1px solid var(--border); box-shadow: var(--shadow); font-size: calc(12px * var(--ui-scale, 1));
@@ -337,6 +375,116 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       void this.backend.setNoCursorReport(t.session.path, true).catch(() => {});
     }
     this.ui.toast(tr('The device read the terminal\'s cursor position answer as typed text. Termwright no longer answers it for this session (Session Options → Terminal).'), 'info', 9000);
+  }
+
+  // ---- command suggestions at the cursor (Ctrl+Space): the device type's history and Command Library ----
+
+  readonly sug = signal<{ items: SuggestItem[]; total: number; sel: number; typed: string; source: string; known: boolean; x: number; y: number; up: boolean } | null>(null);
+  readonly tr = tr;
+  when(iso: string) { return tr(whenText(iso)); }
+  readonly sugTypes = computed(() => (this.ui.settings()?.deviceTypes ?? []).map(d => d.name));
+  private sugTimer?: ReturnType<typeof setTimeout>;
+
+  /** The text typed on the cursor's line, without the prompt ('' when nothing or it cannot be told). */
+  private typedNow(): string {
+    const term = this.term;
+    if (!term) return '';
+    const b = term.buffer.active;
+    let row = b.baseY + b.cursorY;
+    let text = (b.getLine(row)?.translateToString(true) ?? '').slice(0, b.cursorX);
+    while (row > 0 && b.getLine(row)?.isWrapped) { row--; text = (b.getLine(row)?.translateToString(true) ?? '') + text; }
+    return text.trim() ? (commandOfLine(text + ' ') ?? '') : '';
+  }
+
+  private sugSourceFor(): { source: string; known: boolean } {
+    const s = this.tab().session;
+    if (s.deviceType) return { source: s.deviceType, known: true };
+    let v = '';
+    try { v = localStorage.getItem('tw.sugsrc.' + (s.path || this.tab().title)) ?? ''; } catch { /* none */ }
+    return { source: v || '*', known: false };
+  }
+
+  async sugOpen(keepSel = false) {
+    await this.history.load();
+    const term = this.term, el = this.host()?.nativeElement;
+    if (!term || !el) return;
+    const typed = this.typedNow();
+    const { source, known } = this.sugSourceFor();
+    const st = this.ui.settings();
+    const r = termSuggestions(this.history.entries(), st?.snippets ?? [], this.sugTypes(), source, this.tab().session.path ?? '', typed,
+      { library: !st?.suggestNoLibrary, untyped: !!st?.suggestUntyped });
+    // at the cursor: below it, or above when there is no room
+    const core = (term as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { width: number; height: number } } } } } })._core;
+    const cell = core?._renderService?.dimensions?.css?.cell ?? { width: el.clientWidth / term.cols, height: el.clientHeight / term.rows };
+    const b = term.buffer.active;
+    const cx = 6 + b.cursorX * cell.width, cy = 4 + b.cursorY * cell.height;
+    const hostH = (this.host()?.nativeElement.parentElement?.clientHeight ?? el.clientHeight);
+    const up = cy + cell.height + 260 > hostH && cy > hostH / 2;
+    const x = Math.max(8, Math.min(cx - typed.length * cell.width, el.clientWidth - 570));
+    const y = up ? cy - 6 : cy + cell.height + 4;
+    const old = this.sug();
+    this.sug.set({ ...r, sel: keepSel && old ? Math.min(old.sel, Math.max(0, r.items.length - 1)) : 0, typed, source, known, x, y, up });
+  }
+
+  sugSel(i: number) { const g = this.sug(); if (g) this.sug.set({ ...g, sel: i }); }
+  sugClose() { this.sug.set(null); clearTimeout(this.sugTimer); }
+
+  sugSource(v: string) {
+    const s = this.tab().session;
+    try { localStorage.setItem('tw.sugsrc.' + (s.path || this.tab().title), v); } catch { /* not kept */ }
+    this.sugOpen();
+    this.term?.focus();
+  }
+
+  async sugSetType(dt: string) {
+    const s = this.tab().session;
+    if (!s.path) return;
+    try {
+      const saved = await this.backend.saveSession({ ...s, deviceType: dt }, s.path);
+      this.tabs.patch(this.tab().id, { session: { ...s, deviceType: saved?.deviceType ?? dt } } as Partial<TabView>);
+      this.ui.toast(tr('{0} is now a {1} session', s.name || this.tab().title, dt), 'success');
+      this.sugOpen();
+    } catch (e) { this.ui.toast(String(e), 'error'); }
+    this.term?.focus();
+  }
+
+  /** Puts the chosen command on the line (the rest of it, or the whole after erasing what is typed); run: Enter too. */
+  sugTake(i: number, run: boolean) {
+    const g = this.sug(), t = this.tab();
+    const it = g?.items[i];
+    this.sugClose();
+    this.term?.focus();
+    if (!g || !it || t.state !== 'connected') return;
+    let out: string;
+    if (it.cmd.toLowerCase().startsWith(g.typed.toLowerCase()) && it.cmd.slice(0, g.typed.length) === g.typed) out = it.cmd.slice(g.typed.length);
+    else out = (t.session.backspace === 'bs' ? '\b' : '\x7f').repeat(g.typed.length) + it.cmd;
+    void this.backend.sendInput(t.id, out + (run ? '\r' : ''));
+    if (run) this.history.add(it.cmd, { session: t.session.path, title: t.title, deviceType: t.session.deviceType });
+  }
+
+  /** Keys while the list is open: undefined lets xterm have the key (typing goes on; the list follows). */
+  private sugKey(ev: KeyboardEvent): boolean | undefined {
+    const g = this.sug()!;
+    const n = g.items.length;
+    switch (ev.key) {
+      case 'ArrowDown': ev.preventDefault(); if (n) this.sugSel((g.sel + 1) % n); return false;
+      case 'ArrowUp': ev.preventDefault(); if (n) this.sugSel((g.sel - 1 + n) % n); return false;
+      case 'Tab': ev.preventDefault(); this.sugTake(g.sel, false); return false;
+      case 'Enter': ev.preventDefault(); if (n) { this.sugTake(g.sel, true); return false; } this.sugClose(); return true;
+      case 'Escape': ev.preventDefault(); this.sugClose(); return false;
+      case 'Delete':
+        if (ev.shiftKey && n) {
+          ev.preventDefault();
+          const it = g.items[g.sel];
+          if (!it.library) void this.history.remove(it.cmd, g.source === '*' || g.source === '@' ? '' : g.source).then(() => this.sugOpen(true));
+          return false;
+        }
+    }
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) { this.sugClose(); return undefined; }
+    // typing: the list follows what is on the line once the device echoed it
+    clearTimeout(this.sugTimer);
+    this.sugTimer = setTimeout(() => { if (this.sug()) this.sugOpen(true); }, 120);
+    return undefined;
   }
 
   private remember(term: Terminal, t: TabView) {
@@ -689,6 +837,9 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     term.onCursorMove(() => this.pubCaret());
     term.attachCustomKeyEventHandler(ev => {
       if (ev.type !== 'keydown') return true;
+      if (this.sug()) { const r = this.sugKey(ev); if (r !== undefined) return r; }
+      const sk = this.ui.settings()?.suggestKey || 'Ctrl+Space';
+      if (sk !== 'off' && comboOf(ev) === sk) { ev.preventDefault(); void this.sugOpen(); return false; }
       const km = this.ui.settings()?.keyMap;
       if (km?.length) {
         const combo = comboOf(ev);
@@ -713,6 +864,8 @@ export class TerminalView implements AfterViewInit, OnDestroy {
 
     // keyword highlighting of the rows in view, at most once per frame
     term.onWriteParsed(() => this.scheduleHighlight());
+    // the suggestion list goes when the terminal loses the keyboard (not to the list's own device type choice)
+    term.textarea?.addEventListener('blur', () => setTimeout(() => { if (!(document.activeElement as HTMLElement | null)?.closest?.('.tsug')) this.sugClose(); }, 0));
     term.onRender(() => this.scheduleHighlight());
     this.compileKeywords();
 

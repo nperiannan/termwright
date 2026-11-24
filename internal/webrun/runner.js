@@ -182,8 +182,16 @@ async function login(S, req, url) {
   const L = req.login || [];
   const first = L.find(a => a.target);
   if (!first) return false;
-  const shows = await loc(S.page, first.target).first().waitFor({ state: 'visible', timeout: 2500 }).then(() => true, () => false);
-  if (!shows) return false;
+  // the login form can come late (a single sign-on page that redirects and draws itself): wait for its first
+  // field until the page has settled (no network for a moment), then 4 s more - at most 20 s
+  const field = loc(S.page, first.target).first();
+  // a web app opened for a person: wait for its login page up to 30 s (a person then sees what happened)
+  const shows = req.person ? await field.waitFor({ state: 'visible', timeout: 30000 }).then(() => true, () => false) : await Promise.race([
+    field.waitFor({ state: 'visible', timeout: 20000 }).then(() => true, () => false),
+    S.page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
+      .then(() => field.waitFor({ state: 'visible', timeout: 4000 }).then(() => true, () => false)),
+  ]);
+  if (!shows) { out({ i: -1, ok: true, note: 'no login asked: ' + first.target + ' did not show on ' + S.page.url() + (req.person ? ' in 30 s' : '') }); return false; }
   // after the password is typed and sent (a click or Enter), the login is done: a click recorded after it
   // (on the app's first page, e.g. "Dashboard") is tried but does not fail the login - that page can differ
   let typed = false, sent = false;
@@ -278,7 +286,14 @@ const RECORDER = `(() => {
       if (lab && lab.length < 50) add('label=' + lab);
       if (el.placeholder) add('placeholder=' + el.placeholder);
     }
-    if (el.id && !/^\\d|[:\\s]|\\d{3,}/.test(el.id) && unique('#' + CSS.escape(el.id))) add('#' + CSS.escape(el.id));
+    // a field in a web component (shadow DOM): its host's own class names it (Playwright's CSS looks inside)
+    const root = el.getRootNode && el.getRootNode();
+    if (root && root.host) {
+      const hc = [...root.host.classList].find(c => !/^(ng-|en-u-|is-|has-)/.test(c) && c.length > 3);
+      if (hc) add(root.host.tagName.toLowerCase() + '.' + CSS.escape(hc) + ' ' + t);
+    }
+    const randomId = id => /^[A-Za-z0-9_-]{12,}$/.test(id) && /[A-Z]/.test(id) && /[a-z]/.test(id) && /\\d/.test(id); // made anew on every load
+    if (el.id && !/^\\d|[:\\s]|\\d{3,}/.test(el.id) && !randomId(el.id) && unique('#' + CSS.escape(el.id))) add('#' + CSS.escape(el.id));
     if (field && el.name && unique(t + '[name=' + q(el.name) + ']')) add(t + '[name=' + q(el.name) + ']');
     const r = role(el), name = (el.getAttribute('aria-label') || el.getAttribute('title') || text(el)).trim();
     if (r && name) add('role=' + r + '[name=' + q(name) + ']');
@@ -298,10 +313,30 @@ const RECORDER = `(() => {
   window.__twTargets = targets;
   const clickable = el => el.closest('a,button,[role=button],[role=link],[role=tab],[role=menuitem],input[type=button],input[type=submit],input[type=checkbox],input[type=radio],label,summary,option,li,td,span,div') || el;
   const send = a => window.__twRecOn2 && window.__twRec && window.__twRec(a);
+  // the element itself, also inside a web component (shadow DOM): e.target is only its host there
+  const real = e => (e.composedPath && e.composedPath()[0]) || e.target;
+  // typing in a field of a web component: its change event does not leave the component, so the value is
+  // taken when the field loses the focus (or Enter, or a click elsewhere)
+  let pend = null;
+  const flush = () => {
+    if (!pend) return; const el = pend; pend = null;
+    const ty = (el.getAttribute('type') || '').toLowerCase();
+    send({ do: 'fill', ...T(el), value: ty === 'password' ? '{{password}}' : el.value, secret: ty === 'password' });
+  };
+  document.addEventListener('input', e => {
+    if (!window.__twRecOn2) return;
+    const el = real(e), t = el.tagName && el.tagName.toLowerCase(), ty = (el.getAttribute && el.getAttribute('type') || '').toLowerCase();
+    if (el === e.target) return; // not in a web component: its change records it
+    if ((t === 'input' && !['checkbox', 'radio', 'file', 'button', 'submit'].includes(ty)) || t === 'textarea') { if (pend && pend !== el) flush(); pend = el; }
+  }, true);
+  document.addEventListener('focusout', e => { if (window.__twRecOn2 && pend && real(e) === pend) flush(); }, true);
+  window.addEventListener('beforeunload', () => { if (window.__twRecOn2) flush(); });
   document.addEventListener('click', e => {
     if (!window.__twRecOn2) return;
-    if (!e.altKey && e.target.closest && e.target.closest('input,textarea,select,option')) return; // fields: their change
-    const el = clickable(e.target);
+    flush();
+    const tg = real(e);
+    if (!e.altKey && tg.closest && tg.closest('input,textarea,select,option')) return; // fields: their change
+    const el = clickable(tg);
     if (e.altKey) { e.preventDefault(); e.stopPropagation(); const tg = T(el); send(tg.target.startsWith('text=') ? { do: 'expect', value: text(el) } : { do: 'expect', ...tg, value: text(el) }); flash(el, '#3fb950'); return; }
     const t = el.tagName.toLowerCase(), ty = (el.getAttribute('type') || '').toLowerCase();
     if (t === 'label' && el.control) return; // its field records the change
@@ -319,8 +354,10 @@ const RECORDER = `(() => {
   }, true);
   document.addEventListener('keydown', e => {
     if (!window.__twRecOn2) return;
-    if (e.key === 'Enter' && e.target && ['INPUT'].includes(e.target.tagName)) {
-      const el = e.target; const ty = (el.getAttribute('type') || '').toLowerCase();
+    const el = real(e);
+    if (e.key === 'Enter' && el && ['INPUT'].includes(el.tagName)) {
+      if (pend === el) pend = null;
+      const ty = (el.getAttribute('type') || '').toLowerCase();
       send({ do: 'fill', ...T(el), value: ty === 'password' ? '{{password}}' : el.value, secret: ty === 'password' });
       send({ do: 'press', ...T(el), value: 'Enter' });
     }
@@ -378,7 +415,7 @@ const closed = S => new Promise(resolve => {
 async function drive(S, list) { // tests: do these as a person would
   for (const d of list) {
     const el = loc(S.page, d.target).first();
-    if (d.do === 'fill') { await el.click(); await el.fill(d.value); await el.dispatchEvent('change'); }
+    if (d.do === 'fill') { await el.click(); await el.fill(d.value); await el.press('Tab'); }
     else if (d.do === 'select') await el.selectOption({ label: d.value });
     else if (d.do === 'altclick') await el.click({ modifiers: ['Alt'] });
     else await el.click();

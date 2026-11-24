@@ -971,6 +971,10 @@ The connector listens only on this computer (127.0.0.1) with a random key kept i
 
 ![Command Window suggestions](screenshots/autocomplete.png)
 
+**Suggestions in the terminal** (**Ctrl+Space** at the prompt): a list at the cursor with the commands of the tab's device type - your history (most used first, then the newest) and its Command Library commands - that start with what is typed on the line; with nothing typed, the most used. A VOSS tab never offers EXOS commands. ↑/↓ chooses, **Tab** fills the rest of the line in without running it, **Enter** fills in and runs it, **Shift+Delete** forgets a mistyped command, Esc closes; typing goes on with the list open. In a tab **without a device type** the list asks *History of* - a device type, *All device types* or *This session only* - and remembers the choice for the session; *set as this session's device type* also saves it on the session (its login steps and the rest then apply). It only opens on the key, so the device's own Tab completion and `?` help are unchanged. Settings → Terminal → *Command suggestions* sets another key (Ctrl+Space switches the input language on some computers) or turns it off, and whether the Command Library and commands of sessions without a device type are included.
+
+![Command suggestions in the terminal](screenshots/term-suggestions.png)
+
 **Command Library** (Script → Command Library…, `Cmd+E` / `Ctrl+Shift+E`)
 
 ![Command Library](screenshots/commands.png)
