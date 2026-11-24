@@ -342,7 +342,7 @@ export class Backend {
   testHistory(file: string, limit = 50) { return this.call<TestHistory[]>('TestHistory', file, limit); }
   testSendQTest(dir: string, files: string[] = []) { return this.call<string>('TestSendQTest', dir, files); }
   testCreateDefect(dir: string, file: string) { return this.call<string[]>('TestCreateDefect', dir, file); }
-  testsExport(o: { files: string[]; lang: string; os: string; testbed: string; name: string; standalone?: boolean }) { return this.call<string>('TestsExport', o); }
+  testsExport(o: { files: string[]; lang: string; os: string; testbed: string; name: string; standalone?: boolean; noFailShots?: boolean; stepShots?: boolean }) { return this.call<string>('TestsExport', o); }
   testProcs() { return this.call<TestProcInfo[]>('TestProcs'); }
   testProc(name: string) { return this.call<TestProc>('TestProc', name); }
   testSaveProc(name: string, p: TestProc) { return this.call<string>('TestSaveProc', name, p); }
@@ -611,7 +611,12 @@ export class Backend {
   discoverOuiStatus() { return this.call<string>('DiscoverOUIStatus'); }
   discoverDownloadOui() { return this.call<number>('DiscoverDownloadOUI'); }
   sftpLoginShell(id: string) { return this.call<string>('SFTPLoginShell', id); }
-  sftpOpen(tabId: string, mode: SftpMode = '') { return this.call<{ id: string; home: string; target: string }>('SFTPOpen', tabId, mode); }
+  sftpOpen(tabId: string, mode: SftpMode = '') { return this.call<{ id: string; home: string; target: string; local?: string }>('SFTPOpen', tabId, mode); }
+  sftpStat(id: string, p: string) { return this.call<{ size: number; mod: number }>('SFTPStat', id, p); }
+  sftpReadTail(id: string, p: string) { return this.call<{ text: string; size: number }>('SFTPReadTail', id, p); }
+  sftpSaveText(id: string, p: string, text: string, expect: number) { return this.call<number>('SFTPSaveText', id, p, text, expect); }
+  localShowInFolder(id: string, p: string) { return this.call<void>('LocalShowInFolder', id, p); }
+  localTrashFiles(id: string, paths: string[]) { return this.call<void>('LocalTrashFiles', id, paths); }
   diagnoseRemoteDesktop(path: string, sudo: string) { return this.call<unknown>('DiagnoseRemoteDesktop', path, sudo); }
   restartRemoteDesktopService(path: string, which: 'RDP' | 'VNC', sudo: string) { return this.call<string>('RestartRemoteDesktopService', path, which, sudo); }
   remoteDesktopInfo(tabId: string) { return this.call<{ knownPassword: boolean; user: string }>('RemoteDesktopInfo', tabId); }

@@ -28,6 +28,15 @@ function viewport(v) {
   return m ? { width: +m[1], height: +m[2] } : undefined;
 }
 
+// every browser this runner started: closed before it exits, so none is left running (macOS keeps a
+// browser without windows in the Dock)
+const BROWSERS = [];
+async function quit(code) {
+  await Promise.all(BROWSERS.map(b => b.close().catch(() => {})));
+  process.exit(code);
+}
+for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(sig, () => quit(0));
+
 async function context(req, w, show) {
   const type = { firefox, webkit }[w.browser] || chromium;
   let browser;
@@ -36,6 +45,7 @@ async function context(req, w, show) {
     if (type !== chromium) throw e;
     browser = await chromium.launch({ headless: !show, channel: 'chrome' }).catch(() => chromium.launch({ headless: !show, channel: 'msedge' })).catch(() => { throw e; });
   }
+  BROWSERS.push(browser);
   const opts = { ignoreHTTPSErrors: !!w.insecure, viewport: viewport(w.viewport) };
   if (req.httpUser) opts.httpCredentials = { username: req.httpUser, password: req.httpPassword || '' };
   const statePath = w.state && req.stateDir ? path.join(req.stateDir, w.state.replace(/[^\w.-]+/g, '_') + '.json') : '';
@@ -203,18 +213,26 @@ async function run(req) {
   let i = -1;
   try {
     await start(S, req, w);
+    let last = '';
     for (i = 0; i < (w.actions || []).length; i++) {
       const { note, healed } = await act(S, req, w.actions[i]);
-      out({ i, ok: true, note, healed, pic: await picture(S, req, i) });
+      last = await picture(S, req, i);
+      out({ i, ok: true, note, healed, pic: last });
     }
     await saveState(S);
     const text = (await S.page.innerText('body').catch(() => '')).slice(0, 20000);
-    out({ done: true, url: S.page.url(), title: await S.page.title(), text, reads: S.reads, dialogs: S.dialogs });
+    // the page at the end: the step's checks run on it - a failed check shows this picture
+    let end = '';
+    if (req.failShot && req.shots) {
+      end = last;
+      if (!end) { const p = path.join(req.shots, (req.prefix || 'web') + '-end-' + Date.now() + '.png'); end = await S.page.screenshot({ path: p, fullPage: true }).then(() => p, () => ''); }
+    }
+    out({ done: true, url: S.page.url(), title: await S.page.title(), text, reads: S.reads, dialogs: S.dialogs, end });
     if (w.trace) await S.ctx.tracing.stop({ path: path.join(req.shots, 'trace-' + Date.now() + '.zip') });
     await S.ctx.close().catch(() => {});
   } catch (e) {
     let p = '', tr = '', vid = '';
-    try { const pp = path.join(req.shots, 'failed-' + Date.now() + '.png'); await S.page.screenshot({ path: pp, fullPage: true }); p = pp; } catch { /* no page */ }
+    if (req.failShot !== false) try { const pp = path.join(req.shots, 'failed-' + Date.now() + '.png'); await S.page.screenshot({ path: pp, fullPage: true }); p = pp; } catch { /* no page */ }
     if (w.trace) { tr = path.join(req.shots, 'trace-failed-' + Date.now() + '.zip'); try { await S.ctx.tracing.stop({ path: tr }); } catch { tr = ''; } }
     if (S.videoDir) {
       const v = S.page && S.page.video(); await S.ctx.close().catch(() => {});
@@ -341,7 +359,12 @@ async function recorder(S) {
   S.setRec = async on => { S.rec = on; for (const p of S.pages) await p.evaluate(v => window.__twSetRec && window.__twSetRec(v), on).catch(() => {}); };
 }
 
-const closed = S => new Promise(resolve => { S.browser.on('disconnected', resolve); S.ctx.on('close', resolve); S.ctx.on('page', p => p.on('close', () => { if (S.ctx.pages().length === 0) resolve(); })); });
+// closed: the person closed the browser - or its last window (on macOS the browser keeps running then)
+const closed = S => new Promise(resolve => {
+  S.browser.on('disconnected', resolve); S.ctx.on('close', resolve);
+  const watch = p => p.on('close', () => { if (S.ctx.pages().length === 0) resolve(); });
+  S.ctx.pages().forEach(watch); S.ctx.on('page', watch);
+});
 
 async function drive(S, list) { // tests: do these as a person would
   for (const d of list) {
@@ -364,6 +387,7 @@ async function record(req) {
   await S.setRec(true);
   if (req.drive) { await drive(S, req.drive); out({ done: true, url: S.page.url() }); await S.browser.close(); return; }
   await closed(S);
+  await saveState(S); // logged in now: the next browser starts logged in
   out({ done: true });
   await S.browser.close().catch(() => {});
 }
@@ -376,7 +400,7 @@ async function serve(req, lines) {
   await recorder(S);
   if (req.trace) await S.ctx.tracing.start({ screenshots: true, snapshots: true });
   let busy = Promise.resolve();
-  const bye = async () => { await saveState(S); out({ closed: true }); process.exit(0); };
+  const bye = async () => { await saveState(S); out({ closed: true }); await quit(0); };
   closed(S).then(bye);
   const err = e => String(e && e.message || e).split('\n')[0];
   const handle = async c => {
@@ -414,6 +438,7 @@ async function serve(req, lines) {
   rl.on('line', l => { if (gotFirst) { const g = gotFirst; gotFirst = null; g(l); } else if (lines.take) lines.take(l); else lines.queue.push(l); });
   rl.on('close', () => { lines.ended = true; if (lines.onEnd) lines.onEnd(); });
   const req = JSON.parse(await firstLine);
-  if (req.serve) await serve(req, lines);
-  else if (req.record) await record(req); else await run(req);
-})().catch(e => { out({ i: -2, ok: false, error: String(e && e.message || e).split('\n')[0] }); process.exit(0); });
+  if (req.serve) { await serve(req, lines); return; } // runs until the browser closes (bye)
+  if (req.record) await record(req); else await run(req);
+  await quit(0);
+})().catch(e => { out({ i: -2, ok: false, error: String(e && e.message || e).split('\n')[0] }); return quit(0); });

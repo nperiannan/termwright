@@ -456,7 +456,7 @@ def web(w, shots):
         raise StepError("web steps need Playwright: npm install --prefix %s playwright && npx --prefix %s playwright install chromium" % (pw, pw))
     w = dict(w)
     req = {"shots": os.path.abspath(shots), "timeout": 30, "root": ROOT, "stateDir": os.path.join(ROOT, ".web-state"),
-           "pictures": w.get("pictures") != "off", "video": not w.get("show"), "prefix": "web-%d" % (time.time() * 1000)}
+           "pictures": w.get("pictures") == "all", "failShot": w.get("pictures") != "none", "video": not w.get("show"), "prefix": "web-%d" % (time.time() * 1000)}
     def with_login(acts, user, pw_):
         out = []
         for a in acts or []:

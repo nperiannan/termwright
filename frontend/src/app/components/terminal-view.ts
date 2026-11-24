@@ -487,11 +487,17 @@ export class TerminalView implements AfterViewInit, OnDestroy {
 
   constructor() {
     // Apply settings changes (font, scheme, cursor) live.
+    // Only when the settings, the light/dark look or the session's own font, scheme or keywords change - not on
+    // every change of the tab (its size, folder, title…): each run sets the theme and fits again, and on macOS
+    // that fit could land one column off, change the tab's size and run this again - a resize loop (flicker).
     effect(() => {
       const s = this.ui.settings();
       const t = this.term;
       if (!s || !t) return;
       const sess = this.tab().session;
+      const key = [sess.fontFamily, sess.fontSize, sess.colorScheme, sess.keywordSet, this.ui.lightUi()].join('\u0001');
+      if (s === this.styledWith && key === this.styleKey) return;
+      this.styledWith = s; this.styleKey = key;
       t.options.fontFamily = sess.fontFamily || s.fontFamily;
       t.options.fontSize = sess.fontSize > 0 ? sess.fontSize + (s.fontSize - BASE_FONT) : s.fontSize;
       t.options.lineHeight = s.lineHeight && s.lineHeight >= 1 ? s.lineHeight : 1;
@@ -506,10 +512,10 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       t.options.theme = theme;
       this.compileKeywords();
       this.host().nativeElement.parentElement?.style.setProperty('--term-bg', String(t.options.theme.background));
-      this.scheduleFit();
+      this.scheduleFit(true);
     });
     effect(() => {
-      if (this.visible()) this.scheduleFit();
+      if (this.visible()) this.scheduleFit(true);
     });
     effect(() => {
       if (this.visible() && this.tabs.activeId() === this.tab().id) { setTimeout(() => this.term?.focus(), 0); this.pubCaret(); }
@@ -712,7 +718,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
 
     this.ro = new ResizeObserver(() => this.scheduleFit());
     this.ro.observe(this.host().nativeElement);
-    this.doFit();
+    this.doFit(true);
     this.tabs.patch(id, { cols: term.cols, rows: term.rows });
     this.tabs.start(id);
     if (this.visible()) term.focus();
@@ -803,15 +809,58 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     this.hl = [...kept.values()];
   }
 
-  private scheduleFit() {
+  private scheduleFit(force = false) {
     clearTimeout(this.fitTimer);
-    this.fitTimer = setTimeout(() => this.doFit(), 30);
+    this.fitForce ||= force;
+    this.fitTimer = setTimeout(() => { const f = this.fitForce; this.fitForce = false; this.doFit(f); }, 30);
   }
+  private fitForce = false;
+  private styledWith?: object;
+  private styleKey = '';
+  /** The terminal box when it was last fitted, and the sizes of the last fits (to see a flip-flop). */
+  private lastBox = { w: 0, h: 0 };
+  private fits: { size: string; cols: number; rows: number; at: number }[] = [];
 
-  private doFit() {
-    const el = this.host()?.nativeElement;
-    if (!this.fit || !el || el.offsetWidth === 0 || el.offsetHeight === 0) return;
-    try { this.fit.fit(); } catch { /* not yet rendered */ }
+  /** The box when the terminal last got smaller: it grows back only when the box gained a whole cell since. */
+  private shrunk = { w: 0, h: 0 };
+  /** A size it settled on after flipping between two: kept while the fits keep proposing those two. */
+  private pinned?: { a: string; b: string; cols: number; rows: number; until: number };
+
+  /** Fits the terminal to its box. force: the font or the look changed (the box may be the same).
+   * A box on the edge of a column (the Files panel's split view on macOS: 201 / 202 columns) made the terminal
+   * and the layout push each other back and forth, and the shell redrew on every resize. So: only a real change of
+   * the box fits again; after shrinking it grows back only when the box gained a whole cell (hysteresis); and a
+   * size that goes A → B → A within 10 s settles on the smaller of the two. */
+  private doFit(force = false) {
+    const el = this.host()?.nativeElement, t = this.term;
+    if (!this.fit || !t || !el || el.offsetWidth === 0 || el.offsetHeight === 0) return;
+    const w = el.clientWidth, h = el.clientHeight;
+    if (!force && w === this.lastBox.w && h === this.lastBox.h) return; // the same box: nothing to do
+    this.lastBox = { w, h };
+    let p: { cols: number; rows: number } | undefined;
+    try { p = this.fit.proposeDimensions(); } catch { return; /* not yet rendered */ }
+    if (!p || !p.cols || !p.rows) return;
+    let { cols, rows } = p;
+    if (!force) {
+      const cw = w / Math.max(1, t.cols), ch = h / Math.max(1, t.rows);
+      if (cols > t.cols && this.shrunk.w && w < this.shrunk.w + cw) cols = t.cols;
+      if (rows > t.rows && this.shrunk.h && h < this.shrunk.h + ch) rows = t.rows;
+    }
+    const now = Date.now(), size = cols + 'x' + rows;
+    if (this.pinned && now < this.pinned.until && (size === this.pinned.a || size === this.pinned.b)) { cols = this.pinned.cols; rows = this.pinned.rows; }
+    else {
+      this.pinned = undefined;
+      this.fits = [...this.fits.filter(f => now - f.at < 10000), { size, cols, rows, at: now }].slice(-6);
+      const [x, y, z] = this.fits.slice(-3);
+      if (z && x.size === z.size && y.size !== x.size) { // A → B → A: it is flipping
+        this.pinned = { a: x.size, b: y.size, cols: Math.min(x.cols, y.cols), rows: Math.min(x.rows, y.rows), until: now + 10000 };
+        cols = this.pinned.cols; rows = this.pinned.rows;
+      }
+    }
+    if (cols === t.cols && rows === t.rows) return;
+    if (cols < t.cols) this.shrunk.w = w;
+    if (rows < t.rows) this.shrunk.h = h;
+    t.resize(cols, rows);
   }
 
   onContextMenu(ev: MouseEvent) {

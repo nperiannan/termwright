@@ -882,7 +882,11 @@ func (a *App) SFTPOpen(tabID, mode string) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return map[string]string{"id": id, "home": home, "target": a.terms.SFTPTarget(id)}, nil
+	out := map[string]string{"id": id, "home": home, "target": a.terms.SFTPTarget(id)}
+	if a.terms.SFTPIsLocal(id) { // a Local Shell tab: this computer's files
+		out["local"] = runtime.GOOS
+	}
+	return out, nil
 }
 
 // SFTPConnect opens a standalone SFTP session for a saved session (its own

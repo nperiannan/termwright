@@ -569,6 +569,7 @@ export class App implements OnInit {
       case 'syslog-server': void this.tabs.openSyslog(); break;
       case 'test-record': this.rec.start(); break;
       case 'tests-open': void this.tabs.openTests(); break;
+      case 'tests-web-rec': void this.tabs.openTests().then(() => this.tabs.testsAction.set('web-rec')); break;
       case 'syslog-send': void this.tabs.openSyslog('send'); break;
       case 'syslog-toggle': try {
         const st = await this.backend.syslogState();
@@ -625,7 +626,7 @@ export class App implements OnInit {
       }
       case 'files-panel': {
         const t = this.tabs.active();
-        if (t?.kind === 'terminal' && t.session.protocol === 'SSH2') this.tabs.patch(t.id, { filesPanel: !t.filesPanel });
+        if (t?.kind === 'terminal' && (t.session.protocol === 'SSH2' || t.session.protocol === 'Local Shell')) this.tabs.patch(t.id, { filesPanel: !t.filesPanel });
         else this.ui.toast('The Files panel is for SSH2 terminal tabs.', 'info');
         break;
       }
@@ -794,6 +795,10 @@ export class App implements OnInit {
       { label: 'Clone Session', action: () => this.tabs.clone(t.id) },
       ...(t.kind === 'terminal' ? [{ label: this.tabs.selected().has(t.id) ? 'Remove from Send Group' : 'Add to Send Group',
         action: () => this.tabs.toggleSelected(t.id) }] : []),
+      ...(t.kind === 'terminal' && t.session.protocol === 'Local Shell' ? [
+        { separator: true },
+        { label: (t.filesPanel ? '✓ ' : '') + 'Files Panel - This Computer', hint: shortcutOf('files-panel', this.isMac), action: () => this.tabs.patch(t.id, { filesPanel: !t.filesPanel }) },
+      ] : []),
       ...(t.kind === 'terminal' && t.session.protocol === 'SSH2' ? [
         { separator: true },
         ...(t.hopTarget ? [

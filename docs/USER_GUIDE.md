@@ -719,7 +719,7 @@ For an SSH session over Wi-Fi, a VPN or a laptop that sleeps, tick **Connect wit
 - **Zoom**: `Cmd/Ctrl +`, `Cmd/Ctrl -`, `Cmd/Ctrl 0` (back to 14).
 - **Font, size and line spacing**: Global Options → Terminal & Appearance. The default is Menlo / Consolas / DejaVu Sans Mono at 14 with *Normal* line spacing (the font's own, as most terminal programs use); *Line spacing* adds 10, 20 or 35 % between lines. A session can have its own font and size (Session Options → Terminal → Appearance).
 - **Save Screen As Image** (File menu, tab menu, `Mod+⇧P`): the visible screen as a PNG, with its colours and highlighting - handy for tickets and chat.
-- **Files panel**: View → *Files Panel* (`Mod+⇧1`), the title-bar button or the tab's right-click menu shows a file browser beside an SSH terminal that follows its folder - see [Files panel beside the terminal](#files-panel-beside-the-terminal).
+- **Files panel**: View → *Files Panel* (`Mod+⇧1`), the title-bar button or the tab's right-click menu shows a file browser beside an SSH or Local Shell terminal that follows its folder - see [Files panel beside the terminal](#files-panel-beside-the-terminal).
 - **Terminal bar** (under every SSH, Telnet, Raw and local shell tab): timestamps (clock), scroll lock (lock) and clear (eraser, asks first) one click away, as icons with tooltips. Global Options → Terminal → *Show Timestamps, Auto scroll and Clear…* hides it for every SSH, Telnet and local tab.
 - **Clear Screen** (the eraser button, the terminal bar - which asks first -, right-click the terminal or a tab, Edit menu) empties the screen and the scrollback; the line with the cursor stays. *Clear Scrollback* keeps what is on the screen; *Reset Terminal* resets the emulator.
 - **Timestamps**: right-click the terminal → *Timestamps* (or Edit → Timestamps On / Off) puts the local time with milliseconds at the start of each line, on any connection. It is display only: logs have their own per-line prefix. Session Options → Terminal → *Display* turns it on for every connection of a session (off by default).
@@ -1160,10 +1160,40 @@ A small file browser beside an SSH terminal, on the side opposite the Session Ma
 - **Follows the terminal**: the panel shows the folder the shell is in (bash or zsh report it; Termwright turns this on, as for SFTP tabs). *Following* in the header turns it off and on. Through a jump station it opens on the host the terminal is on; when the terminal moves to the other host, the panel says so and *Show … here* reopens it there.
 - **Follows the terminal's user**: after `sudo su -` (or `sudo -i`, `su - oracle` …) the panel browses as that user too - a red **root** badge shows it - so `/root` and other protected folders open instead of *permission denied*; after `exit` it browses as the login user again. It uses `sudo` on that host (asking for the password if sudo needs one), also through a jump station. ⋯ → *Browse as root (sudo)* / *Browse as …* switches by hand; Global Options → General → *SFTP tabs and the Files panel browse as the terminal's user* turns this off.
 - **And the other way round**: open a folder in the panel (double-click, the path, ↑ or ..) and the terminal `cd`s there - only when the shell is at a prompt, so nothing is typed into a running program. ⋯ → *cd the Terminal When I Open a Folder Here* turns this off.
-- **Open a file on this computer**: double-click a file (or right-click → Open). It is copied to a private temporary folder and opened with the program your system uses for its type. When you save it, the panel asks **Upload it to …?** - *Upload Now*, *Not Now* or *Stop Watching*. Programs and shortcuts (.exe, .bat, .app, .command …) are never opened from a server; use Download.
+- **Open a file**: double-click a text file - JSON, YAML, XML, YANG, a device configuration, a log, CSV, a script - and it opens in the **file viewer** ([below](#the-file-viewer-look-check-follow-small-edits)). Other files (and right-click → **Open With an App on This Computer**): It is copied to a private temporary folder and opened with the program your system uses for its type. When you save it, the panel asks **Upload it to …?** - *Upload Now*, *Not Now* or *Stop Watching*. Programs and shortcuts (.exe, .bat, .app, .command …) are never opened from a server; use Download.
 - **Upload** (choose files), **Download…** (choose a folder), **New Folder**, **Rename**, **Delete**, **Copy Path**, **cd Here in the Terminal**, *Show Hidden Files*, and a button that opens a full SFTP tab here. Drag the panel's edge to make it wider.
 
 ![Files panel on the left](screenshots/files-panel-right.png)
+
+#### This computer's files (Local Shell)
+
+A **Local Shell** tab has the Files panel too - **This Mac**, **This PC** on Windows, **This computer** on Linux: the tab's right-click menu → *Files Panel - This Computer*, View → *Files Panel* or the title-bar button. It is the same panel, on your own disk:
+
+- **Follows the shell**: `cd` in the terminal moves the panel (bash and zsh; **PowerShell** on Windows - the Windows Command Prompt does not say its folder, so there you browse in the panel). Opening a folder in the panel `cd`s the shell there, as for SSH.
+- **Right-click**: Open (the viewer), Open With Its App (where the file is - no copy), **Copy To…** another folder, cd Here in the Terminal, **Show in Finder** (Explorer, the file manager), Copy Path (`C:\…` on Windows), Rename and **Move to Trash** (Recycle Bin) - files are not deleted for good.
+- **Windows**: the top of the panel lists the drives (C:, D: …).
+- Nothing goes over the network: the panel reads this computer's disk through Termwright itself.
+
+![The Files panel of a Local Shell](screenshots/files-panel-local.png)
+
+### The file viewer: look, check, follow, small edits
+
+Double-click a text file in a Files panel (SSH or this computer) and it opens beside the panel - one file at a time, Esc closes it. It is for **looking at, checking and small fixes**, not an IDE: no tabs of files, projects or code completion; bigger work goes to your editor with **Open in App**.
+
+- **Looks like VS Code**: its Dark+ / Light+ colours (with the app's light or dark theme), its editor font, and a status line (line and column, file type, encoding, line endings). Drag the viewer's edge to make it wider (double-click: back to the default width).
+- **Colours** for JSON, YAML, **Markdown**, XML, YANG, device configurations (EXOS, VOSS, IOS-style: `.cfg`, `.conf`, running-config), logs, CSV, INI/TOML, shell scripts and - read-only - code (Go, Python, TCL, JavaScript…). Line numbers and folding for structured files; logs and plain text without.
+- **JSON**: *Pretty* / *Compact*, and a red line **Not valid JSON at line N** with *Go to line* while you edit.
+- **Logs**: errors red, warnings and timestamps coloured; **Follow** shows new lines as they are written (like `tail -f`); a filter box shows only lines with a text or a `/regex/`, **Errors only** the errors and failures. Files over 5 MB show their last 2 MB.
+- **Markdown**: *Code* shows the source in colour (code blocks in their language's colours), **Preview** shows it as it reads - headings, tables, lists, code. Links open in your browser. The viewer remembers which you used last.
+- **CSV**: *Table* shows it as a table.
+- **Find** (⌘F / Ctrl+F, with replace), **Wrap**, **Copy** (the selection, or the whole file).
+- **Edit → Save** for text files up to 5 MB, with the file's permissions kept. If the file changed since you opened it (on the device or on disk), Save says so instead of overwriting it - *Reload*, or copy your text first. Code files are read-only here: *Open in App*.
+
+![Editing JSON in the viewer](screenshots/file-viewer-json.png)
+
+![A log in the viewer](screenshots/file-viewer-log.png)
+
+![Markdown preview](screenshots/file-viewer-markdown.png)
 
 ### SFTP through a jump station (bastion) - how the files travel
 
@@ -1484,7 +1514,7 @@ Termwright can turn manual testing into repeatable tests, the way record-and-rep
 
 ### Recording a test
 
-**Tests → Record a Test** opens the **Steps** panel on the right. While it records:
+**Tests → Record a Device Test** opens the **Steps** panel on the right (**Record a Web Test (Playwright)** records a web app in a browser instead; one test can have both kinds of steps - see the web testing guide). While it records:
 
 - Every command you type in a terminal tab (or send from its Send bar) becomes a step: *session › command*. Commands that may hold a password, secret, community or key are not recorded.
 - Every request you send in the **API Client** becomes a step with its session, environment, collection, method, URL, headers and body; its status code is added as the first check.
@@ -1646,7 +1676,7 @@ The TCL scripts print TAP (`ok 1 - show version`, `not ok 2 - …` with the reas
 
 **Suites** (`suites/<name>.yaml`: `name`, `tests` - files, folders or suites - and `tags`) are named sets; *Save as suite…* keeps a selection. A run **locks** its testbed (`locks/` in the tests folder, stale after 12 hours; *Release* frees it) and can run on several testbeds at once. Every run records the software version of each device (its device facts) and adds its results to `reports/history.jsonl`. While recording, show commands get checks for what was configured before them (*Options* in the recorder turns it off).
 
-**Import.** **Import Test Cases** (⋯ menu) takes Excel or CSV manual test cases, a **Postman collection** (one test per request; folders become suites; the status check comes from the test script or the saved example) or an **OpenAPI 3 / Swagger 2** description (one test per operation; tags become suites; the first 2xx answer is the status check). Name the API session the requests go to.
+**Import.** **Import Test Cases** (⋯ menu) takes Excel or CSV manual test cases, a **Postman collection** (one test per request; folders become suites; the status check comes from the test script or the saved example) or an **OpenAPI 3 / Swagger 2** description (one test per operation; tags become suites; the first 2xx answer is the status check). Name the API session the requests go to. Rows with *Type* `web` are web actions (`click text=Log In`, `fill label=Email = {{email}}`) on the web app in *Device*. **Export…** can also write the web steps as a **Playwright Test project (TypeScript)** to run with `npx playwright test`.
 
 **Procedures, data, NETCONF, breakpoints, samples and tables.** Shared steps with parameters live in `procs/` (**Procedures** in the left bar; **+ More → Call a Procedure** in a test). **Test data** runs a test once per CSV or Excel row. **+ More → NETCONF Request** sends get, get-config, edit-config or an RPC over SSH (port 830); XML replies are checked with paths like `data.vlans.vlan[0].name`. Click a step's number for a breakpoint (Run Step, Continue, Skip, change variables); **Step through** stops before every step. **Sample over time** checks the average, maximum, minimum, change or rate of a value. **▦ Make a Table…** turns output into a table by clicking the header line and saves it as a TextFSM template. See the testing guide, section 14.
 

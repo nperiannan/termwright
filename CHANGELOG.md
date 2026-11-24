@@ -2,6 +2,29 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## Unreleased
+
+## 0.44.2 (2026-11-24)
+
+- Terminal: no more flicker when the Files panel leaves the terminal on the edge of a column (201/202). After shrinking, it grows back only when there is room for a whole column, and a size that flips back and forth settles on the smaller one.
+
+- **Fixed**: opening another file while the viewer was open kept the first file's language (after a Markdown file, Go and JSON were coloured as Markdown) - each file gets its own editor. The Files panel flicker on macOS had a second path: the terminal's style effect fitted it again on every change of the tab; it now does so only when the font, colours or keywords change, and the guard against flipping between two widths covers every fit.
+- **Fixed**: the file viewer left parts of long files without colours (it coloured lazily, around the screen) - the whole file is coloured when it opens; Go, Python and JavaScript names as in VS Code (calls yellow, types teal, control words purple); the find bar is dark in the dark theme.
+- **Fixed**: with the Files panel open the terminal flickered: on macOS the split view sat on the edge of a column, so the terminal flipped between two widths (201 / 202 columns) several times a second and the shell redrew each time. The terminal now resizes only when its box really changes, and settles on the smaller size if it starts flipping. Opening a folder in a Local Shell's Files panel `cd`s with PowerShell's syntax on Windows.
+- **Files panel for Local Shell tabs**: *This Mac* / *This PC* / *This computer* - the same Files panel as SSH tabs, on this computer's disk (served inside Termwright, no network): follows `cd` (bash, zsh, PowerShell), opening a folder `cd`s the shell, Show in Finder/Explorer, Copy To…, **Move to Trash** (Recycle Bin), the drives on Windows.
+- **File viewer looks like VS Code**: its Dark+ / Light+ colours for JSON, YAML, Markdown, XML and the rest (following the app's theme), its editor font, a clear toolbar and a status line (line, column, type, encoding); **Markdown** in colour with a **Preview**; the viewer is wider and can be resized by dragging its edge.
+- **File viewer**: double-click a text file in a Files panel (SSH or this computer) - colours for JSON, YAML, XML, YANG, device configurations and logs; JSON *Pretty* and *Not valid JSON at line N*; logs **Follow** (like tail -f), a filter and **Errors only**; CSV as a table; Find, Wrap, Copy; **Edit → Save** for files up to 5 MB (it does not overwrite a file that changed since it was opened). One file at a time, code read-only, *Open in App* for anything bigger - not an IDE. The editor (CodeMirror) loads only when a file opens.
+- **Web procedures**: actions many web tests share are **web procedures** - Procedures → **+ New ▾ → Web procedure - record in the browser…**, or select actions → **Save as Procedure…** (was *Save as Block*); in a web step **+ Procedure ▾** inserts one with its values. The Procedures list shows 🌐 web / ⌨ device and how many tests use each.
+- **Clearer record buttons**: **Record a Device Test** (terminal · API · SNMP) and **Record a Web Test** (Playwright · web apps), the same in the Tests menu; the Device column shows a web step's web app; greyed web buttons say *Set up Playwright first*.
+- **Guide**: web and device steps in one test, and web procedures - with screenshots (WEB_TESTING_GUIDE).
+- **Tests menu → Record a Web Test (Playwright)**: recording a browser test is now also in the menu bar (it was only a button in the Tests tab).
+- **Pictures of web steps**: a picture of the page **when a step fails** - an action that fails, or a check of the step that is not on the page - on by default and shown in the run log right under the failed step; **after every action** is now off by default (bigger reports: Termwright asks before turning it on); *none* turns pictures off. Step editor: *Pictures - of a failure / after every action / none*.
+- **Playwright export: screenshots in the step**: a step that fails gets a screenshot attached inside that step of the Playwright report (on by default; `TW_FAIL_SHOTS=0`); *a screenshot after every step* is optional (off by default, asks first; `TW_STEP_SHOTS=1`).
+- **Playwright tests (TypeScript)**: Export… → *Playwright tests (TypeScript) - the web steps* writes a Playwright Test project: one spec per test with its web steps as Playwright code, the web apps' recorded logins (passwords from `TW_PASSWORD_<APP>`), test data rows, fallback targets; run with `npx playwright test` - no Termwright needed.
+- **Web test cases from a sheet**: Import Test Cases (Excel or CSV) takes rows with *Type* `web` - a web action on the web app in *Device* (`click text=Log In`, `fill label=Email = {{email}}`, `expect Networks`); rows in a row become one web step, quoted *Expected* text a check.
+- **Fixed**: on macOS, closing the browser window did not finish **Record Login** or **Record a Web Test** (the browser keeps running without windows there); the login is now also kept after the recording, so the next browser starts logged in.
+- **Fixed**: test browsers no longer stay behind (in the macOS Dock) when a recording or web step is stopped, times out or Termwright quits: the browser is closed before its runner ends.
+
 ## 0.44.1 (2026-11-23)
 
 Test any web application with Playwright, a test framework you set up on screens (testbeds with ports, tags and links, defaults per folder of tests, what a test needs), and a cleaner test editor.

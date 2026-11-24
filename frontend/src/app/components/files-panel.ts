@@ -3,6 +3,8 @@ import { glacierIcons } from '../core/icon-finish';
 import { Component, OnDestroy, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend, errText } from '../core/backend';
+import { TextViewer } from './text-viewer';
+import { kindOf } from '../core/file-kind';
 import { SUDO_ERR } from '../core/fixes';
 import { FileEntry, formatBytes } from '../core/models';
 import { Tabs, TabView } from '../core/tabs.service';
@@ -27,7 +29,7 @@ const store = {
  */
 @Component({
   selector: 'app-files-panel',
-  imports: [FormsModule, Autofocus, FileIcon, FolderIcon, Icon],
+  imports: [FormsModule, Autofocus, FileIcon, FolderIcon, Icon, TextViewer],
   host: { '[style.width.px]': 'width()', class: 'modern' },
   template: `
     <div class="grip" title="Drag to resize" (mousedown)="startResize($event)"></div>
@@ -58,11 +60,12 @@ const store = {
       <button type="button" class="ib" title="Up" (click)="up()"><app-icon name="up" [size]="15" /></button>
       <button type="button" class="ib" title="Refresh" (click)="refresh()"><app-icon name="refresh" [size]="15" /></button>
       <button type="button" class="ib" title="New folder" (click)="mkdir()"><app-icon name="folder-plus" [size]="15" /></button>
-      <button type="button" class="ib" title="Upload files here" (click)="upload()"><app-icon name="upload" [size]="15" /></button>
-      <button type="button" class="ib" [disabled]="!selected().size" title="Download the selected files" (click)="download()"><app-icon name="download" [size]="15" /></button>
-      <button type="button" class="ib del" [disabled]="!selected().size" title="Delete the selected files" (click)="remove()"><app-icon name="trash" [size]="15" /></button>
+      <button type="button" class="ib" [title]="local() ? 'Copy files here' : 'Upload files here'" (click)="upload()"><app-icon name="upload" [size]="15" /></button>
+      <button type="button" class="ib" [disabled]="!selected().size" [title]="local() ? 'Copy the selected files to another folder' : 'Download the selected files'" (click)="download()"><app-icon name="download" [size]="15" /></button>
+      <button type="button" class="ib del" [disabled]="!selected().size" [title]="local() ? 'Move the selected files to the Trash' : 'Delete the selected files'" (click)="remove()"><app-icon name="trash" [size]="15" /></button>
       <span class="grow"></span>
-      <button type="button" class="ib" title="Open a full SFTP tab here" (click)="openTab()"><app-icon name="sftp" [size]="15" /></button>
+      @if (local()) { <button type="button" class="ib" [title]="'Show this folder in ' + fileManager()" (click)="backend.localShowInFolder(sid(), dir())"><app-icon name="folder" [size]="15" /></button> }
+      @else { <button type="button" class="ib" title="Open a full SFTP tab here" (click)="openTab()"><app-icon name="sftp" [size]="15" /></button> }
     </div>
     <div class="list" tabindex="0" (keydown)="key($event)">
       @if (error()) { <div class="err">{{ error() }}</div> }
@@ -97,6 +100,7 @@ const store = {
         <span class="st">{{ x.state === 'running' ? (x.total ? pct(x.bytes, x.total) + '%' : '') : x.state === 'done' ? 'Done' : x.error || x.state }}</span>
       </div>
     }
+    @if (viewing() && sid()) { <app-text-viewer [sid]="sid()" [path]="viewing()" [local]="local()" (closed)="viewing.set('')" (openApp)="openViewedInApp()" (saved)="refresh()" /> }
     <div class="foot">{{ shown().length }} items@if (selected().size) { · {{ selected().size }} selected }@if (opened().length) { · watching {{ opened().length }} }</div>
   `,
   styles: [`
@@ -144,7 +148,7 @@ export class FilesPanel implements OnDestroy {
   readonly term = input.required<TabView>();
   protected ui = inject(Ui);
   private tabs = inject(Tabs);
-  private backend = inject(Backend);
+  protected backend = inject(Backend);
 
   readonly sid = signal('');
   /** The hop target this panel browses ('' = the host logged in to). */
@@ -181,8 +185,16 @@ export class FilesPanel implements OnDestroy {
     return !t.hopTarget || !!this.target() === !this.tabs.onJump(t);
   });
   readonly termHost = computed(() => { const t = this.live(); return this.tabs.onJump(t) ? t.session.hostname : t.hopTarget || t.session.hostname; });
-  readonly hostTitle = computed(() => this.target() ? this.target() + ' (through ' + this.live().session.hostname + ')' : this.live().session.hostname);
-  readonly hostShort = computed(() => this.shortOf(this.target() || this.live().session.hostname));
+  readonly hostTitle = computed(() => this.local() ? 'Files of this computer, where the Local Shell runs' : this.target() ? this.target() + ' (through ' + this.live().session.hostname + ')' : this.live().session.hostname);
+  readonly hostShort = computed(() => this.local() || this.live().session.protocol === 'Local Shell' ? this.localName() : this.shortOf(this.target() || this.live().session.hostname));
+  /** A Local Shell tab's panel: this computer's files - its system ("darwin", "windows", "linux"), else ''. */
+  readonly local = signal('');
+  localName() { return this.local() === 'darwin' ? 'This Mac' : this.local() === 'windows' ? 'This PC' : 'This computer'; }
+  fileManager() { return this.local() === 'darwin' ? 'Finder' : this.local() === 'windows' ? 'Explorer' : 'the File Manager'; }
+  /** A path as this computer writes it (C:\x on Windows; the panel's own paths are /C:/x). */
+  nativePath(p: string) { return this.local() === 'windows' ? p.replace(/^\//, '').replace(/\//g, '\\') : p; }
+  /** The shell command that goes to a folder. */
+  cdLine(p: string) { return this.local() === 'windows' ? ` cd '${this.nativePath(p).replace(/'/g, "''")}'\r` : ` cd '${p.replace(/'/g, `'\\''`)}'\r`; }
   readonly xfer = computed(() => this.tabs.transfers().find(x => this.xferIds.has(x.id)));
 
   constructor() {
@@ -218,7 +230,7 @@ export class FilesPanel implements OnDestroy {
     if (this.sid()) void this.backend.sftpClose(this.sid()).catch(() => {});
   }
 
-  shortOf(h: string) { h = h.slice(h.lastIndexOf('@') + 1); return /^[\d.]+$|:/.test(h) ? h : h.split('.')[0]; }
+  shortOf(h: string) { h = (h ?? '').slice((h ?? '').lastIndexOf('@') + 1); return /^[\d.]+$|:/.test(h) ? h : h.split('.')[0]; }
   base(p: string) { return p.slice(Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\')) + 1); }
   size(n: number) { return formatBytes(n); }
   pct(a: number, b: number) { return Math.round(a * 100 / b); }
@@ -230,13 +242,14 @@ export class FilesPanel implements OnDestroy {
     const t = this.live();
     if (!mode) mode = t.hopTarget ? (this.tabs.onJump(t) ? 'jump' : 'target') : undefined;
     try {
-      let r: { id: string; home: string; target: string };
+      let r: { id: string; home: string; target: string; local?: string };
       try { r = await this.backend.sftpOpen(t.id, mode ?? ''); }
       catch (e) {
         if (mode !== 'target') throw e;
         r = await this.backend.sftpOpen(t.id, 'jump');
       }
       this.target.set(r.target || '');
+      this.local.set(r.local || '');
       this.home = r.home;
       this.asUser.set('');
       this.triedUser = '';
@@ -319,7 +332,7 @@ export class FilesPanel implements OnDestroy {
     await this.load(d);
     const t = this.live();
     if (this.cdTerm() && this.followable() && t.state === 'connected' && this.dir() === d && t.cwd !== d && this.tabs.atPrompt(t.id))
-      void this.backend.sendInput(t.id, ` cd '${d.replace(/'/g, `'\\''`)}'\r`);
+      void this.backend.sendInput(t.id, this.cdLine(d));
   }
   async up() {
     const d = this.dir();
@@ -369,16 +382,28 @@ export class FilesPanel implements OnDestroy {
     else if (ev.key === 'Delete') void this.remove();
   }
 
-  /** Double-click: a folder opens, a file opens on this computer. */
+  /** Double-click: a folder opens; a text file (JSON, YAML, XML, YANG, configs, logs, CSV, scripts…) opens in the
+   * viewer; any other file in its app on this computer. */
   async open(e: FileEntry) {
     if (e.isDir) { await this.go(this.join(e.name)); return; }
+    if (kindOf(e.name)) { this.viewing.set(this.join(e.name)); return; }
+    await this.openWithApp(e);
+  }
+  /** The file in the viewer (its path), '' when it is closed. */
+  readonly viewing = signal('');
+  async openWithApp(e: FileEntry) {
     const remote = this.join(e.name);
     this.ui.toast('Opening ' + e.name + '…', 'info', 2500);
     try {
       const r = await this.backend.sftpOpenFile(this.sid(), remote);
+      if (!r.local) return; // this computer's own file: opened where it is
       this.opened.update(l => [...l.filter(o => o.remote !== remote), { remote, local: r.local, mod: r.mod, changed: false }]);
       this.watch();
     } catch (err) { this.ui.error(err); }
+  }
+  openViewedInApp() {
+    const p = this.viewing(); if (!p) return;
+    void this.openWithApp({ name: p.slice(p.lastIndexOf('/') + 1), isDir: false } as FileEntry);
   }
 
   private watch() {
@@ -433,6 +458,13 @@ export class FilesPanel implements OnDestroy {
   async remove(names = [...this.selected()]) {
     if (!names.length) return;
     const what = names.length === 1 ? names[0] : names.length + ' items';
+    if (this.local()) {
+      const bin = this.local() === 'windows' ? 'the Recycle Bin' : 'the Trash';
+      if (!(await this.ui.confirm('Move to ' + (this.local() === 'windows' ? 'Recycle Bin' : 'Trash'), `Move ${what} to ${bin}? You can put it back from there.`, 'Move'))) return;
+      await this.backend.localTrashFiles(this.sid(), names.map(n => this.join(n))).catch(e => this.ui.error(e));
+      await this.load(this.dir());
+      return;
+    }
     if (!(await this.ui.confirm('Delete', `Delete ${what} on the server? This cannot be undone; folders are deleted with their contents.`, 'Delete', true))) return;
     for (const n of names) await this.backend.sftpRemove(this.sid(), this.join(n)).catch(e => this.ui.error(e));
     await this.load(this.dir());
@@ -450,13 +482,15 @@ export class FilesPanel implements OnDestroy {
     const t = this.live();
     this.ui.showMenu(ev, [
       { label: 'Open', hint: 'double-click', action: () => void this.open(e) },
-      { label: 'Download…', action: () => void this.download() },
+      ...(!e.isDir ? [{ label: 'Open With ' + (this.local() ? 'Its App' : 'an App on This Computer'), action: () => void this.openWithApp(e) }] : []),
+      { label: this.local() ? 'Copy To…' : 'Download…', action: () => void this.download() },
       { separator: true },
       { label: 'cd Here in the Terminal', disabled: !this.followable() || t.state !== 'connected',
-        action: () => { void this.backend.sendInput(t.id, ` cd '${(e.isDir ? path : this.dir()).replace(/'/g, `'\\''`)}'\r`); this.tabs.handles.get(t.id)?.term.focus(); } },
-      { label: 'Copy Path', action: () => void this.backend.clipboardSet(path) },
+        action: () => { void this.backend.sendInput(t.id, this.cdLine(e.isDir ? path : this.dir())); this.tabs.handles.get(t.id)?.term.focus(); } },
+      ...(this.local() ? [{ label: 'Show in ' + this.fileManager(), action: () => void this.backend.localShowInFolder(this.sid(), path).catch(err => this.ui.error(err)) }] : []),
+      { label: 'Copy Path', action: () => void this.backend.clipboardSet(this.nativePath(path)) },
       { label: 'Rename…', action: () => void this.rename(e) },
-      { label: 'Delete…', action: () => void this.remove() },
+      this.local() ? { label: 'Move to Trash', action: () => void this.remove() } : { label: 'Delete…', action: () => void this.remove() },
     ]);
   }
 
@@ -467,10 +501,11 @@ export class FilesPanel implements OnDestroy {
       { label: (this.hidden() ? '✓ ' : '') + 'Show Hidden Files', action: () => { this.hidden.set(!this.hidden()); store.set('termwright.filesHidden', this.hidden() ? '1' : '0'); } },
       { separator: true },
       { label: 'Go to Home Folder', action: () => void this.go(this.home || '~') },
-      ...(this.asUser() ? [{ label: 'Browse as ' + (this.loginName() || 'the Login User'), action: () => { this.triedUser = this.live().shellUser ?? ''; void this.switchUser(''); } }]
+      ...(this.local() ? [{ label: 'Show This Folder in ' + this.fileManager(), action: () => void this.backend.localShowInFolder(this.sid(), this.dir()).catch(err => this.ui.error(err)) }]
+        : this.asUser() ? [{ label: 'Browse as ' + (this.loginName() || 'the Login User'), action: () => { this.triedUser = this.live().shellUser ?? ''; void this.switchUser(''); } }]
         : [{ label: 'Browse as root (sudo)', action: () => { this.triedUser = this.live().shellUser ?? ''; void this.switchUser('sudo'); } }]),
-      { label: 'Turn On Folder Detection in the Terminal', action: () => void this.tabs.enableCwdReporting(this.live().id, false, true) },
-      { label: 'Open a Full SFTP Tab', action: () => this.openTab() },
+      { label: 'Turn On Folder Detection in the Terminal', action: () => void this.tabs.enableCwdReporting(this.live().id, false, true, this.local() === 'windows') },
+      ...(this.local() ? [] : [{ label: 'Open a Full SFTP Tab', action: () => this.openTab() }]),
       { separator: true },
       { label: 'Hide the Files Panel', action: () => this.hide() },
     ]);

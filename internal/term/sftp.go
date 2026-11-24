@@ -39,6 +39,7 @@ type sftpSess struct {
 	hop    *Hop   // set when the files are on the remote command's target, reached through the connection
 	stop   func() // closes the exec channel that carries a hop's sftp
 	root   bool   // browsing as root through sudo
+	local  bool   // this computer's files (a Local Shell tab), served in-process
 	// sudoPass is the sudo password typed for this tab (memory only)
 	sudoPass string
 }
@@ -132,6 +133,14 @@ func (m *Manager) SFTPConnect(s session.Session, mode string) (string, string, s
 // SFTPOpen starts an SFTP session over an existing SSH2 tab connection
 // (no second login). It returns the session id and the remote home folder.
 func (m *Manager) SFTPOpen(tabID, mode string) (string, string, error) {
+	if t, err := m.get(tabID); err == nil {
+		t.mu.Lock()
+		sess := t.sess
+		t.mu.Unlock()
+		if sess.Protocol == session.ProtoLocal {
+			return m.sftpOpenLocal(tabID, sess)
+		}
+	}
 	client, err := m.sshClientOf(tabID)
 	if err != nil {
 		return "", "", err

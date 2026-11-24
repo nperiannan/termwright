@@ -1,6 +1,8 @@
 package testrec
 
 import (
+	"github.com/termwright/termwright/internal/webrun"
+
 	"context"
 	"encoding/json"
 	"errors"
@@ -775,6 +777,9 @@ func runStep(ctx context.Context, st Step, i int, d Driver, v map[string]string)
 		if ok && s.Var != "" {
 			v[s.Var] = val
 		}
+	}
+	if st.Web != nil { // the page's picture: the failure screenshot when a check failed
+		sr.Output = webrun.FailPicture(sr.Output, !sr.Passed)
 	}
 	if st.Web != nil && sr.Passed { // web "read" actions: variables for later steps
 		for _, ln := range strings.Split(out, "\n") {

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"github.com/termwright/termwright/internal/term"
 	"os"
 	"os/exec"
 	"path"
@@ -41,15 +42,20 @@ func (a *App) SFTPOpenFile(id, remote string) (OpenedFile, error) {
 	if programExt[strings.ToLower(filepath.Ext(name))] {
 		return OpenedFile{}, fmt.Errorf("%s is a program or shortcut - Termwright does not run files from a server; use Download instead", name)
 	}
-	b := make([]byte, 6)
-	_, _ = rand.Read(b)
-	dir := filepath.Join(os.TempDir(), "termwright-open", hex.EncodeToString(b))
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return OpenedFile{}, err
-	}
-	local := filepath.Join(dir, name)
-	if err := a.terms.SFTPDownloadFile(id, remote, local); err != nil {
-		return OpenedFile{}, err
+	var local string
+	if a.terms.SFTPIsLocal(id) { // this computer's file (a Local Shell tab): opened where it is, no copy to watch
+		local = term.LocalPathOf(remote)
+	} else {
+		b := make([]byte, 6)
+		_, _ = rand.Read(b)
+		dir := filepath.Join(os.TempDir(), "termwright-open", hex.EncodeToString(b))
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return OpenedFile{}, err
+		}
+		local = filepath.Join(dir, name)
+		if err := a.terms.SFTPDownloadFile(id, remote, local); err != nil {
+			return OpenedFile{}, err
+		}
 	}
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
@@ -64,6 +70,9 @@ func (a *App) SFTPOpenFile(id, remote string) (OpenedFile, error) {
 		return OpenedFile{}, err
 	}
 	go func() { _ = cmd.Wait() }()
+	if a.terms.SFTPIsLocal(id) {
+		return OpenedFile{}, nil
+	}
 	return OpenedFile{Local: local, Mod: modMs(local)}, nil
 }
 
