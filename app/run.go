@@ -310,7 +310,7 @@ func buildMenu(app *App, lang string) *menu.Menu {
 
 	tsM := m.AddSubmenu(t("Tests"))
 	add(tsM, "Tests", "tests-open")
-	add(tsM, "Record a Test", "test-record")
+	add(tsM, "Record a Device Test", "test-record")
 	add(tsM, "Record a Web Test (Playwright)", "tests-web-rec")
 
 	slM := m.AddSubmenu(t("Syslog"))

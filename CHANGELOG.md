@@ -4,6 +4,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Web procedures**: actions many web tests share are **web procedures** - Procedures → **+ New ▾ → Web procedure - record in the browser…**, or select actions → **Save as Procedure…** (was *Save as Block*); in a web step **+ Procedure ▾** inserts one with its values. The Procedures list shows 🌐 web / ⌨ device and how many tests use each.
+- **Clearer record buttons**: **Record a Device Test** (terminal · API · SNMP) and **Record a Web Test** (Playwright · web apps), the same in the Tests menu; the Device column shows a web step's web app; greyed web buttons say *Set up Playwright first*.
+- **Guide**: web and device steps in one test, and web procedures - with screenshots (WEB_TESTING_GUIDE).
 - **Tests menu → Record a Web Test (Playwright)**: recording a browser test is now also in the menu bar (it was only a button in the Tests tab).
 - **Pictures of web steps**: a picture of the page **when a step fails** - an action that fails, or a check of the step that is not on the page - on by default and shown in the run log right under the failed step; **after every action** is now off by default (bigger reports: Termwright asks before turning it on); *none* turns pictures off. Step editor: *Pictures - of a failure / after every action / none*.
 - **Playwright export: screenshots in the step**: a step that fails gets a screenshot attached inside that step of the Playwright report (on by default; `TW_FAIL_SHOTS=0`); *a screenshot after every step* is optional (off by default, asks first; `TW_STEP_SHOTS=1`).

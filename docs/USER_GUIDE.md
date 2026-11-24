@@ -1484,7 +1484,7 @@ Termwright can turn manual testing into repeatable tests, the way record-and-rep
 
 ### Recording a test
 
-**Tests → Record a Test** opens the **Steps** panel on the right. While it records:
+**Tests → Record a Device Test** opens the **Steps** panel on the right (**Record a Web Test (Playwright)** records a web app in a browser instead; one test can have both kinds of steps - see the web testing guide). While it records:
 
 - Every command you type in a terminal tab (or send from its Send bar) becomes a step: *session › command*. Commands that may hold a password, secret, community or key are not recorded.
 - Every request you send in the **API Client** becomes a step with its session, environment, collection, method, URL, headers and body; its status code is added as the first check.

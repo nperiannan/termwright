@@ -3,7 +3,7 @@
 Termwright tests can drive a web browser with [Playwright](https://playwright.dev) - for **any web
 application**, not only device GUIs: a CRM, a portal, a controller, your own product. You record or pick
 the actions; you do not write code. Compared with plain Playwright you get a saved login per app, a
-recorder, element picking, step-by-step runs in a live browser, self-healing targets, reusable blocks,
+recorder, element picking, step-by-step runs in a live browser, self-healing targets, shared procedures,
 the page of a failure in the report (and, if you want, a picture after every action) - and the same test can also use the CLI, REST, SNMP and
 NETCONF steps.
 
@@ -15,7 +15,7 @@ NETCONF steps.
 - [6. Targets: telling it what to act on](#6-targets-telling-it-what-to-act-on)
 - [7. Step by step in a live browser: Debug, ▶ and ⌖ Pick](#7-step-by-step-in-a-live-browser-debug--and--pick)
 - [8. Self-healing targets](#8-self-healing-targets)
-- [9. Blocks: reusable actions](#9-blocks-reusable-actions)
+- [9. Web procedures: shared actions](#9-web-procedures-shared-actions)
 - [10. Checks](#10-checks)
 - [11. Logins and passwords](#11-logins-and-passwords)
 - [12. Variables, test data and reading values from the page](#12-variables-test-data-and-reading-values-from-the-page)
@@ -36,7 +36,7 @@ NETCONF steps.
 Web steps need **Node.js** (18 or later) on the computer that runs the tests.
 
 1. Install Node.js from [nodejs.org](https://nodejs.org) (macOS: `brew install node`).
-2. In Termwright open **Tests**, click **Record a Web Test** (or add a step with **+ More ▾ → Web Page
+2. In Termwright open **Tests**, click **Record a Web Test · Playwright web apps** (or **Tests menu → Record a Web Test (Playwright)**) (or add a step with **+ More ▾ → Web Page
    (Playwright)**).
 3. If it says *Playwright is not set up on this computer*, click **Set Up Playwright** - the button is
    in the web app session (next to Login), in **Record a Web Test** and in every web step. It installs
@@ -70,7 +70,7 @@ test account without them.
 
 ## 3. Record a web test
 
-1. **Tests → Record a Web Test**.
+1. **Tests menu → Record a Web Test (Playwright)**, or the **Record a Web Test** button at the top of the test list (next to **Record a Device Test**).
 
    ![Record a Web Test](screenshots/web-guide/06-record-web-test.png)
 
@@ -138,7 +138,7 @@ In the YAML file the step looks like this:
       - { do: expect, target: table.contacts, value: "{{name}}" }
 ```
 
-`alt` are the fallback targets ([8](#8-self-healing-targets)); `block` uses a saved block ([9](#9-blocks-reusable-actions)).
+`alt` are the fallback targets ([8](#8-self-healing-targets)); `block` uses a web procedure ([9](#9-web-procedures-shared-actions)).
 
 ## 5. Actions
 
@@ -176,7 +176,7 @@ Pick the action from the list; the boxes after it change to what it needs.
 | Check address / Check title (`expect_url` / `expect_title`) | - | text | Part of the address or the title. |
 | Read into variable (`read`) | yes | name | Its text becomes `{{name}}` for later steps. |
 | Screenshot (`screenshot`) | optional | file name | The page, or just the target. Saved in `reports/web-shots`. |
-| Use block (`block`) | block name | its values | The actions of a saved block ([9](#9-blocks-reusable-actions)). |
+| Use procedure (`block`) | procedure name | its values | The actions of a saved web procedure ([9](#9-web-procedures-shared-actions)). |
 
 Every action waits for its target (up to the step's timeout, 30 s by default), so you rarely need *Wait*.
 
@@ -221,7 +221,7 @@ browser (logged in) and **keeps it open** while you edit:
 - **● Record from Here**: records in the open browser; the actions go after the selected action (click
   an action's number to select it; Shift+click selects a range).
 
-The variables of the test (its defaults and the first data row) are used, and blocks run as their actions.
+The variables of the test (its defaults and the first data row) are used, and procedures run as their actions.
 
 ## 8. Self-healing targets
 
@@ -238,18 +238,43 @@ The step shows **⚠ Healed in the last run** with **Use the New Targets**: one 
 worked the target (the old one becomes a fallback); save the test. The HTML report lists healed actions
 too, so a release that renamed things is visible without failing every test.
 
-## 9. Blocks: reusable actions
+## 9. Web procedures: shared actions
 
-Logging in, saving a dialog, opening a menu: actions many tests repeat can be a **block**.
+Opening a configuration profile, choosing a device, logging in: actions many tests repeat are a **web
+procedure** - recorded or fixed once, used by every test. They are listed with the device procedures in
+**Tests → Procedures**: 🌐 *web* or ⌨ *device*, how many actions or steps, and **how many tests use each** -
+so you see what a change affects.
 
-1. Select the actions (click their numbers; Shift+click for a range) - or none for all.
-2. **Save as Block…** and give it a name, e.g. *Save and confirm*.
-3. The actions become one **Use block** action. `{{names}}` in them become the block's values: the
-   action shows a box for each (e.g. `toast: Saved`).
+![Procedures: web and device](screenshots/web-guide/10-procedures.png)
 
-Other web steps choose **Use block** and the block's name; its actions run in the same browser, in
-place. Blocks are files of the tests folder (`procs/<name>.yaml`) - change one and every test that uses
-it changes. A block can use other blocks.
+**Make one:**
+
+- **Record it:** Procedures → **+ New ▾ → Web procedure - record in the browser…**. Choose the web app and
+  the start page, name it (e.g. `open-cp-gvi`) and say what it does; the browser opens logged in. Do the
+  shared steps, close the window - they are saved as the procedure.
+
+  ![Record a Web Procedure](screenshots/web-guide/12-record-web-procedure.png)
+
+- **From a test you already have:** in a web step select the actions (click their numbers; Shift+click for a
+  range - or none for all) → **Save as Procedure…**. They become one **Use procedure** action.
+
+Values you typed while recording (a profile name, a device) are fixed in the procedure. Open it and replace
+them with `{{profile}}`, `{{device}}`: each `{{name}}` becomes a value the procedure takes.
+
+**Use one:** in a web step, **+ Procedure ▾** lists the web procedures with their values and how many
+actions they have; choose one and it is inserted after the selected action (or at the end), with a box for
+each value - `profile = CP_Override_Test`, `device = {{device}}` (the test's own value, so a testbed or
+the Run panel can change it). **Record a new procedure…** at the end of the menu records one and inserts it.
+
+![+ Procedure in a web step](screenshots/web-guide/11-insert-procedure.png)
+
+Procedures are files of the tests folder (`procs/<name>.yaml`): change one and every test that uses it
+changes - fix a target once with ⌖ Pick and all the tests that use it are fixed. A procedure can use other
+procedures. (In the YAML a web procedure is still the action `block`.)
+
+**When the buttons are greyed:** recording, ▶ Debug in Browser, ▶ and ⌖ need Playwright on this computer.
+Until it is set up, a note above the actions says so with **Set Up Playwright** next to it (once, about
+150 MB), and hovering a greyed button says *Set up Playwright first*.
 
 ## 10. Checks
 
@@ -402,7 +427,40 @@ cleanup:
   - http: { session: "{{app}}", method: DELETE, url: "/api/contacts/{{id}}" }
 ```
 
-And with devices - change something in a GUI and check it on the switch:
+### Web and device steps in one test
+
+One test can drive a web GUI and log in to devices: each step says where it runs - a web step on a **web
+app** session, a command on a **device** session. Here a RADIUS override is made in the GUI, deployed, and
+checked on the switch's CLI:
+
+![A test with web steps and a CLI step](screenshots/web-guide/09-web-and-device-test.png)
+
+| Step | Runs on | What |
+|---|---|---|
+| 1 | `{{xiq}}` - the web app | uses the procedures *open-cp-gvi* and *select-device-context*, sets Auth Port to 1645, saves, checks *Assigned(1)* |
+| 2 | `{{xiq}}` | Deploy, waits for *Deployed* |
+| 3 | `{{sw}}` - the switch | `show radius`, checks `Auth Port : 1645` |
+| cleanup | `{{sw}}` | puts the RADIUS server back |
+
+The **Device** column shows where each step runs. `{{xiq}}`, `{{sw}}` and `{{device}}` are the test's values:
+a testbed gives them per lab (the web app of that environment and its switch), so the same test runs on
+staging and production unchanged.
+
+**Building one:**
+
+1. Start from either side: **Record a Web Test** (the GUI part) or **Record a Device Test** (the CLI part).
+2. Add the other side in the editor: **+ Command** for a device command, **+ More ▾ → Web Page (Playwright)**
+   for a web step - or record into the test again: **● Record in Browser** in a web step, or record device
+   steps from a terminal tab.
+3. Pass values between them: a web step's **Read into variable** keeps a text of the page as `{{name}}` for
+   the CLI steps; a CLI step's *save* keeps a value of the output for the web steps.
+4. Use procedures of both kinds: 🌐 web procedures inside web steps (**+ Procedure ▾**), ⌨ device procedures
+   as steps (**+ More ▾ → Procedure**).
+
+The report has both in one place: the CLI output of the device steps, and the action log and failure
+screenshot of the web steps.
+
+And with devices - change something in a GUI and check it on the switch (in YAML):
 
 ```yaml
 name: GUI VLAN reaches the switch
@@ -461,7 +519,7 @@ Web steps run everywhere tests run:
   libraries: `npx --prefix .playwright playwright install --with-deps chromium`.
 
 Values read into variables are passed on by Termwright and twrun; in Python and Go suites they show in
-the log. Blocks are expanded when the suite is exported.
+the log. Web procedures are expanded when the suite is exported.
 
 ### Playwright tests (TypeScript)
 

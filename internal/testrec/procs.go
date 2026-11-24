@@ -37,6 +37,11 @@ type ProcInfo struct {
 	Params      []string `json:"params,omitempty"`
 	Steps       int      `json:"steps"`
 	Error       string   `json:"error,omitempty"`
+	// Kind: "web" - browser actions only (a web procedure, used with "use" in web steps); "device" - other steps.
+	Kind string `json:"kind"`
+	// Actions: a web procedure's actions; UsedBy: how many tests use the procedure.
+	Actions int `json:"actions,omitempty"`
+	UsedBy  int `json:"usedBy"`
 }
 
 // LoadProc reads procs/<name>.yaml.
@@ -73,11 +78,57 @@ func (f Folder) Procs() []ProcInfo {
 			i.Error = err.Error()
 		} else {
 			i.Name, i.Description, i.Params, i.Steps = p.Name, p.Description, p.Params, len(p.Steps)
+			i.Kind = "device"
+			web := len(p.Steps) > 0
+			for _, st := range p.Steps {
+				if st.Web == nil {
+					web = false
+				} else {
+					i.Actions += len(st.Web.Actions)
+				}
+			}
+			if web {
+				i.Kind = "web"
+			}
 		}
 		out = append(out, i)
 		return nil
 	})
 	sort.Slice(out, func(a, b int) bool { return out[a].File < out[b].File })
+	if len(out) > 0 { // how many tests use each: a call step, or a web step's "use" (block) action
+		uses := map[string]int{}
+		for _, ci := range f.List() {
+			c, err := f.Load(ci.File)
+			if err != nil {
+				continue
+			}
+			seen := map[string]bool{}
+			for _, list := range [][]Step{c.Setup, c.Steps, c.Cleanup} {
+				for _, st := range list {
+					if st.Call != nil {
+						seen[st.Call.Proc] = true
+					}
+					if st.Web != nil {
+						for _, a := range st.Web.Actions {
+							if a.Do == "block" {
+								seen[a.Target] = true
+							}
+						}
+					}
+				}
+			}
+			for k := range seen {
+				uses[k]++
+			}
+		}
+		for i := range out {
+			n := strings.TrimSuffix(strings.TrimPrefix(out[i].File, "procs/"), ".yaml")
+			out[i].UsedBy = uses[n]
+			if out[i].Name != n {
+				out[i].UsedBy += uses[out[i].Name]
+			}
+		}
+	}
 	return out
 }
 

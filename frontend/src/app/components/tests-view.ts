@@ -36,8 +36,8 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
         @switch (section()) {
           @case ('tests') {
             <div class="stop">
-              <div class="row"><button type="button" class="recb" (click)="recordMore()" title="Record what you do in terminal tabs, the API Client and the SNMP Browser as a test"><i class="rdot"></i>Record a Test</button><button type="button" class="recb" (click)="openWebRec()" title="Record a test of a web app in the browser: no device needed"><i class="rdot"></i>Record a Web Test</button><span class="sp"></span><button type="button" (click)="moreMenu($event)" title="Open, clone, write with AI, folder">⋯</button></div>
-              <input class="search" type="search" placeholder="Search tests" [ngModel]="q()" (ngModelChange)="q.set($event)" aria-label="Search tests" />
+              <div class="recs"><button type="button" class="recb rc" (click)="recordMore()" title="Record what you do in terminal tabs, the API Client and the SNMP Browser as a test: devices, APIs, SNMP"><i class="rdot"></i><span>Record a Device Test<small>terminal · API · SNMP</small></span></button><button type="button" class="recb rc" (click)="openWebRec()" title="Record a test of any web app in a browser (Playwright) - no device needed. A test can have both: add device steps to a web test, or web steps to a device test"><i class="rdot"></i><span>Record a Web Test<small>Playwright · web apps</small></span></button></div>
+              <div class="srch"><input class="search" type="search" placeholder="Search tests" [ngModel]="q()" (ngModelChange)="q.set($event)" aria-label="Search tests" /><button type="button" (click)="moreMenu($event)" title="Open, clone, import, export, write with AI, defaults, folder">⋯</button></div>
               <div class="tags">@for (t of tagList(); track t.k) { <button type="button" class="tag" [class.on]="tag() === t.k" (click)="tag.set(t.k)">{{ t.l }} <i>{{ t.n }}</i></button> }</div>
             </div>
             <div class="list">
@@ -69,7 +69,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                     <ol><li><b>Record</b> - work on the device as you always do; commands, API requests and SNMP queries become steps, and the checks for what you configured are added for you.</li>
                       <li><b>Run</b> - on the same devices or a testbed, with or without cleanup.</li>
                       <li><b>Report</b> - results with expected vs got, history, qTest and Jira.</li></ol>
-                    <button type="button" class="recb" (click)="recordMore()"><i class="rdot"></i>Record a Test</button>
+                    <button type="button" class="recb" (click)="recordMore()"><i class="rdot"></i>Record a Device Test</button><button type="button" class="recb" (click)="openWebRec()"><i class="rdot"></i>Record a Web Test · Playwright</button>
                     <button type="button" (click)="importManual()">Import Test Cases…</button>
                     <button type="button" (click)="writeWithAI()">✦ Write a Test with AI</button>
                     <span class="mut">Import reads your test case sheet (Excel or CSV): Suite, Test, Step, Device, Expected - and Type web for web actions on a web app (click text=Log In, fill label=Email = {{ '{{' }}email{{ '}}' }}, expect Networks).</span>
@@ -122,12 +122,12 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
             </div>
           }
           @case ('procs') {
-            <div class="stop"><div class="row"><b class="grow">Procedures</b><button type="button" (click)="newProc()" title="Shared steps with parameters, e.g. create a VLAN on a switch">+ New</button></div><span class="mut">steps several tests share - change once, every test follows</span></div>
+            <div class="stop"><div class="row"><b class="grow">Procedures</b><button type="button" (click)="newProcMenu($event)" title="A device procedure (CLI, API, SNMP steps) or a web procedure (browser actions), shared by tests">+ New ▾</button></div><span class="mut">steps several tests share - change once, every test follows</span></div>
             <div class="list">
               @for (p of procs(); track p.file) {
                 <div class="case" [class.sel]="procSel() === p.file" (click)="openProc(p.file)" (keydown.enter)="openProc(p.file)" (contextmenu)="fileMenu($event, p.file)" tabindex="0" role="button" [title]="p.error || p.description || p.file">
-                  <span class="cn">{{ p.name }}<span class="mut">({{ (p.params ?? []).join(', ') }})</span></span><span class="n">{{ p.steps }}</span></div>
-              } @empty { <div class="empty-s">No procedures yet. <b>+ New</b>, or ⋯ on a test → <b>Make a Procedure from This Test</b>.</div> }
+                  <span class="pk" [class.web]="p.kind === 'web'">{{ p.kind === 'web' ? '🌐 web' : '⌨ device' }}</span><span class="cn">{{ p.name }}@if (p.params?.length) { <span class="mut">({{ p.params!.join(', ') }})</span> }</span><span class="n" [title]="'Used by ' + p.usedBy + (p.usedBy === 1 ? ' test' : ' tests') + ' - a change here changes them'">{{ p.kind === 'web' ? p.actions + ' actions' : p.steps + (p.steps === 1 ? ' step' : ' steps') }} · {{ p.usedBy }} {{ p.usedBy === 1 ? 'test' : 'tests' }}</span></div>
+              } @empty { <div class="empty-s"><b>No procedures yet</b> - steps several tests share, changed in one place.<br>⌨ <b>Device procedure</b>: + New → Device procedure, or ⋯ on a test → Make a Procedure from This Test.<br>🌐 <b>Web procedure</b>: + New → Web procedure (record it in the browser), or select actions in a web step → <b>Save as Procedure…</b></div> }
             </div>
           }
           @case ('library') {
@@ -463,11 +463,11 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                               <div class="row opts"><span class="mut">The result is JSON: check <b>loss &lt; 0.01</b>, <b>streams[0].loss &lt; 0.1</b>, <b>streams[1].latencyUs &lt; 50</b> or <b>rx &gt; 0</b> (Result checks below). The API session holds the server's address and login.</span></div>
                             }
                             @if (s.web; as w) {
-                              @if (webSt(); as ws) { @if (!ws.ready) { <div class="row opts webst"><span>🌐 {{ ws.node ? 'Playwright is not set up on this computer.' : 'Node.js is not installed.' }} <small class="mut">{{ ws.hint }}</small></span><span class="sp"></span>@if (ws.node) { <button type="button" class="pri" (click)="webSetup()" [disabled]="webBusy()">{{ webBusy() ? 'Setting up…' : 'Set Up Playwright' }}</button> }</div>@if (webBusy()) { <div class="row opts"><code class="mut">{{ webLine() }}</code></div> } } }
+                              @if (webSt(); as ws) { @if (!ws.ready) { <div class="row opts webst"><span>🌐 {{ ws.node ? 'Playwright is not set up on this computer yet - recording, step-by-step runs and ⌖ Pick need it (once, about 150 MB).' : 'Node.js is not installed - web steps need it.' }} <small class="mut">{{ ws.hint }}</small></span><span class="sp"></span>@if (ws.node) { <button type="button" class="pri" (click)="webSetup()" [disabled]="webBusy()">{{ webBusy() ? 'Setting up…' : 'Set Up Playwright' }}</button> }</div>@if (webBusy()) { <div class="row opts"><code class="mut">{{ webLine() }}</code></div> } } }
                               @let dw = dbgOn(w);
                               <div class="row opts webdbg">
                                 @if (dw) { <span class="ok">● browser open</span><button type="button" (click)="dbgRunAll(w)" [disabled]="dbgBusy()" title="Run all the actions in the open browser, from its page">▶ Run All</button><button type="button" (click)="dbgRestart()" [disabled]="dbgBusy()" title="Back to the step's page">↺ Start Over</button><button type="button" (click)="dbgClose()">■ Stop</button> }
-                                @else { <button type="button" (click)="dbgOpen(w)" [disabled]="dbgBusy() || !webSt()?.ready" title="Open the step's page in a browser (logged in) and keep it open: run actions one by one with ▶, pick targets with ⌖, record more">▶ Debug in Browser</button> }
+                                @else { <button type="button" (click)="dbgOpen(w)" [disabled]="dbgBusy() || !webSt()?.ready" [title]="needPw('Open the step page in a browser (logged in) and keep it open: run actions one by one with ▶, pick targets with ⌖, record more')">▶ Debug in Browser</button> }
                                 @if (dbgMsg()) { <span class="mut">{{ dbgMsg() }}</span> }<span class="sp"></span>
                                 @if (selActs().size) { <span class="mut">{{ selActs().size }} selected</span> }
                               </div>
@@ -484,16 +484,17 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                                     @if (webAct(a.do)?.tg !== false) { <input class="cmdi" [(ngModel)]="a.target" [attr.list]="'twtgt'" [placeholder]="webTgtHint(a.do)" aria-label="Target" [title]="a.alt?.length ? 'Fallbacks when it is not found: ' + a.alt.join('   ') : ''" /> }
                                     @if (webAct(a.do)?.v !== false) { <input class="pin" [(ngModel)]="a.value" [type]="a.secret || ((a.do === 'fill' || a.do === 'type') && isSecretTarget(a.target) && a.value !== '{{password}}') ? 'password' : 'text'" [placeholder]="webValHint(a.do)" aria-label="Value" /> }
                                   }
-                                  @if (webAct(a.do)?.tg !== false && a.do !== 'block') { <button type="button" class="lnk pick" (click)="dbgPick(w, k)" [disabled]="dbgBusy() || !webSt()?.ready" title="Pick on the page: click the element in the browser and its target is filled in">⌖</button> }
-                                  <button type="button" class="lnk" (click)="dbgRunOne(w, k)" [disabled]="dbgBusy() || !webSt()?.ready" title="Run just this action in the open browser (opens it at the step's page when it is not open)">▶</button>
+                                  @if (webAct(a.do)?.tg !== false && a.do !== 'block') { <button type="button" class="lnk pick" (click)="dbgPick(w, k)" [disabled]="dbgBusy() || !webSt()?.ready" [title]="needPw('Pick on the page: click the element in the browser and its target is filled in')">⌖</button> }
+                                  <button type="button" class="lnk" (click)="dbgRunOne(w, k)" [disabled]="dbgBusy() || !webSt()?.ready" [title]="needPw('Run just this action in the open browser (opens it at the step page when it is not open)')">▶</button>
                                   <button type="button" class="lnk" [disabled]="k === 0" (click)="mvWeb(w, k, -1)" title="Move up">↑</button>
                                   <button type="button" class="lnk" (click)="rmWeb(w, k)" title="Remove the action">✕</button></div>
                               }
                               @let hl = healedOf(ph.k, i, w);
                               @if (hl.length) { <div class="row opts heal">⚠ <span><b>Healed in the last run:</b> @for (h of hl; track h.n) { action {{ h.n }} <code>{{ h.from }}</code> was not found, <code>{{ h.to }}</code> was. }</span><span class="sp"></span><button type="button" (click)="useHealed(w, hl)">Use the New Targets</button></div> }
                               <div class="row opts"><button type="button" class="lnk" (click)="(w.actions ??= []).push({ do: 'click', target: '' }); touch()">+ Action</button>
-                                <button type="button" class="rec" (click)="dw ? dbgRecord(w) : webRecord(w)" [disabled]="webRec() || dbgBusy() || !webSt()?.ready" [title]="dw ? 'Record in the open browser: the actions go after the selected one (or at the end)' : 'Opens the page in a browser: click, type and choose as usual (Alt+click a text to check it shows), then close the window - the actions are added here'">{{ webRec() ? (dw ? '■ Stop Recording' : '● Recording… close the browser to finish') : (dw ? '● Record from Here' : '● Record in Browser') }}</button>
-                                <button type="button" (click)="saveBlock(w)" [disabled]="!(w.actions?.length)" title="Save the selected actions (or all) as a block other web steps can use - they become one 'Use block' action here">Save as Block…</button><span class="sp"></span>
+                                <button type="button" class="rec" (click)="dw ? dbgRecord(w) : webRecord(w)" [disabled]="webRec() || dbgBusy() || !webSt()?.ready" [title]="!webSt()?.ready ? needPw('') : dw ? 'Record in the open browser: the actions go after the selected one (or at the end)' : 'Opens the page in a browser: click, type and choose as usual (Alt+click a text to check it shows), then close the window - the actions are added here'">{{ webRec() ? (dw ? '■ Stop Recording' : '● Recording… close the browser to finish') : (dw ? '● Record from Here' : '● Record in Browser') }}</button>
+                                <button type="button" (click)="procMenu($event, w)" title="Insert a web procedure (shared actions with values) - or record a new one">+ Procedure ▾</button>
+                                <button type="button" (click)="saveBlock(w)" [disabled]="!(w.actions?.length)" title="Save the selected actions (or all) as a web procedure other tests can use - they become one 'Use procedure' action here">Save as Procedure…</button><span class="sp"></span>
                                 <label title="Accept self-signed certificates (device web pages)"><input type="checkbox" [(ngModel)]="w.insecure" /> Self-signed certificate OK</label><label title="Show the browser window while it runs (default: hidden)"><input type="checkbox" [(ngModel)]="w.show" /> Show the browser</label><label title="Record a Playwright trace (every action with the page before and after) - open it with npx playwright show-trace"><input type="checkbox" [(ngModel)]="w.trace" /> Trace</label><label title="Pictures of the page in the run report: of a failure - the action or check that failed, at its step (the default); after every action as well (bigger reports); or none">Pictures <select [ngModel]="w.pictures === 'all' || w.pictures === 'none' ? w.pictures : ''" (ngModelChange)="setPictures(w, $event, $any($event.target))"><option value="">of a failure</option><option value="all">after every action</option><option value="none">none</option></select></label></div>
                               <div class="row opts">
                                 <label title="A web app session (its address, login and settings), or any saved session whose user name and password fill {{ '{{' }}username}} and {{ '{{' }}password}}. A testbed role works too: {{ '{{' }}app}}. Passwords never go in the test.">Web app <input class="pin lg" [(ngModel)]="w.login" list="twsess" placeholder="session (optional)" /></label>
@@ -750,15 +751,20 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
       @if (webRecDlg(); as wr) {
         <div class="scrim fixed" (click)="webRecDlg.set(null)" aria-hidden="true"></div>
         <div class="mdlg wide" role="dialog" aria-label="Record a web test">
-          <h3>Record a Web Test</h3>
+          <h3>{{ wr.proc ? 'Record a Web Procedure' : 'Record a Web Test' }} <span class="mut">· Playwright</span></h3>
           @if (!webApps().length) { <div class="webst row opts">🌐 <span>First save the web app as a session: <b>+ New</b> in the session list, protocol <b>Web App (HTTP/HTTPS)</b>, its address, user and password, then <b>● Record Login</b>.</span></div> }
           <label class="f2">Web app <select [(ngModel)]="wr.app">@for (p of webApps(); track p) { <option [value]="p">{{ p }}</option> }</select></label>
           <label class="f2">Start page <input [(ngModel)]="wr.start" placeholder="/ (the app's address) or /contacts" spellcheck="false" /></label>
+          @if (wr.proc) {
+            <label class="f2">Procedure name <input [(ngModel)]="wr.name" placeholder="e.g. open-cp-gvi" spellcheck="false" /></label>
+            <label class="f2">What it does <input [(ngModel)]="wr.description" placeholder="e.g. opens a configuration profile's Global Value Inheritance" /></label>
+          } @else {
           <label class="f2">Test name <input [(ngModel)]="wr.name" placeholder="e.g. Create a contact" /></label>
           <label class="f2">Save in <input [(ngModel)]="wr.folder" list="twsuites" placeholder="cases/ folder, e.g. crm" spellcheck="false" /></label>
+          }
           <datalist id="twsuites">@for (x of suiteDirs(); track x) { <option [value]="x"></option> }</datalist>
-          <span class="mut">The browser opens logged in. Use the app as usual; Alt+click a text to check it shows. Close the window to finish - the test opens in the editor to look over and save.</span>
-          <div class="row"><span class="sp"></span><button type="button" (click)="webRecDlg.set(null)">Cancel</button><button type="button" class="pri" (click)="startWebRec()" [disabled]="!wr.app || !wr.name.trim() || !webSt()?.ready">● Start Recording</button></div>
+          <span class="mut">{{ wr.proc ? 'The browser opens logged in at the start page. Do the steps the tests share, then close the window: they are saved as a procedure. In the procedure, replace values you typed (a profile, a device) with {{name}} - they become its values.' : 'The browser opens logged in. Use the app as usual; Alt+click a text to check it shows. Close the window to finish - the test opens in the editor to look over and save.' }}</span>
+          <div class="row"><span class="sp"></span><button type="button" (click)="webRecDlg.set(null)">Cancel</button><button type="button" class="pri" (click)="wr.proc ? startWebProc() : startWebRec()" [disabled]="!wr.app || !wr.name.trim() || !webSt()?.ready">● Start Recording</button></div>
           @if (webSt(); as ws) { @if (!ws.ready) { <div class="row webst"><span>🌐 {{ ws.node ? 'Playwright is not set up on this computer yet.' : 'Node.js is not installed: install it from nodejs.org (or brew install node) first.' }}</span><span class="sp"></span>@if (ws.node) { <button type="button" class="pri" (click)="webSetup()" [disabled]="webBusy()">{{ webBusy() ? 'Setting up…' : 'Set Up Playwright' }}</button> }</div>@if (webBusy()) { <code class="mut">{{ webLine() }}</code> } } }
         </div>
       }
@@ -1038,6 +1044,9 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
     .optbar .seg button.on { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--text); } .optbar .lnk.on { color: var(--accent); } .optbar > .lnk { max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .optbar { flex-wrap: nowrap !important; } .optpanel { border: 1px dashed var(--border); border-radius: 8px; padding: 6px 10px; margin-left: 24px; }
     input.exp, input.exp::placeholder { color: var(--muted); opacity: .75; }
     .lshot { display: block; margin: 4px 0 8px 18px; padding: 0; border: 1px solid #f8514966; border-radius: 6px; background: none; cursor: zoom-in; max-width: 480px; } .lshot img { display: block; width: 100%; border-radius: 6px; }
+    .recs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } .recb.rc { display: flex; align-items: flex-start; gap: 7px; text-align: left; padding: 6px 9px; min-width: 0; } .recb.rc .rdot { margin-top: 5px; flex: none; } .recb.rc span { display: flex; flex-direction: column; min-width: 0; } .recb.rc small { color: var(--muted); font-size: 11px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .srch { display: flex; gap: 6px; align-items: center; } .srch .search { flex: 1; min-width: 0; }
+    .pk { font-size: 10.5px; border: 1px solid color-mix(in srgb, var(--ok, #3fb950) 40%, transparent); color: var(--ok, #3fb950); border-radius: 8px; padding: 0 6px; margin-right: 6px; flex: none; } .pk.web { color: #a371f7; border-color: #a371f744; }
     .tbmeta { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; } .tbmeta .lbl { width: 80px; flex: none; } .tbmeta .grow { flex: 1; }
     .tagc { display: inline-flex; align-items: center; white-space: nowrap; border: 1px solid var(--border); border-radius: 10px; padding: 1px 8px; font-size: 12px; } .tagc .x { background: none; border: 0; color: var(--muted); padding: 0 0 0 2px; cursor: pointer; } .tagin { width: 90px; }
     .lkh { margin-top: 4px; font-size: 12.5px; } .lk { display: grid; grid-template-columns: minmax(0,1fr) 120px 18px minmax(0,1fr) 120px 28px; gap: 6px; align-items: center; }
@@ -1416,7 +1425,7 @@ export class TestsView implements OnInit, OnDestroy {
   }
   picUrl(p: string) { return this.picCache()[p] || ''; }
   showPic(p: string) { this.bigPic.set(this.picUrl(p)); }
-  readonly webRecDlg = signal<{ app: string; start: string; name: string; folder: string } | null>(null);
+  readonly webRecDlg = signal<{ app: string; start: string; name: string; folder: string; proc?: boolean; description?: string } | null>(null);
   openWebRec() {
     void this.loadWebSt();
     let folder = ''; try { folder = localStorage.getItem('tw.webrec.folder') ?? ''; } catch { /* none */ }
@@ -2189,7 +2198,7 @@ export class TestsView implements OnInit, OnDestroy {
   }
   isOpen(p: Phase, i: number) { return this.open().includes(p + i); }
   toggleRow(p: Phase, i: number) { const k = p + i; this.open.update(l => l.includes(k) ? l.filter(x => x !== k) : [...l, k]); }
-  target(s: TestStep) { return s.run?.session ?? s.http?.session ?? s.snmp?.session ?? ''; }
+  target(s: TestStep) { return s.run?.session ?? s.http?.session ?? s.snmp?.session ?? s.web?.login ?? ''; }
   shortDev(t: string) { return t.replace(/^\{\{\s*|\s*\}\}$/g, '').split('/').pop() ?? t; }
   runHint() { const v = this.view(); return v === 'go' ? 'Run: go test ./cases/...' : v === 'py' ? 'Run: python lib/python/run_tests.py' : v === 'tcl' ? 'Run: tclsh lib/tcl/run_tests.tcl' : ''; }
   openRun(files: string[], label: string) {
@@ -2381,7 +2390,7 @@ export class TestsView implements OnInit, OnDestroy {
     { g: 'Check', a: [{ k: 'expect', l: 'Check it shows', t: 'No target: the text anywhere. Target and text: it contains the text' }, { k: 'expect_not', l: 'Check it is gone', t: '' },
       { k: 'expect_value', l: 'Check field value', t: '' }, { k: 'expect_count', l: 'Check how many', t: 'e.g. table rows: tr' }, { k: 'expect_checked', l: 'Check ticked', t: '', v: false },
       { k: 'expect_enabled', l: 'Check enabled', t: '', v: false }, { k: 'expect_url', l: 'Check address', t: 'A part of the address', tg: false }, { k: 'expect_title', l: 'Check title', t: 'A part of the title', tg: false }] },
-    { g: 'Keep', a: [{ k: 'block', l: 'Use block', t: 'The actions of a saved block, with its values', v: false }, { k: 'read', l: 'Read into variable', t: 'The text becomes {{name}} for later steps' }, { k: 'screenshot', l: 'Screenshot', t: 'A target: only it. Value: the file name', }] },
+    { g: 'Keep', a: [{ k: 'block', l: 'Use procedure', t: 'The actions of a saved web procedure, with its values', v: false }, { k: 'read', l: 'Read into variable', t: 'The text becomes {{name}} for later steps' }, { k: 'screenshot', l: 'Screenshot', t: 'A target: only it. Value: the file name', }] },
   ];
   private readonly webActMap = new Map(this.webGroups.flatMap(g => g.a.map(a => [a.k, a] as const)));
   webAct(k: string) { return this.webActMap.get(k); }
@@ -2465,10 +2474,55 @@ export class TestsView implements OnInit, OnDestroy {
   async loadBlocks() { try { this.blocks.set(await this.backend.testsWebBlocks()); } catch { /* none */ } }
   blockParams(name?: string) { const b = this.blocks().find(x => x.file === name); return (b?.params ?? []).map(p => p.split('=')[0].trim()); }
   setWith(a: TestWebAction, k: string, v: string) { a.with = { ...(a.with ?? {}), [k]: v }; this.touch(); }
+  /** A greyed web button's tooltip: why it is greyed when Playwright is not set up. */
+  needPw(t: string) { return this.webSt()?.ready ? t : tr('Set up Playwright first - the note above the actions'); }
+  newProcMenu(ev: MouseEvent) {
+    this.ui.showMenu(ev, [
+      { label: '⌨ Device procedure - CLI, API, SNMP steps', action: () => void this.newProc() },
+      { label: '🌐 Web procedure - record in the browser…', action: () => this.openWebProc() },
+      { label: 'From the selected test…', action: () => void this.procFromTest(), disabled: !this.sel() },
+    ]);
+  }
+  procMenu(ev: MouseEvent, w: TestWeb) {
+    void this.loadBlocks();
+    const items = this.blocks().map(b => ({ label: '🌐 ' + b.name + (b.params?.length ? ' (' + b.params.join(', ') + ')' : '') + ' · ' + (b.actions ?? 0) + ' actions', action: () => this.insertProc(w, b.file) }));
+    this.ui.showMenu(ev, [...items, ...(items.length ? [{ separator: true }] : []), { label: 'Record a new procedure…', hint: 'opens the browser, saves what you do', action: () => this.openWebProc(w) }]);
+  }
+  /** Inserts a web procedure after the selected action (or at the end), its values as {{same names}}. */
+  insertProc(w: TestWeb, name: string) {
+    const acts = (w.actions ??= []), params = this.blockParams(name), withv: Record<string, string> = {};
+    for (const p of params) withv[p] = '{{' + p + '}}';
+    const at = this.selW === w && this.selActs().size ? Math.max(...this.selActs()) + 1 : acts.length;
+    acts.splice(at, 0, { do: 'block', target: name, with: params.length ? withv : undefined }); this.touch();
+  }
+  /** Record a Web Procedure: the dialog of Record a Web Test, saving the actions as a procedure. */
+  openWebProc(into?: TestWeb) {
+    void this.loadWebSt();
+    this.webProcInto = into ?? null;
+    this.webRecDlg.set({ app: into?.login && this.isWebApp(into.login) ? into.login : this.webApps()[0] ?? '', start: into?.url ?? '', name: '', folder: '', proc: true, description: '' });
+  }
+  private webProcInto: TestWeb | null = null;
+  async startWebProc() {
+    const wr = this.webRecDlg(); if (!wr) return;
+    const acts: TestWebAction[] = [];
+    const off = this.backend.on('web:rec', (a: TestWebAction) => acts.push({ do: a.do, target: a.target, value: a.value, alt: a.alt?.length ? a.alt : undefined }));
+    this.webRecDlg.set(null); this.webRec.set(true);
+    try {
+      await this.backend.webRecord({ login: wr.app, url: wr.start.trim() || undefined, actions: [] });
+      if (!acts.length) { this.ui.toast(tr('Nothing was recorded'), 'error'); return; }
+      const file = await this.backend.testsSaveWebBlock(wr.name.trim(), (wr.description ?? '').trim(), acts);
+      await this.loadBlocks(); await this.loadProcs();
+      const b = file.replace(/^procs\//, '').replace(/\.yaml$/, '');
+      if (this.webProcInto) this.insertProc(this.webProcInto, b);
+      else { this.section.set('procs'); this.proc.set(null); this.procSel.set(file); void this.openFile(file); }
+      this.ui.toast(tr('Saved the procedure {0} ({1} actions) - replace typed values with {{names}} to make them its values', b, acts.length), 'success');
+    } catch (e) { this.ui.toast(errText(e), 'error'); }
+    finally { off(); this.webRec.set(false); this.webProcInto = null; }
+  }
   async saveBlock(w: TestWeb) {
     const acts = w.actions ?? [];
     const sel = this.selW === w && this.selActs().size ? [...this.selActs()].sort((a, b) => a - b) : acts.map((_, k) => k);
-    const name = await this.ui.input(tr('Save as Block'), tr('A name for these {0} actions, e.g. Log in or Add contact. Other web steps use them with "Use block"; {{names}} in them become the block\'s values.', sel.length), '');
+    const name = await this.ui.input(tr('Save as Procedure'), tr('A name for these {0} actions, e.g. open-cp-gvi or add-contact. Other web steps use them with "Use procedure"; {{names}} in them become its values.', sel.length), '');
     if (!name?.trim()) return;
     try {
       const file = await this.backend.testsSaveWebBlock(name.trim(), '', sel.map(k => acts[k]));

@@ -158,3 +158,25 @@ func keys(m map[string]string) []string {
 	}
 	return out
 }
+
+func TestProcKinds(t *testing.T) {
+	d := t.TempDir()
+	f := Folder{Root: d}
+	os.MkdirAll(filepath.Join(d, "cases"), 0o755)
+	if _, err := f.SaveWebBlock("open-cp-gvi", "", []WebAction{{Do: "click", Target: "text={{profile}}"}, {Do: "click", Target: "text=Global Value Inheritance"}}); err != nil {
+		t.Fatal(err)
+	}
+	f.SaveProc("create-vlan", Proc{Params: []string{"vlan"}, Steps: []Step{{Run: &RunStep{Session: "{{sw}}", Command: "create vlan {{vlan}}"}}}})
+	os.WriteFile(filepath.Join(d, "cases", "a.yaml"), []byte("name: A\nsteps:\n  - web: {login: Apps/X, actions: [{do: block, target: open-cp-gvi, with: {profile: P}}]}\n  - call: {proc: create-vlan, with: {vlan: '5'}}\n"), 0o644)
+	os.WriteFile(filepath.Join(d, "cases", "b.yaml"), []byte("name: B\nsteps:\n  - web: {login: Apps/X, actions: [{do: block, target: open-cp-gvi}, {do: block, target: open-cp-gvi}]}\n"), 0o644)
+	got := map[string]ProcInfo{}
+	for _, p := range f.Procs() {
+		got[p.Name] = p
+	}
+	if w := got["open-cp-gvi"]; w.Kind != "web" || w.Actions != 2 || w.UsedBy != 2 || len(w.Params) != 1 {
+		t.Fatalf("%+v", w)
+	}
+	if c := got["create-vlan"]; c.Kind != "device" || c.Steps != 1 || c.UsedBy != 1 {
+		t.Fatalf("%+v", c)
+	}
+}
