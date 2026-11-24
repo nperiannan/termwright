@@ -30,6 +30,7 @@ type Session struct {
 	done    chan struct{}
 	OnRec   func(Action) // recorded actions, while recording is on
 	OnClose func()       // the browser was closed
+	Start   []string     // what opening it said (the page, "logged in", "no login asked: …")
 	closeMu sync.Once
 }
 
@@ -90,7 +91,13 @@ func (r Runner) Open(ctx context.Context, w Step, shots string, x Extra, drive .
 		}
 		_ = stderr
 	}()
-	if _, err := s.do(map[string]any{"cmd": "start"}); err != nil {
+	got, err := s.do(map[string]any{"cmd": "start"})
+	for _, l := range got {
+		if l.Note != "" {
+			s.Start = append(s.Start, l.Note)
+		}
+	}
+	if err != nil {
 		if x.Person && !s.closed() {
 			return s, err // left open: the person sees the page
 		}

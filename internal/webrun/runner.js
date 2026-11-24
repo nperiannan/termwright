@@ -190,7 +190,7 @@ async function login(S, req, url) {
     S.page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
       .then(() => field.waitFor({ state: 'visible', timeout: 4000 }).then(() => true, () => false)),
   ]);
-  if (!shows) return false;
+  if (!shows) { out({ i: -1, ok: true, note: 'no login asked: ' + first.target + ' did not show on ' + S.page.url() }); return false; }
   // after the password is typed and sent (a click or Enter), the login is done: a click recorded after it
   // (on the app's first page, e.g. "Dashboard") is tried but does not fail the login - that page can differ
   let typed = false, sent = false;
