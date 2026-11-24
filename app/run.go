@@ -58,6 +58,7 @@ func Use(f Files) {
 // Run starts the app: the window, or "termwright mcp" (the AI apps' connector) or "termwright lab …" (the command
 // line). bind is the app as the window calls it (window.go.main.App: the main package's App).
 func Run(bind func(*App) any) {
+	utf8Locale()
 	// "Termwright mcp": the connector Claude Desktop / Claude Code start (stdin/stdout, no window)
 	if len(os.Args) > 1 && os.Args[1] == "mcp" {
 		os.Exit(mcpBridgeMain())
@@ -358,4 +359,14 @@ func buildMenu(app *App, lang string) *menu.Menu {
 	add(help, "Keyboard Shortcuts", "shortcuts")
 	add(help, "About Termwright", "about")
 	return m
+}
+
+// utf8Locale: an app started from the Finder or the Dock has no LANG, and macOS's pbcopy (what copying
+// to the clipboard runs) then reads the text as Mac Roman - "✅" pasted as ",úÖ". Without a locale of
+// its own, the app and what it starts use UTF-8.
+func utf8Locale() {
+	if runtime.GOOS != "darwin" || os.Getenv("LANG") != "" || os.Getenv("LC_ALL") != "" || os.Getenv("LC_CTYPE") != "" {
+		return
+	}
+	_ = os.Setenv("LANG", "en_US.UTF-8")
 }

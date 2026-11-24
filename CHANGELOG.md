@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **macOS: copied text pastes correctly**: with Termwright started from the Finder or the Dock, copying text with symbols (✅, ✓, —) pasted junk such as `,úÖ` - the clipboard read it as Mac Roman. It is copied as UTF-8 now.
+
 ## 0.44.3 (2026-11-24)
 
 - **Web app login**: a click recorded after the password was sent (on the app's first page, e.g. *Dashboard*) no longer fails the login when that page differs - it is tried and skipped. Before, Test Login and opening the app stopped with *the app's login (click text=Dashboard): Timeout*.
