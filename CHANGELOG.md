@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Recording logins on sign-in pages built of web components** (shadow DOM, e.g. ExtremeCloud single sign-on): what was typed in the Email and Password fields was not recorded - only clicks on the fields - so the login never filled them in. Typing in such fields is recorded now, by the field's label, and an id made anew on every page load is no longer used as a target. **Record Login again** on such web apps.
+
 - **Command suggestions in the terminal**: Ctrl+Space at the prompt lists the tab's device type commands - your history (most used, then newest) and its Command Library - that start with what is typed; Tab fills in, Enter runs, Shift+Delete forgets one. A tab without a device type asks whose history to use (a device type, all, or this session) and can set it as the session's device type. Settings → Terminal sets the key or turns it off.
 - **Opening a web app waits 30 s for its login page**; if none shows, a message says so and asks you to log in by hand in the browser (and to Record Login again).
 
