@@ -806,6 +806,8 @@ export class Tabs {
   }
 
   /** The Tests view (one tab). */
+  /** What the Tests tab should open once shown (a menu item: 'web-rec'). */
+  readonly testsAction = signal('');
   async openTests() {
     const open = this.tabs().find(t => t.kind === 'tests');
     if (open) { this.activeId.set(open.id); return; }

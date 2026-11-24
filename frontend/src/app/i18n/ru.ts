@@ -2991,6 +2991,7 @@ const ru: Record<string, string> = {
   'Git repository (uses this computer\'s git and its saved login)': 'Git-репозиторий (используется git этого компьютера и его сохранённый вход)',
   'Open the folder in VS Code (or the file manager)': 'Открыть папку в VS Code (или в файловом менеджере)',
   'Record a Test': 'Записать тест',
+  'Record a Web Test (Playwright)': 'Записать веб-тест (Playwright)',
   'Not recorded: the command may hold a secret': 'Не записано: команда может содержать секрет',
   'Type a command first: checks belong to the last recorded command of this tab': 'Сначала введите команду: проверки относятся к последней записанной команде этой вкладки',
   'Save as Variable': 'Сохранить как переменную',

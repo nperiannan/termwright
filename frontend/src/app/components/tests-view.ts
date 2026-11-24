@@ -1269,6 +1269,7 @@ export class TestsView implements OnInit, OnDestroy {
 
   constructor() {
     effect(() => { if (this.visible()) void this.poll(); });
+    effect(() => { if (this.tabsSvc.testsAction() === 'web-rec') { this.tabsSvc.testsAction.set(''); queueMicrotask(() => this.openWebRec()); } });
   }
 
   ngOnInit() {

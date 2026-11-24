@@ -569,6 +569,7 @@ export class App implements OnInit {
       case 'syslog-server': void this.tabs.openSyslog(); break;
       case 'test-record': this.rec.start(); break;
       case 'tests-open': void this.tabs.openTests(); break;
+      case 'tests-web-rec': void this.tabs.openTests().then(() => this.tabs.testsAction.set('web-rec')); break;
       case 'syslog-send': void this.tabs.openSyslog('send'); break;
       case 'syslog-toggle': try {
         const st = await this.backend.syslogState();
