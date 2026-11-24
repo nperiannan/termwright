@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.44.2 (2026-11-24)
+
 - Terminal: no more flicker when the Files panel leaves the terminal on the edge of a column (201/202). After shrinking, it grows back only when there is room for a whole column, and a size that flips back and forth settles on the smaller one.
 
 - **Fixed**: opening another file while the viewer was open kept the first file's language (after a Markdown file, Go and JSON were coloured as Markdown) - each file gets its own editor. The Files panel flicker on macOS had a second path: the terminal's style effect fitted it again on every change of the tab; it now does so only when the font, colours or keywords change, and the guard against flipping between two widths covers every fit.
