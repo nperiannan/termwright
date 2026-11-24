@@ -7043,6 +7043,12 @@ func (a *App) emuPutTopo(t emuTopo) error {
 // (switches boot from their images), its own sessions folder.
 func emuFresh(t *emuTopo, o emuOther) {
 	l := *t.Lab
+	// never the ID it came from (the open topology is not among the others, and the IDs are random)
+	ids := map[string]bool{t.Lab.ID: true}
+	for k := range o.ids {
+		ids[k] = true
+	}
+	o.ids = ids
 	l.ID, l.Base = emuFreeLabID(o), emuFreeBase(o) // it may run beside the one it came from
 	if l.Mgmt == "bridge" && o.nets[l.MgmtNet] {
 		l.MgmtNet = emuFreeBridgeNet(o)

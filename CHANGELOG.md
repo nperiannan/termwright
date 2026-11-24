@@ -4,9 +4,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
-- **Web app login**: a click recorded after the password was sent (on the app's first page, e.g. *Dashboard*) no longer fails the login when that page differs - it is tried and skipped. Before, Test Login and opening the app stopped with *the app's login (click text=Dashboard): Timeout*.
-
 ## 0.44.3 (2026-11-24)
+
+- **Web app login**: a click recorded after the password was sent (on the app's first page, e.g. *Dashboard*) no longer fails the login when that page differs - it is tried and skipped. Before, Test Login and opening the app stopped with *the app's login (click text=Dashboard): Timeout*.
 
 - **Telnet and serial log in like SSH with a device type**: the device type's login steps match the prompt in any case and also at the usual Username:/Password: prompts, a device that asks only for a password gets it, and a device type without login steps still logs in with its username and password. Before, an unanswered prompt left the device to time out and close the connection.
 
