@@ -184,8 +184,17 @@ async function login(S, req, url) {
   if (!first) return false;
   const shows = await loc(S.page, first.target).first().waitFor({ state: 'visible', timeout: 2500 }).then(() => true, () => false);
   if (!shows) return false;
+  // after the password is typed and sent (a click or Enter), the login is done: a click recorded after it
+  // (on the app's first page, e.g. "Dashboard") is tried but does not fail the login - that page can differ
+  let typed = false, sent = false;
   for (const a of L) {
-    try { await act(S, req, a); } catch (e) { throw new Error('the app\'s login (' + (a.do + ' ' + (a.target || '')).trim() + '): ' + String(e.message || e).split('\n')[0]); }
+    try { await act(S, req, a); } catch (e) {
+      const msg = String(e.message || e).split('\n')[0];
+      if (sent) { out({ i: -1, ok: true, note: 'after the login, skipped: ' + (a.do + ' ' + (a.target || '')).trim() }); continue; }
+      throw new Error('the app\'s login (' + (a.do + ' ' + (a.target || '')).trim() + '): ' + msg);
+    }
+    if (a.secret) typed = true;
+    else if (typed && /^(click|press|dblclick|check|submit)$/i.test(a.do || '')) sent = true;
   }
   await S.page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
   await saveState(S);
