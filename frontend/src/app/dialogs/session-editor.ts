@@ -1,4 +1,5 @@
 import { filesPanelFor } from '../core/device-kind';
+import { SizePick } from '../components/size-pick';
 import { TestBrowsers } from '../core/test-browsers';
 import { ChangeDetectorRef, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -49,7 +50,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
 /** Session Options dialog (create / edit a saved session). */
 @Component({
   selector: 'app-session-editor',
-  imports: [FormsModule, Autofocus, SerialPortPicker, Icon, DeviceIcon, SessionIcon, FolderPicker, FactTeach],
+  imports: [SizePick, FormsModule, Autofocus, SerialPortPicker, Icon, DeviceIcon, SessionIcon, FolderPicker, FactTeach],
   template: `
   @if (s) {
   <div class="modal-backdrop">
@@ -299,7 +300,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   <div class="pair o5"><div class="f"><label>User</label><input name="webuser" [(ngModel)]="s.username" autocomplete="off" /></div>
                     <div class="f"><label>Password</label><div class="row"><input name="webpw" [type]="isShown('web') ? 'text' : 'password'" autocomplete="new-password" [(ngModel)]="pw" [disabled]="noPw" [placeholder]="pwState() === 'set' ? '(saved - type to change)' : pwState() === 'empty' ? '(saved: no password)' : ''" /> <button type="button" class="eye" (click)="toggleShow('web')" [title]="isShown('web') ? 'Hide' : 'Show what you typed'" [attr.aria-pressed]="isShown('web')"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg></button></div></div></div>
                   <div class="pair o5"><div class="f"><label>Browser</label><select name="webbr" [(ngModel)]="s.webBrowser"><option [ngValue]="undefined">Chromium</option><option value="firefox">Firefox</option><option value="webkit">WebKit (Safari)</option></select></div>
-                    <div class="f"><label>Page size</label><input name="webvp" [(ngModel)]="s.webViewport" placeholder="1280x800" /></div></div>
+                    <div class="f"><label>Page size</label><app-size-pick [(value)]="s.webViewport" /></div></div>
                   <div class="f o5 wide"><label></label><label class="nowrap"><input type="checkbox" name="webins" [(ngModel)]="s.webInsecure" /> Self-signed certificate OK</label></div>
                   @if (webStNow(); as ws) { @if (!ws.ready) {
                     <div class="f o6 wide"><label>Playwright</label><div><div class="row"><span class="bad">{{ ws.node ? 'Not set up on this computer - needed to record and run web tests.' : 'Node.js is not installed: install it from nodejs.org (or brew install node) first.' }}</span><span class="sp"></span>

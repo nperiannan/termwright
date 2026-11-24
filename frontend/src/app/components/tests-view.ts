@@ -1,4 +1,5 @@
 import { Component, OnDestroy, OnInit, computed, effect, inject, input, signal } from '@angular/core';
+import { SizePick } from './size-pick';
 import { TestBrowsers } from '../core/test-browsers';
 import { FormsModule } from '@angular/forms';
 import { NgTemplateOutlet } from '@angular/common';
@@ -22,7 +23,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
 
 @Component({
   selector: 'app-tests-view',
-  imports: [FormsModule, NgTemplateOutlet, Icon],
+  imports: [SizePick, FormsModule, NgTemplateOutlet, Icon],
   template: `
     <div class="tv" [style.grid-template-columns]="'64px ' + sideW() + 'px minmax(0, 1fr)'">
       <nav class="rail" aria-label="Tests sections">
@@ -500,7 +501,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                               <div class="row opts">
                                 <label title="A web app session (its address, login and settings), or any saved session whose user name and password fill {{ '{{' }}username}} and {{ '{{' }}password}}. A testbed role works too: {{ '{{' }}app}}. Passwords never go in the test.">Web app <input class="pin lg" [(ngModel)]="w.login" list="twsess" placeholder="session (optional)" /></label>
                                 @if (!isWebApp(w.login)) { <label title="Keep the login (cookies) under this name: the next web steps with the same name start logged in">Keep login as <input class="pin" [(ngModel)]="w.state" placeholder="e.g. xiq (optional)" /></label> }
-                                <label title="The page size, e.g. 1280x800 or 390x844 for a phone">Size <input class="pin sm" [(ngModel)]="w.viewport" [placeholder]="isWebApp(w.login) ? 'as the app' : '1280x800'" /></label></div>
+                                <label title="The page size: a screen resolution or a custom one, e.g. 390x844 for a phone">Size <app-size-pick [(value)]="w.viewport" [empty]="isWebApp(w.login) ? 'As the app' : 'Browser default'" /></label></div>
                               <datalist id="twsess">@for (p of webSessions(); track p) { <option [value]="p"></option> }</datalist>
                               <datalist id="twblocks">@for (b of blocks(); track b.file) { <option [value]="b.file">{{ b.name }}</option> }</datalist>
                               <datalist id="twtgt"><option value="text="></option><option value="label="></option><option value="placeholder="></option><option value="role=button[name=&quot;&quot;]"></option><option value="testid="></option><option value="title="></option><option value="frame=iframe >> "></option></datalist>
