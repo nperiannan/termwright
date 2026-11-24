@@ -96,6 +96,10 @@ type logonRunner struct {
 	window  string
 	strip   logging.Stripper
 	basic   bool // Expect is a list of prompts ("a|b"), matched in any case, only as the last thing on screen
+	// flex: the first flex actions are a device type's login over Telnet, serial or a console: matched in any
+	// case, a username or password step also at the usual prompts (Username:, Password:), and a device that
+	// asks only for a password gets it - as over SSH, where the login does not depend on the prompts.
+	flex int
 }
 
 // Prompts the basic login answers: a session with a username but no device
@@ -189,6 +193,22 @@ func (l *logonRunner) feed(p []byte) []session.LogonAction {
 				break
 			}
 			l.window = l.window[i+n:]
+		} else if l.idx < l.flex {
+			i, n := flexMatch(l.window, a)
+			if i < 0 && strings.Contains(a.Send, `\s`) {
+				if j := l.passStep(); j > l.idx {
+					if k, m := basicMatch(l.window, basicPassPrompts); k >= 0 { // asks only for a password
+						l.window = l.window[k+m:]
+						out = append(out, l.actions[j])
+						l.idx = j + 1
+						continue
+					}
+				}
+			}
+			if i < 0 {
+				break
+			}
+			l.window = l.window[i+n:]
 		} else if a.Expect != "" {
 			exp := Unescape(a.Expect)
 			i := strings.Index(l.window, exp)
@@ -201,6 +221,41 @@ func (l *logonRunner) feed(p []byte) []session.LogonAction {
 		l.idx++
 	}
 	return out
+}
+
+// passStep: the login's password step (-1: none).
+func (l *logonRunner) passStep() int {
+	for j := l.idx; j < l.flex; j++ {
+		if strings.Contains(l.actions[j].Send, `\w`) {
+			return j
+		}
+	}
+	return -1
+}
+
+// flexMatch finds a login step's prompt in any case; a username or password step also at the usual prompts.
+func flexMatch(window string, a session.LogonAction) (int, int) {
+	low := strings.ToLower(window)
+	if exp := strings.ToLower(Unescape(a.Expect)); exp != "" {
+		if i := strings.Index(low, exp); i >= 0 {
+			return i, len(exp)
+		}
+	} else {
+		return 0, 0
+	}
+	switch {
+	case strings.Contains(a.Send, `\s`):
+		return basicMatch(window, basicUserPrompts)
+	case strings.Contains(a.Send, `\w`):
+		return basicMatch(window, basicPassPrompts)
+	}
+	return -1, 0
+}
+
+// newDeviceLogon: a device type's login steps (the first n of a) over Telnet, serial or a console, matched
+// as flexMatch says.
+func newDeviceLogon(a []session.LogonAction, n int) *logonRunner {
+	return &logonRunner{actions: a, flex: n}
 }
 
 // sendPart is a piece of logon output: text, or a one-second pause.

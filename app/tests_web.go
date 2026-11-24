@@ -82,6 +82,13 @@ func (a *App) WebRecord(w testrec.WebStep) ([]webrun.Action, error) {
 	return webRunner().Record(ctx, w2, func(ac webrun.Action) { emitter{a}.Emit("web:rec", ac) }, x)
 }
 
+// WebLeftovers lists the test browsers (and web runners) left running from earlier web steps; those of a
+// recording or step-by-step browser open now are not listed.
+func (a *App) WebLeftovers() []webrun.Leftover { return webRunner().Leftovers() }
+
+// WebCloseLeftovers closes them and says how many.
+func (a *App) WebCloseLeftovers() int { return webRunner().CloseLeftovers() }
+
 // WebStatus says whether web steps can run (Node.js and Playwright installed).
 func (a *App) WebStatus() webrun.Status { return webRunner().Status() }
 

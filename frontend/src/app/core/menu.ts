@@ -67,7 +67,7 @@ export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
       { label: 'Import Postman, OpenAPI or cURL...', action: 'api-import' },
     ] },
     { title: 'Tests', items: [
-      { label: 'Tests', action: 'tests-open' }, { label: 'Record a Device Test', action: 'test-record' }, { label: 'Record a Web Test (Playwright)', action: 'tests-web-rec' },
+      { label: 'Tests', action: 'tests-open' }, { label: 'Record a Device Test', action: 'test-record' }, { label: 'Record a Web Test (Playwright)', action: 'tests-web-rec' }, { label: 'Close Test Browsers...', action: 'tests-close-browsers' },
     ] },
     { title: 'Syslog', items: [
       { label: 'Syslog Server', action: 'syslog-server' }, { label: 'Start / Stop Receiving', action: 'syslog-toggle' }, { sep: true },

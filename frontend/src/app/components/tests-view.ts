@@ -1,4 +1,5 @@
 import { Component, OnDestroy, OnInit, computed, effect, inject, input, signal } from '@angular/core';
+import { TestBrowsers } from '../core/test-browsers';
 import { FormsModule } from '@angular/forms';
 import { NgTemplateOutlet } from '@angular/common';
 import { Backend, errText } from '../core/backend';
@@ -752,6 +753,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
         <div class="scrim fixed" (click)="webRecDlg.set(null)" aria-hidden="true"></div>
         <div class="mdlg wide" role="dialog" aria-label="Record a web test">
           <h3>{{ wr.proc ? 'Record a Web Procedure' : 'Record a Web Test' }} <span class="mut">· Playwright</span></h3>
+          @if (testBrowsers.count()) { <div class="webst row opts">⚠ <span>{{ testBrowsers.count() === 1 ? '1 test browser from an earlier run is still open.' : testBrowsers.count() + ' test browsers from earlier runs are still open.' }}</span><span class="sp"></span><button type="button" (click)="testBrowsers.close()">Close Them</button></div> }
           @if (!webApps().length) { <div class="webst row opts">🌐 <span>First save the web app as a session: <b>+ New</b> in the session list, protocol <b>Web App (HTTP/HTTPS)</b>, its address, user and password, then <b>● Record Login</b>.</span></div> }
           <label class="f2">Web app <select [(ngModel)]="wr.app">@for (p of webApps(); track p) { <option [value]="p">{{ p }}</option> }</select></label>
           <label class="f2">Start page <input [(ngModel)]="wr.start" placeholder="/ (the app's address) or /contacts" spellcheck="false" /></label>
@@ -1186,6 +1188,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
 export class TestsView implements OnInit, OnDestroy {
   readonly visible = input(true);
   readonly backend = inject(Backend);
+  readonly testBrowsers = inject(TestBrowsers);
   private readonly ui = inject(Ui);
   private readonly tabsSvc = inject(Tabs);
   private readonly rec = inject(Recorder);
@@ -1427,7 +1430,7 @@ export class TestsView implements OnInit, OnDestroy {
   showPic(p: string) { this.bigPic.set(this.picUrl(p)); }
   readonly webRecDlg = signal<{ app: string; start: string; name: string; folder: string; proc?: boolean; description?: string } | null>(null);
   openWebRec() {
-    void this.loadWebSt();
+    void this.loadWebSt(); void this.testBrowsers.refresh();
     let folder = ''; try { folder = localStorage.getItem('tw.webrec.folder') ?? ''; } catch { /* none */ }
     this.webRecDlg.set({ app: this.webApps()[0] ?? '', start: '', name: '', folder });
   }

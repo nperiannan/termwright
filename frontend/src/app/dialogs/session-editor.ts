@@ -1,4 +1,5 @@
 import { filesPanelFor } from '../core/device-kind';
+import { TestBrowsers } from '../core/test-browsers';
 import { ChangeDetectorRef, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Autofocus } from '../core/autofocus';
@@ -308,7 +309,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   <div class="f o6 wide"><label>Login</label>
                     <div><div class="row">@if (webLoginCount()) { <span class="ok">✓ recorded: {{ webLoginCount() }} actions</span> } @else { <span class="mut">not recorded - web steps start at the address as it is</span> }<span class="sp"></span>
                       <button type="button" class="rec" (click)="webRecordLogin()" [disabled]="!!webBusy() || !webStNow()?.ready">{{ webBusy() === 'rec' ? '● Recording… close the browser' : '● Record Login' }}</button>
-                      @if (webLoginCount()) { <button type="button" (click)="webTestLogin()" [disabled]="!!webBusy()">{{ webBusy() === 'test' ? 'Testing…' : 'Test Login' }}</button><button type="button" class="lnk" (click)="s.webLogin = ''" title="Forget the recorded login">Clear</button> }</div>
+                      @if (webLoginCount()) { <button type="button" (click)="webTestLogin()" [disabled]="!!webBusy()">{{ webBusy() === 'test' ? 'Testing…' : 'Test Login' }}</button><button type="button" class="lnk" (click)="s.webLogin = ''" title="Forget the recorded login">Clear</button> }<button type="button" (click)="testBrowsers.close()" [disabled]="!testBrowsers.count()" [title]="testBrowsers.count() ? 'Close test browsers Termwright started that were left open' : 'No test browsers are open'">Close Test Browsers{{ testBrowsers.count() ? ' (' + testBrowsers.count() + ')' : '' }}</button></div>
                       @if (webMsg(); as m) { <div [class.ok]="m.ok" [class.bad]="!m.ok" class="snmpmsg">{{ m.text }}</div> }
                       <div class="hint">Log in once in the browser that opens, then close it. Web steps with this app start logged in; when the login page shows again they log in by themselves. The password you type is never saved in the recording - it is the one above, in the keychain. Double-click the session to open the app, logged in.</div></div></div>
                 }
@@ -928,6 +929,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
 export class SessionEditor implements OnInit {
   protected ui = inject(Ui);
   private backend = inject(Backend);
+  readonly testBrowsers = inject(TestBrowsers);
   private tabs = inject(Tabs);
   private cdr = inject(ChangeDetectorRef);
 
@@ -976,7 +978,7 @@ export class SessionEditor implements OnInit {
   readonly webSetupLine = signal('');
   private webStAsked = false;
   webStNow() {
-    if (!this.webStAsked) { this.webStAsked = true; queueMicrotask(() => this.backend.webStatus().then(v => this.webSt.set(v)).catch(() => {})); }
+    if (!this.webStAsked) { this.webStAsked = true; queueMicrotask(() => { this.backend.webStatus().then(v => this.webSt.set(v)).catch(() => {}); void this.testBrowsers.refresh(); }); }
     return this.webSt();
   }
   async webSetup() {

@@ -41,7 +41,11 @@ func (r Runner) Open(ctx context.Context, w Step, shots string, x Extra, drive .
 			return nil, errors.New("{{password}} comes from the step's web app or login session - choose one")
 		}
 	}
-	job := x.job(w, shots, 10) // step by step: a missing target fails sooner
+	tmo := 10 // step by step: a missing target fails sooner
+	if x.Person {
+		tmo = 30
+	}
+	job := x.job(w, shots, tmo)
 	job["serve"], job["pictures"], job["video"] = true, false, false
 	if len(drive) > 0 {
 		job["drive"] = true
@@ -87,6 +91,9 @@ func (r Runner) Open(ctx context.Context, w Step, shots string, x Extra, drive .
 		_ = stderr
 	}()
 	if _, err := s.do(map[string]any{"cmd": "start"}); err != nil {
+		if x.Person && !s.closed() {
+			return s, err // left open: the person sees the page
+		}
 		s.Close()
 		return nil, err
 	}
@@ -206,4 +213,14 @@ func (r Result) String() string {
 		return fmt.Sprintf("✓ %d %s", r.I+1, r.Note)
 	}
 	return fmt.Sprintf("✗ %d %s", r.I+1, r.Error)
+}
+
+// closed: the browser is gone.
+func (s *Session) closed() bool {
+	select {
+	case <-s.done:
+		return true
+	default:
+		return false
+	}
 }

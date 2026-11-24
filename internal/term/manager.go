@@ -412,21 +412,31 @@ func (m *Manager) run(ctx context.Context, t *Tab, gen int) {
 	t.logon = nil
 	actions := realActions(s.LogonActions)
 	initialCR := s.InitialCR
+	flex := 0
 	if dt, ok := m.deviceOf(s); ok {
 		proto := s.Protocol
 		if s.ConsoleServer != "" {
 			proto = session.ProtoConsole // the device's own login prompts appear at the console, even over SSH
 		}
+		login := dt.LoginOnly(proto)
+		if proto != session.ProtoSSH2 && proto != "SSH" && len(login) == 0 {
+			// a device type without login steps (set up for SSH): its username and password still log in
+			login = []session.LogonAction{{Expect: "login:", Send: `\s`, TrailingCR: true, Credential: dt.Credential},
+				{Expect: "password:", Send: `\w`, Hide: true, TrailingCR: true, Credential: dt.Credential}}
+		}
+		if proto != session.ProtoSSH2 && proto != "SSH" {
+			flex = len(login)
+		}
 		if _, bg := m.quiet.Load(t.id); bg {
 			// background capture: it runs the after-login steps itself, one at a prompt
-			actions = append(dt.LoginOnly(proto), actions...)
+			actions = append(login, actions...)
 		} else {
-			actions = append(dt.Steps(proto), actions...)
+			actions = append(append(login, dt.After()...), actions...)
 		}
 		initialCR = initialCR || dt.InitialCR
 	}
 	if len(actions) > 0 && (s.AutomateLogon || s.DeviceType != "") {
-		t.logon = newLogonRunner(actions)
+		t.logon = newDeviceLogon(actions, flex)
 	} else if len(actions) == 0 && basic != nil {
 		t.logon = basic
 	}
@@ -438,7 +448,7 @@ func (m *Manager) run(ctx context.Context, t *Tab, gen int) {
 			if isBasic {
 				return m.basicLogin(s)
 			}
-			return newLogonRunner(again)
+			return newDeviceLogon(again, flex)
 		}
 	}
 	t.alertBuf, t.logonPass = "", ""

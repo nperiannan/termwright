@@ -1,4 +1,5 @@
 import { A11y } from './core/a11y';
+import { TestBrowsers } from './core/test-browsers';
 import { Component, ElementRef, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend, errText } from './core/backend';
@@ -103,6 +104,7 @@ export class App implements OnInit {
   protected tabs = inject(Tabs);
   private remoteDesktop = inject(RemoteDesktopSetup);
   private backend = inject(Backend);
+  private testBrowsers = inject(TestBrowsers);
   private ops = inject(SessionOps);
   private cmdWin = viewChild(CommandWindow);
 
@@ -443,6 +445,11 @@ export class App implements OnInit {
     if (info.ownTitle) this.menuKeys();
     if (info.insetTitle) void this.alignWithWindowButtons();
     if (info.initError) this.ui.toast('Startup error: ' + info.initError, 'error', 20000);
+    // test browsers web steps left running (the app quit while one was open): say so once, with a way to close them
+    setTimeout(() => void this.testBrowsers.refresh().then(n => {
+      if (n) this.ui.toast(n === 1 ? tr('1 test browser from an earlier run is still open.') : tr('{0} test browsers from earlier runs are still open.', n), 'info', 12000,
+        [{ label: tr('Close Them'), run: () => void this.testBrowsers.close() }]);
+    }), 4000);
     await this.ui.loadSettings();
     if (info.locked) { this.ui.locked.set(true); this.ui.lockScreen.set(true); }
     else if (this.ui.settings() && this.ui.settings()!.welcomeSeen !== WELCOME_VERSION) this.ui.open('welcome');
@@ -569,6 +576,7 @@ export class App implements OnInit {
       case 'syslog-server': void this.tabs.openSyslog(); break;
       case 'test-record': this.rec.start(); break;
       case 'tests-open': void this.tabs.openTests(); break;
+      case 'tests-close-browsers': void this.testBrowsers.close(); break;
       case 'tests-web-rec': void this.tabs.openTests().then(() => this.tabs.testsAction.set('web-rec')); break;
       case 'syslog-send': void this.tabs.openSyslog('send'); break;
       case 'syslog-toggle': try {

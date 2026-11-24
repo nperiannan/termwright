@@ -312,6 +312,7 @@ func buildMenu(app *App, lang string) *menu.Menu {
 	add(tsM, "Tests", "tests-open")
 	add(tsM, "Record a Device Test", "test-record")
 	add(tsM, "Record a Web Test (Playwright)", "tests-web-rec")
+	add(tsM, "Close Test Browsers...", "tests-close-browsers")
 
 	slM := m.AddSubmenu(t("Syslog"))
 	add(slM, "Syslog Server", "syslog-server")
