@@ -1,5 +1,6 @@
-import { Component, ElementRef, OnDestroy, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, SecurityContext, OnDestroy, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { DomSanitizer } from '@angular/platform-browser';
 import { Backend, errText } from '../core/backend';
 import { Ui } from '../core/ui.service';
 import { kindOf, type FileKind } from '../core/file-kind';
@@ -12,28 +13,37 @@ const MAX = 5 << 20;
 @Component({
   selector: 'app-text-viewer',
   imports: [FormsModule],
-  host: { '(keydown.escape)': 'esc($event)', tabindex: '-1' },
+  host: { '(keydown.escape)': 'esc($event)', tabindex: '-1', '[style.width.px]': 'width()', '[class]': "'k-' + kind()" },
   template: `
-    <div class="bar">
-      <b class="nm" [title]="path()">{{ name() }}</b><span class="k">{{ kindLabel() }}</span>
-      <span class="mut">{{ info() }}</span>
-      @if (dirty()) { <span class="dot" title="Not saved">●</span> }
-      <span class="sp"></span>
-      @if (kind() === 'json' && !tail()) { <button type="button" (click)="pretty()" title="Indent the JSON (or put it on one line)">{{ prettyOn ? 'Compact' : 'Pretty' }}</button> }
-      @if (kind() === 'csv') { <button type="button" [class.on]="table()" (click)="table.set(!table())" title="Show as a table">Table</button> }
-      @if (kind() === 'log') { <button type="button" [class.on]="following()" (click)="setFollow(!following())" title="Show new lines as they are written (like tail -f)">{{ following() ? '● Following' : 'Follow' }}</button> }
-      <button type="button" (click)="ed?.find()" title="Find and replace (⌘F / Ctrl+F)">Find</button>
-      <button type="button" [class.on]="wrap()" (click)="setWrap(!wrap())" title="Wrap long lines">Wrap</button>
-      <button type="button" (click)="copy()" title="Copy the selection, or the whole file">Copy</button>
-      @if (canEdit()) {
-        @if (!editing()) { <button type="button" (click)="edit()" [disabled]="!!filter() || errOnly() || tail()" [title]="tail() ? 'Only the end of the file is shown - open it in its app to edit' : 'Edit the file here'">Edit</button> }
-        @else { <button type="button" class="pri" (click)="save()" [disabled]="!dirty() || saving()">{{ saving() ? 'Saving…' : 'Save' }}</button> }
-      }
-      <button type="button" (click)="openApp.emit()" [title]="kind() === 'code' ? 'Edit it in your editor' : 'Open it in the app this computer uses for it'">Open in App</button>
-      <button type="button" class="x" (click)="close()" title="Close (Esc)">✕</button>
+    <div class="grip" (mousedown)="resize($event)" (dblclick)="setWidth(0)" title="Drag to change the width (double-click: default)"></div>
+    <div class="head">
+      <div class="title">
+        <span class="fi">{{ icon() }}</span><b class="nm" [title]="path()">{{ name() }}</b>
+        @if (dirty()) { <span class="dot" title="Not saved">●</span> }
+        <span class="crumb" [title]="path()">{{ folder() }}</span>
+      </div>
+      <div class="tools">
+        @if (kind() === 'md' && !error()) {
+          <div class="seg" role="group" aria-label="View"><button type="button" [class.on]="!preview()" (click)="setPreview(false)">Code</button><button type="button" [class.on]="preview()" (click)="setPreview(true)" title="Show the Markdown as it reads">Preview</button></div>
+        }
+        @if (kind() === 'json' && !tail() && !error()) { <button type="button" (click)="pretty()" title="Indent the JSON (or put it on one line)">{{ prettyOn ? 'Compact' : 'Pretty' }}</button> }
+        @if (kind() === 'csv' && !error()) { <button type="button" [class.on]="table()" (click)="table.set(!table())" title="Show as a table">Table</button> }
+        @if (kind() === 'log' && !error()) { <button type="button" [class.on]="following()" (click)="setFollow(!following())" title="Show new lines as they are written (like tail -f)">{{ following() ? '● Following' : 'Follow' }}</button> }
+        <div class="seg" role="group" aria-label="Text">
+          <button type="button" (click)="ed?.find()" [disabled]="!!error() || preview()" title="Find and replace (⌘F / Ctrl+F)">Find</button>
+          <button type="button" [class.on]="wrap()" (click)="setWrap(!wrap())" [disabled]="!!error() || preview()" title="Wrap long lines">Wrap</button>
+          <button type="button" (click)="copy()" [disabled]="!!error()" title="Copy the selection, or the whole file">Copy</button>
+        </div>
+        @if (canEdit() && !error()) {
+          @if (!editing()) { <button type="button" (click)="edit()" [disabled]="!!filter() || errOnly() || tail()" [title]="tail() ? 'Only the end of the file is shown - open it in its app to edit' : 'Edit the file here'">Edit</button> }
+          @else { <button type="button" class="pri" (click)="save()" [disabled]="!dirty() || saving()">{{ saving() ? 'Saving…' : 'Save' }}</button> }
+        }
+        <button type="button" (click)="openApp.emit()" [title]="kind() === 'code' ? 'Edit it in your editor' : 'Open it in the app this computer uses for it'">Open in App</button>
+        <button type="button" class="x" (click)="close()" title="Close (Esc)" aria-label="Close">✕</button>
+      </div>
     </div>
     @if (kind() === 'log' && !error()) {
-      <div class="bar sub"><input class="flt" [ngModel]="filter()" (ngModelChange)="setFilter($event)" placeholder="Show only lines with… (text or /regex/)" spellcheck="false" />
+      <div class="sub"><input class="flt" [ngModel]="filter()" (ngModelChange)="setFilter($event)" placeholder="Show only lines with… (text or /regex/)" spellcheck="false" />
         <button type="button" [class.on]="errOnly()" (click)="errOnly.set(!errOnly()); setFilter(filter())" title="Only errors and failures (error, fail, crit, alert, emerg, fatal)">Errors only</button>
         @if (filter() || errOnly()) { <span class="mut">{{ shownLines() }} of {{ allLines() }} lines</span> }</div>
     }
@@ -43,24 +53,70 @@ const MAX = 5 << 20;
       <div class="tbl"><table>@for (r of rows(); track $index; let i = $index) { <tr>@for (c of r; track $index) { @if (i === 0) { <th>{{ c }}</th> } @else { <td>{{ c }}</td> } }</tr> }</table>
         @if (rowsCut()) { <div class="mut pad">The first 1000 rows.</div> }</div>
     }
-    <div class="cm" #host [hidden]="!!error() || (table() && kind() === 'csv')"></div>
+    @else if (preview()) { <div class="md" (click)="mdClick($event)" [innerHTML]="html()"></div> }
+    <div class="cm" #host [hidden]="!!error() || (table() && kind() === 'csv') || preview()"></div>
+    <div class="status">
+      @if (!error()) { <span>Ln {{ pos().line }}, Col {{ pos().col }}</span>@if (pos().sel) { <span>({{ pos().sel }} selected)</span> } }
+      <span class="sp"></span>
+      <span>{{ info() }}</span><span>{{ kindLabel() }}</span>@if (!error()) { <span>UTF-8</span><span>{{ eol() }}</span> }
+      <span>{{ editing() ? 'Editing' : 'Read-only' }}</span>
+    </div>
   `,
   styles: [`
-    :host { position: absolute; top: 0; bottom: 0; right: 100%; width: min(920px, 62vw); display: flex; flex-direction: column; background: var(--bg); border-left: 1px solid var(--border);
-      box-shadow: -12px 0 32px #0006; z-index: 20; outline: none; }
-    :host-context(.tdock.left) { right: auto; left: 100%; border-left: 0; border-right: 1px solid var(--border); box-shadow: 12px 0 32px #0006; }
-    .bar { flex: none; display: flex; align-items: center; gap: 6px; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--border); min-width: 0; }
-    .bar.sub { padding: 4px 8px 4px 12px; } .flt { flex: 1; min-width: 0; height: 24px; }
-    .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 30%; } .k { font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 8px; padding: 0 6px; }
-    .mut { color: var(--muted); font-size: 11.5px; white-space: nowrap; } .sp { flex: 1; } .dot { color: var(--accent); }
-    button { height: 24px; padding: 0 8px; font-size: 12px; white-space: nowrap; } button.on { color: var(--accent); border-color: var(--accent); } button.x { width: 26px; padding: 0; }
-    .lnk { background: none; border: 0; color: var(--accent); cursor: pointer; }
-    .note { flex: none; padding: 5px 12px; font-size: 12px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--accent) 8%, transparent); }
-    .note.bad { background: color-mix(in srgb, var(--danger, #f85149) 12%, transparent); }
-    .cm { flex: 1; min-height: 0; overflow: hidden; }
-    .empty { flex: 1; display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; color: var(--muted); padding: 24px; text-align: center; }
-    .tbl { flex: 1; overflow: auto; font-size: 12px; } .tbl table { border-collapse: collapse; } .pad { padding: 8px; }
-    .tbl th, .tbl td { border: 1px solid var(--border); padding: 3px 8px; white-space: nowrap; text-align: left; } .tbl th { position: sticky; top: 0; background: var(--panel); }
+    :host { position: absolute; top: 0; bottom: 0; right: 100%; display: flex; flex-direction: column; z-index: 20; outline: none;
+      background: var(--vs-bg); border-left: 1px solid var(--border); box-shadow: -14px 0 36px #0007;
+      /* VS Code Dark+ */
+      --vs-bg: #1e1e1e; --vs-fg: #d4d4d4; --vs-head: #252526; --vs-head2: #2d2d2d; --vs-btn: #3a3d41; --vs-btn-hover: #45494e; --vs-bd: #3c3c3c;
+      --vs-kw: #569cd6; --vs-ctrl: #c586c0; --vs-str: #ce9178; --vs-num: #b5cea8; --vs-re: #d16969; --vs-comment: #6a9955; --vs-prop: #9cdcfe; --vs-attr: #9cdcfe;
+      --vs-tag: #569cd6; --vs-type: #4ec9b0; --vs-fn: #dcdcaa; --vs-var: #9cdcfe; --vs-heading: #569cd6; --vs-code: #ce9178; --vs-link: #4fc1ff; --vs-quote: #6a9955;
+      --vs-punct: #808080; --vs-meta: #858585; --vs-err: #f44747; --vs-lineno: #858585; --vs-lineno-on: #c6c6c6; --vs-line: #2a2d2e; --vs-sel: #264f78;
+      --vs-sel-other: #3a3d41; --vs-match: #623315; --vs-match-on: #515c6a; --vs-caret: #aeafad; --vs-status: #007acc;
+      --vs-font: Menlo, Monaco, Consolas, 'Droid Sans Mono', 'Courier New', monospace; --vs-size: calc(12px * var(--ui-scale, 1)); --vs-lh: 18px; }
+    :host-context(:root.light) {
+      /* VS Code Light+ */
+      --vs-bg: #ffffff; --vs-fg: #1f1f1f; --vs-head: #f3f3f3; --vs-head2: #f8f8f8; --vs-btn: #ffffff; --vs-btn-hover: #e8e8e8; --vs-bd: #d4d4d4;
+      --vs-kw: #0000ff; --vs-ctrl: #af00db; --vs-str: #a31515; --vs-num: #098658; --vs-re: #811f3f; --vs-comment: #008000; --vs-prop: #0451a5; --vs-attr: #e50000;
+      --vs-tag: #800000; --vs-type: #267f99; --vs-fn: #795e26; --vs-var: #001080; --vs-heading: #800000; --vs-code: #800000; --vs-link: #0000ee; --vs-quote: #0451a5;
+      --vs-punct: #6e7681; --vs-meta: #6e7681; --vs-err: #cd3131; --vs-lineno: #237893; --vs-lineno-on: #0b216f; --vs-line: #f5f5f5; --vs-sel: #add6ff;
+      --vs-sel-other: #e5ebf1; --vs-match: #f8c9ab; --vs-match-on: #a8ac94; --vs-caret: #000000; --vs-status: #007acc; box-shadow: -14px 0 36px #0002; }
+    /* YAML keys are VS Code's tag colour, not JSON's property colour */
+    :host(.k-yaml) { --vs-prop: var(--vs-tag); }
+    :host-context(.tdock.left) { right: auto; left: 100%; border-left: 0; border-right: 1px solid var(--border); box-shadow: 14px 0 36px #0007; }
+    .grip { position: absolute; left: -3px; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 2; }
+    :host-context(.tdock.left) .grip { left: auto; right: -3px; }
+    .head { flex: none; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 12px; height: 40px; background: var(--vs-head); border-bottom: 1px solid var(--vs-bd); color: var(--vs-fg); min-width: 0; }
+    .title { display: flex; align-items: baseline; gap: 7px; min-width: 0; flex: 1; }
+    .fi { font-size: 12px; } .nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; max-width: 60%; }
+    .crumb { color: var(--vs-meta); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .dot { color: var(--vs-fg); }
+    .tools { display: flex; align-items: center; gap: 6px; flex: none; }
+    :host .head button, :host .sub button, :host .empty button { background-image: none; box-shadow: none; height: 26px; padding: 0 10px; font-size: 12px; white-space: nowrap; color: var(--vs-fg); background: var(--vs-btn); border: 1px solid var(--vs-bd); border-radius: 5px; cursor: pointer; }
+    :host .head button:hover:not(:disabled), :host .sub button:hover:not(:disabled) { background: var(--vs-btn-hover); } :host button:disabled { opacity: .45; cursor: default; }
+    :host .head button.on, :host .sub button.on, :host .head button.on:hover { color: #fff !important; background: var(--vs-status) !important; border-color: var(--vs-status) !important; }
+    :host .head button.pri { color: #fff !important; background: #0e639c !important; border-color: #0e639c !important; } :host .head button.pri:hover:not(:disabled) { background: #1177bb !important; }
+    :host .head button.x { width: 28px; padding: 0; background: transparent; border-color: transparent; font-size: 13px; } :host .head button.x:hover { background: var(--vs-btn-hover); }
+    .seg { display: inline-flex; } :host .seg button { border-radius: 0; margin-left: -1px; } :host .seg button:first-child { border-radius: 5px 0 0 5px; margin-left: 0; } :host .seg button:last-child { border-radius: 0 5px 5px 0; }
+    .sub { flex: none; display: flex; align-items: center; gap: 6px; padding: 5px 8px 5px 12px; background: var(--vs-head2); border-bottom: 1px solid var(--vs-bd); }
+    .flt { flex: 1; min-width: 0; height: 26px; background: var(--vs-bg); color: var(--vs-fg); border: 1px solid var(--vs-bd); border-radius: 4px; padding: 0 8px; }
+    .mut { color: var(--vs-meta); font-size: 11.5px; white-space: nowrap; }
+    :host .note .lnk { background: none; border: 0; color: var(--vs-link); height: auto; padding: 0 6px; cursor: pointer; }
+    .note { flex: none; padding: 6px 12px; font-size: 12px; color: var(--vs-fg); border-bottom: 1px solid var(--vs-bd); background: color-mix(in srgb, var(--vs-status) 14%, var(--vs-bg)); }
+    .note.bad { background: color-mix(in srgb, var(--vs-err) 16%, var(--vs-bg)); }
+    .cm { flex: 1; min-height: 0; overflow: hidden; background: var(--vs-bg); }
+    .empty { flex: 1; display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; color: var(--vs-meta); padding: 24px; text-align: center; }
+    .tbl { flex: 1; overflow: auto; font: var(--vs-size)/var(--vs-lh) var(--vs-font); color: var(--vs-fg); } .tbl table { border-collapse: collapse; } .pad { padding: 8px; }
+    .tbl th, .tbl td { border: 1px solid var(--vs-bd); padding: 3px 10px; white-space: nowrap; text-align: left; } .tbl th { position: sticky; top: 0; background: var(--vs-head); }
+    .status { flex: none; display: flex; gap: 14px; align-items: center; height: 22px; padding: 0 12px; font-size: 11.5px; color: #fff; background: var(--vs-status); white-space: nowrap; overflow: hidden; }
+    .sp { flex: 1; }
+    /* Markdown preview, as VS Code shows it */
+    .md { flex: 1; overflow: auto; padding: 22px 32px 40px; color: var(--vs-fg); background: var(--vs-bg); font: 14px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Ubuntu, sans-serif; }
+    .md ::ng-deep :is(h1, h2) { padding-bottom: .3em; border-bottom: 1px solid var(--vs-bd); } .md ::ng-deep h1 { font-size: 2em; margin: .2em 0 .6em; } .md ::ng-deep h2 { font-size: 1.5em; margin: 1.2em 0 .6em; }
+    .md ::ng-deep h3 { font-size: 1.25em; margin: 1.1em 0 .5em; } .md ::ng-deep :is(h4, h5, h6) { margin: 1em 0 .4em; }
+    .md ::ng-deep :is(code, pre) { font-family: var(--vs-font); font-size: 0.9em; } .md ::ng-deep code { padding: 1px 4px; border-radius: 3px; background: color-mix(in srgb, var(--vs-fg) 10%, transparent); }
+    .md ::ng-deep pre { padding: 12px 14px; border-radius: 4px; overflow: auto; background: color-mix(in srgb, var(--vs-fg) 7%, transparent); } .md ::ng-deep pre code { padding: 0; background: none; }
+    .md ::ng-deep table { border-collapse: collapse; margin: 1em 0; } .md ::ng-deep :is(th, td) { border: 1px solid var(--vs-bd); padding: 5px 10px; } .md ::ng-deep th { background: color-mix(in srgb, var(--vs-fg) 6%, transparent); }
+    .md ::ng-deep blockquote { margin: 0 0 1em; padding: 0 1em; border-left: 4px solid color-mix(in srgb, var(--vs-status) 60%, transparent); color: var(--vs-meta); }
+    .md ::ng-deep a { color: var(--vs-link); } .md ::ng-deep hr { border: 0; border-top: 1px solid var(--vs-bd); } .md ::ng-deep img { max-width: 100%; } .md ::ng-deep :is(ul, ol) { padding-left: 2em; }
   `],
 })
 export class TextViewer implements OnDestroy {
@@ -79,7 +135,46 @@ export class TextViewer implements OnDestroy {
 
   readonly name = computed(() => this.path().slice(this.path().lastIndexOf('/') + 1));
   readonly kind = computed<FileKind>(() => kindOf(this.name()) || 'text');
-  readonly kindLabel = computed(() => ({ json: 'JSON', yaml: 'YAML', xml: 'XML', yang: 'YANG', log: 'log', config: 'config', csv: 'CSV', ini: 'settings', shell: 'shell script', code: 'code (read-only)', text: 'text' })[this.kind()]);
+  readonly kindLabel = computed(() => ({ json: 'JSON', yaml: 'YAML', xml: 'XML', yang: 'YANG', log: 'Log', config: 'Device config', csv: 'CSV', ini: 'Settings', shell: 'Shell script', code: this.codeLang() + ' (read-only)', md: 'Markdown', text: 'Plain text' })[this.kind()]);
+  private codeLang() { const e = this.name().split('.').pop()?.toLowerCase() ?? ''; return ({ go: 'Go', py: 'Python', js: 'JavaScript', ts: 'TypeScript', tcl: 'TCL', c: 'C', h: 'C', cpp: 'C++', java: 'Java', rs: 'Rust', rb: 'Ruby', ps1: 'PowerShell' } as Record<string, string>)[e] ?? 'Code'; }
+  readonly icon = computed(() => ({ json: '{ }', yaml: '≡', xml: '</>', yang: 'Y', log: '☰', config: '⚙', csv: '▦', ini: '⚙', shell: '$', code: '‹›', md: 'M↓', text: '¶' })[this.kind()]);
+  /** The folder of the file, shown after its name. */
+  readonly folder = computed(() => this.path().slice(0, this.path().lastIndexOf('/')) || '/');
+  // ---- width: wider than the Files panel; drag the edge, remembered ----
+  private readonly defWidth = () => Math.round(Math.max(600, Math.min(1280, window.innerWidth * 0.68)));
+  readonly width = signal(Number(localStorage.getItem('termwright.viewerWidth')) || this.defWidth());
+  setWidth(w: number) { const x = w || this.defWidth(); this.width.set(x); try { if (w) localStorage.setItem('termwright.viewerWidth', String(x)); else localStorage.removeItem('termwright.viewerWidth'); } catch { /* not kept */ } }
+  resize(ev: MouseEvent) {
+    ev.preventDefault();
+    const x0 = ev.clientX, w0 = this.width(), left = !!(ev.currentTarget as HTMLElement).closest('.tdock.left');
+    const move = (e: MouseEvent) => this.width.set(Math.max(420, Math.min(window.innerWidth - 360, w0 + (left ? e.clientX - x0 : x0 - e.clientX))));
+    const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up); this.setWidth(this.width()); };
+    addEventListener('mousemove', move); addEventListener('mouseup', up);
+  }
+  // ---- Markdown preview ----
+  private sanitizer = inject(DomSanitizer);
+  readonly preview = signal(false);
+  readonly html = signal('');
+  async setPreview(on: boolean) {
+    try { localStorage.setItem('termwright.mdPreview', on ? '1' : '0'); } catch { /* not kept */ }
+    if (on) {
+      const { marked } = await import('marked');
+      const src = this.ed ? this.ed.text() : this.full;
+      // Angular's sanitizer drops scripts, event handlers and javascript: links of the file's HTML
+      this.html.set(this.sanitizer.sanitize(SecurityContext.HTML, await marked.parse(src, { gfm: true })) ?? '');
+    }
+    this.preview.set(on);
+  }
+  /** Links in the preview open in the browser, never inside Termwright. */
+  mdClick(ev: MouseEvent) {
+    const a = (ev.target as HTMLElement).closest('a'); if (!a) return;
+    ev.preventDefault();
+    const href = a.getAttribute('href') ?? '';
+    if (/^https?:\/\//i.test(href)) window.runtime?.BrowserOpenURL(href);
+  }
+  // ---- the status line ----
+  readonly pos = signal({ line: 1, col: 1, sel: 0 });
+  readonly eol = computed(() => { this.allLines(); return this.full.includes('\r\n') ? 'CRLF' : 'LF'; });
   /** Programs are only looked at here; editing them belongs in an editor. */
   readonly canEdit = computed(() => this.kind() !== 'code');
   readonly info = signal('');
@@ -110,7 +205,7 @@ export class TextViewer implements OnDestroy {
   }
 
   async load() {
-    this.error.set(''); this.note.set(null); this.editing.set(false); this.dirty.set(false); this.tail.set(false); this.setFollow(false); this.filter.set(''); this.errOnly.set(false);
+    this.error.set(''); this.note.set(null); this.preview.set(false); this.editing.set(false); this.dirty.set(false); this.tail.set(false); this.setFollow(false); this.filter.set(''); this.errOnly.set(false);
     try {
       const st = await this.backend.sftpStat(this.sid(), this.path());
       this.mod = st.mod;
@@ -125,6 +220,7 @@ export class TextViewer implements OnDestroy {
       await this.show(text);
       if (this.kind() === 'json') this.checkJson();
       if (this.kind() === 'log') { this.setWrap(true); this.ed?.toEnd(); }
+      if (this.kind() === 'md') { this.setWrap(true); let p = '0'; try { p = localStorage.getItem('termwright.mdPreview') ?? '0'; } catch { /* none */ } await this.setPreview(p === '1'); }
     } catch (e) { this.error.set(errText(e)); }
   }
 
@@ -135,10 +231,11 @@ export class TextViewer implements OnDestroy {
     const el = this.host()?.nativeElement; if (!el) return;
     const k = this.kind();
     this.ed = createEditor(el, { text, kind: k, name: this.name(), readOnly: true, wrap: this.wrap(), numbers: !['log', 'text'].includes(k),
+      onCursor: (line, col, sel) => this.pos.set({ line, col, sel }),
       onChange: () => { if (this.setting) return; this.dirty.set(true); if (this.kind() === 'json') { clearTimeout(this.check); this.check = setTimeout(() => this.checkJson(), 400); } } });
   }
 
-  edit() { this.editing.set(true); this.ed?.setReadOnly(false); this.ed?.view.focus(); }
+  edit() { if (this.preview()) void this.setPreview(false); this.editing.set(true); this.ed?.setReadOnly(false); this.ed?.view.focus(); }
 
   async save() {
     if (!this.ed) return;

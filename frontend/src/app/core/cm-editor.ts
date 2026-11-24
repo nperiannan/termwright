@@ -10,6 +10,7 @@ import { tags as t } from '@lezer/highlight';
 import { json } from '@codemirror/lang-json';
 import { yaml } from '@codemirror/lang-yaml';
 import { xml } from '@codemirror/lang-xml';
+import { markdown } from '@codemirror/lang-markdown';
 import { shell } from '@codemirror/legacy-modes/mode/shell';
 import { go } from '@codemirror/legacy-modes/mode/go';
 import { python } from '@codemirror/legacy-modes/mode/python';
@@ -46,9 +47,9 @@ const MAC = /^(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}/i;
 const logParser: StreamParser<unknown> = {
   token(s) {
     if (s.match(/^\b(?:EMERG|ALERT|CRIT(?:ICAL)?|FATAL|ERROR|ERR|FAIL(?:ED|URE)?)\b/i)) return 'invalid';
-    if (s.match(/^\b(?:WARN(?:ING)?)\b/i)) return 'keyword';
+    if (s.match(/^\b(?:WARN(?:ING)?)\b/i)) return 'string';
     if (s.match(/^\b(?:NOTICE|INFO)\b/i)) return 'typeName';
-    if (s.match(/^\b(?:DEBUG|TRACE)\b/i)) return 'comment';
+    if (s.match(/^\b(?:DEBUG|TRACE)\b/i)) return 'meta';
     if (s.match(MAC) || s.match(IP)) return 'number';
     if (s.match(/^\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d(?:[.,]\d+)?(?:Z|[+-]\d\d:?\d\d)?/) || s.match(/^(?:[A-Z][a-z]{2} +\d{1,2} )?\d\d:\d\d:\d\d(?:\.\d+)?/)) return 'meta';
     if (s.match(/^"(?:[^"\\]|\\.)*"/)) return 'string';
@@ -80,6 +81,17 @@ function language(kind: FileKind, name: string): Extension {
     case 'json': return json();
     case 'yaml': return yaml();
     case 'xml': return xml();
+    case 'md': return markdown({ codeLanguages: info => { // fenced code in its language's colours, as in VS Code
+      const l = info.toLowerCase();
+      if (l === 'json') return json().language;
+      if (l === 'yaml' || l === 'yml') return yaml().language;
+      if (l === 'xml' || l === 'html') return xml().language;
+      const m: Record<string, StreamParser<unknown>> = { go, python, py: python, sh: shell, bash: shell, shell, zsh: shell, js: javascript, javascript, ts: typescript, typescript, tcl, toml, ini: properties } as Record<string, StreamParser<unknown>>;
+      if (m[l]) return StreamLanguage.define(m[l]);
+      if (l === 'yang') return StreamLanguage.define(yangParser);
+      if (l === 'log') return StreamLanguage.define(logParser);
+      return null;
+    } });
     case 'yang': return StreamLanguage.define(yangParser);
     case 'log': return StreamLanguage.define(logParser);
     case 'config': return StreamLanguage.define(configParser);
@@ -90,29 +102,50 @@ function language(kind: FileKind, name: string): Extension {
   }
 }
 
-// colours from the app's own variables, so light and dark themes both work
+// VS Code's Dark+ / Light+ token colours, as CSS variables of the viewer (set for the light and dark theme)
+const v = (n: string) => `var(--vs-${n})`;
 const style = HighlightStyle.define([
-  { tag: [t.keyword, t.definitionKeyword, t.moduleKeyword, t.controlKeyword], color: 'var(--cm-kw, #c678dd)' },
-  { tag: [t.string, t.special(t.string), t.attributeValue], color: 'var(--cm-str, #98c379)' },
-  { tag: [t.number, t.bool, t.null, t.atom], color: 'var(--cm-num, #d19a66)' },
-  { tag: [t.comment, t.lineComment, t.blockComment], color: 'var(--muted)', fontStyle: 'italic' },
-  { tag: [t.propertyName, t.attributeName, t.tagName], color: 'var(--cm-prop, #61afef)' },
-  { tag: [t.typeName, t.className], color: 'var(--cm-type, #56b6c2)' },
-  { tag: t.meta, color: 'var(--cm-time, #7f8ea3)' },
-  { tag: t.invalid, color: 'var(--danger, #f85149)', fontWeight: '600' },
+  { tag: [t.keyword, t.definitionKeyword, t.moduleKeyword, t.bool, t.null, t.atom, t.self], color: v('kw') },
+  { tag: [t.controlKeyword, t.operatorKeyword], color: v('ctrl') },
+  { tag: [t.string, t.special(t.string), t.attributeValue, t.character], color: v('str') },
+  { tag: [t.number, t.integer, t.float], color: v('num') },
+  { tag: [t.regexp, t.escape], color: v('re') },
+  { tag: [t.comment, t.lineComment, t.blockComment, t.docComment], color: v('comment') },
+  { tag: [t.propertyName, t.definition(t.propertyName)], color: v('prop') },
+  { tag: [t.attributeName], color: v('attr') },
+  { tag: [t.tagName, t.angleBracket], color: v('tag') },
+  { tag: [t.typeName, t.className, t.namespace], color: v('type') },
+  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: v('fn') },
+  { tag: [t.variableName, t.definition(t.variableName)], color: v('var') },
+  { tag: [t.heading, t.heading1, t.heading2, t.heading3, t.heading4], color: v('heading'), fontWeight: 'bold' },
+  { tag: t.strong, fontWeight: 'bold' },
+  { tag: t.emphasis, fontStyle: 'italic' },
+  { tag: t.strikethrough, textDecoration: 'line-through' },
+  { tag: t.monospace, color: v('code') },
+  { tag: [t.link, t.url], color: v('link'), textDecoration: 'underline' },
+  { tag: t.quote, color: v('quote') },
+  { tag: [t.processingInstruction, t.contentSeparator, t.punctuation, t.separator, t.bracket], color: v('punct') },
+  { tag: t.meta, color: v('meta') },
+  { tag: t.invalid, color: v('err'), fontWeight: '600' },
 ]);
 
 const theme = EditorView.theme({
-  '&': { height: '100%', fontSize: 'calc(12.5px * var(--ui-scale, 1))', color: 'var(--text)', backgroundColor: 'transparent' },
-  '.cm-scroller': { fontFamily: 'var(--mono, ui-monospace, Menlo, Consolas, monospace)', lineHeight: '1.5' },
-  '.cm-content': { caretColor: 'var(--accent)' },
-  '.cm-gutters': { backgroundColor: 'transparent', color: 'var(--muted)', border: 'none' },
-  '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'color-mix(in srgb, var(--accent) 7%, transparent)' },
-  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: 'color-mix(in srgb, var(--accent) 28%, transparent) !important' },
-  '.cm-searchMatch': { backgroundColor: 'color-mix(in srgb, #e3b341 35%, transparent)' },
-  '.cm-panels': { backgroundColor: 'var(--panel)', color: 'var(--text)', borderColor: 'var(--border)' },
-  '.cm-panel input, .cm-panel button': { fontSize: '12px' },
-  '.cm-foldGutter span': { color: 'var(--muted)' },
+  '&': { height: '100%', fontSize: 'var(--vs-size)', color: v('fg'), backgroundColor: v('bg') },
+  '.cm-scroller': { fontFamily: v('font'), lineHeight: 'var(--vs-lh)' },
+  '.cm-content': { caretColor: v('caret'), padding: '6px 0' },
+  '.cm-gutters': { backgroundColor: v('bg'), color: v('lineno'), border: 'none', paddingRight: '6px' },
+  '.cm-activeLineGutter': { backgroundColor: 'transparent', color: v('lineno-on') },
+  '.cm-activeLine': { backgroundColor: v('line') },
+  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection': { backgroundColor: v('sel') + ' !important' },
+  '.cm-searchMatch': { backgroundColor: v('match') },
+  '.cm-searchMatch-selected': { backgroundColor: v('match-on') },
+  '.cm-selectionMatch': { backgroundColor: v('sel-other') },
+  '.cm-matchingBracket': { outline: '1px solid ' + v('lineno'), backgroundColor: 'transparent' },
+  '.cm-panels': { backgroundColor: 'var(--panel)', color: 'var(--text)' },
+  '.cm-panels.cm-panels-top': { borderBottom: '1px solid var(--border)' },
+  '.cm-panel input, .cm-panel button, .cm-panel label': { fontSize: '12px' },
+  '.cm-foldGutter span': { color: v('lineno') },
+  '.cm-foldPlaceholder': { backgroundColor: v('line'), border: 'none', color: v('lineno') },
 });
 
 export interface TextEditor {
@@ -129,7 +162,7 @@ export interface TextEditor {
 }
 
 /** Makes the editor in host. numbers: line numbers and folding (configs, JSON, YAML, code); not for logs and text. */
-export function createEditor(host: HTMLElement, o: { text: string; kind: FileKind; name: string; readOnly: boolean; wrap: boolean; numbers: boolean; onChange?: () => void }): TextEditor {
+export function createEditor(host: HTMLElement, o: { text: string; kind: FileKind; name: string; readOnly: boolean; wrap: boolean; numbers: boolean; onChange?: () => void; onCursor?: (line: number, col: number, sel: number) => void }): TextEditor {
   const ro = new Compartment(), wrap = new Compartment();
   const view = new EditorView({
     parent: host,
@@ -143,7 +176,10 @@ export function createEditor(host: HTMLElement, o: { text: string; kind: FileKin
         language(o.kind, o.name), syntaxHighlighting(style), theme,
         ro.of([EditorState.readOnly.of(o.readOnly), EditorView.editable.of(!o.readOnly)]),
         wrap.of(o.wrap ? EditorView.lineWrapping : []),
-        EditorView.updateListener.of(u => { if (u.docChanged && o.onChange) o.onChange(); }),
+        EditorView.updateListener.of(u => {
+          if (u.docChanged && o.onChange) o.onChange();
+          if ((u.selectionSet || u.docChanged) && o.onCursor) { const m = u.state.selection.main, l = u.state.doc.lineAt(m.head); o.onCursor(l.number, m.head - l.from + 1, m.to - m.from); }
+        }),
       ],
     }),
   });

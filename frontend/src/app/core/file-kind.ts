@@ -1,7 +1,7 @@
 // What kind of file a name is - for the file viewer (kept apart from the editor, which loads only when a file opens).
 
 /** What a file is, for colours and the viewer's buttons. */
-export type FileKind = 'json' | 'yaml' | 'xml' | 'yang' | 'log' | 'config' | 'csv' | 'ini' | 'shell' | 'code' | 'text';
+export type FileKind = 'json' | 'yaml' | 'xml' | 'yang' | 'log' | 'config' | 'csv' | 'ini' | 'shell' | 'code' | 'md' | 'text';
 
 /** What kind of file a name is (for colours and buttons); '' when the viewer should not open it. */
 export function kindOf(name: string): FileKind | '' {
@@ -9,6 +9,7 @@ export function kindOf(name: string): FileKind | '' {
   if (/\.(log|out)(\.\d+)?$/.test(n) || /^(syslog|messages|dmesg)(\.\d+)?$/.test(n)) return 'log';
   if (ext === 'json' || ext === 'geojson' || n.endsWith('.json.txt')) return 'json';
   if (ext === 'yaml' || ext === 'yml') return 'yaml';
+  if (['md', 'markdown', 'mdown', 'mkd'].includes(ext)) return 'md';
   if (['xml', 'xsd', 'xsl', 'svg', 'html', 'htm', 'plist', 'xhtml'].includes(ext)) return 'xml';
   if (ext === 'yang') return 'yang';
   if (['cfg', 'conf', 'config', 'cnf', 'xsf', 'pol'].includes(ext) || /running-config|startup-config/.test(n)) return 'config';

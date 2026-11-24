@@ -1180,9 +1180,11 @@ A **Local Shell** tab has the Files panel too - **This Mac**, **This PC** on Win
 
 Double-click a text file in a Files panel (SSH or this computer) and it opens beside the panel - one file at a time, Esc closes it. It is for **looking at, checking and small fixes**, not an IDE: no tabs of files, projects or code completion; bigger work goes to your editor with **Open in App**.
 
-- **Colours** for JSON, YAML, XML, YANG, device configurations (EXOS, VOSS, IOS-style: `.cfg`, `.conf`, running-config), logs, CSV, INI/TOML, shell scripts and - read-only - code (Go, Python, TCL, JavaScript…). Line numbers and folding for structured files; logs and plain text without.
+- **Looks like VS Code**: its Dark+ / Light+ colours (with the app's light or dark theme), its editor font, and a status line (line and column, file type, encoding, line endings). Drag the viewer's edge to make it wider (double-click: back to the default width).
+- **Colours** for JSON, YAML, **Markdown**, XML, YANG, device configurations (EXOS, VOSS, IOS-style: `.cfg`, `.conf`, running-config), logs, CSV, INI/TOML, shell scripts and - read-only - code (Go, Python, TCL, JavaScript…). Line numbers and folding for structured files; logs and plain text without.
 - **JSON**: *Pretty* / *Compact*, and a red line **Not valid JSON at line N** with *Go to line* while you edit.
 - **Logs**: errors red, warnings and timestamps coloured; **Follow** shows new lines as they are written (like `tail -f`); a filter box shows only lines with a text or a `/regex/`, **Errors only** the errors and failures. Files over 5 MB show their last 2 MB.
+- **Markdown**: *Code* shows the source in colour (code blocks in their language's colours), **Preview** shows it as it reads - headings, tables, lists, code. Links open in your browser. The viewer remembers which you used last.
 - **CSV**: *Table* shows it as a table.
 - **Find** (⌘F / Ctrl+F, with replace), **Wrap**, **Copy** (the selection, or the whole file).
 - **Edit → Save** for text files up to 5 MB, with the file's permissions kept. If the file changed since you opened it (on the device or on disk), Save says so instead of overwriting it - *Reload*, or copy your text first. Code files are read-only here: *Open in App*.
@@ -1190,6 +1192,8 @@ Double-click a text file in a Files panel (SSH or this computer) and it opens be
 ![Editing JSON in the viewer](screenshots/file-viewer-json.png)
 
 ![A log in the viewer](screenshots/file-viewer-log.png)
+
+![Markdown preview](screenshots/file-viewer-markdown.png)
 
 ### SFTP through a jump station (bastion) - how the files travel
 
