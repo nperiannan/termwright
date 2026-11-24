@@ -118,6 +118,7 @@ var menuRU = map[string]string{
 	"Record a Test":                           "Записать тест",
 	"Record a Device Test":                    "Записать тест устройства",
 	"Record a Web Test (Playwright)":          "Записать веб-тест (Playwright)",
+	"Close Test Browsers...":                  "Закрыть тестовые браузеры...",
 	"Syslog Server":                           "Сервер syslog",
 	"Start / Stop Receiving":                  "Начать / остановить приём",
 	"Send Test Message...":                    "Отправить тестовое сообщение...",
