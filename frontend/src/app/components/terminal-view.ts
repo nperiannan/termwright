@@ -487,11 +487,17 @@ export class TerminalView implements AfterViewInit, OnDestroy {
 
   constructor() {
     // Apply settings changes (font, scheme, cursor) live.
+    // Only when the settings, the light/dark look or the session's own font, scheme or keywords change - not on
+    // every change of the tab (its size, folder, title…): each run sets the theme and fits again, and on macOS
+    // that fit could land one column off, change the tab's size and run this again - a resize loop (flicker).
     effect(() => {
       const s = this.ui.settings();
       const t = this.term;
       if (!s || !t) return;
       const sess = this.tab().session;
+      const key = [sess.fontFamily, sess.fontSize, sess.colorScheme, sess.keywordSet, this.ui.lightUi()].join('\u0001');
+      if (s === this.styledWith && key === this.styleKey) return;
+      this.styledWith = s; this.styleKey = key;
       t.options.fontFamily = sess.fontFamily || s.fontFamily;
       t.options.fontSize = sess.fontSize > 0 ? sess.fontSize + (s.fontSize - BASE_FONT) : s.fontSize;
       t.options.lineHeight = s.lineHeight && s.lineHeight >= 1 ? s.lineHeight : 1;
@@ -809,6 +815,8 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     this.fitTimer = setTimeout(() => { const f = this.fitForce; this.fitForce = false; this.doFit(f); }, 30);
   }
   private fitForce = false;
+  private styledWith?: object;
+  private styleKey = '';
   /** The terminal box when it was last fitted, and the sizes of the last fits (to see a flip-flop). */
   private lastBox = { w: 0, h: 0 };
   private fits: { size: string; cols: number; rows: number; at: number }[] = [];
@@ -827,7 +835,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     if (!p || !p.cols || !p.rows || (p.cols === this.term.cols && p.rows === this.term.rows)) return;
     const now = Date.now();
     this.fits = [...this.fits.filter(f => now - f.at < 3000), { size: p.cols + 'x' + p.rows, cols: p.cols, rows: p.rows, at: now }];
-    if (!force && this.fits.length >= 4 && new Set(this.fits.map(f => f.size)).size <= 2) {
+    if (this.fits.length >= 4 && new Set(this.fits.map(f => f.size)).size <= 2) {
       const cols = Math.min(...this.fits.map(f => f.cols)), rows = Math.min(...this.fits.map(f => f.rows));
       if (cols !== this.term.cols || rows !== this.term.rows) this.term.resize(cols, rows);
       return;

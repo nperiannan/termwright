@@ -224,11 +224,15 @@ export class TextViewer implements OnDestroy {
     } catch (e) { this.error.set(errText(e)); }
   }
 
+  /** The file the editor was made for: another file gets a new editor (its own language and colours). */
+  private edFor = '';
   private async show(text: string) {
     this.allLines.set(this.count(text)); this.shownLines.set(this.allLines());
+    if (this.ed && this.edFor !== this.path()) { this.ed.destroy(); this.ed = undefined; }
     if (this.ed) { this.setting = true; this.ed.setText(text); this.setting = false; this.ed.setReadOnly(!this.editing()); return; }
     const { createEditor } = await import('../core/cm-editor');
     const el = this.host()?.nativeElement; if (!el) return;
+    this.edFor = this.path();
     const k = this.kind();
     this.ed = createEditor(el, { text, kind: k, name: this.name(), readOnly: true, wrap: this.wrap(), numbers: !['log', 'text'].includes(k),
       onCursor: (line, col, sel) => this.pos.set({ line, col, sel }),
