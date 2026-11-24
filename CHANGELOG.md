@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- Web apps: opening a web app (double-click) no longer closes its browser after a few seconds when the page is slow or the recorded login fails - pages get 30 s, the browser stays open and the message says what failed, so you can log in by hand or record the login again.
+
 ## 0.44.2 (2026-11-24)
 
 - Terminal: no more flicker when the Files panel leaves the terminal on the edge of a column (201/202). After shrinking, it grows back only when there is room for a whole column, and a size that flips back and forth settles on the smaller one.

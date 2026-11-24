@@ -102,9 +102,15 @@ func (a *App) WebOpenApp(path string) error {
 	if err != nil {
 		return err
 	}
-	w, x := webrun.ForApp(webrun.Step{}, app, a.webBaseExtra())
+	x0 := a.webBaseExtra()
+	x0.Person = true
+	w, x := webrun.ForApp(webrun.Step{}, app, x0)
 	s, err := webRunner().Open(context.Background(), w, "", x)
 	if err != nil {
+		if s != nil { // the browser stays open on the page
+			go func() { <-s.Closed() }()
+			return errors.New("the browser is open, but its login did not finish (" + err.Error() + "): log in there, or record the login again")
+		}
 		return err
 	}
 	go func() { <-s.Closed() }()

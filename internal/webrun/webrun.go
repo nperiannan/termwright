@@ -423,6 +423,9 @@ type Extra struct {
 	Login                  []Action
 	Prefix                 string
 	NoVideo                bool
+	// Person: a browser opened for a person (a web app double-clicked): pages may take 30 s, and when the
+	// page or the login fails the browser stays open, so the person sees why and can log in by hand.
+	Person bool
 }
 
 func (x Extra) job(w Step, shots string, timeout int) map[string]any {
