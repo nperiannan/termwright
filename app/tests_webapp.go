@@ -118,8 +118,8 @@ func (a *App) WebOpenApp(path string) error {
 		if strings.HasPrefix(n, "no login asked: ") && len(app.Login) > 0 {
 			// logged in from before, or the login page did not show its first field: say which, so a login that
 			// does not happen can be told apart
-			emitter{a}.Emit("toast", map[string]string{"level": "info", "message": "Not logged in by Termwright: " + strings.TrimPrefix(n, "no login asked: ") +
-				". If the page asks you to log in, record the login again (or click Test Login)."})
+			emitter{a}.Emit("toast", map[string]string{"level": "info", "message": "No login page was seen (" + strings.TrimPrefix(n, "no login asked: ") +
+				"), so Termwright did not log in. If the browser shows a login page, log in there by hand - and Record Login again on the session, so the next time it is done for you."})
 		}
 	}
 	return nil

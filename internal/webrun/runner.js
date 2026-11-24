@@ -185,12 +185,13 @@ async function login(S, req, url) {
   // the login form can come late (a single sign-on page that redirects and draws itself): wait for its first
   // field until the page has settled (no network for a moment), then 4 s more - at most 20 s
   const field = loc(S.page, first.target).first();
-  const shows = await Promise.race([
+  // a web app opened for a person: wait for its login page up to 30 s (a person then sees what happened)
+  const shows = req.person ? await field.waitFor({ state: 'visible', timeout: 30000 }).then(() => true, () => false) : await Promise.race([
     field.waitFor({ state: 'visible', timeout: 20000 }).then(() => true, () => false),
     S.page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
       .then(() => field.waitFor({ state: 'visible', timeout: 4000 }).then(() => true, () => false)),
   ]);
-  if (!shows) { out({ i: -1, ok: true, note: 'no login asked: ' + first.target + ' did not show on ' + S.page.url() }); return false; }
+  if (!shows) { out({ i: -1, ok: true, note: 'no login asked: ' + first.target + ' did not show on ' + S.page.url() + (req.person ? ' in 30 s' : '') }); return false; }
   // after the password is typed and sent (a click or Enter), the login is done: a click recorded after it
   // (on the app's first page, e.g. "Dashboard") is tried but does not fail the login - that page can differ
   let typed = false, sent = false;

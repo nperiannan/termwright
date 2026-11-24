@@ -127,11 +127,11 @@ type Settings struct {
 	SessionsDir          string                       `json:"sessionsDir"`
 	LogDir               string                       `json:"logDir"`
 	DownloadDir          string                       `json:"downloadDir"`
-	TestsDir             string                       `json:"testsDir,omitempty"`      // the tests folder (cases, lib, testbeds, reports); "" = tests in the data folder
-	TestSchedules        []testrec.Schedule           `json:"testSchedules,omitempty"` // tests that run by themselves while Termwright is open
-	APIMonitors          []APIMonitor                 `json:"apiMonitors,omitempty"`   // API collections run every few minutes while Termwright is open
+	TestsDir             string                       `json:"testsDir,omitempty"`       // the tests folder (cases, lib, testbeds, reports); "" = tests in the data folder
+	TestSchedules        []testrec.Schedule           `json:"testSchedules,omitempty"`  // tests that run by themselves while Termwright is open
+	APIMonitors          []APIMonitor                 `json:"apiMonitors,omitempty"`    // API collections run every few minutes while Termwright is open
 	SNMPDashboards       []SNMPDashboard              `json:"snmpDashboards,omitempty"` // saved SNMP poll dashboards
-	Integrations         integrations.Config          `json:"integrations"`            // qTest, Jira and Git host (tokens in the credential store)
+	Integrations         integrations.Config          `json:"integrations"`             // qTest, Jira and Git host (tokens in the credential store)
 	FontFamily           string                       `json:"fontFamily"`
 	FontSize             int                          `json:"fontSize"`
 	LineHeight           float64                      `json:"lineHeight"`           // terminal line spacing (1.0 = the font's own; 0 = 1.0)
@@ -170,6 +170,9 @@ type Settings struct {
 	Scrollback           int                          `json:"scrollback"`
 	CopyOnSelect         bool                         `json:"copyOnSelect"`
 	RightClickPaste      bool                         `json:"rightClickPaste"`
+	SuggestKey           string                       `json:"suggestKey,omitempty"`       // command suggestions in the terminal: "" = Ctrl+Space, "off"
+	SuggestNoLibrary     bool                         `json:"suggestNoLibrary,omitempty"` // suggestions without the Command Library
+	SuggestUntyped       bool                         `json:"suggestUntyped,omitempty"`   // also commands of sessions without a device type
 	ConfirmClose         bool                         `json:"confirmClose"`
 	ShowButtonBar        bool                         `json:"showButtonBar"`
 	ShowCommandWin       bool                         `json:"showCommandWindow"`
@@ -918,10 +921,10 @@ type APIMonitor struct {
 
 // SNMPDashboard is a saved set of SNMP values polled together, with alarm thresholds.
 type SNMPDashboard struct {
-	ID    string          `json:"id"`
-	Name  string          `json:"name"`
-	Every int             `json:"every"` // seconds between polls (at least 5)
-	Items []SNMPDashItem  `json:"items"`
+	ID    string         `json:"id"`
+	Name  string         `json:"name"`
+	Every int            `json:"every"` // seconds between polls (at least 5)
+	Items []SNMPDashItem `json:"items"`
 	// Alarms: poll in the background and notify while the dashboard is closed too.
 	Alarms bool `json:"alarms,omitempty"`
 }

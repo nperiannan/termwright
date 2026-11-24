@@ -33,14 +33,12 @@ export class History {
   private ui = inject(Ui);
   /** Newest first. */
   readonly entries = signal<HistoryEntry[]>([]);
-  private loaded = false;
 
   enabled() { return this.ui.settings()?.recordHistory !== false; }
 
-  async load() {
-    if (this.loaded) return;
-    this.loaded = true;
-    this.entries.set(await this.backend.historyList().catch(() => []) ?? []);
+  private loading?: Promise<void>;
+  load(): Promise<void> {
+    return this.loading ??= (async () => { this.entries.set(await this.backend.historyList().catch(() => []) ?? []); })();
   }
 
   add(cmd: string, from: { session?: string; title?: string; deviceType?: string }) {
