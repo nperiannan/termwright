@@ -263,6 +263,15 @@ func (m *Manager) SFTPLoginShell(id string) string {
 	if err != nil {
 		return ""
 	}
+	if s.local {
+		if t, err := m.get(s.tabID); err == nil {
+			t.mu.Lock()
+			sess := t.sess
+			t.mu.Unlock()
+			return localShellName(sess)
+		}
+		return ""
+	}
 	client := s.client
 	if client == nil {
 		if client, err = m.sshClientOf(s.tabID); err != nil {

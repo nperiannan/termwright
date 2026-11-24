@@ -304,13 +304,13 @@ export class Tabs {
     // Also when a folder is already known: after "sudo su -" the new shell
     // does not report yet, so the line is typed again (it is harmless twice).
     const name = await this.backend.sftpLoginShell(sftp.id).catch(() => '');
-    if (!/^(bash|zsh)$/.test(name)) return;
+    if (!/^(bash|zsh|powershell|pwsh)$/.test(name)) return;
     const term = this.handles.get(sh.id)?.term;
     if (!term || term.buffer.active.type !== 'normal') return;
     const b = term.buffer.active;
     const line = b.getLine(b.baseY + b.cursorY)?.translateToString(true) ?? '';
     if (!/[$#%>]\s*$/.test(line.trimEnd() + ' ') || line.trimEnd().length !== line.slice(0, b.cursorX).trimEnd().length) return;
-    await this.enableCwdReporting(sh.id, false, true);
+    await this.enableCwdReporting(sh.id, false, true, /^(powershell|pwsh)$/.test(name));
   }
 
   /**
@@ -386,7 +386,12 @@ export class Tabs {
   }
 
   /** Types the line that makes bash or zsh report its folder (OSC 7) after every prompt. */
-  enableCwdReporting(termId: string, permanent: boolean, silent = false) {
+  enableCwdReporting(termId: string, permanent: boolean, silent = false, powershell = false) {
+    if (powershell) { // PowerShell (a Windows Local Shell): its prompt reports the folder as file://PC/C:/path
+      const ps = ` if (-not $global:__tw_prompt) { $global:__tw_prompt = $function:prompt; function global:prompt { $p = (Get-Location).ProviderPath; ` +
+        `[Console]::Write([char]27 + ']7;file://' + $env:COMPUTERNAME + '/' + ($p -replace '\\\\','/') + [char]7); & $global:__tw_prompt } }\r`;
+      return this.backend.sendInput(termId, ps);
+    }
     const line = `_tw_cwd(){ printf '\\033]7;file://%s%s\\007\\033]1337;RemoteHost=%s@%s\\007' "\${HOSTNAME:-\$HOST}" "\$PWD" "\${USER:-\$(id -un)}" "\${HOSTNAME:-\$HOST}"; }; ` +
       `if [ -n "\$ZSH_VERSION" ]; then typeset -U precmd_functions; precmd_functions+=(_tw_cwd); ` +
       `else case ";\$PROMPT_COMMAND;" in *_tw_cwd*) ;; *) PROMPT_COMMAND="_tw_cwd\${PROMPT_COMMAND:+;\$PROMPT_COMMAND}";; esac; fi`;
@@ -578,7 +583,7 @@ export class Tabs {
       session: ti.session, logFile: ti.logFile, cols: 0, rows: 0, locked: false,
       kind: 'terminal', parentId: '', home: '', recording: false,
       timestamps: !!ti.session.timestamps, autoScroll: !ti.session.noAutoScroll, sendBar: ti.session.protocol === 'Serial' || !this.ui.settings()?.hideTerminalBar,
-      filesPanel: ti.session.protocol === 'SSH2' && !!ti.session.filesPanel,
+      filesPanel: (ti.session.protocol === 'SSH2' || ti.session.protocol === 'Local Shell') && !!ti.session.filesPanel,
     };
     this.backend.sftpHopTarget(ti.session).then(h => { if (h) this.patch(ti.id, { hopTarget: h }); }).catch(() => {});
     this.unsubs.set(ti.id, [

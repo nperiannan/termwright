@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Files panel for Local Shell tabs**: *This Mac* / *This PC* / *This computer* - the same Files panel as SSH tabs, on this computer's disk (served inside Termwright, no network): follows `cd` (bash, zsh, PowerShell), opening a folder `cd`s the shell, Show in Finder/Explorer, Copy To…, **Move to Trash** (Recycle Bin), the drives on Windows.
+- **File viewer**: double-click a text file in a Files panel (SSH or this computer) - colours for JSON, YAML, XML, YANG, device configurations and logs; JSON *Pretty* and *Not valid JSON at line N*; logs **Follow** (like tail -f), a filter and **Errors only**; CSV as a table; Find, Wrap, Copy; **Edit → Save** for files up to 5 MB (it does not overwrite a file that changed since it was opened). One file at a time, code read-only, *Open in App* for anything bigger - not an IDE. The editor (CodeMirror) loads only when a file opens.
 - **Web procedures**: actions many web tests share are **web procedures** - Procedures → **+ New ▾ → Web procedure - record in the browser…**, or select actions → **Save as Procedure…** (was *Save as Block*); in a web step **+ Procedure ▾** inserts one with its values. The Procedures list shows 🌐 web / ⌨ device and how many tests use each.
 - **Clearer record buttons**: **Record a Device Test** (terminal · API · SNMP) and **Record a Web Test** (Playwright · web apps), the same in the Tests menu; the Device column shows a web step's web app; greyed web buttons say *Set up Playwright first*.
 - **Guide**: web and device steps in one test, and web procedures - with screenshots (WEB_TESTING_GUIDE).

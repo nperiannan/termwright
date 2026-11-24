@@ -611,7 +611,12 @@ export class Backend {
   discoverOuiStatus() { return this.call<string>('DiscoverOUIStatus'); }
   discoverDownloadOui() { return this.call<number>('DiscoverDownloadOUI'); }
   sftpLoginShell(id: string) { return this.call<string>('SFTPLoginShell', id); }
-  sftpOpen(tabId: string, mode: SftpMode = '') { return this.call<{ id: string; home: string; target: string }>('SFTPOpen', tabId, mode); }
+  sftpOpen(tabId: string, mode: SftpMode = '') { return this.call<{ id: string; home: string; target: string; local?: string }>('SFTPOpen', tabId, mode); }
+  sftpStat(id: string, p: string) { return this.call<{ size: number; mod: number }>('SFTPStat', id, p); }
+  sftpReadTail(id: string, p: string) { return this.call<{ text: string; size: number }>('SFTPReadTail', id, p); }
+  sftpSaveText(id: string, p: string, text: string, expect: number) { return this.call<number>('SFTPSaveText', id, p, text, expect); }
+  localShowInFolder(id: string, p: string) { return this.call<void>('LocalShowInFolder', id, p); }
+  localTrashFiles(id: string, paths: string[]) { return this.call<void>('LocalTrashFiles', id, paths); }
   diagnoseRemoteDesktop(path: string, sudo: string) { return this.call<unknown>('DiagnoseRemoteDesktop', path, sudo); }
   restartRemoteDesktopService(path: string, which: 'RDP' | 'VNC', sudo: string) { return this.call<string>('RestartRemoteDesktopService', path, which, sudo); }
   remoteDesktopInfo(tabId: string) { return this.call<{ knownPassword: boolean; user: string }>('RemoteDesktopInfo', tabId); }
