@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **`!sh` on a switch, the prompt kept as it is**: a plain sh reports its folder after every `cd` instead of through the prompt - the switch's shell showed `$(_tw_cwd)` in the prompt. When the terminal is in a folder the device's file access does not show (a switch's SFTP shows only its configuration folder), the panel says so in grey and keeps its listing instead of a red error.
+
 - **Files panel after `!sh` on a switch**: the shell there runs as root, and the panel could not become root (no sudo on the switch), so it showed *root access: …* and stopped following. It now keeps following the folder as the login user and says once why it is not root.
 
 - **Session logs keep every command**: a control sequence the device starts but never ends (seen on Switch Engine) made the log skip everything after it - a log of seven commands held only the first. Such a sequence now ends at the line, so the rest is logged; characters such as `ě` are no longer cut either.

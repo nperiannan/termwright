@@ -70,6 +70,7 @@ const store = {
     </div>
     <div class="list" tabindex="0" (keydown)="key($event)">
       @if (error()) { <div class="err">{{ error() }}</div> }
+      @if (note() && !error()) { <div class="fnote">{{ note() }}</div> }
       @if (!sid() && !error()) { <div class="hint">{{ term().state === 'connected' ? 'Opening…' : 'Not connected' }}</div> }
       @if (dir() && dir() !== '/') {
         <div class="row" title="Up one folder" (dblclick)="up()"><span class="fold"></span><span class="n">..</span></div>
@@ -105,6 +106,7 @@ const store = {
     <div class="foot">{{ shown().length }} items@if (selected().size) { · {{ selected().size }} selected }@if (opened().length) { · watching {{ opened().length }} }</div>
   `,
   styles: [`
+    .fnote { padding: 4px 10px; color: var(--muted); font-size: calc(11.5px * var(--ui-scale, 1)); }
     :host { position: relative; flex: none; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--panel); border-left: 1px solid var(--border); font-size: calc(12.5px * var(--ui-scale, 1)); }
     :host-context(.tdock.left) { border-left: 0; border-right: 1px solid var(--border); .grip { left: auto; right: -3px; } }
     .grip { position: absolute; left: -3px; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 3; }
@@ -209,7 +211,7 @@ export class FilesPanel implements OnDestroy {
     effect(() => {
       const cwd = this.live().cwd;
       if (!cwd || !this.follow() || !this.followable() || !this.sid()) return;
-      untracked(() => { if (cwd !== this.dir() && !this.userBusy && (this.userChange() === null || this.triedUser === (this.live().shellUser ?? ''))) void this.load(cwd); });
+      untracked(() => { if (cwd !== this.dir() && !this.userBusy && (this.userChange() === null || this.triedUser === (this.live().shellUser ?? ''))) void this.load(cwd, true); });
     });
     // Follow the terminal's user: after "sudo su -" the panel browses as root
     // too (sudo sftp-server), after "exit" as the login user again.
@@ -300,9 +302,9 @@ export class FilesPanel implements OnDestroy {
       // the shell went on as another user (a switch's "!sh" shell is root) and the panel cannot become it:
       // it still follows the folder, as the login user
       const cwd = this.follow() && this.followable() ? this.live().cwd : '';
-      if (cwd) {
+      if (cwd || this.dir()) {
         this.error.set('');
-        await this.load(cwd);
+        await this.load(cwd || this.dir(), true);
         if (!this.error()) {
           this.ui.toast(tr('Files: browsing as {0} - could not browse as {1} ({2})', this.asUser() || this.loginName() || tr('the login user'), who, msg), 'info', 8000);
           this.userBusy = false;
@@ -325,7 +327,10 @@ export class FilesPanel implements OnDestroy {
 
   refresh() { if (this.sid()) void this.load(this.dir()); else { this.failed = false; void this.start(); } }
 
-  async load(d: string) {
+  /** A note under the path: the terminal's folder this panel cannot show (soft: the listing stays). */
+  readonly note = signal('');
+
+  async load(d: string, soft = false) {
     const id = this.sid();
     if (!id || !d) return;
     try {
@@ -333,9 +338,15 @@ export class FilesPanel implements OnDestroy {
       this.dir.set(d);
       this.entries.set(list);
       this.error.set('');
+      this.note.set('');
       if (d !== this.last) this.selected.set(new Set());
       this.last = d;
-    } catch (e) { this.error.set(errText(e)); }
+    } catch (e) {
+      // following the terminal into a folder the device's file access does not show (a switch's SFTP shows only
+      // its configuration folder, while "!sh" goes anywhere): say so, keep what is shown
+      if (soft && this.dir()) this.note.set(tr('The terminal is in {0} - this device\'s file access does not show it', d));
+      else this.error.set(errText(e));
+    }
   }
 
   /** Opens a folder; with "cd the terminal" on, the terminal goes there too. */

@@ -394,11 +394,12 @@ export class Tabs {
         `[Console]::Write([char]27 + ']7;file://' + $env:COMPUTERNAME + '/' + ($p -replace '\\\\','/') + [char]7); & $global:__tw_prompt } }\r`;
       return this.backend.sendInput(termId, ps);
     }
-    // bash: PROMPT_COMMAND; zsh: precmd; a plain sh (busybox ash, e.g. a switch's "!sh" shell): in PS1
+    // bash: PROMPT_COMMAND; zsh: precmd; a plain sh (busybox ash, e.g. a switch's "!sh" shell): after every cd
+    // (its prompt may not run commands: $(…) in PS1 would show as typed)
     const line = `_tw_cwd(){ printf '\\033]7;file://%s%s\\007\\033]1337;RemoteHost=%s@%s\\007' "\${HOSTNAME:-\$HOST}" "\$PWD" "\${USER:-\$(id -un 2>/dev/null)}" "\${HOSTNAME:-\$HOST}"; }; ` +
       `if [ -n "\$ZSH_VERSION" ]; then eval 'typeset -U precmd_functions; precmd_functions+=(_tw_cwd)'; ` +
       `elif [ -n "\$BASH_VERSION" ]; then case ";\$PROMPT_COMMAND;" in *_tw_cwd*) ;; *) PROMPT_COMMAND="_tw_cwd\${PROMPT_COMMAND:+;\$PROMPT_COMMAND}";; esac; ` +
-      `else case "\$PS1" in *_tw_cwd*) ;; *) PS1='\$(_tw_cwd)'"\$PS1";; esac; fi`;
+      `else cd(){ command cd "\$@" && _tw_cwd; }; fi`;
     let cmd = ' ' + line + '; _tw_cwd\r'; // leading space: kept out of the shell history
     if (permanent) {
       const q = line.replace(/'/g, `'\\''`);
