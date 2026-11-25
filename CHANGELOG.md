@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.44.6 (2026-11-26)
+
 - **File viewer: the cursor and the selection show**: the cursor was drawn black (unseen on the dark theme) and the highlighted current line covered the selection. Both show now, also before Edit (the file stays read-only until then, but you can place the cursor and select to copy).
 
 - **Scrollback uses your larger setting**: every session carries its own *Scrollback lines* (10000 for new sessions, 500 from older imports), and it won over Settings → Terminal - so raising the global value to 1,000,000 did nothing, and a long `show running-config` kept only about 500 lines. The larger of the two is used now. Also: a scroll region from the top of the screen no longer drops lines from the scrollback.
