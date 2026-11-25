@@ -783,7 +783,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                 <label>Emulation</label>
                 <select name="emu" [(ngModel)]="s.emulation">@for (e of emulations; track e) { <option [value]="e">{{ e }}</option> }</select>
                 <label>TERM override</label><input name="termType" [(ngModel)]="s.termType" placeholder="(from emulation, e.g. xterm-256color)" />
-                <label>Scrollback lines</label><input name="sb" type="number" min="100" class="short" [(ngModel)]="s.scrollback" />
+                <label>Scrollback lines</label><input name="sb" type="number" min="100" class="short" [(ngModel)]="s.scrollback" title="The larger of this and Settings → Terminal → Scrollback lines is used" />
                 <label>Font</label>
                 <div class="row"><input name="ffam" [(ngModel)]="s.fontFamily" placeholder="(global font)" />
                   Size <input name="fsz" type="number" min="0" max="48" class="short" [(ngModel)]="s.fontSize" /></div>

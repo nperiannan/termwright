@@ -72,6 +72,12 @@ function b64ToBytes(b64: string): Uint8Array {
 }
 
 /** One xterm.js terminal bound to a backend tab. */
+/** The scrollback lines of a tab: the larger of the session's and Settings → Terminal's. Every session carries its
+ * own value (10000 for new ones, 500 from older imports), so raising the global one did nothing before. */
+export function scrollbackOf(session?: number, global?: number): number {
+  return Math.max(session || 0, global || 0) || 10000;
+}
+
 @Component({
   selector: 'app-terminal-view',
   imports: [FormsModule, DeviceIcon, Icon],
@@ -650,6 +656,8 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       t.options.fontSize = sess.fontSize > 0 ? sess.fontSize + (s.fontSize - BASE_FONT) : s.fontSize;
       t.options.lineHeight = s.lineHeight && s.lineHeight >= 1 ? s.lineHeight : 1;
       t.options.cursorStyle = s.cursorStyle;
+      const sb = scrollbackOf(sess.scrollback, s.scrollback);
+      if (t.options.scrollback !== sb) t.options.scrollback = sb;
       t.options.cursorBlink = s.cursorBlink;
       const theme = terminalTheme(this.tab().session.colorScheme, s, this.ui.lightUi());
       // modern layout with the automatic scheme: the cursor takes the accent colour
@@ -695,7 +703,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       lineHeight: s?.lineHeight && s.lineHeight >= 1 ? s.lineHeight : 1,
       cursorStyle: s?.cursorStyle ?? 'block',
       cursorBlink: s?.cursorBlink ?? true,
-      scrollback: tab.session.scrollback || s?.scrollback || 10000,
+      scrollback: scrollbackOf(tab.session.scrollback, s?.scrollback),
       theme,
       allowProposedApi: true,
       macOptionIsMeta: true,

@@ -4,7 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
-- **Long output stays in the scrollback**: some switch command lines (Fabric Engine) set a scroll region from the top to above the last row, and the lines that scrolled out of it never reached the scrollback - a long `show running-config` left only a screenful to scroll back. On the normal screen such a region is now the whole screen, so every line is kept (full-screen programs on the alternate screen are not affected).
+- **Scrollback uses your larger setting**: every session carries its own *Scrollback lines* (10000 for new sessions, 500 from older imports), and it won over Settings → Terminal - so raising the global value to 1,000,000 did nothing, and a long `show running-config` kept only about 500 lines. The larger of the two is used now. Also: a scroll region from the top of the screen no longer drops lines from the scrollback.
 
 ## 0.44.5 (2026-11-25)
 
