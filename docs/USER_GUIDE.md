@@ -154,7 +154,7 @@ Devices log in differently: EXOS is ready at `#` after username and password, VO
 ![New host key](screenshots/hostkey.png)
 
 - **New host key**: Termwright shows the key type and SHA256 fingerprint. *Accept & Save* stores it in Termwright's `known_hosts`; *Accept Once* connects without saving. Your `~/.ssh/known_hosts` is also trusted (read-only).
-- **Changed host key**: a red warning. Only choose *Replace & Save* if you know the device was re-keyed.
+- **Changed host key**: by default the new key is saved and the connection goes on, with a note naming the host and the new fingerprint - lab devices are reinstalled and replaced often. Settings → General → **Accept changed SSH host keys** off shows a red warning instead; then only choose *Replace & Save* if you know the device was re-keyed. Turn it off on networks outside a lab: a changed key can also mean someone is in the middle.
 - **Empty passwords**: an account with no password (EXOS `admin`) is remembered too - press Enter at the password prompt with *Remember* ticked, set *No password* on the session, or on its device type.
 - **Password**: tick *Save password (OS keychain)* to store it in the macOS Keychain / Windows Credential Manager / Secret Service. Passwords are never written to session files. Remove one with right-click → *Forget Saved Password*.
 - **Keys**: Termwright tries the session's identity file, then a running SSH agent (`ssh-agent`, Windows OpenSSH agent), then `~/.ssh/id_ed25519`, `id_ecdsa`, `id_rsa` (unencrypted). The identity file can be an OpenSSH/PEM key or a **PuTTY `.ppk`** key. Encrypted identity files prompt for the passphrase (or use one saved in the keychain).
@@ -1005,7 +1005,8 @@ The connector listens only on this computer (127.0.0.1) with a random key kept i
 
 ## 8. Logging and capturing output
 
-- **Start/stop a log**: toolbar *Log*, File → Log Session…, or the tab menu. The tab shows a `LOG` badge.
+- **Where files go** - Settings → **Files & Folders**: the Sessions folder; where the command history, API Client history, lab history, test run history, known hosts and the settings file are (shown, with *Show in Finder*); Session logs (folder, file name, ask where); Session recordings (folder, record every connection, delete after); Tests (tests folder and run results shown) and the **Exports folder** with *Ask where to save exports*; SFTP and the Files panel (**this computer's folder**: the local side of SFTP tabs starts there and Files panel downloads go there; *Ask where to save each download*, *Show the folder after a download*); and the Downloads (ZMODEM), config backups, collected output and checklist folders. Every folder has *Open*.
+- **Start/stop a log**: the **Log** button in the middle of the status bar starts logging at once - in the **Logs folder**, named by the session and the date and time it started (`Stack-20261125-143012.log`), or the session's own log file; stopping says where it is, with *Open* and *Show in Finder*. Right-click: *Log As…* (asks where, starting in the Logs folder), *Open the Last Log*, *Open the Logs Folder*, *Log Settings…*. Settings → General sets the **Logs folder**, the **Log file name** (`%S-%Y%M%D-%h%m%s.log`) and whether the Log button **asks where to save**; while it runs it is red - **Stop Log · 12 KB** - and one click stops it. **Record** next to it records the session the same way (**Stop Recording · 04:12**). Also: toolbar *Log*, File → Log Session…, or the tab menu, where a running log or recording is at the top in red; the tab shows a red `LOG` / `REC` badge (click to stop).
 - **Automatic logging**: Session Options → Log File → *Start log upon connect*.
 - **File name tokens**: `%H` host, `%S` session, `%P` port, `%U` user, `%R` protocol, `%Y %M %D` date, `%h %m %s` time, `%t` ms, `%%` percent. Example: `~/logs/%S-%Y%M%D-%h%m%s.log`. With no name, logs go to the Logs folder (Global Options).
 - **Plain vs raw**: by default escape sequences and colors are removed; *Raw log* keeps everything exactly as received.
@@ -1158,6 +1159,7 @@ Folders use the same colored folder icon as the Session Manager. Files are color
 Choosing a **Linux** device type (Linux, Ubuntu, Debian, RHEL, Rocky, …) for an SSH session turns the Files panel on for it; untick it in Session Options if you do not want it.
 
 ![Files panel](screenshots/files-panel.png)
+
 
 A small file browser beside an SSH terminal, on the side opposite the Session Manager (with the Session Manager on the right it sits on the left). Turn it on for a session with the **Files panel beside the terminal** switch in the session side panel or in Session Options → Connection, or for one tab with **View → Files Panel**, the title-bar button, the tab's right-click menu or ⌘⇧1 (Alt+Shift+1).
 

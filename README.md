@@ -3,7 +3,7 @@
 <h1 align="center">Termwright</h1>
 
 <p align="center">
-  <b>AI-powered network access, automation, monitoring, emulation and reservation platform.</b><br/>
+  <b>Open-source network engineering, automation and testing platform.</b><br/>
   SSH · Telnet · Serial · SFTP · RDP · VNC · WoL · SNMP · Syslog · REST API · Tests · Discover · Collaborate - on Windows, macOS and Linux.
 </p>
 

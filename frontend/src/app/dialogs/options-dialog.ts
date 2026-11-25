@@ -16,14 +16,14 @@ import { UI_FONTS, UI_SIZES, uiFontStack } from '../core/ui-fonts';
 import { DEVICE_KINDS } from '../components/device-icon';
 
 interface DtPw { orig: string; pw: string; empty: boolean; state: string; forget: boolean; }
-type Page = 'general' | 'terminal' | 'schemes' | 'envs' | 'keywords' | 'keymap' | 'buttons' | 'updates' | 'devices' | 'alerts' | 'cards' | 'ai' | 'skills' | 'integrations';
+type Page = 'general' | 'folders' | 'terminal' | 'schemes' | 'envs' | 'keywords' | 'keymap' | 'buttons' | 'updates' | 'devices' | 'alerts' | 'cards' | 'ai' | 'skills' | 'integrations';
 
 /** What Global Options can find: page, the text shown on the page, extra words people search for. */
 const SEARCH: [Page, string, string][] = [
-  ['general', 'Sessions folder', 'storage location ini path'], ['general', 'Logs folder', 'log directory'],
-  ['general', 'Recordings folder', 'session recording cast replay playback audit'], ['general', 'Session recording', 'record every connection replay playback audit delete keep days'],
+  ['folders', 'Sessions folder', 'storage location ini path'], ['folders', 'Logs folder', 'log directory'], ['folders', 'Log file name', 'log name pattern timestamp time date'], ['folders', 'The Log button asks where to save', 'log save as dialog'], ['folders', 'Command history', 'history file location where'], ['folders', 'Exports folder', 'playwright export save'], ['folders', "This computer's folder", 'sftp local download start'], ['folders', 'Known hosts (SSH)', 'known_hosts'],
+  ['folders', 'Recordings folder', 'session recording cast replay playback audit'], ['folders', 'Session recording', 'record every connection replay playback audit delete keep days'],
   ['cards', 'PKCS#11 libraries', 'smart card piv cac yubikey opensc token hsm ssh key'], ['cards', 'Ask the PIN for every login', 'smart card pin'],
-  ['general', 'Downloads folder', 'zmodem download save'], ['general', 'SFTP from a terminal', 'working directory detection folder cwd follow'],
+  ['folders', 'Downloads (ZMODEM)', 'zmodem download save'], ['general', 'Accept changed SSH host keys', 'host key changed fingerprint known_hosts warning'], ['general', 'SFTP from a terminal', 'working directory detection folder cwd follow'],
   ['general', 'SFTP tabs follow the terminal folder', 'cwd'], ['general', "SFTP tabs and the Files panel browse as the terminal's user", 'root sudo files panel'],
   ['general', 'Python interpreter', 'script python3'], ['general', 'UI theme', 'dark light mode appearance'], ['general', 'Interface font', 'font typeface vscode inter plex readable'], ['general', 'Text size', 'font size bigger larger zoom readable'],
   ['general', 'Accent color', 'colour highlight'], ['general', 'Confirm before closing connected tabs', 'quit exit'],
@@ -40,7 +40,7 @@ const SEARCH: [Page, string, string][] = [
   ['devices', 'Send initial carriage return', 'enter'], ['devices', 'Backup commands', 'configuration backup running-config show configuration'], ['alerts', 'Alerts', 'notify pattern sound desktop notification'],
   ['updates', 'Notify me about', 'update stable nightly'], ['updates', 'Check at start-up', 'update automatic'], ['updates', 'Repository', 'github'],
 ];
-const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Terminal & Appearance', schemes: 'Color Schemes', envs: 'Environments', keywords: 'Keyword Highlighting',
+const PAGE_NAMES: Record<Page, string> = { general: 'General', folders: 'Files & Folders', terminal: 'Terminal & Appearance', schemes: 'Color Schemes', envs: 'Environments', keywords: 'Keyword Highlighting',
   keymap: 'Key Map', buttons: 'Button Bar', devices: 'Device Types', alerts: 'Alerts', cards: 'Smart Cards', updates: 'Updates', ai: 'AI Assistant', integrations: 'Integrations', skills: 'Instructions & Skills' };
 
 /** Global Options dialog. */
@@ -62,6 +62,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
             } @empty { <span class="nohit">Nothing found</span> }
           } @else {
           <a [class.on]="page() === 'general'" (click)="page.set('general')"><app-icon name="eye" [size]="15" />General</a>
+          <a [class.on]="page() === 'folders'" (click)="page.set('folders'); loadPaths()"><app-icon name="folder" [size]="15" />Files &amp; Folders</a>
           <a [class.on]="page() === 'terminal'" (click)="page.set('terminal')"><app-icon name="shell" [size]="15" />{{ 'Terminal' }}</a>
           <a class="sub" [class.on]="page() === 'schemes'" (click)="page.set('schemes')"><app-icon name="palette" [size]="15" />Color Schemes</a>
           <a class="sub" [class.on]="page() === 'envs'" (click)="page.set('envs')"><app-icon name="layers" [size]="15" />Environments</a>
@@ -157,6 +158,8 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <label><input type="checkbox" name="cpaste" [(ngModel)]="s.confirmPaste" />  <span class="tx">Confirm pasting more than one line<small>shows the lines first - production tabs always ask</small></span> </label>
                   <label><input type="checkbox" name="kawake" [ngModel]="s.keepAwake !== false" (ngModelChange)="s.keepAwake = $event" />
                      <span class="tx">Keep the computer awake while Termwright is open<small>it does not go to sleep on its own, so sessions, transfers and the lab keep running; the display can still turn off{{ keepAwakeErr ? ' - not possible here: ' + keepAwakeErr : '' }}</small></span> </label>
+                  <label><input type="checkbox" name="hkacc" [ngModel]="s.acceptChangedHostKeys !== false" (ngModelChange)="s.acceptChangedHostKeys = $event" />
+                     <span class="tx">Accept changed SSH host keys<small>a device that was reinstalled or replaced has a new key: it is saved and the connection goes on, with a note; off - asked every time (safer outside a lab)</small></span> </label>
                   <label><input type="checkbox" name="rhist" [ngModel]="s.recordHistory !== false" (ngModelChange)="s.recordHistory = $event" />
                      <span class="tx">Remember typed commands<small>for Command History and suggestions - never commands with passwords, secrets or keys</small></span> </label>
                   <label><input type="checkbox" name="qcs" [ngModel]="!!s.quickConnectSave" (ngModelChange)="s.quickConnectSave = $event" />  <span class="tx">Save Quick Connect sessions<small>every connection made with Quick Connect is kept in the Session Manager (in the selected folder)</small></span> </label>
@@ -174,22 +177,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <div class="hint">After connecting to a session named like 10.1.1.1, Termwright reads the name the device gives itself (its hostname) and offers it, or renames the session with Undo. Team devices are named by the team. Right-click a folder → Name After Devices… does many at once.</div>
                 </div>
                 <h4 class="gsec">Folders and files</h4>
-                <label>Sessions folder</label>
-                <div class="row"><input name="sd" [(ngModel)]="s.sessionsDir" /><button type="button" (click)="browse('sessionsDir')">Browse...</button></div>
-                <label></label>
-                <div class="hint">Sessions are stored as one .ini file per session, in the layout other terminal programs use too.
-                  You can point this at an existing "Config/Sessions" folder to share sessions (back it up first).</div>
-                <label>Logs folder</label>
-                <div class="row"><input name="ld" [(ngModel)]="s.logDir" /><button type="button" (click)="browse('logDir')">Browse...</button></div>
-                <label>Recordings folder</label>
-                <div class="row"><input name="rd" [(ngModel)]="s.recordDir" placeholder="Documents/Termwright Recordings" /><button type="button" (click)="browse('recordDir')">Browse...</button></div>
-                <label>Session recording</label>
-                <div class="checks">
-                  <label><input type="checkbox" name="recall" [(ngModel)]="s.recordSessions" /> Record every connection of every session</label>
-                  <label>Delete recordings after <input name="rkeep" type="number" min="0" style="width: 70px" [(ngModel)]="s.recordKeepDays" /> days (0 = keep them)</label>
-                </div>
-                <label>Downloads folder</label>
-                <div class="row"><input name="dd" [(ngModel)]="s.downloadDir" /><button type="button" (click)="browse('downloadDir')">Browse...</button></div>
+                <label></label><div class="hint">Where sessions, logs, recordings, exports and downloads are kept: <a class="link" (click)="page.set('folders'); loadPaths()">Files &amp; Folders</a>.</div>
                 <label>SFTP from a terminal</label>
                 <div class="checks">
                   <label><input type="checkbox" name="scwd" [(ngModel)]="s.sftpCwdAuto" /> Working directory detection: turn on folder reporting in the shell (bash, zsh) when an SFTP tab is opened from it</label>
@@ -200,8 +188,6 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 <input name="py" [(ngModel)]="s.pythonPath" placeholder="(automatic: python3, or py -3 on Windows)" />
                 <label></label>
                 <div class="hint">Used to run Python (.py) scripts with the <code>crt</code> object. Python 3 must be installed.</div>
-                <label></label><div class="hint">Files received with ZMODEM (remote "sz") are saved here.</div>
-                <label>Data folder</label><div class="hint mono">{{ dataDir() }}</div>
                 <label>Backup</label>
                 <div>
                   <div class="row"><button type="button" [disabled]="bkBusy()" (click)="backupNow()">Back Up Now</button>
@@ -223,6 +209,70 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                     }
                   }
                 </div>
+              </div>
+            }
+            @case ('folders') {
+              <div class="grid">
+                <h4 class="gsec">Sessions and history</h4>
+                <label>Sessions folder</label>
+                <div class="row"><input name="sd" [(ngModel)]="s.sessionsDir" /><button type="button" (click)="browse('sessionsDir')">Browse...</button><button type="button" (click)="openF(s.sessionsDir)">Open</button></div>
+                <label></label>
+                <div class="hint">One .ini file per session, in the layout other terminal programs use too. You can point this at an existing "Config/Sessions" folder to share sessions (back it up first).</div>
+                @for (r of fixedPaths; track r.k) {
+                  @if (paths()[r.k]; as p) { <label>{{ r.label }}</label><div class="row"><span class="hint mono fpath" [title]="p">{{ p }}</span><button type="button" (click)="openF(p)">{{ isMac ? 'Show in Finder' : 'Show' }}</button></div> }
+                }
+                <label></label><div class="hint">These are kept by Termwright in its data folder and cannot be moved; Settings → General → Back Up Now saves them with your settings.</div>
+
+                <h4 class="gsec" id="opt-logs">Session logs</h4>
+                <label>Logs folder</label>
+                <div class="row"><input name="ld" [(ngModel)]="s.logDir" /><button type="button" (click)="browse('logDir')">Browse...</button><button type="button" (click)="openF(s.logDir)">Open</button></div>
+                <label>Log file name</label>
+                <div class="row"><input name="lname" [(ngModel)]="s.logName" placeholder="%S-%Y%M%D-%h%m%s.log" spellcheck="false" /></div>
+                <label></label>
+                <div class="hint">%S session, %H host, %U user, %Y%M%D date, %h%m%s time - the default ends with the date and time the log started, e.g. <span class="mono">Stack-20261125-143012.log</span>. A session's own log file (Session Options → Logging) comes first.</div>
+                <label></label>
+                <div class="checks"><label><input type="checkbox" name="lask" [(ngModel)]="s.logAsk" /> The Log button asks where to save (else it saves at once in the Logs folder)</label></div>
+
+                <h4 class="gsec">Session recordings</h4>
+                <label>Recordings folder</label>
+                <div class="row"><input name="rd" [(ngModel)]="s.recordDir" placeholder="Documents/Termwright Recordings" /><button type="button" (click)="browse('recordDir')">Browse...</button><button type="button" (click)="openF(paths()['recordings'] || s.recordDir || '')">Open</button></div>
+                <label></label>
+                <div class="hint">Each recording is named by its session and when it started - <span class="mono">Lab/Stack/2026-11-25_143012.cast</span> - so the Recordings list finds it.</div>
+                <label>Session recording</label>
+                <div class="checks">
+                  <label><input type="checkbox" name="recall" [(ngModel)]="s.recordSessions" /> Record every connection of every session</label>
+                  <label>Delete recordings after <input name="rkeep" type="number" min="0" style="width: 70px" [(ngModel)]="s.recordKeepDays" /> days (0 = keep them)</label>
+                </div>
+
+                <h4 class="gsec">Tests and web tests (Playwright)</h4>
+                @if (paths()['tests']; as p) { <label>Tests folder</label><div class="row"><span class="hint mono fpath" [title]="p">{{ p }}</span><button type="button" (click)="openF(p)">Open</button></div> }
+                @if (paths()['reports']; as p) { <label>Run results</label><div class="row"><span class="hint mono fpath" [title]="p">{{ p }}</span><button type="button" (click)="openF(p)">Open</button></div>
+                  <label></label><div class="hint">Reports, pictures, videos and traces of the runs; the tests folder is chosen in the Tests view.</div> }
+                <label>Exports folder</label>
+                <div class="row"><input name="exd" [(ngModel)]="s.exportDir" placeholder="Documents/Termwright Exports" /><button type="button" (click)="browse('exportDir')">Browse...</button><button type="button" (click)="openF(paths()['exports'] || s.exportDir || '')">Open</button></div>
+                <label></label>
+                <div class="checks"><label><input type="checkbox" name="exask" [ngModel]="!s.exportNoAsk" (ngModelChange)="s.exportNoAsk = !$event" /> Ask where to save exports (Playwright projects, Go, Python and TCL tests)</label></div>
+
+                <h4 class="gsec">SFTP and the Files panel</h4>
+                <label>This computer's folder</label>
+                <div class="row"><input name="sfl" [(ngModel)]="s.sftpLocalDir" placeholder="(your home folder)" /><button type="button" (click)="browse('sftpLocalDir')">Browse...</button><button type="button" (click)="openF(paths()['sftpLocal'] || s.sftpLocalDir || '')">Open</button></div>
+                <label></label>
+                <div class="hint">The local side of an SFTP tab starts here, and Files panel downloads go here.</div>
+                <label></label>
+                <div class="checks">
+                  <label><input type="checkbox" name="sfask" [ngModel]="!s.sftpDownloadNoAsk" (ngModelChange)="s.sftpDownloadNoAsk = !$event" /> Ask where to save each Files panel download</label>
+                  <label><input type="checkbox" name="sfopen" [(ngModel)]="s.sftpOpenAfter" /> Show the folder after a download</label>
+                </div>
+
+                <h4 class="gsec">Other folders</h4>
+                <label>Downloads (ZMODEM)</label>
+                <div class="row"><input name="dd" [(ngModel)]="s.downloadDir" /><button type="button" (click)="browse('downloadDir')">Browse...</button><button type="button" (click)="openF(s.downloadDir)">Open</button></div>
+                <label>Config backups</label>
+                <div class="row"><input name="bkd" [(ngModel)]="s.backupDir" placeholder="Documents/Termwright Config Backups" /><button type="button" (click)="browse('backupDir')">Browse...</button><button type="button" (click)="openF(paths()['backups'] || '')">Open</button></div>
+                <label>Collected output</label>
+                <div class="row"><input name="cod" [(ngModel)]="s.collectDir" placeholder="Documents/Termwright Collected" /><button type="button" (click)="browse('collectDir')">Browse...</button><button type="button" (click)="openF(paths()['collected'] || '')">Open</button></div>
+                <label>Checklist runs</label>
+                <div class="row"><input name="ckd" [(ngModel)]="s.checklistDir" placeholder="Documents/Termwright Checklists" /><button type="button" (click)="browse('checklistDir')">Browse...</button><button type="button" (click)="openF(paths()['checklists'] || '')">Open</button></div>
               </div>
             }
             @case ('terminal') {
@@ -864,6 +914,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
   </div>
   }`,
   styles: [`
+    .fpath { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .skp { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
     .skh { display: flex; gap: 10px; align-items: baseline; margin-top: 6px; } .skh .sp { flex: 1; } .skh button { flex: none; } .skh .mut { font-size: 12px; }
     .skp textarea[name=aiins] { width: 100%; box-sizing: border-box; font-size: 12px; }
@@ -1053,6 +1104,7 @@ export class OptionsDialog implements OnInit {
   /** Opens the page and highlights the option. */
   goTo(p: Page, label: string) {
     this.page.set(p);
+    if (p === 'folders') this.loadPaths();
     this.q.set('');
     setTimeout(() => {
       const body = document.querySelector('.modal.wide .modal-body');
@@ -1480,7 +1532,14 @@ export class OptionsDialog implements OnInit {
   async syncNow() { this.syncSt.set(await this.backend.syncNow()); }
   ago(iso: string) { const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : Math.round(m / 60) + ' h ago'; }
 
-  async browse(field: 'sessionsDir' | 'logDir' | 'downloadDir' | 'recordDir') {
+  /** Places that cannot be chosen, shown so they can be found. */
+  readonly fixedPaths = [{ k: 'history', label: 'Command history' }, { k: 'apiHistory', label: 'API Client history' }, { k: 'labHistory', label: 'Lab history' },
+    { k: 'testHistory', label: 'Test run history' }, { k: 'knownHosts', label: 'Known hosts (SSH)' }, { k: 'settings', label: 'Settings file' }, { k: 'data', label: 'Data folder' }];
+  readonly paths = signal<Record<string, string>>({});
+  loadPaths() { void this.backend.dataPaths().then(p => this.paths.set(p ?? {})).catch(() => {}); }
+  openF(p: string) { if (p) void this.backend.openFolder(p).catch(e => this.ui.toast(String(e), 'error')); }
+
+  async browse(field: 'sessionsDir' | 'logDir' | 'downloadDir' | 'recordDir' | 'exportDir' | 'sftpLocalDir' | 'backupDir' | 'collectDir' | 'checklistDir') {
     const d = await this.backend.chooseDirectory('Choose Folder').catch(() => '');
     if (d && this.s) this.s[field] = d;
     this.cdr.markForCheck();

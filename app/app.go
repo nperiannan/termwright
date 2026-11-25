@@ -168,6 +168,8 @@ func (a *App) init() error {
 		}
 		return a.secret(p)
 	}
+	a.terms.LogName = func() string { return a.cfg.Get().LogName }
+	a.terms.AcceptChangedKeys = func() bool { v := a.cfg.Get().AcceptChangedKeys; return v == nil || *v }
 	a.terms.DevicePassword = func(name string) (string, bool) {
 		if a.isLocked() {
 			return "", false
@@ -802,6 +804,15 @@ func (a *App) StartLog(id, path string, appendMode, raw bool) (string, error) {
 	return a.terms.StartLog(id, path, appendMode, raw)
 }
 
+// FileSize is a file's size in bytes (the status bar shows the log's), -1 when it cannot be read.
+func (a *App) FileSize(path string) int64 {
+	st, err := os.Stat(path)
+	if err != nil || st.IsDir() {
+		return -1
+	}
+	return st.Size()
+}
+
 // StopLog stops logging.
 func (a *App) StopLog(id string) error { return a.terms.StopLog(id) }
 
@@ -835,6 +846,20 @@ func (a *App) ChooseDirectory(title string) (string, error) {
 }
 
 // ChooseSaveFile shows a save dialog.
+// LogPathFor is where the tab's next log goes (the Logs folder and the file name pattern, expanded now).
+func (a *App) LogPathFor(tabID string) (string, error) { return a.terms.LogPathFor(tabID) }
+
+// ChooseLogFile asks where to save a tab's log: in the Logs folder, named by the session and the time.
+func (a *App) ChooseLogFile(tabID string) (string, error) {
+	p, err := a.terms.LogPathFor(tabID)
+	if err != nil {
+		return "", err
+	}
+	_ = os.MkdirAll(filepath.Dir(p), 0o700)
+	return wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{Title: "Log Session As", DefaultDirectory: filepath.Dir(p), DefaultFilename: filepath.Base(p),
+		Filters: toFilters([]FileFilter{{DisplayName: "Log files", Pattern: "*.log;*.txt"}}), CanCreateDirectories: true})
+}
+
 func (a *App) ChooseSaveFile(title, defaultName string, filters []FileFilter) (string, error) {
 	return wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{Title: title, DefaultFilename: defaultName, Filters: toFilters(filters), CanCreateDirectories: true})
 }
@@ -971,10 +996,7 @@ func (a *App) SFTPClose(id string) { a.terms.SFTPClose(id) }
 func (a *App) LocalList(dir string) ([]term.FileEntry, error) { return term.LocalList(dir) }
 
 // LocalHome returns the user's home folder.
-func (a *App) LocalHome() string {
-	h, _ := os.UserHomeDir()
-	return h
-}
+func (a *App) LocalHome() string { return a.LocalStartDir() } // Settings → Files & Folders → SFTP start folder
 
 // LocalParent returns the parent folder of a local path.
 func (a *App) LocalParent(p string) string { return filepath.Dir(p) }

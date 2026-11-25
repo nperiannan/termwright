@@ -126,6 +126,13 @@ type KeywordSet struct {
 type Settings struct {
 	SessionsDir          string                       `json:"sessionsDir"`
 	LogDir               string                       `json:"logDir"`
+	LogName              string                       `json:"logName,omitempty"`           // file name pattern of new logs ("" = %S-%Y%M%D-%h%m%s.log)
+	LogAsk               bool                         `json:"logAsk,omitempty"`            // the Log button asks where to save
+	ExportDir            string                       `json:"exportDir,omitempty"`         // test exports (Playwright projects, scripts) ("" = Documents/Termwright Exports)
+	ExportNoAsk          bool                         `json:"exportNoAsk,omitempty"`       // exports are saved there at once, without the dialog
+	SFTPLocalDir         string                       `json:"sftpLocalDir,omitempty"`      // this computer's side of SFTP tabs, and Files panel downloads ("" = home)
+	SFTPDownloadNoAsk    bool                         `json:"sftpDownloadNoAsk,omitempty"` // Files panel downloads go there at once
+	SFTPOpenAfter        bool                         `json:"sftpOpenAfter,omitempty"`     // show the folder after a Files panel download
 	DownloadDir          string                       `json:"downloadDir"`
 	TestsDir             string                       `json:"testsDir,omitempty"`       // the tests folder (cases, lib, testbeds, reports); "" = tests in the data folder
 	TestSchedules        []testrec.Schedule           `json:"testSchedules,omitempty"`  // tests that run by themselves while Termwright is open
@@ -188,15 +195,16 @@ type Settings struct {
 	BackupJobs           []BackupJob                  `json:"backupJobs"`
 	Checklists           []Checklist                  `json:"checklists"`
 	Collections          []Collection                 `json:"collections"`
-	CollectDir           string                       `json:"collectDir"`              // "" = Documents/Termwright Collected
-	ChecklistDir         string                       `json:"checklistDir"`            // "" = Documents/Termwright Checklists
-	RecordHistory        *bool                        `json:"recordHistory,omitempty"` // nil = on
-	KeepAwake            *bool                        `json:"keepAwake,omitempty"`     // nil = on: the computer does not sleep on its own while Termwright is open
-	RecordSessions       bool                         `json:"recordSessions"`          // record every connection (.cast)
-	RecordDir            string                       `json:"recordDir"`               // "" = Documents/Termwright Recordings
-	RecordKeepDays       int                          `json:"recordKeepDays"`          // 0 = keep
-	SmartCardLibraries   []string                     `json:"smartCardLibraries"`      // PKCS#11 libraries; empty = the usual places
-	SmartCardPinEachTime bool                         `json:"smartCardPinEachTime"`    // ask the PIN for every login
+	CollectDir           string                       `json:"collectDir"`                      // "" = Documents/Termwright Collected
+	ChecklistDir         string                       `json:"checklistDir"`                    // "" = Documents/Termwright Checklists
+	RecordHistory        *bool                        `json:"recordHistory,omitempty"`         // nil = on
+	AcceptChangedKeys    *bool                        `json:"acceptChangedHostKeys,omitempty"` // nil = on: a changed SSH host key is saved and accepted
+	KeepAwake            *bool                        `json:"keepAwake,omitempty"`             // nil = on: the computer does not sleep on its own while Termwright is open
+	RecordSessions       bool                         `json:"recordSessions"`                  // record every connection (.cast)
+	RecordDir            string                       `json:"recordDir"`                       // "" = Documents/Termwright Recordings
+	RecordKeepDays       int                          `json:"recordKeepDays"`                  // 0 = keep
+	SmartCardLibraries   []string                     `json:"smartCardLibraries"`              // PKCS#11 libraries; empty = the usual places
+	SmartCardPinEachTime bool                         `json:"smartCardPinEachTime"`            // ask the PIN for every login
 	KeywordSets          []KeywordSet                 `json:"keywordSets"`
 	DefaultKeywordSet    string                       `json:"defaultKeywordSet"`
 	ShowConnectBar       bool                         `json:"showConnectBar"`

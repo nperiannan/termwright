@@ -14,8 +14,8 @@
           <span class="dot" [class]="t.state" [style.box-shadow]="tabEnv(t) ? '0 0 0 2px ' + tabEnv(t)!.color : null"></span>
           <span class="label" translate="no">{{ t.title }}</span>
           @if (tabEnv(t)?.protect) { <span class="badge envtag" [style.background]="tabEnv(t)!.color" [style.color]="tabEnv(t)!.fg" [title]="tabEnv(t)!.label">{{ tabEnv(t)!.short }}</span> }
-          @if (t.logFile) { <span class="badge" title="Logging to {{ t.logFile }}">LOG</span> }
-          @if (t.castFile) { <span class="badge rec" title="Recording this session to {{ t.castFile }}">REC</span> }
+          @if (t.logFile) { <span class="badge live" role="button" title="Logging to {{ t.logFile }} - click to stop" (click)="stopAsk($event, t, 'log')"><i></i>LOG</span> }
+          @if (t.castFile) { <span class="badge live" role="button" title="Recording this session to {{ t.castFile }} - click to stop" (click)="stopAsk($event, t, 'rec')"><i></i>REC</span> }
           @if (t.recording) { <span class="badge" title="Recording a script">SCRIPT</span> }
           @if (tabs.selected().has(t.id)) { <span class="badge sel" title="In the send group (Command Window → Selected tabs)">SEL</span> }
           @if (t.alert) { <span class="alertdot" title="An alert matched in this tab"></span> }
@@ -122,7 +122,7 @@
             <div class="home-brand">
               <img class="logo" [src]="ui.lightUi() ? 'icon.svg' : 'icon-dark.svg'" alt="" width="40" height="40" />
               <h1>Termwright</h1>
-              <div class="tag"><b>AI-powered network access, automation, monitoring, emulation and reservation platform</b><span translate="no">SSH · Telnet · Serial · SFTP · RDP · VNC · SNMP · Syslog · REST API · Collaborate</span></div>
+              <div class="tag"><b>Open-source network engineering, automation and testing platform</b><span translate="no">SSH · Telnet · Serial · SFTP · RDP · VNC · SNMP · Syslog · REST API · Collaborate</span></div>
             </div>
             <label [class]="'bigsearch qs-' + qaStyle()">
               <app-icon name="find" [size]="18" />
@@ -222,7 +222,15 @@
     <span class="info" [title]="t.info">{{ statusTarget(t) }}</span>
     @if (statusFacts(t); as sf) { <span [title]="tabTip(t)">{{ sf }}</span> }
     <span class="grow"></span>
-    @if (t.logFile) { <span class="log" [title]="t.logFile">● Logging</span> }
+    @if (t.kind === 'terminal') {
+      <span class="lr">
+        <button type="button" class="lrb" [class.on]="!!t.logFile" (click)="tabs.quickLog(t.id)" (contextmenu)="logMenu($event, t)"
+          [title]="t.logFile ? 'Logging to ' + t.logFile + ' - click to stop (right-click: open it)' : 'Log this session to a file (right-click: Log As…)'"><app-icon name="log" [size]="13" />{{ t.logFile ? 'Stop Log' + (logSize() ? ' · ' + logSize() : '') : 'Log' }}</button>
+        <button type="button" class="lrb" [class.on]="!!t.castFile" (click)="tabs.toggleCast(t.id)" [disabled]="!t.castFile && t.state !== 'connected'"
+          [title]="t.castFile ? 'Recording to ' + t.castFile + ' - click to stop and save it' : 'Record this session (play it back later)'"><i></i>{{ t.castFile ? 'Stop Recording · ' + recFor(t) : 'Record' }}</button>
+      </span>
+      <span class="grow"></span>
+    }
     @if (t.kind === 'terminal') {
       @if (caretOf(t); as c) {
         @if (c.selChars) { <span class="sel" title="The selection: rows, columns and characters">Sel {{ c.selRows === 1 ? c.selCols + ' cols' : c.selRows + ' rows' }}, {{ c.selChars }} chars</span> }

@@ -18,7 +18,7 @@ declare global {
 }
 
 /** Typed wrapper around the Go backend bound by Wails. */
-export type SftpMode = '' | 'jump' | 'target';
+export type SftpMode = '' | 'jump' | 'target' | 'shell';
 
 /** A device's own web server, read by its device type. */
 export interface WebServerState { known: boolean; http: boolean; https: boolean; output?: string; on?: string[] | null; save?: string[] | null; }
@@ -602,6 +602,9 @@ export class Backend {
   disconnectTab(id: string) { return this.call<void>('DisconnectTab', id); }
   closeTab(id: string) { return this.call<void>('CloseTab', id); }
   refreshTabSession(id: string, path = '') { return this.call<void>('RefreshTabSession', id, path); }
+  chooseLogPath(tabId: string) { return this.call<string>('LogPathFor', tabId); }
+  chooseLogFile(tabId: string) { return this.call<string>('ChooseLogFile', tabId); }
+  fileSize(path: string) { return this.call<number>('FileSize', path); }
   startLog(id: string, path: string, append: boolean, raw: boolean) { return this.call<string>('StartLog', id, path, append, raw); }
   stopLog(id: string) { return this.call<void>('StopLog', id); }
   answerPrompt(id: string, r: PromptReply) { return this.call<void>('AnswerPrompt', id, r); }
@@ -670,6 +673,8 @@ export class Backend {
   openedFileMod(local: string) { return this.call<number>('OpenedFileMod', local); }
   sftpUploadOpened(id: string, local: string, remote: string) { return this.call<void>('SFTPUploadOpened', id, local, remote); }
   localList(dir: string) { return this.call<FileEntry[] | null>('LocalList', dir); }
+  dataPaths() { return this.call<Record<string, string>>('DataPaths'); }
+  openFolder(p: string) { return this.call<void>('OpenFolder', p); }
   localHome() { return this.call<string>('LocalHome'); }
   localParent(p: string) { return this.call<string>('LocalParent', p); }
   localJoin(dir: string, name: string) { return this.call<string>('LocalJoin', dir, name); }

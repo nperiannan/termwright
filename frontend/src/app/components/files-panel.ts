@@ -3,6 +3,7 @@ import { glacierIcons } from '../core/icon-finish';
 import { Component, OnDestroy, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend, errText } from '../core/backend';
+import { tr } from '../core/i18n';
 import { TextViewer } from './text-viewer';
 import { kindOf } from '../core/file-kind';
 import { SUDO_ERR } from '../core/fixes';
@@ -65,11 +66,12 @@ const store = {
       <button type="button" class="ib del" [disabled]="!selected().size" [title]="local() ? 'Move the selected files to the Trash' : 'Delete the selected files'" (click)="remove()"><app-icon name="trash" [size]="15" /></button>
       <span class="grow"></span>
       @if (local()) { <button type="button" class="ib" [title]="'Show this folder in ' + fileManager()" (click)="backend.localShowInFolder(sid(), dir())"><app-icon name="folder" [size]="15" /></button> }
-      @else { <button type="button" class="ib" title="Open a full SFTP tab here" (click)="openTab()"><app-icon name="sftp" [size]="15" /></button> }
+      @else if (!shell()) { <button type="button" class="ib" title="Open a full SFTP tab here" (click)="openTab()"><app-icon name="sftp" [size]="15" /></button> }
     </div>
     <div class="list" tabindex="0" (keydown)="key($event)">
       @if (error()) { <div class="err">{{ error() }}</div> }
-      @if (!sid() && !error()) { <div class="hint">{{ term().state === 'connected' ? 'Opening…' : 'Not connected' }}</div> }
+      @if (note() && !error()) { <div class="fnote">{{ note() }}</div> }
+      @if (!sid() && !error() && !shell()) { <div class="hint">{{ term().state === 'connected' ? 'Opening…' : 'Not connected' }}</div> }
       @if (dir() && dir() !== '/') {
         <div class="row" title="Up one folder" (dblclick)="up()"><span class="fold"></span><span class="n">..</span></div>
       }
@@ -104,6 +106,12 @@ const store = {
     <div class="foot">{{ shown().length }} items@if (selected().size) { · {{ selected().size }} selected }@if (opened().length) { · watching {{ opened().length }} }</div>
   `,
   styles: [`
+    .via { display: flex; align-items: center; gap: 8px; padding: 0 10px 6px; }
+    .via .seg { flex: none; display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .via .seg button { font: inherit; font-size: calc(11.5px * var(--ui-scale, 1)); padding: 1px 9px !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; color: var(--muted) !important; min-height: 0 !important; height: auto !important; line-height: 1.45 !important; white-space: nowrap; width: auto !important; max-width: none !important; min-width: 0 !important; flex: none !important; overflow: visible !important; }
+    .via .seg button.on { background: var(--hover) !important; color: var(--text) !important; }
+    .via .vmut { color: var(--muted); font-size: calc(11.5px * var(--ui-scale, 1)); }
+    .fnote { padding: 4px 10px; color: var(--muted); font-size: calc(11.5px * var(--ui-scale, 1)); }
     :host { position: relative; flex: none; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--panel); border-left: 1px solid var(--border); font-size: calc(12.5px * var(--ui-scale, 1)); }
     :host-context(.tdock.left) { border-left: 0; border-right: 1px solid var(--border); .grip { left: auto; right: -3px; } }
     .grip { position: absolute; left: -3px; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 3; }
@@ -208,7 +216,7 @@ export class FilesPanel implements OnDestroy {
     effect(() => {
       const cwd = this.live().cwd;
       if (!cwd || !this.follow() || !this.followable() || !this.sid()) return;
-      untracked(() => { if (cwd !== this.dir() && !this.userBusy && (this.userChange() === null || this.triedUser === (this.live().shellUser ?? ''))) void this.load(cwd); });
+      untracked(() => { if (cwd !== this.dir() && !this.userBusy && (this.userChange() === null || this.triedUser === (this.live().shellUser ?? ''))) void this.load(cwd, true); });
     });
     // Follow the terminal's user: after "sudo su -" the panel browses as root
     // too (sudo sftp-server), after "exit" as the login user again.
@@ -235,11 +243,14 @@ export class FilesPanel implements OnDestroy {
   size(n: number) { return formatBytes(n); }
   pct(a: number, b: number) { return Math.round(a * 100 / b); }
 
-  private async start(mode?: 'jump' | 'target') {
-    if (this.opening) return;
+  private restart = false;
+  private async start(mode?: 'jump' | 'target' | 'shell') {
+    if (this.opening) { this.restart = true; return; } // e.g. SFTP chosen while the switch shell was starting
     this.opening = true;
     this.error.set('');
     const t = this.live();
+    this.shell.set(false); // the switch shell view was taken out: always the device's SFTP
+    if (!mode && this.shell()) mode = 'shell';
     if (!mode) mode = t.hopTarget ? (this.tabs.onJump(t) ? 'jump' : 'target') : undefined;
     try {
       let r: { id: string; home: string; target: string; local?: string };
@@ -248,6 +259,7 @@ export class FilesPanel implements OnDestroy {
         if (mode !== 'target') throw e;
         r = await this.backend.sftpOpen(t.id, 'jump');
       }
+      if ((mode === 'shell') !== this.shell()) { void this.backend.sftpClose(r.id).catch(() => {}); this.restart = true; return; } // switched meanwhile
       this.target.set(r.target || '');
       this.local.set(r.local || '');
       this.home = r.home;
@@ -259,8 +271,18 @@ export class FilesPanel implements OnDestroy {
       if (c !== null) { this.triedUser = this.live().shellUser ?? ''; await this.switchUser(c); }
       else await this.load(cwd || this.dir() || r.home);
       void this.tabs.detectCwd(this.live(), r.id);
-    } catch (e) { this.failed = true; this.error.set('Files: ' + errText(e)); }
-    finally { this.opening = false; }
+    } catch (e) {
+      if (mode === 'shell') { // the switch shell cannot be started: say why, and show its SFTP instead
+        this.shell.set(false);
+        store.set(this.shellKey(), '0');
+        this.shellNote.set(tr('Switch Shell: {0}. Showing SFTP.', errText(e)));
+        this.restart = true;
+      } else { this.failed = true; this.error.set('Files: ' + errText(e)); }
+    }
+    finally {
+      this.opening = false;
+      if (this.restart) { this.restart = false; if (!this.sid()) void this.start(); }
+    }
   }
 
   /** The login name on the host this panel browses ('' when not known). */
@@ -273,6 +295,7 @@ export class FilesPanel implements OnDestroy {
   /** How to switch to the terminal's user: '' = back to the login user,
    *  'sudo' = root, a Run As command; null = nothing to change. */
   private userChange(): string | null {
+    if (this.shell()) return null;
     const u = this.live().shellUser;
     if (!u || this.ui.settings()?.sftpFollowUser === false) return null;
     const login = this.loginName();
@@ -295,7 +318,20 @@ export class FilesPanel implements OnDestroy {
       if (cwd && this.error()) await this.load(home);
     } catch (e) {
       const msg = errText(e);
-      this.error.set(SUDO_ERR.test(msg) ? 'Cannot browse as ' + (cmd === 'sudo' ? 'root' : cmd.replace(/^sudo su - /, '')) + ': ' + msg : msg);
+      const who = cmd === 'sudo' ? 'root' : cmd === '' ? (this.loginName() || 'the login user') : cmd.replace(/^sudo su - /, '');
+      // the shell went on as another user (a switch's "!sh" shell is root) and the panel cannot become it:
+      // it still follows the folder, as the login user
+      const cwd = this.follow() && this.followable() ? this.live().cwd : '';
+      if (cwd || this.dir()) {
+        this.error.set('');
+        await this.load(cwd || this.dir(), true);
+        if (!this.error()) {
+          this.ui.toast(tr('Files: browsing as {0} - could not browse as {1} ({2})', this.asUser() || this.loginName() || tr('the login user'), who, msg), 'info', 8000);
+          this.userBusy = false;
+          return;
+        }
+      }
+      this.error.set(SUDO_ERR.test(msg) ? 'Cannot browse as ' + who + ': ' + msg : msg);
     }
     this.userBusy = false;
   }
@@ -309,9 +345,40 @@ export class FilesPanel implements OnDestroy {
     await this.start(this.tabs.onJump(this.live()) ? 'jump' : 'target');
   }
 
+  readonly tr = tr;
+  /** A switch (a network OS device type): its SFTP shows little, its Linux shell (!sh) everything. */
+  readonly switchLike = computed(() => {
+    const s = this.live().session;
+    return !this.local() && s.protocol === 'SSH2' && !!s.deviceType && !/linux|ubuntu|debian|centos|rhel|red ?hat|fedora|windows|mac|unix|bsd|server/i.test(s.deviceType);
+  });
+  private shellKey() { return 'termwright.filesShell.' + (this.live().session.path || this.live().session.hostname); }
+  /** Browsing through the switch's shell (remembered per session). */
+  readonly shell = signal(false);
+  /** Why Switch Shell is not shown (it could not be started). */
+  readonly shellNote = signal('');
+  private shellRead = false;
+  async setShell(on: boolean) {
+    if (on === this.shell()) return;
+    this.shell.set(on);
+    store.set(this.shellKey(), on ? '1' : '0');
+    this.shellNote.set('');
+    const old = this.sid();
+    this.sid.set('');
+    this.entries.set([]);
+    this.error.set('');
+    this.note.set('');
+    if (old) await this.backend.sftpClose(old).catch(() => {});
+    this.dir.set('');
+    this.failed = false;
+    await this.start();
+  }
+
   refresh() { if (this.sid()) void this.load(this.dir()); else { this.failed = false; void this.start(); } }
 
-  async load(d: string) {
+  /** A note under the path: the terminal's folder this panel cannot show (soft: the listing stays). */
+  readonly note = signal('');
+
+  async load(d: string, soft = false) {
     const id = this.sid();
     if (!id || !d) return;
     try {
@@ -319,9 +386,15 @@ export class FilesPanel implements OnDestroy {
       this.dir.set(d);
       this.entries.set(list);
       this.error.set('');
+      this.note.set('');
       if (d !== this.last) this.selected.set(new Set());
       this.last = d;
-    } catch (e) { this.error.set(errText(e)); }
+    } catch (e) {
+      // following the terminal into a folder the device's file access does not show (a switch's SFTP shows only
+      // its configuration folder, while "!sh" goes anywhere): say so, keep what is shown
+      if (soft && this.dir()) this.note.set(tr('The terminal is in {0} - this device\'s file access does not show it', d));
+      else this.error.set(errText(e));
+    }
   }
 
   /** Opens a folder; with "cd the terminal" on, the terminal goes there too. */
@@ -443,15 +516,22 @@ export class FilesPanel implements OnDestroy {
   async download() {
     const names = [...this.selected()];
     if (!names.length) return;
-    const dest = await this.backend.chooseDirectory('Download to').catch(() => '');
-    if (dest) await this.transfer('down', names.map(n => this.join(n)), dest);
+    // Settings → Files & Folders: straight to this computer's folder, or asked
+    const st = this.ui.settings();
+    let dest = st?.sftpDownloadNoAsk && !this.local() ? await this.backend.localHome().catch(() => '') : '';
+    if (!dest) dest = await this.backend.chooseDirectory('Download to').catch(() => '');
+    if (dest) await this.transfer('down', names.map(n => this.join(n)), dest, !!st?.sftpOpenAfter);
   }
-  private async transfer(dir: 'up' | 'down', src: string[], dest: string) {
+  private async transfer(dir: 'up' | 'down', src: string[], dest: string, showAfter = false) {
     try {
       const id = await this.backend.startTransfer(this.sid(), dir, src, dest);
       if (id) this.xferIds = new Set([id]);
       const off = this.backend.on('xfer:progress', (t: { id: string; state: string }) => {
-        if (t.id === id && t.state !== 'running') { off(); if (dir === 'up') void this.load(this.dir()); }
+        if (t.id === id && t.state !== 'running') {
+          off();
+          if (dir === 'up') void this.load(this.dir());
+          else if (t.state === 'done' && showAfter) void this.backend.openFolder(dest).catch(() => {});
+        }
       });
     } catch (e) { this.ui.error(e); }
   }

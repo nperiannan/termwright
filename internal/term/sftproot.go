@@ -110,7 +110,12 @@ func sftpAsRoot(ctx context.Context, client *ssh.Client, hop *Hop, askPass func(
 				}
 				continue
 			case "eof":
-				msg := strings.TrimSpace(strings.ReplaceAll(tail.String(), "TWERR:", ""))
+				msg := strings.TrimSpace(strings.Map(func(r rune) rune { // a device's exec channel can answer with bytes that are not text
+					if r == '\n' || r == '\t' || (r >= 0x20 && r != 0x7f && r != 0xfffd) {
+						return r
+					}
+					return -1
+				}, strings.ReplaceAll(tail.String(), "TWERR:", "")))
 				if msg == "" {
 					msg = "sudo refused to start the SFTP server as root"
 				}

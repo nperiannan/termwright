@@ -94,7 +94,7 @@ import { ENV_COLORS, envFg, envList } from '../core/env';
       <div class="ctx-menu" [class.noicons]="!anyIcon(m.items)" [style.left.px]="m.x" [style.top.px]="m.y">
         @for (it of m.items; track $index) {
           @if (it.separator) { <div class="sep"></div> }
-          @else { <div class="item" [class.disabled]="it.disabled" [class.danger]="danger(it)" (click)="run(it)"><span class="mi">@if (icon(it); as ic) { <app-icon [name]="ic" [size]="15" /> }</span><span class="ml">{{ it.label }}</span>@if (it.hint) {<span class="hint-key">{{ it.hint }}</span>}</div> }
+          @else { <div class="item" [class.disabled]="it.disabled" [class.danger]="danger(it)" [class.live]="it.live" (click)="run(it)"><span class="mi">@if (icon(it); as ic) { <app-icon [name]="ic" [size]="15" /> }</span><span class="ml">{{ it.label }}</span>@if (it.hint) {<span class="hint-key">{{ it.hint }}</span>}</div> }
         }
       </div>
     }

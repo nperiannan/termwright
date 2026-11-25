@@ -7,7 +7,7 @@ import { SessionOps } from './core/session-ops.service';
 import { i18n, previewLanguages, setPreviewLanguages, tr } from './core/i18n';
 import { Tabs, TabView } from './core/tabs.service';
 import { connectString, findSessionByName, looksLikeConnect } from './core/connect-string';
-import { SessionNode } from './core/models';
+import { SessionNode, formatBytes } from './core/models';
 import { ago, folderScheme, FolderScheme } from './core/env';
 import { factList } from './core/facts';
 import { SessionIcon } from './components/session-icon';
@@ -783,6 +783,57 @@ export class App implements OnInit {
     h?.term.focus();
   }
 
+  /** A clock for the running recordings' time (ticks only while one runs). */
+  readonly clock = signal(Date.now());
+  private clockTimer = setInterval(() => {
+    if (this.tabs.tabs().some(t => t.castFile)) this.clock.set(Date.now());
+    const lf = this.active()?.logFile;
+    if (lf && Date.now() - this.sizeAt > 2000) { this.sizeAt = Date.now(); void this.backend.fileSize(lf).then(n => this.logSize.set(n > 0 ? formatBytes(n) : '')).catch(() => {}); }
+    else if (!lf && this.logSize()) this.logSize.set('');
+  }, 1000);
+  private sizeAt = 0;
+  /** The active tab's log file size ("12 KB"). */
+  readonly logSize = signal('');
+  /** The Log button's right-click: Log As…, open it, show it. */
+  logMenu(ev: MouseEvent, t: TabView) {
+    ev.preventDefault();
+    const last = this.tabs.lastLog()[t.id];
+    const show = this.isMac ? 'Show in Finder' : 'Show in Folder';
+    this.ui.showMenu(ev, t.logFile ? [
+      { label: 'Open the Log', action: () => this.openLog(t) },
+      { label: show, action: () => void this.backend.showInFolder(t.logFile).catch(e => this.ui.error(e)) },
+      { separator: true }, { label: 'Stop Logging', action: () => void this.tabs.quickLog(t.id) },
+    ] : [
+      { label: 'Log As...', action: () => void this.tabs.toggleLog(t.id) },
+      ...(last ? [{ separator: true }, { label: 'Open the Last Log', hint: last.split(/[\\/]/).pop(), action: () => void this.backend.openPath(last).catch(e => this.ui.error(e)) },
+        { label: show + ' (Last Log)', action: () => void this.backend.showInFolder(last).catch(e => this.ui.error(e)) }] : []),
+      { separator: true }, { label: 'Open the Logs Folder', action: () => void this.openLogsFolder(t) },
+      { label: 'Log Settings...', action: () => this.ui.openOptions('general', 'logs') },
+    ]);
+  }
+  /** How long a tab has been recording: "04:12". */
+  recFor(t: TabView): string {
+    if (!t.castAt) return '';
+    const s = Math.max(0, Math.floor((this.clock() - t.castAt) / 1000));
+    const two = (n: number) => String(n).padStart(2, '0');
+    return (s >= 3600 ? Math.floor(s / 3600) + ':' : '') + two(Math.floor(s / 60) % 60) + ':' + two(s % 60);
+  }
+  /** The tab's LOG / REC badge: stop after asking. */
+  async stopAsk(ev: Event, t: TabView, what: 'log' | 'rec') {
+    ev.stopPropagation();
+    const file = (what === 'log' ? t.logFile : t.castFile ?? '').split(/[\\/]/).pop();
+    if (!(await this.ui.confirm(what === 'log' ? tr('Stop Logging') : tr('Stop Recording'), tr(what === 'log' ? 'Stop logging to {0}?' : 'Stop recording to {0}?', file ?? ''), tr('Stop')))) return;
+    if (what === 'log') await this.tabs.toggleLog(t.id); else await this.tabs.toggleCast(t.id);
+  }
+  /** The Logs folder (where the next log of this tab would go). */
+  async openLogsFolder(t: TabView) {
+    try {
+      const p = await this.backend.chooseLogPath(t.id);
+      await this.backend.openPath(p.slice(0, Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'))));
+    } catch (e) { this.ui.error(e); }
+  }
+  openLog(t: TabView) { if (t.logFile) void this.backend.openPath(t.logFile).catch(e => this.ui.error(e)); }
+
   tabMenu(ev: MouseEvent, t: TabView) {
     this.tabs.activeId.set(t.id);
     // tool tabs (API client, SNMP Browser, Syslog, map, lab, player) have no connection or scrollback
@@ -797,7 +848,14 @@ export class App implements OnInit {
       ]);
       return;
     }
+    // what is running goes to the top, in red, so it is found without searching the menu
+    const base = (p: string) => p.split(/[\\/]/).pop() ?? p;
+    const live = [
+      ...(t.logFile ? [{ label: 'Stop Logging', hint: base(t.logFile), live: true, icon: 'record', action: () => this.tabs.toggleLog(t.id) }] : []),
+      ...(t.kind === 'terminal' && t.castFile ? [{ label: 'Stop Recording', hint: this.recFor(t), live: true, icon: 'record', action: () => this.tabs.toggleCast(t.id) }] : []),
+    ];
     this.ui.showMenu(ev, [
+      ...live, ...(live.length ? [{ separator: true }] : []),
       { label: 'Reconnect', action: () => this.tabs.reconnect(t.id) },
       { label: 'Disconnect', action: () => this.tabs.disconnect(t.id), disabled: t.state !== 'connected' || t.kind === 'sftp' },
       { label: 'Clone Session', action: () => this.tabs.clone(t.id) },
@@ -826,9 +884,9 @@ export class App implements OnInit {
         ? [{ label: 'Open SNMP Browser', action: () => void this.tabs.openSnmp(t.session.path, t.session.name) }] : []),
       ...(t.kind === 'terminal' && t.session.mac ? [{ label: 'Wake Up (Wake-on-LAN)', action: () => void this.tabs.wake(t.session, t.id, t.state === 'connected' ? 'none' : 'reconnect') }] : []),
       { separator: true },
-      { label: t.logFile ? 'Stop Logging' : 'Log Session...', action: () => this.tabs.toggleLog(t.id) },
+      ...(t.logFile ? [] : [{ label: 'Log Session...', action: () => this.tabs.toggleLog(t.id) }]),
       ...(t.kind === 'terminal' ? [
-        { label: t.castFile ? 'Stop Recording' : 'Record Session', action: () => this.tabs.toggleCast(t.id), disabled: !t.castFile && t.state !== 'connected' },
+        ...(t.castFile ? [] : [{ label: 'Record Session', action: () => this.tabs.toggleCast(t.id), disabled: t.state !== 'connected' }]),
         ...(t.castFile ? [{ label: 'Add Marker...', hint: this.isMac ? '⌘J' : 'Ctrl+Shift+J', action: () => this.tabs.addMarker(t.id) }] : []),
       ] : []),
       { label: 'Copy Scrollback', action: () => void this.tabs.copyScrollback(t.id) },

@@ -4,6 +4,30 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.44.5 (2026-11-25)
+
+- **Interface font: Menlo** (the VS Code editor font, fixed width) is one more choice in Settings → General → Interface font; the default stays the system font.
+
+- **Settings → Files & Folders**: every place Termwright keeps things on one page, each with *Open*. The Sessions folder, logs and recordings move here from General; new are the **Exports folder** for test exports (Playwright projects, Go, Python and TCL) with *Ask where to save exports* (off: saved there at once), and **this computer's folder** for SFTP - the local side of SFTP tabs starts there and Files panel downloads go there, with *Ask where to save each download* and *Show the folder after a download*. Places that cannot be moved are shown so they can be found: command history, API Client history, lab history, test run history, known hosts, the settings file, the tests folder and its run results.
+
+- **Log files named by time, where you want them**: Settings → General has the **Logs folder**, a **Log file name** pattern (default `%S-%Y%M%D-%h%m%s.log` - the session, then the date and time it started) and **The Log button asks where to save**. *Log As…* starts in the Logs folder with that name (it was the session name only). Stopping a log says where it is, with **Open** and **Show in Finder**; the Log button's right-click has *Open the Last Log*, *Open the Logs Folder* and *Log Settings…*.
+
+- **Accept changed SSH host keys** (Settings → General, on by default): a device whose host key changed - reinstalled or replaced, common in labs - connects without the red warning; the new key is saved and a note names the host and its fingerprint. Off, the warning asks as before.
+- **Log button**: a notepad icon instead of the ring.
+
+- **Log and Record buttons in the status bar**: in the middle of the status bar, for the active tab. **Log** starts logging at once to the session's log file (right-click: Log As…, Open the Log, Show in Finder) and turns red as **Stop Log · 12 KB**; **Record** turns into **Stop Recording · 04:12**. Grey while off.
+
+- **`!sh` on a switch, the prompt kept as it is**: a plain sh reports its folder after every `cd` instead of through the prompt - the switch's shell showed `$(_tw_cwd)` in the prompt. When the terminal is in a folder the device's file access does not show (a switch's SFTP shows only its configuration folder), the panel says so in grey and keeps its listing instead of a red error.
+
+- **Files panel after `!sh` on a switch**: the shell there runs as root, and the panel could not become root (no sudo on the switch), so it showed *root access: …* and stopped following. It now keeps following the folder as the login user and says once why it is not root.
+
+- **Session logs keep every command**: a control sequence the device starts but never ends (seen on Switch Engine) made the log skip everything after it - a log of seven commands held only the first. Such a sequence now ends at the line, so the rest is logged; characters such as `ě` are no longer cut either.
+- **Logging and recording are easy to see and stop**: a red `LOG` / `REC` badge with a blinking dot on the tab (click to stop), **■ Stop Logging** / **■ Stop Recording** at the top of the tab's menu in red, and **● Logging [Open] [Stop]** / **● REC 04:12 [Stop]** in the status bar.
+
+- **Files panel follows `!sh`** (and `sh`, `ash`, `busybox sh`) on switches: the panel's folder now follows the switch's Linux shell too - in a plain sh the folder is reported from the prompt (bash and zsh as before).
+
+- **New tagline**: *Open-source network engineering, automation and testing platform* - on the start page and in the README.
+
 ## 0.44.4 (2026-11-24)
 
 - **Web page size presets**: a web app's page size (and a web step's) is chosen from qHD 960×540, HD 1280×720, Full HD 1920×1080, 2K 2560×1440, 3K 2880×1620, 4K 3840×2160 or Custom… (your own width × height).

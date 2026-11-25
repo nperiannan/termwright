@@ -9,6 +9,7 @@ export const UI_FONTS: { v: string; label: string; stack: string }[] = [
   { v: 'vscode', label: 'VS Code (the font VS Code uses on each system)', stack: "-apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', 'Ubuntu', 'Droid Sans', sans-serif" },
   { v: 'inter', label: 'Inter (wide and very readable)', stack: "'Inter Variable', 'Inter', system-ui, sans-serif" },
   { v: 'plex', label: 'IBM Plex Sans (technical, clear digits)', stack: "'IBM Plex Sans', system-ui, sans-serif" },
+  { v: 'mono', label: 'Menlo (the VS Code editor font, fixed width)', stack: "Menlo, 'SF Mono', Consolas, 'Cascadia Mono', 'DejaVu Sans Mono', monospace" },
 ];
 
 /** Interface text sizes in px; 13 is the default. */

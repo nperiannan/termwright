@@ -52,6 +52,8 @@ export interface TabView {
   labKind?: 'sim' | 'emu';
   /** Terminal tab: the session recording (.cast) being written. */
   castFile?: string;
+  /** When the recording started (ms). */
+  castAt?: number;
   /** Player tab: the recording it plays. */
   playFile?: string;
   /** RDP / VNC tab: the open remote desktop. */
@@ -369,7 +371,7 @@ export class Tabs {
     // tab can follow it there.
     const t0 = this.get(id);
     const jumpTab = !!t0?.hopTarget && this.tabs().some(t => t.kind === 'sftp' && this.linkedTerm(t)?.id === id && !t.hopTarget);
-    if (!(leave && (jumpTab || (!!t0?.hopTarget && !!t0.filesPanel))) && !/^(sudo\s+(-\S+\s+)*(su\b|-i\b|-s\b|bash\b|zsh\b|-iu\s|-u\s+\S+\s+(-i|-s|bash|zsh)\b)|su\b|exec\s+(bash|zsh)\b|(bash|zsh)(\s+-l)?$)/.test(c)) return;
+    if (!(leave && (jumpTab || (!!t0?.hopTarget && !!t0.filesPanel))) && !/^(sudo\s+(-\S+\s+)*(su\b|-i\b|-s\b|bash\b|zsh\b|-iu\s|-u\s+\S+\s+(-i|-s|bash|zsh)\b)|su\b|exec\s+(bash|zsh)\b|(bash|zsh)(\s+-l)?$|!?(sh|ash)(\s+-l)?$|busybox\s+sh$|run\s+script\s+shell)/.test(c)) return;
     if (!t0?.filesPanel && !this.tabs().some(t => t.kind === 'sftp' && this.linkedTerm(t)?.id === id)) return;
     let tries = 0;
     const tick = () => {
@@ -392,9 +394,12 @@ export class Tabs {
         `[Console]::Write([char]27 + ']7;file://' + $env:COMPUTERNAME + '/' + ($p -replace '\\\\','/') + [char]7); & $global:__tw_prompt } }\r`;
       return this.backend.sendInput(termId, ps);
     }
-    const line = `_tw_cwd(){ printf '\\033]7;file://%s%s\\007\\033]1337;RemoteHost=%s@%s\\007' "\${HOSTNAME:-\$HOST}" "\$PWD" "\${USER:-\$(id -un)}" "\${HOSTNAME:-\$HOST}"; }; ` +
-      `if [ -n "\$ZSH_VERSION" ]; then typeset -U precmd_functions; precmd_functions+=(_tw_cwd); ` +
-      `else case ";\$PROMPT_COMMAND;" in *_tw_cwd*) ;; *) PROMPT_COMMAND="_tw_cwd\${PROMPT_COMMAND:+;\$PROMPT_COMMAND}";; esac; fi`;
+    // bash: PROMPT_COMMAND; zsh: precmd; a plain sh (busybox ash, e.g. a switch's "!sh" shell): after every cd
+    // (its prompt may not run commands: $(…) in PS1 would show as typed)
+    const line = `_tw_cwd(){ printf '\\033]7;file://%s%s\\007\\033]1337;RemoteHost=%s@%s\\007' "\${HOSTNAME:-\$HOST}" "\$PWD" "\${USER:-\$(id -un 2>/dev/null)}" "\${HOSTNAME:-\$HOST}"; }; ` +
+      `if [ -n "\$ZSH_VERSION" ]; then eval 'typeset -U precmd_functions; precmd_functions+=(_tw_cwd)'; ` +
+      `elif [ -n "\$BASH_VERSION" ]; then case ";\$PROMPT_COMMAND;" in *_tw_cwd*) ;; *) PROMPT_COMMAND="_tw_cwd\${PROMPT_COMMAND:+;\$PROMPT_COMMAND}";; esac; ` +
+      `else cd(){ command cd "\$@" && _tw_cwd; }; fi`;
     let cmd = ' ' + line + '; _tw_cwd\r'; // leading space: kept out of the shell history
     if (permanent) {
       const q = line.replace(/'/g, `'\\''`);
@@ -608,7 +613,7 @@ export class Tabs {
         }
       }),
       this.backend.on('term:log:' + ti.id, (path: string) => this.patch(ti.id, { logFile: path })),
-      this.backend.on('term:rec:' + ti.id, (path: string) => this.patch(ti.id, { castFile: path })),
+      this.backend.on('term:rec:' + ti.id, (path: string) => this.patch(ti.id, { castFile: path, castAt: path ? (this.get(ti.id)?.castAt || Date.now()) : undefined })),
     ]);
     this.tabs.update(l => [...l, tv]);
     if (!docked) this.activeId.set(ti.id);
@@ -888,7 +893,7 @@ export class Tabs {
       else {
         if (t.state !== 'connected') { this.ui.toast('Connect the tab first - recordings start with the connection.', 'error'); return; }
         const p = await this.backend.startSessionRecording(id);
-        this.patch(id, { castFile: p });
+        this.patch(id, { castFile: p, castAt: Date.now() });
       }
     } catch (e) { this.ui.error(e); }
   }
@@ -1081,17 +1086,39 @@ export class Tabs {
     h.term.focus();
   }
 
+  /** The last log of each tab (its file), to open it after it stopped. */
+  readonly lastLog = signal<Record<string, string>>({});
+  /** Stops a tab's log and says where it is, with Open and Show in Folder. */
+  async stopLogSaved(t: TabView) {
+    const file = t.logFile;
+    await this.backend.stopLog(t.id);
+    this.lastLog.update(m => ({ ...m, [t.id]: file }));
+    const mac = /Mac/i.test(navigator.platform);
+    this.ui.toast('Log saved: ' + file.split(/[\\/]/).pop(), 'success', 8000, [
+      { label: 'Open', run: () => void this.backend.openPath(file).catch(e => this.ui.error(e)) },
+      { label: mac ? 'Show in Finder' : 'Show in Folder', run: () => void this.backend.showInFolder(file).catch(e => this.ui.error(e)) },
+    ]);
+  }
+
+  /** The status bar's Log button: stops, or starts at once to the session's log file (no dialog). */
+  async quickLog(id = this.activeId()) {
+    const t = this.get(id);
+    if (!t) return;
+    if (!t.logFile && this.ui.settings()?.logAsk) return this.toggleLog(id);
+    try {
+      if (t.logFile) { await this.stopLogSaved(t); return; }
+      const p = await this.backend.startLog(id, '', t.session.logAppend, t.session.logRaw);
+      this.ui.toast('Logging to ' + p, 'success');
+    } catch (e) { this.ui.error(e); }
+  }
+
   async toggleLog(id = this.activeId()) {
     const t = this.get(id);
     if (!t) return;
     try {
-      if (t.logFile) {
-        await this.backend.stopLog(id);
-        this.ui.toast('Logging stopped');
-        return;
-      }
-      const name = (t.session.name || t.title || 'session').replace(/[\\/:*?"<>|]/g, '_') + '.log';
-      const path = await this.backend.chooseSaveFile('Log Session As', name, [{ displayName: 'Log files', pattern: '*.log;*.txt' }]);
+      if (t.logFile) { await this.stopLogSaved(t); return; }
+      // in the Logs folder, named by the session and the time (Settings → General → Logs)
+      const path = await this.backend.chooseLogFile(id);
       if (!path) return;
       const p = await this.backend.startLog(id, path, t.session.logAppend, t.session.logRaw);
       this.ui.toast('Logging to ' + p, 'success');
