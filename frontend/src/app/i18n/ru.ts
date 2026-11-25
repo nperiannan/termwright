@@ -5456,6 +5456,8 @@ const ru: Record<string, string> = {
   'Open the log file': 'Открыть файл журнала',
   'Stop logging': 'Остановить журнал',
   'Stop recording and save it': 'Остановить и сохранить запись',
+  'Files: browsing as {0} - could not browse as {1} ({2})': 'Файлы: просмотр от имени {0} - не удалось от имени {1} ({2})',
+  'the login user': 'пользователя входа',
 };
 
 export default ru;

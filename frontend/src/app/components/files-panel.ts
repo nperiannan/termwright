@@ -3,6 +3,7 @@ import { glacierIcons } from '../core/icon-finish';
 import { Component, OnDestroy, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend, errText } from '../core/backend';
+import { tr } from '../core/i18n';
 import { TextViewer } from './text-viewer';
 import { kindOf } from '../core/file-kind';
 import { SUDO_ERR } from '../core/fixes';
@@ -295,7 +296,20 @@ export class FilesPanel implements OnDestroy {
       if (cwd && this.error()) await this.load(home);
     } catch (e) {
       const msg = errText(e);
-      this.error.set(SUDO_ERR.test(msg) ? 'Cannot browse as ' + (cmd === 'sudo' ? 'root' : cmd.replace(/^sudo su - /, '')) + ': ' + msg : msg);
+      const who = cmd === 'sudo' ? 'root' : cmd === '' ? (this.loginName() || 'the login user') : cmd.replace(/^sudo su - /, '');
+      // the shell went on as another user (a switch's "!sh" shell is root) and the panel cannot become it:
+      // it still follows the folder, as the login user
+      const cwd = this.follow() && this.followable() ? this.live().cwd : '';
+      if (cwd) {
+        this.error.set('');
+        await this.load(cwd);
+        if (!this.error()) {
+          this.ui.toast(tr('Files: browsing as {0} - could not browse as {1} ({2})', this.asUser() || this.loginName() || tr('the login user'), who, msg), 'info', 8000);
+          this.userBusy = false;
+          return;
+        }
+      }
+      this.error.set(SUDO_ERR.test(msg) ? 'Cannot browse as ' + who + ': ' + msg : msg);
     }
     this.userBusy = false;
   }
