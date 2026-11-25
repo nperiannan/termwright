@@ -222,8 +222,15 @@
     <span class="info" [title]="t.info">{{ statusTarget(t) }}</span>
     @if (statusFacts(t); as sf) { <span [title]="tabTip(t)">{{ sf }}</span> }
     <span class="grow"></span>
-    @if (t.logFile) { <span class="livepill" [title]="t.logFile"><i></i><b>Logging</b><button type="button" (click)="openLog(t)" title="Open the log file">Open</button><button type="button" (click)="tabs.toggleLog(t.id)" title="Stop logging">Stop</button></span> }
-    @if (t.kind === 'terminal' && t.castFile) { <span class="livepill" [title]="t.castFile"><i></i><b>REC</b> {{ recFor(t) }}<button type="button" (click)="tabs.toggleCast(t.id)" title="Stop recording and save it">Stop</button></span> }
+    @if (t.kind === 'terminal') {
+      <span class="lr">
+        <button type="button" class="lrb" [class.on]="!!t.logFile" (click)="tabs.quickLog(t.id)" (contextmenu)="logMenu($event, t)"
+          [title]="t.logFile ? 'Logging to ' + t.logFile + ' - click to stop (right-click: open it)' : 'Log this session to a file (right-click: Log As…)'"><i></i>{{ t.logFile ? 'Stop Log' + (logSize() ? ' · ' + logSize() : '') : 'Log' }}</button>
+        <button type="button" class="lrb" [class.on]="!!t.castFile" (click)="tabs.toggleCast(t.id)" [disabled]="!t.castFile && t.state !== 'connected'"
+          [title]="t.castFile ? 'Recording to ' + t.castFile + ' - click to stop and save it' : 'Record this session (play it back later)'"><i></i>{{ t.castFile ? 'Stop Recording · ' + recFor(t) : 'Record' }}</button>
+      </span>
+      <span class="grow"></span>
+    }
     @if (t.kind === 'terminal') {
       @if (caretOf(t); as c) {
         @if (c.selChars) { <span class="sel" title="The selection: rows, columns and characters">Sel {{ c.selRows === 1 ? c.selCols + ' cols' : c.selRows + ' rows' }}, {{ c.selChars }} chars</span> }

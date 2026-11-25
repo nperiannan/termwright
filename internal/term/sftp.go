@@ -140,6 +140,9 @@ func (m *Manager) SFTPOpen(tabID, mode string) (string, string, error) {
 		if sess.Protocol == session.ProtoLocal {
 			return m.sftpOpenLocal(tabID, sess)
 		}
+		if mode == "shell" { // a switch's Linux shell ("!sh") in a background session
+			return m.sftpOpenShell(tabID, sess)
+		}
 	}
 	client, err := m.sshClientOf(tabID)
 	if err != nil {

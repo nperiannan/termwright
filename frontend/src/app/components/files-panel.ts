@@ -42,6 +42,15 @@ const store = {
       <button type="button" class="ib" title="More" (click)="moreMenu($event)">⋯</button>
       <button type="button" class="ib" title="Hide the Files panel" (click)="hide()">✕</button>
     </div>
+    @if (switchLike()) {
+      <div class="via">
+        <span class="seg" role="group" aria-label="How the files are reached">
+          <button type="button" [class.on]="!shell()" (click)="setShell(false)" title="The device's SFTP: fast, with upload and delete - on a switch only its configuration folder">SFTP</button>
+          <button type="button" [class.on]="shell()" (click)="setShell(true)" title="The device's Linux shell (!sh) in a background session: every folder, follows the terminal after !sh; files up to 4 MB">Switch Shell</button>
+        </span>
+        @if (shell() && !sid() && !error()) { <span class="vmut">{{ tr('Starting the switch shell…') }}</span> }
+      </div>
+    }
     @if (!followable() && sid()) {
       <div class="away">The terminal is on {{ termHost() }}.
         <a (click)="reopen()">Show {{ shortOf(termHost()) }} here</a></div>
@@ -66,12 +75,12 @@ const store = {
       <button type="button" class="ib del" [disabled]="!selected().size" [title]="local() ? 'Move the selected files to the Trash' : 'Delete the selected files'" (click)="remove()"><app-icon name="trash" [size]="15" /></button>
       <span class="grow"></span>
       @if (local()) { <button type="button" class="ib" [title]="'Show this folder in ' + fileManager()" (click)="backend.localShowInFolder(sid(), dir())"><app-icon name="folder" [size]="15" /></button> }
-      @else { <button type="button" class="ib" title="Open a full SFTP tab here" (click)="openTab()"><app-icon name="sftp" [size]="15" /></button> }
+      @else if (!shell()) { <button type="button" class="ib" title="Open a full SFTP tab here" (click)="openTab()"><app-icon name="sftp" [size]="15" /></button> }
     </div>
     <div class="list" tabindex="0" (keydown)="key($event)">
       @if (error()) { <div class="err">{{ error() }}</div> }
       @if (note() && !error()) { <div class="fnote">{{ note() }}</div> }
-      @if (!sid() && !error()) { <div class="hint">{{ term().state === 'connected' ? 'Opening…' : 'Not connected' }}</div> }
+      @if (!sid() && !error() && !shell()) { <div class="hint">{{ term().state === 'connected' ? 'Opening…' : 'Not connected' }}</div> }
       @if (dir() && dir() !== '/') {
         <div class="row" title="Up one folder" (dblclick)="up()"><span class="fold"></span><span class="n">..</span></div>
       }
@@ -106,6 +115,11 @@ const store = {
     <div class="foot">{{ shown().length }} items@if (selected().size) { · {{ selected().size }} selected }@if (opened().length) { · watching {{ opened().length }} }</div>
   `,
   styles: [`
+    .via { display: flex; align-items: center; gap: 8px; padding: 0 10px 6px; }
+    .via .seg { flex: none; display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .via .seg button { font: inherit; font-size: calc(11.5px * var(--ui-scale, 1)); padding: 1px 9px !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; color: var(--muted) !important; min-height: 0 !important; height: auto !important; line-height: 1.45 !important; white-space: nowrap; width: auto !important; max-width: none !important; min-width: 0 !important; flex: none !important; overflow: visible !important; }
+    .via .seg button.on { background: var(--hover) !important; color: var(--text) !important; }
+    .via .vmut { color: var(--muted); font-size: calc(11.5px * var(--ui-scale, 1)); }
     .fnote { padding: 4px 10px; color: var(--muted); font-size: calc(11.5px * var(--ui-scale, 1)); }
     :host { position: relative; flex: none; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--panel); border-left: 1px solid var(--border); font-size: calc(12.5px * var(--ui-scale, 1)); }
     :host-context(.tdock.left) { border-left: 0; border-right: 1px solid var(--border); .grip { left: auto; right: -3px; } }
@@ -238,11 +252,13 @@ export class FilesPanel implements OnDestroy {
   size(n: number) { return formatBytes(n); }
   pct(a: number, b: number) { return Math.round(a * 100 / b); }
 
-  private async start(mode?: 'jump' | 'target') {
+  private async start(mode?: 'jump' | 'target' | 'shell') {
     if (this.opening) return;
     this.opening = true;
     this.error.set('');
     const t = this.live();
+    if (!this.shellRead) { this.shellRead = true; this.shell.set(this.switchLike() && store.get(this.shellKey(), '0') === '1'); }
+    if (!mode && this.shell()) mode = 'shell';
     if (!mode) mode = t.hopTarget ? (this.tabs.onJump(t) ? 'jump' : 'target') : undefined;
     try {
       let r: { id: string; home: string; target: string; local?: string };
@@ -276,6 +292,7 @@ export class FilesPanel implements OnDestroy {
   /** How to switch to the terminal's user: '' = back to the login user,
    *  'sudo' = root, a Run As command; null = nothing to change. */
   private userChange(): string | null {
+    if (this.shell()) return null;
     const u = this.live().shellUser;
     if (!u || this.ui.settings()?.sftpFollowUser === false) return null;
     const login = this.loginName();
@@ -323,6 +340,31 @@ export class FilesPanel implements OnDestroy {
     if (old) await this.backend.sftpClose(old).catch(() => {});
     this.dir.set('');
     await this.start(this.tabs.onJump(this.live()) ? 'jump' : 'target');
+  }
+
+  readonly tr = tr;
+  /** A switch (a network OS device type): its SFTP shows little, its Linux shell (!sh) everything. */
+  readonly switchLike = computed(() => {
+    const s = this.live().session;
+    return !this.local() && s.protocol === 'SSH2' && !!s.deviceType && !/linux|ubuntu|debian|centos|rhel|red ?hat|fedora|windows|mac|unix|bsd|server/i.test(s.deviceType);
+  });
+  private shellKey() { return 'termwright.filesShell.' + (this.live().session.path || this.live().session.hostname); }
+  /** Browsing through the switch's shell (remembered per session). */
+  readonly shell = signal(false);
+  private shellRead = false;
+  async setShell(on: boolean) {
+    if (on === this.shell()) return;
+    this.shell.set(on);
+    store.set(this.shellKey(), on ? '1' : '0');
+    const old = this.sid();
+    this.sid.set('');
+    this.entries.set([]);
+    this.error.set('');
+    this.note.set('');
+    if (old) await this.backend.sftpClose(old).catch(() => {});
+    this.dir.set('');
+    this.failed = false;
+    await this.start();
   }
 
   refresh() { if (this.sid()) void this.load(this.dir()); else { this.failed = false; void this.start(); } }

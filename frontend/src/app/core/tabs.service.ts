@@ -1086,6 +1086,17 @@ export class Tabs {
     h.term.focus();
   }
 
+  /** The status bar's Log button: stops, or starts at once to the session's log file (no dialog). */
+  async quickLog(id = this.activeId()) {
+    const t = this.get(id);
+    if (!t) return;
+    try {
+      if (t.logFile) { await this.backend.stopLog(id); this.ui.toast('Logging stopped'); return; }
+      const p = await this.backend.startLog(id, '', t.session.logAppend, t.session.logRaw);
+      this.ui.toast('Logging to ' + p, 'success');
+    } catch (e) { this.ui.error(e); }
+  }
+
   async toggleLog(id = this.activeId()) {
     const t = this.get(id);
     if (!t) return;

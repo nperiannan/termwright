@@ -802,6 +802,15 @@ func (a *App) StartLog(id, path string, appendMode, raw bool) (string, error) {
 	return a.terms.StartLog(id, path, appendMode, raw)
 }
 
+// FileSize is a file's size in bytes (the status bar shows the log's), -1 when it cannot be read.
+func (a *App) FileSize(path string) int64 {
+	st, err := os.Stat(path)
+	if err != nil || st.IsDir() {
+		return -1
+	}
+	return st.Size()
+}
+
 // StopLog stops logging.
 func (a *App) StopLog(id string) error { return a.terms.StopLog(id) }
 

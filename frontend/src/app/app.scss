@@ -282,10 +282,13 @@ app-command-window { flex: none; }
 .home .card:hover, .home .card:focus-within { .cstamp { bottom: calc(100% - 34px); right: 16px; } .ctop { padding-right: 96px; } }
 @media (prefers-reduced-motion: reduce) { .home .card .cstamp, .home .card .ctop { transition: none; } }
 
-.livepill { display: inline-flex; align-items: center; gap: 5px; color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent); background: color-mix(in srgb, var(--danger) 8%, transparent);
-  border-radius: 10px; padding: 0 2px 0 7px; line-height: 1.25;
-  i { width: 6px; height: 6px; border-radius: 50%; background: var(--danger); animation: livepulse 1.2s ease-in-out infinite; }
-  b { font-weight: 600; }
-  button { font: inherit; font-size: .92em; color: var(--danger); background: none; border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent); border-radius: 6px; padding: 0 5px !important; height: auto !important; min-height: 0 !important; line-height: 1.3 !important; margin: 1px 0; cursor: pointer;
-    &:hover { background: color-mix(in srgb, var(--danger) 15%, transparent); } } }
+/* the status bar's Log and Record buttons: quiet when off, red with a blinking dot while on */
+.lr { display: inline-flex; gap: 6px; }
+.lrb { display: inline-flex; align-items: center; gap: 5px; font: inherit; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 10px;
+  padding: 0 9px !important; height: auto !important; min-height: 0 !important; line-height: 1.35 !important; cursor: pointer;
+  i { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid currentColor; box-sizing: border-box; }
+  &:hover:not(:disabled) { color: var(--text); background: var(--hover); }
+  &.on { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); background: color-mix(in srgb, var(--danger) 9%, transparent);
+    i { border: 0; background: var(--danger); animation: livepulse 1.2s ease-in-out infinite; } }
+  &:disabled { opacity: .45; cursor: default; } }
 @keyframes livepulse { 50% { opacity: .2; } }

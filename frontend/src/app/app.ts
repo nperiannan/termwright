@@ -7,7 +7,7 @@ import { SessionOps } from './core/session-ops.service';
 import { i18n, previewLanguages, setPreviewLanguages, tr } from './core/i18n';
 import { Tabs, TabView } from './core/tabs.service';
 import { connectString, findSessionByName, looksLikeConnect } from './core/connect-string';
-import { SessionNode } from './core/models';
+import { SessionNode, formatBytes } from './core/models';
 import { ago, folderScheme, FolderScheme } from './core/env';
 import { factList } from './core/facts';
 import { SessionIcon } from './components/session-icon';
@@ -785,7 +785,24 @@ export class App implements OnInit {
 
   /** A clock for the running recordings' time (ticks only while one runs). */
   readonly clock = signal(Date.now());
-  private clockTimer = setInterval(() => { if (this.tabs.tabs().some(t => t.castFile)) this.clock.set(Date.now()); }, 1000);
+  private clockTimer = setInterval(() => {
+    if (this.tabs.tabs().some(t => t.castFile)) this.clock.set(Date.now());
+    const lf = this.active()?.logFile;
+    if (lf && Date.now() - this.sizeAt > 2000) { this.sizeAt = Date.now(); void this.backend.fileSize(lf).then(n => this.logSize.set(n > 0 ? formatBytes(n) : '')).catch(() => {}); }
+    else if (!lf && this.logSize()) this.logSize.set('');
+  }, 1000);
+  private sizeAt = 0;
+  /** The active tab's log file size ("12 KB"). */
+  readonly logSize = signal('');
+  /** The Log button's right-click: Log As…, open it, show it. */
+  logMenu(ev: MouseEvent, t: TabView) {
+    ev.preventDefault();
+    this.ui.showMenu(ev, t.logFile ? [
+      { label: 'Open the Log', action: () => this.openLog(t) },
+      { label: this.isMac ? 'Show in Finder' : 'Show in Folder', action: () => void this.backend.showInFolder(t.logFile).catch(e => this.ui.error(e)) },
+      { separator: true }, { label: 'Stop Logging', action: () => void this.tabs.toggleLog(t.id) },
+    ] : [{ label: 'Log As...', action: () => void this.tabs.toggleLog(t.id) }]);
+  }
   /** How long a tab has been recording: "04:12". */
   recFor(t: TabView): string {
     if (!t.castAt) return '';

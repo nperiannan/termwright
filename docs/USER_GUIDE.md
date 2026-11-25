@@ -1005,7 +1005,7 @@ The connector listens only on this computer (127.0.0.1) with a random key kept i
 
 ## 8. Logging and capturing output
 
-- **Start/stop a log**: toolbar *Log*, File → Log Session…, or the tab menu. While it runs the tab shows a red `LOG` badge with a blinking dot (click it to stop), **■ Stop Logging** is at the top of the tab's menu in red, and the status bar shows **● Logging [Open] [Stop]**. A session recording shows the same way as `REC`, with its running time.
+- **Start/stop a log**: the **Log** button in the middle of the status bar starts logging at once to the session's log file (right-click: *Log As…*, *Open the Log*, *Show in Finder*); while it runs it is red - **Stop Log · 12 KB** - and one click stops it. **Record** next to it records the session the same way (**Stop Recording · 04:12**). Also: toolbar *Log*, File → Log Session…, or the tab menu, where a running log or recording is at the top in red; the tab shows a red `LOG` / `REC` badge (click to stop).
 - **Automatic logging**: Session Options → Log File → *Start log upon connect*.
 - **File name tokens**: `%H` host, `%S` session, `%P` port, `%U` user, `%R` protocol, `%Y %M %D` date, `%h %m %s` time, `%t` ms, `%%` percent. Example: `~/logs/%S-%Y%M%D-%h%m%s.log`. With no name, logs go to the Logs folder (Global Options).
 - **Plain vs raw**: by default escape sequences and colors are removed; *Raw log* keeps everything exactly as received.
@@ -1158,6 +1158,8 @@ Folders use the same colored folder icon as the Session Manager. Files are color
 Choosing a **Linux** device type (Linux, Ubuntu, Debian, RHEL, Rocky, …) for an SSH session turns the Files panel on for it; untick it in Session Options if you do not want it.
 
 ![Files panel](screenshots/files-panel.png)
+
+**Switches: SFTP or Switch Shell.** A switch's SFTP shows only its configuration folder (`/config` on Switch Engine), while `!sh` in the terminal goes anywhere. For an SSH session with a network device type the panel offers **SFTP | Switch Shell**: *SFTP* is the fast view (upload, delete); *Switch Shell* logs in once more in the background, starts the switch's Linux shell (`!sh`) and lists with it - every folder, and it follows the terminal after `!sh` and `cd`. Files open in the viewer and download, and small ones (up to 4 MB) upload and save, all through the shell. The choice is kept per session. On Switch Engine `!sh` may need debug mode for the whole switch; the panel says so when the shell cannot be started.
 
 A small file browser beside an SSH terminal, on the side opposite the Session Manager (with the Session Manager on the right it sits on the left). Turn it on for a session with the **Files panel beside the terminal** switch in the session side panel or in Session Options → Connection, or for one tab with **View → Files Panel**, the title-bar button, the tab's right-click menu or ⌘⇧1 (Alt+Shift+1).
 

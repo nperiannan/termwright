@@ -5458,6 +5458,13 @@ const ru: Record<string, string> = {
   'Stop recording and save it': 'Остановить и сохранить запись',
   'Files: browsing as {0} - could not browse as {1} ({2})': 'Файлы: просмотр от имени {0} - не удалось от имени {1} ({2})',
   'the login user': 'пользователя входа',
+  'Starting the switch shell…': 'Запуск оболочки коммутатора…',
+  'Switch Shell': 'Оболочка коммутатора',
+  'Stop Log': 'Остановить журнал',
+  'Open the Log': 'Открыть журнал',
+  'Log As...': 'Журнал как...',
+  'Show in Folder': 'Показать в папке',
+  'The terminal is in {0} - this device\'s file access does not show it': 'Терминал в {0} - доступ к файлам устройства его не показывает',
 };
 
 export default ru;

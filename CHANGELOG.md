@@ -4,6 +4,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Files panel: Switch Shell**: on a switch the panel offers **SFTP | Switch Shell**. *Switch Shell* logs in once more in the background, starts the switch's Linux shell (`!sh`) and browses with it - every folder, following the terminal after `!sh` and `cd`; files open in the viewer and download, small ones (up to 4 MB) upload and save. *SFTP* stays the fast view of the configuration folder.
+- **Log and Record buttons in the status bar**: in the middle of the status bar, for the active tab. **Log** starts logging at once to the session's log file (right-click: Log As…, Open the Log, Show in Finder) and turns red as **Stop Log · 12 KB**; **Record** turns into **Stop Recording · 04:12**. Grey while off.
+
 - **`!sh` on a switch, the prompt kept as it is**: a plain sh reports its folder after every `cd` instead of through the prompt - the switch's shell showed `$(_tw_cwd)` in the prompt. When the terminal is in a folder the device's file access does not show (a switch's SFTP shows only its configuration folder), the panel says so in grey and keeps its listing instead of a red error.
 
 - **Files panel after `!sh` on a switch**: the shell there runs as root, and the panel could not become root (no sudo on the switch), so it showed *root access: …* and stopped following. It now keeps following the folder as the login user and says once why it is not root.
