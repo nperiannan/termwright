@@ -731,6 +731,19 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       return true;
     };
     const setHost = (h: string) => { h = h.trim(); if (h && this.tabs.get(id)?.shellHost !== h) this.tabs.patch(id, { shellHost: h }); };
+    // A scroll region from the top to above the last row (DECSTBM "1;N") on the normal screen: switch command lines
+    // (Fabric Engine) set one, and lines that scroll out of such a region never reach the scrollback - a long
+    // "show running-config" left only a screenful. Like other terminals for this case, the region is the whole
+    // screen then, so every line stays in the scrollback. Full-screen programs use the alternate screen: untouched.
+    term.parser.registerCsiHandler({ final: 'r' }, params => {
+      const top = (typeof params[0] === 'number' ? params[0] : 0) || 1;
+      const bottom = (typeof params[1] === 'number' ? params[1] : 0) || term.rows;
+      if (term.buffer.active.type !== 'normal' || top !== 1 || bottom >= term.rows) return false;
+      const ih = (term as unknown as { _core?: { _inputHandler?: { setScrollRegion?: (p: { params: number[]; length: number }) => boolean } } })._core?._inputHandler;
+      if (!ih?.setScrollRegion) return false;
+      ih.setScrollRegion({ params: [1, term.rows], length: 2 }); // the whole screen; the cursor goes home, as for any region
+      return true;
+    });
     term.parser.registerOscHandler(7, d => {
       const m = /^file:\/\/([^/]*)(\/.*)$/.exec(d.trim());
       if (m) { setHost(m[1]); try { setCwd(decodeURIComponent(m[2])); } catch { setCwd(m[2]); } }

@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Long output stays in the scrollback**: some switch command lines (Fabric Engine) set a scroll region from the top to above the last row, and the lines that scrolled out of it never reached the scrollback - a long `show running-config` left only a screenful to scroll back. On the normal screen such a region is now the whole screen, so every line is kept (full-screen programs on the alternate screen are not affected).
+
 ## 0.44.5 (2026-11-25)
 
 - **Interface font: Menlo** (the VS Code editor font, fixed width) is one more choice in Settings → General → Interface font; the default stays the system font.
