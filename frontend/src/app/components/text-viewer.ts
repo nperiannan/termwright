@@ -69,7 +69,7 @@ const MAX = 5 << 20;
       --vs-bg: #1e1e1e; --vs-fg: #d4d4d4; --vs-head: #252526; --vs-head2: #2d2d2d; --vs-btn: #3a3d41; --vs-btn-hover: #45494e; --vs-bd: #3c3c3c;
       --vs-kw: #569cd6; --vs-ctrl: #c586c0; --vs-str: #ce9178; --vs-num: #b5cea8; --vs-re: #d16969; --vs-comment: #6a9955; --vs-prop: #9cdcfe; --vs-attr: #9cdcfe;
       --vs-tag: #569cd6; --vs-type: #4ec9b0; --vs-fn: #dcdcaa; --vs-var: #9cdcfe; --vs-heading: #569cd6; --vs-code: #ce9178; --vs-link: #4fc1ff; --vs-quote: #6a9955;
-      --vs-punct: #808080; --vs-meta: #858585; --vs-err: #f44747; --vs-lineno: #858585; --vs-lineno-on: #c6c6c6; --vs-line: #2a2d2e; --vs-sel: #264f78;
+      --vs-punct: #808080; --vs-meta: #858585; --vs-err: #f44747; --vs-lineno: #858585; --vs-lineno-on: #c6c6c6; --vs-line: #ffffff0f; --vs-sel: #264f78;
       --vs-sel-other: #3a3d41; --vs-match: #623315; --vs-match-on: #515c6a; --vs-caret: #aeafad; --vs-status: #007acc;
       --vs-font: Menlo, Monaco, Consolas, 'Droid Sans Mono', 'Courier New', monospace; --vs-size: calc(12px * var(--ui-scale, 1)); --vs-lh: 18px; }
     :host-context(:root.light) {
@@ -77,7 +77,7 @@ const MAX = 5 << 20;
       --vs-bg: #ffffff; --vs-fg: #1f1f1f; --vs-head: #f3f3f3; --vs-head2: #f8f8f8; --vs-btn: #ffffff; --vs-btn-hover: #e8e8e8; --vs-bd: #d4d4d4;
       --vs-kw: #0000ff; --vs-ctrl: #af00db; --vs-str: #a31515; --vs-num: #098658; --vs-re: #811f3f; --vs-comment: #008000; --vs-prop: #0451a5; --vs-attr: #e50000;
       --vs-tag: #800000; --vs-type: #267f99; --vs-fn: #795e26; --vs-var: #001080; --vs-heading: #800000; --vs-code: #800000; --vs-link: #0000ee; --vs-quote: #0451a5;
-      --vs-punct: #6e7681; --vs-meta: #6e7681; --vs-err: #cd3131; --vs-lineno: #237893; --vs-lineno-on: #0b216f; --vs-line: #f5f5f5; --vs-sel: #add6ff;
+      --vs-punct: #6e7681; --vs-meta: #6e7681; --vs-err: #cd3131; --vs-lineno: #237893; --vs-lineno-on: #0b216f; --vs-line: #0000000b; --vs-sel: #add6ff;
       --vs-sel-other: #e5ebf1; --vs-match: #f8c9ab; --vs-match-on: #a8ac94; --vs-caret: #000000; --vs-status: #007acc; box-shadow: -14px 0 36px #0002; }
     /* YAML keys are VS Code's tag colour, not JSON's property colour */
     :host(.k-yaml) { --vs-prop: var(--vs-tag); }

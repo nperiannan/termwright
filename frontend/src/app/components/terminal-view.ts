@@ -72,6 +72,12 @@ function b64ToBytes(b64: string): Uint8Array {
 }
 
 /** One xterm.js terminal bound to a backend tab. */
+/** The scrollback lines of a tab: the larger of the session's and Settings → Terminal's. Every session carries its
+ * own value (10000 for new ones, 500 from older imports), so raising the global one did nothing before. */
+export function scrollbackOf(session?: number, global?: number): number {
+  return Math.max(session || 0, global || 0) || 10000;
+}
+
 @Component({
   selector: 'app-terminal-view',
   imports: [FormsModule, DeviceIcon, Icon],
@@ -650,6 +656,8 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       t.options.fontSize = sess.fontSize > 0 ? sess.fontSize + (s.fontSize - BASE_FONT) : s.fontSize;
       t.options.lineHeight = s.lineHeight && s.lineHeight >= 1 ? s.lineHeight : 1;
       t.options.cursorStyle = s.cursorStyle;
+      const sb = scrollbackOf(sess.scrollback, s.scrollback);
+      if (t.options.scrollback !== sb) t.options.scrollback = sb;
       t.options.cursorBlink = s.cursorBlink;
       const theme = terminalTheme(this.tab().session.colorScheme, s, this.ui.lightUi());
       // modern layout with the automatic scheme: the cursor takes the accent colour
@@ -695,7 +703,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       lineHeight: s?.lineHeight && s.lineHeight >= 1 ? s.lineHeight : 1,
       cursorStyle: s?.cursorStyle ?? 'block',
       cursorBlink: s?.cursorBlink ?? true,
-      scrollback: tab.session.scrollback || s?.scrollback || 10000,
+      scrollback: scrollbackOf(tab.session.scrollback, s?.scrollback),
       theme,
       allowProposedApi: true,
       macOptionIsMeta: true,
@@ -731,6 +739,19 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       return true;
     };
     const setHost = (h: string) => { h = h.trim(); if (h && this.tabs.get(id)?.shellHost !== h) this.tabs.patch(id, { shellHost: h }); };
+    // A scroll region from the top to above the last row (DECSTBM "1;N") on the normal screen: switch command lines
+    // (Fabric Engine) set one, and lines that scroll out of such a region never reach the scrollback - a long
+    // "show running-config" left only a screenful. Like other terminals for this case, the region is the whole
+    // screen then, so every line stays in the scrollback. Full-screen programs use the alternate screen: untouched.
+    term.parser.registerCsiHandler({ final: 'r' }, params => {
+      const top = (typeof params[0] === 'number' ? params[0] : 0) || 1;
+      const bottom = (typeof params[1] === 'number' ? params[1] : 0) || term.rows;
+      if (term.buffer.active.type !== 'normal' || top !== 1 || bottom >= term.rows) return false;
+      const ih = (term as unknown as { _core?: { _inputHandler?: { setScrollRegion?: (p: { params: number[]; length: number }) => boolean } } })._core?._inputHandler;
+      if (!ih?.setScrollRegion) return false;
+      ih.setScrollRegion({ params: [1, term.rows], length: 2 }); // the whole screen; the cursor goes home, as for any region
+      return true;
+    });
     term.parser.registerOscHandler(7, d => {
       const m = /^file:\/\/([^/]*)(\/.*)$/.exec(d.trim());
       if (m) { setHost(m[1]); try { setCwd(decodeURIComponent(m[2])); } catch { setCwd(m[2]); } }
