@@ -189,25 +189,44 @@ func (l *Logger) Close() error {
 // state between calls so sequences split across reads are handled.
 type Stripper struct {
 	state int // 0 text, 1 ESC, 2 CSI, 3 OSC/DCS string, 4 string ESC, 5 one-char after ESC (charset)
+	cont  int // UTF-8 continuation bytes still to come (0x9b there is part of a character, not a CSI)
+	n     int // bytes in the current OSC/DCS string
 }
 
 // Strip returns p with control sequences removed. Tabs, CR, LF, backspace
 // are kept; backspace removes the previous character of the same chunk.
+// A string sequence (OSC, DCS …) that is not ended - no BEL or ESC \ - ends at
+// the next line, another ESC or after 4 KB, so it cannot swallow the output
+// that follows (a log then missing every command before it).
 func (s *Stripper) Strip(p []byte) []byte {
 	out := make([]byte, 0, len(p))
 	for _, c := range p {
 		switch s.state {
 		case 0:
 			switch {
+			case s.cont > 0 && c >= 0x80 && c < 0xc0:
+				s.cont--
+				out = append(out, c)
 			case c == 0x1b:
-				s.state = 1
+				s.cont, s.state = 0, 1
 			case c == 0x9b:
 				s.state = 2
 			case c == '\b':
+				s.cont = 0
 				if n := len(out); n > 0 && out[n-1] != '\n' {
 					out = out[:n-1]
 				}
+			case c >= 0xc0 && c < 0xf8:
+				s.cont = 1
+				if c >= 0xe0 {
+					s.cont = 2
+				}
+				if c >= 0xf0 {
+					s.cont = 3
+				}
+				out = append(out, c)
 			case c == '\n' || c == '\r' || c == '\t' || c >= 0x20 && c != 0x7f:
+				s.cont = 0
 				out = append(out, c)
 			}
 		case 1:
@@ -215,7 +234,7 @@ func (s *Stripper) Strip(p []byte) []byte {
 			case '[':
 				s.state = 2
 			case ']', 'P', '_', '^', 'X':
-				s.state = 3
+				s.state, s.n = 3, 0
 			case '(', ')', '*', '+', '-', '.', '/', '#', '%', ' ':
 				s.state = 5
 			default:
@@ -224,18 +243,40 @@ func (s *Stripper) Strip(p []byte) []byte {
 		case 2:
 			if c >= 0x40 && c <= 0x7e {
 				s.state = 0
+			} else if c == 0x18 || c == 0x1a || c == '\n' { // cancelled, or not a sequence after all
+				s.state = 0
+				if c == '\n' {
+					out = append(out, c)
+				}
 			}
 		case 3:
-			if c == 0x07 {
+			s.n++
+			switch {
+			case c == 0x07 || c == 0x18 || c == 0x1a:
 				s.state = 0
-			} else if c == 0x1b {
+			case c == 0x1b:
 				s.state = 4
+			case c == '\n' || s.n > 4096: // never ended: back to the text
+				s.state = 0
+				if c == '\n' {
+					out = append(out, c)
+				}
 			}
 		case 4:
 			if c == '\\' {
 				s.state = 0
-			} else {
-				s.state = 3
+			} else { // another sequence starts: this string ended
+				s.state = 1
+				switch c {
+				case '[':
+					s.state = 2
+				case ']', 'P', '_', '^', 'X':
+					s.state, s.n = 3, 0
+				case '(', ')', '*', '+', '-', '.', '/', '#', '%', ' ':
+					s.state = 5
+				default:
+					s.state = 0
+				}
 			}
 		case 5:
 			s.state = 0

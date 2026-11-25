@@ -4,6 +4,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Session logs keep every command**: a control sequence the device starts but never ends (seen on Switch Engine) made the log skip everything after it - a log of seven commands held only the first. Such a sequence now ends at the line, so the rest is logged; characters such as `ě` are no longer cut either.
+- **Logging and recording are easy to see and stop**: a red `LOG` / `REC` badge with a blinking dot on the tab (click to stop), **■ Stop Logging** / **■ Stop Recording** at the top of the tab's menu in red, and **● Logging [Open] [Stop]** / **● REC 04:12 [Stop]** in the status bar.
+
 - **Files panel follows `!sh`** (and `sh`, `ash`, `busybox sh`) on switches: the panel's folder now follows the switch's Linux shell too - in a plain sh the folder is reported from the prompt (bash and zsh as before).
 
 - **New tagline**: *Open-source network engineering, automation and testing platform* - on the start page and in the README.

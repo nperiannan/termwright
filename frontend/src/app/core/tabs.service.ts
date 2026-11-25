@@ -52,6 +52,8 @@ export interface TabView {
   labKind?: 'sim' | 'emu';
   /** Terminal tab: the session recording (.cast) being written. */
   castFile?: string;
+  /** When the recording started (ms). */
+  castAt?: number;
   /** Player tab: the recording it plays. */
   playFile?: string;
   /** RDP / VNC tab: the open remote desktop. */
@@ -610,7 +612,7 @@ export class Tabs {
         }
       }),
       this.backend.on('term:log:' + ti.id, (path: string) => this.patch(ti.id, { logFile: path })),
-      this.backend.on('term:rec:' + ti.id, (path: string) => this.patch(ti.id, { castFile: path })),
+      this.backend.on('term:rec:' + ti.id, (path: string) => this.patch(ti.id, { castFile: path, castAt: path ? (this.get(ti.id)?.castAt || Date.now()) : undefined })),
     ]);
     this.tabs.update(l => [...l, tv]);
     if (!docked) this.activeId.set(ti.id);
@@ -890,7 +892,7 @@ export class Tabs {
       else {
         if (t.state !== 'connected') { this.ui.toast('Connect the tab first - recordings start with the connection.', 'error'); return; }
         const p = await this.backend.startSessionRecording(id);
-        this.patch(id, { castFile: p });
+        this.patch(id, { castFile: p, castAt: Date.now() });
       }
     } catch (e) { this.ui.error(e); }
   }

@@ -5449,6 +5449,13 @@ const ru: Record<string, string> = {
   'Also the Command Library': 'Также библиотека команд',
   'Also commands of sessions without a device type': 'Также команды сессий без типа устройства',
   'another key if Ctrl+Space switches your input language': 'другая клавиша, если Ctrl+Пробел переключает язык ввода',
+  'Stop Logging': 'Остановить журнал',
+  'Stop Recording': 'Остановить запись',
+  'Stop logging to {0}?': 'Остановить запись журнала в {0}?',
+  'Stop recording to {0}?': 'Остановить запись в {0}?',
+  'Open the log file': 'Открыть файл журнала',
+  'Stop logging': 'Остановить журнал',
+  'Stop recording and save it': 'Остановить и сохранить запись',
 };
 
 export default ru;

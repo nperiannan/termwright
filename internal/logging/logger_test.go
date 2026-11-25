@@ -3,6 +3,7 @@ package logging
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -35,5 +36,19 @@ func TestLoggerPrefix(t *testing.T) {
 	b, _ := os.ReadFile(p)
 	if string(b) != "> one\n> two\n" {
 		t.Fatalf("%q", b)
+	}
+}
+
+func TestStripUnendedString(t *testing.T) {
+	var s Stripper
+	// a string sequence the device never ends: the commands after it are kept
+	got := string(s.Strip([]byte("\x1bPgarbage\r\n# show vlan\r\nDefault 1\r\n\x1b]0;title\x1b[0m# show ports\r\nport 1:1 \xc4\x9b ok\r\n")))
+	for _, want := range []string{"# show vlan", "Default 1", "# show ports", "port 1:1 \xc4\x9b ok"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("no %q in %q", want, got)
+		}
+	}
+	if strings.Contains(got, "garbage") || strings.Contains(got, "title") {
+		t.Errorf("sequence text kept: %q", got)
 	}
 }

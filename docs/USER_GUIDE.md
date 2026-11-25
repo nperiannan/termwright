@@ -1005,7 +1005,7 @@ The connector listens only on this computer (127.0.0.1) with a random key kept i
 
 ## 8. Logging and capturing output
 
-- **Start/stop a log**: toolbar *Log*, File → Log Session…, or the tab menu. The tab shows a `LOG` badge.
+- **Start/stop a log**: toolbar *Log*, File → Log Session…, or the tab menu. While it runs the tab shows a red `LOG` badge with a blinking dot (click it to stop), **■ Stop Logging** is at the top of the tab's menu in red, and the status bar shows **● Logging [Open] [Stop]**. A session recording shows the same way as `REC`, with its running time.
 - **Automatic logging**: Session Options → Log File → *Start log upon connect*.
 - **File name tokens**: `%H` host, `%S` session, `%P` port, `%U` user, `%R` protocol, `%Y %M %D` date, `%h %m %s` time, `%t` ms, `%%` percent. Example: `~/logs/%S-%Y%M%D-%h%m%s.log`. With no name, logs go to the Logs folder (Global Options).
 - **Plain vs raw**: by default escape sequences and colors are removed; *Raw log* keeps everything exactly as received.
