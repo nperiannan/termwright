@@ -516,15 +516,22 @@ export class FilesPanel implements OnDestroy {
   async download() {
     const names = [...this.selected()];
     if (!names.length) return;
-    const dest = await this.backend.chooseDirectory('Download to').catch(() => '');
-    if (dest) await this.transfer('down', names.map(n => this.join(n)), dest);
+    // Settings → Files & Folders: straight to this computer's folder, or asked
+    const st = this.ui.settings();
+    let dest = st?.sftpDownloadNoAsk && !this.local() ? await this.backend.localHome().catch(() => '') : '';
+    if (!dest) dest = await this.backend.chooseDirectory('Download to').catch(() => '');
+    if (dest) await this.transfer('down', names.map(n => this.join(n)), dest, !!st?.sftpOpenAfter);
   }
-  private async transfer(dir: 'up' | 'down', src: string[], dest: string) {
+  private async transfer(dir: 'up' | 'down', src: string[], dest: string, showAfter = false) {
     try {
       const id = await this.backend.startTransfer(this.sid(), dir, src, dest);
       if (id) this.xferIds = new Set([id]);
       const off = this.backend.on('xfer:progress', (t: { id: string; state: string }) => {
-        if (t.id === id && t.state !== 'running') { off(); if (dir === 'up') void this.load(this.dir()); }
+        if (t.id === id && t.state !== 'running') {
+          off();
+          if (dir === 'up') void this.load(this.dir());
+          else if (t.state === 'done' && showAfter) void this.backend.openFolder(dest).catch(() => {});
+        }
       });
     } catch (e) { this.ui.error(e); }
   }

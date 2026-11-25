@@ -597,9 +597,23 @@ func (a *App) TestsExport(o testrec.ExportOptions) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	p, err := wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{Title: "Export Automation Suite", DefaultFilename: name, CanCreateDirectories: true})
-	if err != nil || p == "" {
-		return "", err
+	dir := a.ExportDir()
+	_ = os.MkdirAll(dir, 0o755)
+	var p string
+	if a.cfg.Get().ExportNoAsk { // Settings → Files & Folders: saved at once (a name already there gets a number)
+		p = filepath.Join(dir, name)
+		ext := filepath.Ext(name)
+		for i := 2; ; i++ {
+			if _, err := os.Stat(p); err != nil {
+				break
+			}
+			p = filepath.Join(dir, strings.TrimSuffix(name, ext)+" ("+strconv.Itoa(i)+")"+ext)
+		}
+	} else {
+		p, err = wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{Title: "Export Automation Suite", DefaultDirectory: dir, DefaultFilename: name, CanCreateDirectories: true})
+		if err != nil || p == "" {
+			return "", err
+		}
 	}
 	if err := os.WriteFile(p, b, 0o644); err != nil {
 		return "", err

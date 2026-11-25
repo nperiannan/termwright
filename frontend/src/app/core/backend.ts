@@ -673,6 +673,8 @@ export class Backend {
   openedFileMod(local: string) { return this.call<number>('OpenedFileMod', local); }
   sftpUploadOpened(id: string, local: string, remote: string) { return this.call<void>('SFTPUploadOpened', id, local, remote); }
   localList(dir: string) { return this.call<FileEntry[] | null>('LocalList', dir); }
+  dataPaths() { return this.call<Record<string, string>>('DataPaths'); }
+  openFolder(p: string) { return this.call<void>('OpenFolder', p); }
   localHome() { return this.call<string>('LocalHome'); }
   localParent(p: string) { return this.call<string>('LocalParent', p); }
   localJoin(dir: string, name: string) { return this.call<string>('LocalJoin', dir, name); }

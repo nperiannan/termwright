@@ -5470,6 +5470,21 @@ const ru: Record<string, string> = {
   'Open the Last Log': 'Открыть последний журнал',
   'Open the Logs Folder': 'Открыть папку журналов',
   'Log Settings...': 'Настройки журнала...',
+  'Files & Folders': 'Файлы и папки',
+  'Command history': 'История команд',
+  'API Client history': 'История API-клиента',
+  'Lab history': 'История лаборатории',
+  'Test run history': 'История запусков тестов',
+  'Known hosts (SSH)': 'Известные хосты (SSH)',
+  'Settings file': 'Файл настроек',
+  'Exports folder': 'Папка экспорта',
+  'This computer\'s folder': 'Папка этого компьютера',
+  'Run results': 'Результаты запусков',
+  'Tests folder': 'Папка тестов',
+  'Checklist runs': 'Запуски чек-листов',
+  'Collected output': 'Собранный вывод',
+  'Config backups': 'Резервные копии конфигураций',
+  'Downloads (ZMODEM)': 'Загрузки (ZMODEM)',
 };
 
 export default ru;

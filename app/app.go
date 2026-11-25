@@ -996,10 +996,7 @@ func (a *App) SFTPClose(id string) { a.terms.SFTPClose(id) }
 func (a *App) LocalList(dir string) ([]term.FileEntry, error) { return term.LocalList(dir) }
 
 // LocalHome returns the user's home folder.
-func (a *App) LocalHome() string {
-	h, _ := os.UserHomeDir()
-	return h
-}
+func (a *App) LocalHome() string { return a.LocalStartDir() } // Settings → Files & Folders → SFTP start folder
 
 // LocalParent returns the parent folder of a local path.
 func (a *App) LocalParent(p string) string { return filepath.Dir(p) }
