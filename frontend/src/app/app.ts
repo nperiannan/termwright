@@ -797,11 +797,19 @@ export class App implements OnInit {
   /** The Log button's right-click: Log As…, open it, show it. */
   logMenu(ev: MouseEvent, t: TabView) {
     ev.preventDefault();
+    const last = this.tabs.lastLog()[t.id];
+    const show = this.isMac ? 'Show in Finder' : 'Show in Folder';
     this.ui.showMenu(ev, t.logFile ? [
       { label: 'Open the Log', action: () => this.openLog(t) },
-      { label: this.isMac ? 'Show in Finder' : 'Show in Folder', action: () => void this.backend.showInFolder(t.logFile).catch(e => this.ui.error(e)) },
-      { separator: true }, { label: 'Stop Logging', action: () => void this.tabs.toggleLog(t.id) },
-    ] : [{ label: 'Log As...', action: () => void this.tabs.toggleLog(t.id) }]);
+      { label: show, action: () => void this.backend.showInFolder(t.logFile).catch(e => this.ui.error(e)) },
+      { separator: true }, { label: 'Stop Logging', action: () => void this.tabs.quickLog(t.id) },
+    ] : [
+      { label: 'Log As...', action: () => void this.tabs.toggleLog(t.id) },
+      ...(last ? [{ separator: true }, { label: 'Open the Last Log', hint: last.split(/[\\/]/).pop(), action: () => void this.backend.openPath(last).catch(e => this.ui.error(e)) },
+        { label: show + ' (Last Log)', action: () => void this.backend.showInFolder(last).catch(e => this.ui.error(e)) }] : []),
+      { separator: true }, { label: 'Open the Logs Folder', action: () => void this.openLogsFolder(t) },
+      { label: 'Log Settings...', action: () => this.ui.openOptions('general', 'logs') },
+    ]);
   }
   /** How long a tab has been recording: "04:12". */
   recFor(t: TabView): string {
@@ -816,6 +824,13 @@ export class App implements OnInit {
     const file = (what === 'log' ? t.logFile : t.castFile ?? '').split(/[\\/]/).pop();
     if (!(await this.ui.confirm(what === 'log' ? tr('Stop Logging') : tr('Stop Recording'), tr(what === 'log' ? 'Stop logging to {0}?' : 'Stop recording to {0}?', file ?? ''), tr('Stop')))) return;
     if (what === 'log') await this.tabs.toggleLog(t.id); else await this.tabs.toggleCast(t.id);
+  }
+  /** The Logs folder (where the next log of this tab would go). */
+  async openLogsFolder(t: TabView) {
+    try {
+      const p = await this.backend.chooseLogPath(t.id);
+      await this.backend.openPath(p.slice(0, Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'))));
+    } catch (e) { this.ui.error(e); }
   }
   openLog(t: TabView) { if (t.logFile) void this.backend.openPath(t.logFile).catch(e => this.ui.error(e)); }
 

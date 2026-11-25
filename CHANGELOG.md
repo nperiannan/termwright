@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Log files named by time, where you want them**: Settings → General has the **Logs folder**, a **Log file name** pattern (default `%S-%Y%M%D-%h%m%s.log` - the session, then the date and time it started) and **The Log button asks where to save**. *Log As…* starts in the Logs folder with that name (it was the session name only). Stopping a log says where it is, with **Open** and **Show in Finder**; the Log button's right-click has *Open the Last Log*, *Open the Logs Folder* and *Log Settings…*.
+
 - **Accept changed SSH host keys** (Settings → General, on by default): a device whose host key changed - reinstalled or replaced, common in labs - connects without the red warning; the new key is saved and a note names the host and its fingerprint. Off, the warning asks as before.
 - **Log button**: a notepad icon instead of the ring.
 

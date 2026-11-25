@@ -20,7 +20,7 @@ type Page = 'general' | 'terminal' | 'schemes' | 'envs' | 'keywords' | 'keymap' 
 
 /** What Global Options can find: page, the text shown on the page, extra words people search for. */
 const SEARCH: [Page, string, string][] = [
-  ['general', 'Sessions folder', 'storage location ini path'], ['general', 'Logs folder', 'log directory'],
+  ['general', 'Sessions folder', 'storage location ini path'], ['general', 'Logs folder', 'log directory'], ['general', 'Log file name', 'log name pattern timestamp time date'], ['general', 'The Log button asks where to save', 'log save as dialog'],
   ['general', 'Recordings folder', 'session recording cast replay playback audit'], ['general', 'Session recording', 'record every connection replay playback audit delete keep days'],
   ['cards', 'PKCS#11 libraries', 'smart card piv cac yubikey opensc token hsm ssh key'], ['cards', 'Ask the PIN for every login', 'smart card pin'],
   ['general', 'Downloads folder', 'zmodem download save'], ['general', 'Accept changed SSH host keys', 'host key changed fingerprint known_hosts warning'], ['general', 'SFTP from a terminal', 'working directory detection folder cwd follow'],
@@ -181,8 +181,14 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 <label></label>
                 <div class="hint">Sessions are stored as one .ini file per session, in the layout other terminal programs use too.
                   You can point this at an existing "Config/Sessions" folder to share sessions (back it up first).</div>
-                <label>Logs folder</label>
+                <label id="opt-logs">Logs folder</label>
                 <div class="row"><input name="ld" [(ngModel)]="s.logDir" /><button type="button" (click)="browse('logDir')">Browse...</button></div>
+                <label>Log file name</label>
+                <div class="row"><input name="lname" [(ngModel)]="s.logName" placeholder="%S-%Y%M%D-%h%m%s.log" spellcheck="false" /></div>
+                <label></label>
+                <div class="hint">%S session, %H host, %U user, %Y%M%D date, %h%m%s time - the default ends with the date and time the log started, e.g. <span class="mono">Stack-20261125-143012.log</span>. A session's own log file (Session Options → Logging) comes first.</div>
+                <label></label>
+                <div class="checks"><label><input type="checkbox" name="lask" [(ngModel)]="s.logAsk" /> The Log button asks where to save (else it saves at once in the Logs folder)</label></div>
                 <label>Recordings folder</label>
                 <div class="row"><input name="rd" [(ngModel)]="s.recordDir" placeholder="Documents/Termwright Recordings" /><button type="button" (click)="browse('recordDir')">Browse...</button></div>
                 <label>Session recording</label>

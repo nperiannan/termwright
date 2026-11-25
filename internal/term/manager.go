@@ -182,6 +182,8 @@ type Manager struct {
 	OnAccountPasswordTyped func(account, password string)
 	// Clipboard returns the clipboard text (logon action \v).
 	Clipboard func() string
+	// LogName: the file name pattern of new logs ("" = DefaultLogName).
+	LogName func() string
 	// AcceptChangedKeys: a changed SSH host key is saved and accepted without asking.
 	AcceptChangedKeys func() bool
 	// DeviceType looks up a device type (login profile) by name.
@@ -823,18 +825,9 @@ func (m *Manager) StartLog(id, path string, appendMode, raw bool) (string, error
 	if old != nil {
 		_ = old.Close()
 	}
-	vars := logging.Vars{Host: s.Hostname, Session: s.Path, Port: s.Port, User: s.Username, Proto: s.Protocol}
-	if s.Protocol == session.ProtoSerial {
-		vars.Host = s.ComPort
-	}
-	if vars.Session == "" {
-		vars.Session = title(s)
-	}
+	vars := logVars(s)
 	if path == "" {
-		path = s.LogFile
-	}
-	if path == "" {
-		path = filepath.Join(m.logDir(), "%S-%Y%M%D-%h%m%s.log")
+		path = m.defaultLogPath(s)
 	}
 	path = logging.Expand(path, vars, time.Now())
 	if strings.HasPrefix(path, "~") {
@@ -851,6 +844,50 @@ func (m *Manager) StartLog(id, path string, appendMode, raw bool) (string, error
 	t.mu.Unlock()
 	m.emit.Emit("term:log:"+id, path)
 	return path, nil
+}
+
+func logVars(s session.Session) logging.Vars {
+	vars := logging.Vars{Host: s.Hostname, Session: s.Path, Port: s.Port, User: s.Username, Proto: s.Protocol}
+	if s.Protocol == session.ProtoSerial {
+		vars.Host = s.ComPort
+	}
+	if vars.Session == "" {
+		vars.Session = title(s)
+	}
+	return vars
+}
+
+// DefaultLogName is the pattern of a new log's file name: the session and when it started.
+const DefaultLogName = "%S-%Y%M%D-%h%m%s.log"
+
+// defaultLogPath: the session's own log file, else the Logs folder and the file name pattern (unexpanded).
+func (m *Manager) defaultLogPath(s session.Session) string {
+	if s.LogFile != "" {
+		return s.LogFile
+	}
+	name := DefaultLogName
+	if m.LogName != nil && strings.TrimSpace(m.LogName()) != "" {
+		name = strings.TrimSpace(m.LogName())
+	}
+	return filepath.Join(m.logDir(), name)
+}
+
+// LogPathFor is where a new log of the tab would go, expanded now (the Log As… dialog starts there).
+func (m *Manager) LogPathFor(id string) (string, error) {
+	t, err := m.get(id)
+	if err != nil {
+		return "", err
+	}
+	t.mu.Lock()
+	s := t.sess
+	t.mu.Unlock()
+	p := logging.Expand(m.defaultLogPath(s), logVars(s), time.Now())
+	if strings.HasPrefix(p, "~") {
+		if h, err := userHome(); err == nil {
+			p = filepath.Join(h, p[1:])
+		}
+	}
+	return p, nil
 }
 
 // StopLog stops logging.

@@ -1086,12 +1086,27 @@ export class Tabs {
     h.term.focus();
   }
 
+  /** The last log of each tab (its file), to open it after it stopped. */
+  readonly lastLog = signal<Record<string, string>>({});
+  /** Stops a tab's log and says where it is, with Open and Show in Folder. */
+  async stopLogSaved(t: TabView) {
+    const file = t.logFile;
+    await this.backend.stopLog(t.id);
+    this.lastLog.update(m => ({ ...m, [t.id]: file }));
+    const mac = /Mac/i.test(navigator.platform);
+    this.ui.toast('Log saved: ' + file.split(/[\\/]/).pop(), 'success', 8000, [
+      { label: 'Open', run: () => void this.backend.openPath(file).catch(e => this.ui.error(e)) },
+      { label: mac ? 'Show in Finder' : 'Show in Folder', run: () => void this.backend.showInFolder(file).catch(e => this.ui.error(e)) },
+    ]);
+  }
+
   /** The status bar's Log button: stops, or starts at once to the session's log file (no dialog). */
   async quickLog(id = this.activeId()) {
     const t = this.get(id);
     if (!t) return;
+    if (!t.logFile && this.ui.settings()?.logAsk) return this.toggleLog(id);
     try {
-      if (t.logFile) { await this.backend.stopLog(id); this.ui.toast('Logging stopped'); return; }
+      if (t.logFile) { await this.stopLogSaved(t); return; }
       const p = await this.backend.startLog(id, '', t.session.logAppend, t.session.logRaw);
       this.ui.toast('Logging to ' + p, 'success');
     } catch (e) { this.ui.error(e); }
@@ -1101,13 +1116,9 @@ export class Tabs {
     const t = this.get(id);
     if (!t) return;
     try {
-      if (t.logFile) {
-        await this.backend.stopLog(id);
-        this.ui.toast('Logging stopped');
-        return;
-      }
-      const name = (t.session.name || t.title || 'session').replace(/[\\/:*?"<>|]/g, '_') + '.log';
-      const path = await this.backend.chooseSaveFile('Log Session As', name, [{ displayName: 'Log files', pattern: '*.log;*.txt' }]);
+      if (t.logFile) { await this.stopLogSaved(t); return; }
+      // in the Logs folder, named by the session and the time (Settings → General → Logs)
+      const path = await this.backend.chooseLogFile(id);
       if (!path) return;
       const p = await this.backend.startLog(id, path, t.session.logAppend, t.session.logRaw);
       this.ui.toast('Logging to ' + p, 'success');

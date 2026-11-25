@@ -126,6 +126,8 @@ type KeywordSet struct {
 type Settings struct {
 	SessionsDir          string                       `json:"sessionsDir"`
 	LogDir               string                       `json:"logDir"`
+	LogName              string                       `json:"logName,omitempty"` // file name pattern of new logs ("" = %S-%Y%M%D-%h%m%s.log)
+	LogAsk               bool                         `json:"logAsk,omitempty"`  // the Log button asks where to save
 	DownloadDir          string                       `json:"downloadDir"`
 	TestsDir             string                       `json:"testsDir,omitempty"`       // the tests folder (cases, lib, testbeds, reports); "" = tests in the data folder
 	TestSchedules        []testrec.Schedule           `json:"testSchedules,omitempty"`  // tests that run by themselves while Termwright is open

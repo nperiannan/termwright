@@ -5466,6 +5466,10 @@ const ru: Record<string, string> = {
   'Show in Folder': 'Показать в папке',
   'The terminal is in {0} - this device\'s file access does not show it': 'Терминал в {0} - доступ к файлам устройства его не показывает',
   'Accept changed SSH host keys': 'Принимать изменённые ключи хоста SSH',
+  'Log file name': 'Имя файла журнала',
+  'Open the Last Log': 'Открыть последний журнал',
+  'Open the Logs Folder': 'Открыть папку журналов',
+  'Log Settings...': 'Настройки журнала...',
 };
 
 export default ru;

@@ -602,6 +602,8 @@ export class Backend {
   disconnectTab(id: string) { return this.call<void>('DisconnectTab', id); }
   closeTab(id: string) { return this.call<void>('CloseTab', id); }
   refreshTabSession(id: string, path = '') { return this.call<void>('RefreshTabSession', id, path); }
+  chooseLogPath(tabId: string) { return this.call<string>('LogPathFor', tabId); }
+  chooseLogFile(tabId: string) { return this.call<string>('ChooseLogFile', tabId); }
   fileSize(path: string) { return this.call<number>('FileSize', path); }
   startLog(id: string, path: string, append: boolean, raw: boolean) { return this.call<string>('StartLog', id, path, append, raw); }
   stopLog(id: string) { return this.call<void>('StopLog', id); }
