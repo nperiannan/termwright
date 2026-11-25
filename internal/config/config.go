@@ -188,15 +188,16 @@ type Settings struct {
 	BackupJobs           []BackupJob                  `json:"backupJobs"`
 	Checklists           []Checklist                  `json:"checklists"`
 	Collections          []Collection                 `json:"collections"`
-	CollectDir           string                       `json:"collectDir"`              // "" = Documents/Termwright Collected
-	ChecklistDir         string                       `json:"checklistDir"`            // "" = Documents/Termwright Checklists
-	RecordHistory        *bool                        `json:"recordHistory,omitempty"` // nil = on
-	KeepAwake            *bool                        `json:"keepAwake,omitempty"`     // nil = on: the computer does not sleep on its own while Termwright is open
-	RecordSessions       bool                         `json:"recordSessions"`          // record every connection (.cast)
-	RecordDir            string                       `json:"recordDir"`               // "" = Documents/Termwright Recordings
-	RecordKeepDays       int                          `json:"recordKeepDays"`          // 0 = keep
-	SmartCardLibraries   []string                     `json:"smartCardLibraries"`      // PKCS#11 libraries; empty = the usual places
-	SmartCardPinEachTime bool                         `json:"smartCardPinEachTime"`    // ask the PIN for every login
+	CollectDir           string                       `json:"collectDir"`                      // "" = Documents/Termwright Collected
+	ChecklistDir         string                       `json:"checklistDir"`                    // "" = Documents/Termwright Checklists
+	RecordHistory        *bool                        `json:"recordHistory,omitempty"`         // nil = on
+	AcceptChangedKeys    *bool                        `json:"acceptChangedHostKeys,omitempty"` // nil = on: a changed SSH host key is saved and accepted
+	KeepAwake            *bool                        `json:"keepAwake,omitempty"`             // nil = on: the computer does not sleep on its own while Termwright is open
+	RecordSessions       bool                         `json:"recordSessions"`                  // record every connection (.cast)
+	RecordDir            string                       `json:"recordDir"`                       // "" = Documents/Termwright Recordings
+	RecordKeepDays       int                          `json:"recordKeepDays"`                  // 0 = keep
+	SmartCardLibraries   []string                     `json:"smartCardLibraries"`              // PKCS#11 libraries; empty = the usual places
+	SmartCardPinEachTime bool                         `json:"smartCardPinEachTime"`            // ask the PIN for every login
 	KeywordSets          []KeywordSet                 `json:"keywordSets"`
 	DefaultKeywordSet    string                       `json:"defaultKeywordSet"`
 	ShowConnectBar       bool                         `json:"showConnectBar"`

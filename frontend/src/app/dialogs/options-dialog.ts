@@ -23,7 +23,7 @@ const SEARCH: [Page, string, string][] = [
   ['general', 'Sessions folder', 'storage location ini path'], ['general', 'Logs folder', 'log directory'],
   ['general', 'Recordings folder', 'session recording cast replay playback audit'], ['general', 'Session recording', 'record every connection replay playback audit delete keep days'],
   ['cards', 'PKCS#11 libraries', 'smart card piv cac yubikey opensc token hsm ssh key'], ['cards', 'Ask the PIN for every login', 'smart card pin'],
-  ['general', 'Downloads folder', 'zmodem download save'], ['general', 'SFTP from a terminal', 'working directory detection folder cwd follow'],
+  ['general', 'Downloads folder', 'zmodem download save'], ['general', 'Accept changed SSH host keys', 'host key changed fingerprint known_hosts warning'], ['general', 'SFTP from a terminal', 'working directory detection folder cwd follow'],
   ['general', 'SFTP tabs follow the terminal folder', 'cwd'], ['general', "SFTP tabs and the Files panel browse as the terminal's user", 'root sudo files panel'],
   ['general', 'Python interpreter', 'script python3'], ['general', 'UI theme', 'dark light mode appearance'], ['general', 'Interface font', 'font typeface vscode inter plex readable'], ['general', 'Text size', 'font size bigger larger zoom readable'],
   ['general', 'Accent color', 'colour highlight'], ['general', 'Confirm before closing connected tabs', 'quit exit'],
@@ -157,6 +157,8 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <label><input type="checkbox" name="cpaste" [(ngModel)]="s.confirmPaste" />  <span class="tx">Confirm pasting more than one line<small>shows the lines first - production tabs always ask</small></span> </label>
                   <label><input type="checkbox" name="kawake" [ngModel]="s.keepAwake !== false" (ngModelChange)="s.keepAwake = $event" />
                      <span class="tx">Keep the computer awake while Termwright is open<small>it does not go to sleep on its own, so sessions, transfers and the lab keep running; the display can still turn off{{ keepAwakeErr ? ' - not possible here: ' + keepAwakeErr : '' }}</small></span> </label>
+                  <label><input type="checkbox" name="hkacc" [ngModel]="s.acceptChangedHostKeys !== false" (ngModelChange)="s.acceptChangedHostKeys = $event" />
+                     <span class="tx">Accept changed SSH host keys<small>a device that was reinstalled or replaced has a new key: it is saved and the connection goes on, with a note; off - asked every time (safer outside a lab)</small></span> </label>
                   <label><input type="checkbox" name="rhist" [ngModel]="s.recordHistory !== false" (ngModelChange)="s.recordHistory = $event" />
                      <span class="tx">Remember typed commands<small>for Command History and suggestions - never commands with passwords, secrets or keys</small></span> </label>
                   <label><input type="checkbox" name="qcs" [ngModel]="!!s.quickConnectSave" (ngModelChange)="s.quickConnectSave = $event" />  <span class="tx">Save Quick Connect sessions<small>every connection made with Quick Connect is kept in the Session Manager (in the selected folder)</small></span> </label>

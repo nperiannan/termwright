@@ -289,6 +289,6 @@ app-command-window { flex: none; }
   i { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid currentColor; box-sizing: border-box; }
   &:hover:not(:disabled) { color: var(--text); background: var(--hover); }
   &.on { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); background: color-mix(in srgb, var(--danger) 9%, transparent);
-    i { border: 0; background: var(--danger); animation: livepulse 1.2s ease-in-out infinite; } }
+    i { border: 0; background: var(--danger); animation: livepulse 1.2s ease-in-out infinite; } app-icon { animation: livepulse 1.2s ease-in-out infinite; } }
   &:disabled { opacity: .45; cursor: default; } }
 @keyframes livepulse { 50% { opacity: .2; } }

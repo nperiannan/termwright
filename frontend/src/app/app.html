@@ -225,7 +225,7 @@
     @if (t.kind === 'terminal') {
       <span class="lr">
         <button type="button" class="lrb" [class.on]="!!t.logFile" (click)="tabs.quickLog(t.id)" (contextmenu)="logMenu($event, t)"
-          [title]="t.logFile ? 'Logging to ' + t.logFile + ' - click to stop (right-click: open it)' : 'Log this session to a file (right-click: Log As…)'"><i></i>{{ t.logFile ? 'Stop Log' + (logSize() ? ' · ' + logSize() : '') : 'Log' }}</button>
+          [title]="t.logFile ? 'Logging to ' + t.logFile + ' - click to stop (right-click: open it)' : 'Log this session to a file (right-click: Log As…)'"><app-icon name="log" [size]="13" />{{ t.logFile ? 'Stop Log' + (logSize() ? ' · ' + logSize() : '') : 'Log' }}</button>
         <button type="button" class="lrb" [class.on]="!!t.castFile" (click)="tabs.toggleCast(t.id)" [disabled]="!t.castFile && t.state !== 'connected'"
           [title]="t.castFile ? 'Recording to ' + t.castFile + ' - click to stop and save it' : 'Record this session (play it back later)'"><i></i>{{ t.castFile ? 'Stop Recording · ' + recFor(t) : 'Record' }}</button>
       </span>

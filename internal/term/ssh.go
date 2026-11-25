@@ -527,6 +527,13 @@ func (m *Manager) hostKeyCallback(ctx context.Context, t *Tab) ssh.HostKeyCallba
 			}
 			return nil
 		}
+		if m.AcceptChangedKeys != nil && m.AcceptChangedKeys() { // labs: devices are reinstalled and replaced
+			if err := m.saveHostKey(hostname, key, true); err != nil {
+				return err
+			}
+			m.emit.Emit("toast", map[string]string{"level": "info", "message": "The host key of " + hostname + " changed - the new one (" + fp + ") was saved. Settings → General → Accept changed SSH host keys asks instead."})
+			return nil
+		}
 		r, err := m.prompts.Ask(ctx, Prompt{TabID: t.id, Kind: "hostkey", Title: "WARNING: Host Key Changed", Danger: true,
 			Message: fmt.Sprintf("The host key for %s does NOT match the saved key (%s:%d).\nThis could mean someone is intercepting the connection.\n\nNew key type: %s\nNew fingerprint: %s", hostname, ke.Want[0].Filename, ke.Want[0].Line, key.Type(), fp),
 			Choices: []string{"Replace & Save", "Accept Once"}})

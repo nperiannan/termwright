@@ -182,6 +182,8 @@ type Manager struct {
 	OnAccountPasswordTyped func(account, password string)
 	// Clipboard returns the clipboard text (logon action \v).
 	Clipboard func() string
+	// AcceptChangedKeys: a changed SSH host key is saved and accepted without asking.
+	AcceptChangedKeys func() bool
 	// DeviceType looks up a device type (login profile) by name.
 	DeviceType func(name string) (session.DeviceType, bool)
 	// PythonPath returns the configured Python interpreter ("" = find python3).

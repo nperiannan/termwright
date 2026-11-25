@@ -4,6 +4,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Accept changed SSH host keys** (Settings → General, on by default): a device whose host key changed - reinstalled or replaced, common in labs - connects without the red warning; the new key is saved and a note names the host and its fingerprint. Off, the warning asks as before.
+- **Log button**: a notepad icon instead of the ring.
+
 - **Log and Record buttons in the status bar**: in the middle of the status bar, for the active tab. **Log** starts logging at once to the session's log file (right-click: Log As…, Open the Log, Show in Finder) and turns red as **Stop Log · 12 KB**; **Record** turns into **Stop Recording · 04:12**. Grey while off.
 
 - **`!sh` on a switch, the prompt kept as it is**: a plain sh reports its folder after every `cd` instead of through the prompt - the switch's shell showed `$(_tw_cwd)` in the prompt. When the terminal is in a folder the device's file access does not show (a switch's SFTP shows only its configuration folder), the panel says so in grey and keeps its listing instead of a red error.

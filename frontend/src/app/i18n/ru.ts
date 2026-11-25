@@ -5465,6 +5465,7 @@ const ru: Record<string, string> = {
   'Log As...': 'Журнал как...',
   'Show in Folder': 'Показать в папке',
   'The terminal is in {0} - this device\'s file access does not show it': 'Терминал в {0} - доступ к файлам устройства его не показывает',
+  'Accept changed SSH host keys': 'Принимать изменённые ключи хоста SSH',
 };
 
 export default ru;

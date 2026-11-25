@@ -168,6 +168,7 @@ func (a *App) init() error {
 		}
 		return a.secret(p)
 	}
+	a.terms.AcceptChangedKeys = func() bool { v := a.cfg.Get().AcceptChangedKeys; return v == nil || *v }
 	a.terms.DevicePassword = func(name string) (string, bool) {
 		if a.isLocked() {
 			return "", false

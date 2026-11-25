@@ -162,7 +162,9 @@ export interface Settings {
   terminalScheme: string; cursorStyle: 'block' | 'underline' | 'bar'; cursorBlink: boolean;
   scrollback: number; copyOnSelect: boolean; rightClickPaste: boolean;
   /** Command suggestions in the terminal: the key ('' = Ctrl+Space, 'off'), without the Command Library, with commands of sessions without a device type. */
-  suggestKey?: string; suggestNoLibrary?: boolean; suggestUntyped?: boolean; confirmClose: boolean;
+  suggestKey?: string; suggestNoLibrary?: boolean; suggestUntyped?: boolean;
+  /** SSH: a changed host key is saved and accepted (null = on). */
+  acceptChangedHostKeys?: boolean | null; confirmClose: boolean;
   sessionEditor?: '' | 'window'; language?: string; layout?: string; style?: string; iconFinish?: '' | 'glacier' | 'flat'; compactRows?: boolean; highlightStyle?: string; welcomeSeen?: string; iconStyle?: string; quickButtons?: '' | 'keycap' | 'glow'; folderColors?: '' | 'vivid' | 'steel'; mapLook?: string; nameAfterDevice?: '' | 'auto' | 'off'; nameFormat?: '' | 'model' | 'octet'; deviceFacts?: Record<string, Record<string, string>> | null; showButtonBar: boolean; hideTerminalBar?: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
   sftpCwdAuto?: boolean; sftpFollowTerminal?: boolean; sftpFollowUser?: boolean;
   pasteLineDelayMs: number; buttons: Button[]; recentSessions: string[];

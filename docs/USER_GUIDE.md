@@ -154,7 +154,7 @@ Devices log in differently: EXOS is ready at `#` after username and password, VO
 ![New host key](screenshots/hostkey.png)
 
 - **New host key**: Termwright shows the key type and SHA256 fingerprint. *Accept & Save* stores it in Termwright's `known_hosts`; *Accept Once* connects without saving. Your `~/.ssh/known_hosts` is also trusted (read-only).
-- **Changed host key**: a red warning. Only choose *Replace & Save* if you know the device was re-keyed.
+- **Changed host key**: by default the new key is saved and the connection goes on, with a note naming the host and the new fingerprint - lab devices are reinstalled and replaced often. Settings → General → **Accept changed SSH host keys** off shows a red warning instead; then only choose *Replace & Save* if you know the device was re-keyed. Turn it off on networks outside a lab: a changed key can also mean someone is in the middle.
 - **Empty passwords**: an account with no password (EXOS `admin`) is remembered too - press Enter at the password prompt with *Remember* ticked, set *No password* on the session, or on its device type.
 - **Password**: tick *Save password (OS keychain)* to store it in the macOS Keychain / Windows Credential Manager / Secret Service. Passwords are never written to session files. Remove one with right-click → *Forget Saved Password*.
 - **Keys**: Termwright tries the session's identity file, then a running SSH agent (`ssh-agent`, Windows OpenSSH agent), then `~/.ssh/id_ed25519`, `id_ecdsa`, `id_rsa` (unencrypted). The identity file can be an OpenSSH/PEM key or a **PuTTY `.ppk`** key. Encrypted identity files prompt for the passphrase (or use one saved in the keychain).
