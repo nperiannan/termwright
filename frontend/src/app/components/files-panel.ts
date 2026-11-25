@@ -42,15 +42,6 @@ const store = {
       <button type="button" class="ib" title="More" (click)="moreMenu($event)">⋯</button>
       <button type="button" class="ib" title="Hide the Files panel" (click)="hide()">✕</button>
     </div>
-    @if (switchLike()) {
-      <div class="via">
-        <span class="seg" role="group" aria-label="How the files are reached">
-          <button type="button" [class.on]="!shell()" (click)="setShell(false)" title="The device's SFTP: fast, with upload and delete - on a switch only its configuration folder">SFTP</button>
-          <button type="button" [class.on]="shell()" (click)="setShell(true)" title="The device's Linux shell (!sh) in a background session: every folder, follows the terminal after !sh; files up to 4 MB">Switch Shell</button>
-        </span>
-        @if (shell() && !sid() && !error()) { <span class="vmut">{{ tr('Starting the switch shell…') }}</span> }
-      </div>
-    }
     @if (!followable() && sid()) {
       <div class="away">The terminal is on {{ termHost() }}.
         <a (click)="reopen()">Show {{ shortOf(termHost()) }} here</a></div>
@@ -252,12 +243,13 @@ export class FilesPanel implements OnDestroy {
   size(n: number) { return formatBytes(n); }
   pct(a: number, b: number) { return Math.round(a * 100 / b); }
 
+  private restart = false;
   private async start(mode?: 'jump' | 'target' | 'shell') {
-    if (this.opening) return;
+    if (this.opening) { this.restart = true; return; } // e.g. SFTP chosen while the switch shell was starting
     this.opening = true;
     this.error.set('');
     const t = this.live();
-    if (!this.shellRead) { this.shellRead = true; this.shell.set(this.switchLike() && store.get(this.shellKey(), '0') === '1'); }
+    this.shell.set(false); // the switch shell view was taken out: always the device's SFTP
     if (!mode && this.shell()) mode = 'shell';
     if (!mode) mode = t.hopTarget ? (this.tabs.onJump(t) ? 'jump' : 'target') : undefined;
     try {
@@ -267,6 +259,7 @@ export class FilesPanel implements OnDestroy {
         if (mode !== 'target') throw e;
         r = await this.backend.sftpOpen(t.id, 'jump');
       }
+      if ((mode === 'shell') !== this.shell()) { void this.backend.sftpClose(r.id).catch(() => {}); this.restart = true; return; } // switched meanwhile
       this.target.set(r.target || '');
       this.local.set(r.local || '');
       this.home = r.home;
@@ -278,8 +271,18 @@ export class FilesPanel implements OnDestroy {
       if (c !== null) { this.triedUser = this.live().shellUser ?? ''; await this.switchUser(c); }
       else await this.load(cwd || this.dir() || r.home);
       void this.tabs.detectCwd(this.live(), r.id);
-    } catch (e) { this.failed = true; this.error.set('Files: ' + errText(e)); }
-    finally { this.opening = false; }
+    } catch (e) {
+      if (mode === 'shell') { // the switch shell cannot be started: say why, and show its SFTP instead
+        this.shell.set(false);
+        store.set(this.shellKey(), '0');
+        this.shellNote.set(tr('Switch Shell: {0}. Showing SFTP.', errText(e)));
+        this.restart = true;
+      } else { this.failed = true; this.error.set('Files: ' + errText(e)); }
+    }
+    finally {
+      this.opening = false;
+      if (this.restart) { this.restart = false; if (!this.sid()) void this.start(); }
+    }
   }
 
   /** The login name on the host this panel browses ('' when not known). */
@@ -351,11 +354,14 @@ export class FilesPanel implements OnDestroy {
   private shellKey() { return 'termwright.filesShell.' + (this.live().session.path || this.live().session.hostname); }
   /** Browsing through the switch's shell (remembered per session). */
   readonly shell = signal(false);
+  /** Why Switch Shell is not shown (it could not be started). */
+  readonly shellNote = signal('');
   private shellRead = false;
   async setShell(on: boolean) {
     if (on === this.shell()) return;
     this.shell.set(on);
     store.set(this.shellKey(), on ? '1' : '0');
+    this.shellNote.set('');
     const old = this.sid();
     this.sid.set('');
     this.entries.set([]);

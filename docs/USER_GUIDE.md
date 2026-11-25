@@ -1159,7 +1159,6 @@ Choosing a **Linux** device type (Linux, Ubuntu, Debian, RHEL, Rocky, …) for a
 
 ![Files panel](screenshots/files-panel.png)
 
-**Switches: SFTP or Switch Shell.** A switch's SFTP shows only its configuration folder (`/config` on Switch Engine), while `!sh` in the terminal goes anywhere. For an SSH session with a network device type the panel offers **SFTP | Switch Shell**: *SFTP* is the fast view (upload, delete); *Switch Shell* logs in once more in the background, starts the switch's Linux shell (`!sh`) and lists with it - every folder, and it follows the terminal after `!sh` and `cd`. Files open in the viewer and download, and small ones (up to 4 MB) upload and save, all through the shell. The choice is kept per session. On Switch Engine `!sh` may need debug mode for the whole switch; the panel says so when the shell cannot be started.
 
 A small file browser beside an SSH terminal, on the side opposite the Session Manager (with the Session Manager on the right it sits on the left). Turn it on for a session with the **Files panel beside the terminal** switch in the session side panel or in Session Options → Connection, or for one tab with **View → Files Panel**, the title-bar button, the tab's right-click menu or ⌘⇧1 (Alt+Shift+1).
 

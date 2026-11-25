@@ -371,9 +371,11 @@ func (m *Manager) sftpOpenShell(tabID string, s session.Session) (string, string
 		return "", "", err
 	}
 	fs := &shellFS{c: c}
-	ok := false
+	ok, said := false, ""
 	for _, sh := range ShellCommands {
-		if _, err := fs.run(sh); err != nil {
+		out, err := fs.run(sh)
+		if said = strings.TrimSpace(out); err != nil {
+			said = err.Error()
 			continue
 		}
 		// a shell does arithmetic; the switch's own command line does not
@@ -384,7 +386,10 @@ func (m *Manager) sftpOpenShell(tabID string, s session.Session) (string, string
 	}
 	if !ok {
 		c.Close()
-		return "", "", errors.New("the device's Linux shell (!sh) could not be started in a second session - on Switch Engine it may need debug mode for the whole switch")
+		if said != "" {
+			said = " - it answered: " + clip(strings.ReplaceAll(said, "\n", " "), 160)
+		}
+		return "", "", errors.New("the switch's Linux shell (!sh) could not be started in a background session" + said)
 	}
 	_, _ = fs.run("export PS1='# ' LANG=C 2>/dev/null; unset HISTFILE")
 	home := "/"
