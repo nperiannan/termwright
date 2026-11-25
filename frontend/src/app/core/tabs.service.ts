@@ -369,7 +369,7 @@ export class Tabs {
     // tab can follow it there.
     const t0 = this.get(id);
     const jumpTab = !!t0?.hopTarget && this.tabs().some(t => t.kind === 'sftp' && this.linkedTerm(t)?.id === id && !t.hopTarget);
-    if (!(leave && (jumpTab || (!!t0?.hopTarget && !!t0.filesPanel))) && !/^(sudo\s+(-\S+\s+)*(su\b|-i\b|-s\b|bash\b|zsh\b|-iu\s|-u\s+\S+\s+(-i|-s|bash|zsh)\b)|su\b|exec\s+(bash|zsh)\b|(bash|zsh)(\s+-l)?$)/.test(c)) return;
+    if (!(leave && (jumpTab || (!!t0?.hopTarget && !!t0.filesPanel))) && !/^(sudo\s+(-\S+\s+)*(su\b|-i\b|-s\b|bash\b|zsh\b|-iu\s|-u\s+\S+\s+(-i|-s|bash|zsh)\b)|su\b|exec\s+(bash|zsh)\b|(bash|zsh)(\s+-l)?$|!?(sh|ash)(\s+-l)?$|busybox\s+sh$|run\s+script\s+shell)/.test(c)) return;
     if (!t0?.filesPanel && !this.tabs().some(t => t.kind === 'sftp' && this.linkedTerm(t)?.id === id)) return;
     let tries = 0;
     const tick = () => {
@@ -392,9 +392,11 @@ export class Tabs {
         `[Console]::Write([char]27 + ']7;file://' + $env:COMPUTERNAME + '/' + ($p -replace '\\\\','/') + [char]7); & $global:__tw_prompt } }\r`;
       return this.backend.sendInput(termId, ps);
     }
-    const line = `_tw_cwd(){ printf '\\033]7;file://%s%s\\007\\033]1337;RemoteHost=%s@%s\\007' "\${HOSTNAME:-\$HOST}" "\$PWD" "\${USER:-\$(id -un)}" "\${HOSTNAME:-\$HOST}"; }; ` +
-      `if [ -n "\$ZSH_VERSION" ]; then typeset -U precmd_functions; precmd_functions+=(_tw_cwd); ` +
-      `else case ";\$PROMPT_COMMAND;" in *_tw_cwd*) ;; *) PROMPT_COMMAND="_tw_cwd\${PROMPT_COMMAND:+;\$PROMPT_COMMAND}";; esac; fi`;
+    // bash: PROMPT_COMMAND; zsh: precmd; a plain sh (busybox ash, e.g. a switch's "!sh" shell): in PS1
+    const line = `_tw_cwd(){ printf '\\033]7;file://%s%s\\007\\033]1337;RemoteHost=%s@%s\\007' "\${HOSTNAME:-\$HOST}" "\$PWD" "\${USER:-\$(id -un 2>/dev/null)}" "\${HOSTNAME:-\$HOST}"; }; ` +
+      `if [ -n "\$ZSH_VERSION" ]; then eval 'typeset -U precmd_functions; precmd_functions+=(_tw_cwd)'; ` +
+      `elif [ -n "\$BASH_VERSION" ]; then case ";\$PROMPT_COMMAND;" in *_tw_cwd*) ;; *) PROMPT_COMMAND="_tw_cwd\${PROMPT_COMMAND:+;\$PROMPT_COMMAND}";; esac; ` +
+      `else case "\$PS1" in *_tw_cwd*) ;; *) PS1='\$(_tw_cwd)'"\$PS1";; esac; fi`;
     let cmd = ' ' + line + '; _tw_cwd\r'; // leading space: kept out of the shell history
     if (permanent) {
       const q = line.replace(/'/g, `'\\''`);

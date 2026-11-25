@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Files panel follows `!sh`** (and `sh`, `ash`, `busybox sh`) on switches: the panel's folder now follows the switch's Linux shell too - in a plain sh the folder is reported from the prompt (bash and zsh as before).
+
 - **New tagline**: *Open-source network engineering, automation and testing platform* - on the start page and in the README.
 
 ## 0.44.4 (2026-11-24)
