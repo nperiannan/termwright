@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Interface font: Menlo** (the VS Code editor font, fixed width) is one more choice in Settings → General → Interface font; the default stays the system font.
+
 - **Settings → Files & Folders**: every place Termwright keeps things on one page, each with *Open*. The Sessions folder, logs and recordings move here from General; new are the **Exports folder** for test exports (Playwright projects, Go, Python and TCL) with *Ask where to save exports* (off: saved there at once), and **this computer's folder** for SFTP - the local side of SFTP tabs starts there and Files panel downloads go there, with *Ask where to save each download* and *Show the folder after a download*. Places that cannot be moved are shown so they can be found: command history, API Client history, lab history, test run history, known hosts, the settings file, the tests folder and its run results.
 
 - **Log files named by time, where you want them**: Settings → General has the **Logs folder**, a **Log file name** pattern (default `%S-%Y%M%D-%h%m%s.log` - the session, then the date and time it started) and **The Log button asks where to save**. *Log As…* starts in the Logs folder with that name (it was the session name only). Stopping a log says where it is, with **Open** and **Show in Finder**; the Log button's right-click has *Open the Last Log*, *Open the Logs Folder* and *Log Settings…*.
