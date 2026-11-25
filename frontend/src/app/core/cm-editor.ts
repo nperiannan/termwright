@@ -165,6 +165,9 @@ const theme = EditorView.theme({
   '.cm-gutters': { backgroundColor: v('bg'), color: v('lineno'), border: 'none', paddingRight: '6px' },
   '.cm-activeLineGutter': { backgroundColor: 'transparent', color: v('lineno-on') },
   '.cm-activeLine': { backgroundColor: v('line') },
+  // the cursor is drawn by CodeMirror (drawSelection): its default is black, unseen on the dark theme
+  '.cm-cursor, .cm-dropCursor': { borderLeftColor: v('caret'), borderLeftWidth: '2px' },
+  '&.cm-focused .cm-cursor': { borderLeftColor: v('caret') },
   '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection': { backgroundColor: v('sel') + ' !important' },
   '.cm-searchMatch': { backgroundColor: v('match') },
   '.cm-searchMatch-selected': { backgroundColor: v('match-on') },
@@ -213,7 +216,7 @@ export function createEditor(host: HTMLElement, o: { text: string; kind: FileKin
         search({ top: true }), highlightSelectionMatches(),
         keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, ...foldKeymap, indentWithTab]),
         language(o.kind, o.name), syntaxHighlighting(style), theme,
-        ro.of([EditorState.readOnly.of(o.readOnly), EditorView.editable.of(!o.readOnly)]),
+        ro.of([EditorState.readOnly.of(o.readOnly)]), // always focusable: the cursor and the selection show also read-only
         wrap.of(o.wrap ? EditorView.lineWrapping : []),
         EditorView.updateListener.of(u => {
           if (u.docChanged && o.onChange) o.onChange();
@@ -239,7 +242,7 @@ export function createEditor(host: HTMLElement, o: { text: string; kind: FileKin
       if (keepScroll) view.scrollDOM.scrollTop = top;
       parseAll();
     },
-    setReadOnly: r => view.dispatch({ effects: ro.reconfigure([EditorState.readOnly.of(r), EditorView.editable.of(!r)]) }),
+    setReadOnly: r => view.dispatch({ effects: ro.reconfigure([EditorState.readOnly.of(r)]) }),
     setWrap: w => view.dispatch({ effects: wrap.reconfigure(w ? EditorView.lineWrapping : []) }),
     find: () => { openSearchPanel(view); },
     toEnd: () => { view.dispatch({ selection: { anchor: view.state.doc.length }, scrollIntoView: true }); },
