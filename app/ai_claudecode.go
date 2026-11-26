@@ -220,6 +220,20 @@ func claudeCodeChat(ctx context.Context, path, model, effort, sys, user string) 
 	return out, err
 }
 
+// errClaudeLogin: Claude Code answered that it is not signed in (or its sign-in ran out).
+var errClaudeLogin = errors.New("Claude Code is not signed in")
+
+// claudeNeedsLogin: a Claude Code message that means signing in again.
+func claudeNeedsLogin(msg string) bool {
+	low := strings.ToLower(msg)
+	for _, w := range []string{"login", "log in", "logged out", "sign in", "not authenticated", "authentication", "api key", "oauth", "unauthorized", "401", "credential", "token has expired", "token expired", "revoked"} {
+		if strings.Contains(low, w) {
+			return true
+		}
+	}
+	return false
+}
+
 // claudeCodeResult reads the JSON Claude Code prints (plain text from an older one).
 func claudeCodeResult(out string) (string, *AIUsage, error) {
 	var v struct {
@@ -241,7 +255,15 @@ func claudeCodeResult(out string) (string, *AIUsage, error) {
 		return t, nil, nil
 	}
 	if v.IsError {
-		return "", nil, errors.New("Claude Code: " + v.Result)
+		// signed out, it ends at once: an error with no answer and no tokens
+		if claudeNeedsLogin(v.Result) || (strings.TrimSpace(v.Result) == "" && v.Usage.In+v.Usage.Out+v.Usage.CacheR+v.Usage.CacheW == 0) {
+			return "", nil, errClaudeLogin
+		}
+		r := strings.TrimSpace(v.Result)
+		if r == "" {
+			r = "it stopped without an answer (no tokens used) - it may not be signed in"
+		}
+		return "", nil, errors.New("Claude Code: " + r)
 	}
 	u := &AIUsage{In: v.Usage.In + v.Usage.CacheR + v.Usage.CacheW, Out: v.Usage.Out}
 	best := -1
@@ -291,8 +313,16 @@ func claudeCodeRun(ctx context.Context, path, model, effort, sys, user, picDir s
 		if msg == "" {
 			msg = strings.TrimSpace(out)
 		}
-		low := strings.ToLower(msg)
-		if strings.Contains(low, "login") || strings.Contains(low, "log in") || strings.Contains(low, "not authenticated") || strings.Contains(low, "/login") {
+		// it exited with its JSON answer: the reason is its "result" (shown raw before - a page of JSON)
+		if _, _, jerr := claudeCodeResult(out); jerr != nil {
+			if errors.Is(jerr, errClaudeLogin) {
+				return "", nil, errors.New("Claude Code is not signed in. " + claudeSignInHint(runtime.GOOS, bin, os.Getenv("PATH")))
+			}
+			if strings.TrimSpace(stderr) == "" {
+				return "", nil, jerr
+			}
+		}
+		if claudeNeedsLogin(msg) {
 			return "", nil, errors.New("Claude Code is not signed in. " + claudeSignInHint(runtime.GOOS, bin, os.Getenv("PATH")))
 		}
 		if len(msg) > 400 {
@@ -304,6 +334,9 @@ func claudeCodeRun(ctx context.Context, path, model, effort, sys, user, picDir s
 		return "", nil, errors.New("Claude Code: " + msg)
 	}
 	text, usage, err := claudeCodeResult(out)
+	if errors.Is(err, errClaudeLogin) {
+		return "", nil, errors.New("Claude Code is not signed in. " + claudeSignInHint(runtime.GOOS, bin, os.Getenv("PATH")))
+	}
 	if err != nil {
 		return "", nil, err
 	}

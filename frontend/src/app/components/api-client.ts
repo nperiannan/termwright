@@ -383,7 +383,7 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
             <div class="vr" [class.no]="!v">
               <span class="vn" translate="no">{{ n }}</span>
               @if (v) { <span class="vv" translate="no">{{ v.secret ? '••••••••' : v.value }}</span><span class="vs">{{ v.source }}</span> }
-              @else { <input class="vv" placeholder="Enter value" (change)="setLocal(n, $any($event.target).value)" /> }
+              @else { <input class="vv" placeholder="Enter value" (input)="typeLocal(n, $any($event.target).value)" (change)="setLocal(n, $any($event.target).value)" (keydown.enter)="setLocal(n, $any($event.target).value)" title="Used by this tab's requests until you close it" /> }
             </div>
           } @empty { <div class="mut pad">This request uses no {{ '{{variables}}' }}.</div> }
           <div class="vh">All variables</div>
@@ -832,7 +832,7 @@ export class ApiClient implements OnInit, OnDestroy {
   async choose(p: string) {
     this.path.set(p);
     this.sess.set(p ? await this.backend.getSession(p).catch(() => null) : null);
-    this.vars = {};
+    this.vars = { ...this.typed }; // values typed by hand stay; those set by scripts belong to the session
     void this.loadToken();
     void this.refreshVars();
   }
@@ -1102,7 +1102,15 @@ export class ApiClient implements OnInit, OnDestroy {
     return order.map(src => ({ src, vars: this.varList().filter(v => v.source === src) })).filter(g => g.vars.length);
   }
   srcName(s: string) { return ({ local: 'Local (set by scripts in this tab)', environment: 'Environment: ' + this.envName(), session: 'API session: ' + (this.sess()?.name ?? ''), collection: 'Collection: ' + this.collName(this.draft().coll), globals: 'Globals' } as Record<string, string>)[s] ?? s; }
-  setLocal(n: string, v: string) { if (v === '') return; this.vars[n] = v; void this.refreshVars(); }
+  /** Values typed in the Variables panel: they count at once (also for a Send right after typing) and stay when
+   * another session is chosen - unlike values set by scripts, which belong to the session they ran with. */
+  private typed: Record<string, string> = {};
+  private typeTimer?: ReturnType<typeof setTimeout>;
+  typeLocal(n: string, v: string) {
+    if (v === '') { delete this.typed[n]; delete this.vars[n]; } else { this.typed[n] = v; this.vars[n] = v; }
+    clearTimeout(this.typeTimer); this.typeTimer = setTimeout(() => void this.refreshVars(), 400);
+  }
+  setLocal(n: string, v: string) { if (v === '') return; this.typed[n] = v; this.vars[n] = v; void this.refreshVars(); }
   // ---- environments ----
   async loadEnvs() {
     const l = await this.backend.httpEnvironments().catch(() => [] as HEnv[]);

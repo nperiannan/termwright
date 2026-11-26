@@ -4,6 +4,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **AI Assistant: "not signed in" instead of a page of JSON**: when Claude Code was signed out (or its sign-in ran out), the chat showed its raw JSON answer. It now says Claude Code is not signed in, with **Run it in a Termwright tab** (opens a Local Shell and starts the sign-in) and **Copy the command**.
+- **API Client: a value typed in the Variables panel counts at once**: it was taken only when the field lost focus, and was dropped when another session was chosen. It now applies as you type (and on Enter), and stays for the tab.
+
 ## 0.44.6 (2026-11-26)
 
 - **File viewer: the cursor and the selection show**: the cursor was drawn black (unseen on the dark theme) and the highlighted current line covered the selection. Both show now, also before Edit (the file stays read-only until then, but you can place the cursor and select to copy).
