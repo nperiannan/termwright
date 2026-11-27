@@ -177,6 +177,7 @@ func (f Folder) Load(rel string) (Case, error) {
 		c.Name = strings.TrimSuffix(filepath.Base(p), filepath.Ext(p))
 	}
 	c.file = filepath.ToSlash(rel)
+	webLoginRoles(&c) // the web app is a role, so a testbed can bring its own
 	return c, nil
 }
 

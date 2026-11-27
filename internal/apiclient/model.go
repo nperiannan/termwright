@@ -35,6 +35,47 @@ type ReqAuth struct {
 	Value string `json:"value,omitempty"`
 	// In: where the API key goes, "header" (default) or "query".
 	In string `json:"in,omitempty"`
+	// OAuth 2.0 (Postman's "Get New Access Token"): Grant "client_credentials" (default) or "password" (User
+	// and Password are the resource owner's), TokenURL, ClientID, ClientSecret, Scope; ClientAuth "body"
+	// sends the client's id and secret in the form instead of a Basic header. Token, when set, is used as it is.
+	Grant        string `json:"grant,omitempty"`
+	TokenURL     string `json:"tokenUrl,omitempty"`
+	ClientID     string `json:"clientId,omitempty"`
+	ClientSecret string `json:"clientSecret,omitempty"`
+	Scope        string `json:"scope,omitempty"`
+	ClientAuth   string `json:"clientAuth,omitempty"`
+	// AWS Signature (v4): AccessKey, SecretKey, Region, Service and SessionToken (temporary credentials).
+	AccessKey    string `json:"accessKey,omitempty"`
+	SecretKey    string `json:"secretKey,omitempty"`
+	Region       string `json:"region,omitempty"`
+	Service      string `json:"service,omitempty"`
+	SessionToken string `json:"sessionToken,omitempty"`
+	// OAuth 2.0 in a browser: Grant "authorization_code" or "implicit"; AuthURL, RedirectURI (an
+	// http://localhost or 127.0.0.1 address Termwright listens on; default one with a free port), PKCE
+	// "S256" or "plain" ("" none) and State ("" a random one).
+	AuthURL     string `json:"authUrl,omitempty"`
+	RedirectURI string `json:"redirectUri,omitempty"`
+	PKCE        string `json:"pkce,omitempty"`
+	State       string `json:"state,omitempty"`
+	// OAuth 1.0: ConsumerKey, ConsumerSecret, Token (the access token), TokenSecret, SignatureMethod
+	// ("HMAC-SHA1" default, "HMAC-SHA256", "HMAC-SHA512" or "PLAINTEXT"), Realm; In "header" (default),
+	// "query" or "body".
+	ConsumerKey     string `json:"consumerKey,omitempty"`
+	ConsumerSecret  string `json:"consumerSecret,omitempty"`
+	TokenSecret     string `json:"tokenSecret,omitempty"`
+	SignatureMethod string `json:"signatureMethod,omitempty"`
+	Realm           string `json:"realm,omitempty"`
+	// Hawk: HawkID, HawkKey, Algorithm ("sha256" default or "sha1"), Ext, App, Dlg; Payload adds the body's hash.
+	HawkID    string `json:"hawkId,omitempty"`
+	HawkKey   string `json:"hawkKey,omitempty"`
+	Algorithm string `json:"algorithm,omitempty"`
+	Ext       string `json:"ext,omitempty"`
+	App       string `json:"app,omitempty"`
+	Dlg       string `json:"dlg,omitempty"`
+	Payload   bool   `json:"payload,omitempty"`
+	// NTLM: User and Password, with Domain and Workstation.
+	Domain      string `json:"domain,omitempty"`
+	Workstation string `json:"workstation,omitempty"`
 }
 
 // Settings of a request (Postman's request settings). Zero values are the defaults.
@@ -83,8 +124,11 @@ type Request struct {
 	Name string `json:"name,omitempty"`
 	// Folder in the collection ("Interfaces/Ports"), "" = top level.
 	Folder string `json:"folder,omitempty"`
-	// Method: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS or any other word.
+	// Method: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS or any other word; "WS" is a WebSocket and
+	// "GRPC" a gRPC call (see GRPC).
 	Method string `json:"method"`
+	// GRPC: a gRPC call's method and schema.
+	GRPC *GRPCSpec `json:"grpc,omitempty"`
 	// URL: absolute, or a path (/rest/...) that goes after the session's base URL.
 	URL string `json:"url"`
 	// Params: query parameters added to the URL.
@@ -95,7 +139,8 @@ type Request struct {
 	Headers []KV `json:"headers,omitempty"`
 	// Body sent with it.
 	Body Body `json:"body,omitempty"`
-	// Auth: "" inherits (the collection's, else the session's), "none", "bearer", "basic" or "apikey".
+	// Auth: "" inherits (the collection's, else the session's), "none", "bearer", "basic", "apikey", "digest",
+	// "oauth2" or "awsv4".
 	Auth string `json:"auth,omitempty"`
 	// AuthData: the values of its own authentication.
 	AuthData *ReqAuth `json:"authData,omitempty"`
@@ -133,7 +178,7 @@ type Collection struct {
 	Vars []KV `json:"vars,omitempty"`
 	// Requests in order.
 	Requests []Request `json:"requests"`
-	// Auth of its requests that inherit: "" (the session's), "none", "bearer", "basic" or "apikey".
+	// Auth of its requests that inherit: "" (the session's), "none", "bearer", "basic", "apikey", "digest", "oauth2" or "awsv4".
 	Auth string `json:"auth,omitempty"`
 	// AuthData: the values of its authentication.
 	AuthData *ReqAuth `json:"authData,omitempty"`
@@ -232,6 +277,8 @@ type Response struct {
 	EnvSet map[string]string `json:"envSet,omitempty"`
 	// GlobalSet: values the scripts set with pm.globals.set (kept in the globals).
 	GlobalSet map[string]string `json:"globalSet,omitempty"`
+	// CollSet: values the scripts set with pm.collectionVariables.set (kept in the collection).
+	CollSet map[string]string `json:"collSet,omitempty"`
 }
 
 // Environment is a named set of variables (Postman's environments); the one with ID "globals" holds
@@ -267,7 +314,7 @@ func (a *ReqAuth) Scrub() {
 	if a == nil {
 		return
 	}
-	for _, p := range []*string{&a.Token, &a.Password, &a.Value} {
+	for _, p := range []*string{&a.Token, &a.Password, &a.Value, &a.ClientSecret, &a.SecretKey, &a.SessionToken, &a.ConsumerSecret, &a.TokenSecret, &a.HawkKey} {
 		if Literal(*p) {
 			*p = ""
 		}

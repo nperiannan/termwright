@@ -8,7 +8,7 @@ import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { Recorder, escapeRe, fieldPattern, isRead } from '../core/recorder.service';
 import { Tabs } from '../core/tabs.service';
-import { TestbedMeta, TestRequirement, TestStepOptions, TestSuiteDefaults, TestWeb, TestWebAction, WebResult, TestbedDevice, WebStatus, TestBooking, TestTrends, TestTable, TestProc, TestProcInfo, TemplateSpec, SessionNode, TestApproval, CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestHistory, TestStepResult, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
+import { TestbedMeta, TestRequirement, TestStepOptions, TestSuiteDefaults, TestWeb, TestWebAction, WebResult, TestbedDevice, WebStatus, TestBooking, TestTrends, TestTable, TestProc, TestProcInfo, TemplateSpec, SessionNode, Session, TestApproval, CleanupMode, OnCleanupFail, TestCase, TestCaseInfo, TestExpect, TestHistory, TestStepResult, TestResult, TestRunReport, TestSchedule, TestScheduleView, TestStep, TestsGitInfo, TestsTree } from '../core/models';
 import { expectLabel, parseTableCheck, stepText } from './recorder-panel';
 import { AIChat } from '../core/ai-chat.service';
 import { Icon } from './icon';
@@ -20,6 +20,14 @@ type Section = 'tests' | 'runs' | 'schedules' | 'testbeds' | 'procs' | 'library'
 
 /** The Tests tab: the tests folder's tree, the selected test (steps, YAML, generated Go) and the last run. */
 type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestStepResult };
+
+/** A recorded action from the browser into a list: the toolbar's Undo drops the last one, Done is not an action. */
+function recInto(acts: TestWebAction[], a: TestWebAction): boolean {
+  if (a.do === '__done') return false;
+  if (a.do === '__undo') return acts.pop() !== undefined;
+  acts.push({ do: a.do, target: a.target, value: a.value, alt: a.alt?.length ? a.alt : undefined });
+  return true;
+}
 
 @Component({
   selector: 'app-tests-view',
@@ -397,23 +405,10 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                   </div>
                   @for (r of restoreRes(); track $index) { <div class="trow" [class.bad]="!r.passed"><span>{{ r.passed ? '✓' : '✗' }}</span><span>{{ r.name }}</span><span class="mut">{{ r.target }} {{ r.error }}</span></div> }
                   @if (draft(); as d) {
-                    <div class="sec devsec"><div class="sh">Devices <span class="mut norm">where the steps run - a testbed or the Run panel can put them on other devices</span></div>
-                      <div class="ed">
-                        @for (r of testRoles(d); track r) {
-                          <div class="row devrow"><code class="rolec">{{ '{{' }}{{ r }}{{ '}}' }}</code><span class="mut">→</span><input class="cmdi" [ngModel]="d.vars?.[r] ?? ''" (ngModelChange)="d.vars![r] = $event; touch()" [attr.list]="'twsesslist'" aria-label="Session" />
-                            <span class="mut sm">{{ portsHint(r) }}</span><button type="button" class="lnk" (click)="renameTestRole(d, r)" title="Rename it in every step of the test">Rename</button></div>
-                          @let q = d.requires?.[r] ?? {};
-                          <div class="row needs" title="What the test needs of this device: a testbed that does not have it skips the test with the reason (not a failure)"><span class="mut">Needs</span>
-                            <select [ngModel]="q.deviceType ?? ''" (ngModelChange)="setReq(d, r, 'deviceType', $event)"><option value="">any device type</option>@for (t of deviceTypeNames(); track t) { <option [value]="t">{{ t }}</option> }</select>
-                            <select [ngModel]="q.stack === undefined ? '' : q.stack ? 'yes' : 'no'" (ngModelChange)="setReq(d, r, 'stack', $event === '' ? undefined : $event === 'yes')"><option value="">stack or not</option><option value="yes">a stack</option><option value="no">not a stack</option></select>
-                            <label>at least <input type="number" min="0" class="num2" [ngModel]="q.ports" (ngModelChange)="setReq(d, r, 'ports', $event || undefined)" placeholder="0" /> ports</label>
-                            <input class="pin" [ngModel]="(q.tags ?? []).join(', ')" (ngModelChange)="setReq(d, r, 'tags', splitTags($event))" placeholder="testbed tags, e.g. l3" /></div>
-                        } @empty { <div class="mut">The steps name their sessions themselves.</div> }
-                        @if (testRoles(d).length === 1) { <div class="mut sm">One device: the steps use it without naming it. Steps on another session show it.</div> }
-                      </div>
-                      <datalist id="twroles">@for (r of testRoles(d); track r) { <option [value]="'{{' + r + '}}'"></option> }</datalist>
-                      <datalist id="twsesslist">@for (p of allSessions(); track p) { <option [value]="p"></option> }</datalist>
-                    </div>
+                    <div class="elay">
+                    <div class="emain">
+                    @if (setsOpen()) {
+                      <div class="setsh"><b>Settings</b><span class="mut">for the whole test</span><span class="sp"></span><button type="button" class="lnk" (click)="setsOpen.set(false)">Done</button></div>
                     <div class="sec devsec"><div class="sh">Step options <span class="mut norm">for the steps set to Default</span></div>
                       <div class="ed"><div class="row opts">
                         <label>Timeout <input type="number" min="0" class="num2" [ngModel]="d.defaults?.timeout" (ngModelChange)="setDef(d, 'timeout', $event)" placeholder="60" /> s</label>
@@ -434,6 +429,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                         <div class="row opts"><label title="Reads each device's configuration (its device type's backup commands) before the test and after the cleanup; a difference fails the test"><input type="checkbox" [(ngModel)]="d.configDiff" /> Compare the configuration before and after (needs the cleanup on)</label>
                           @if (d.configDiff) { <label class="wide">ignore lines <input class="cmdi" [ngModel]="(d.configIgnore ?? []).join(', ')" (ngModelChange)="d.configIgnore = splitTags($event)" placeholder="regular expressions, e.g. ^! Last configuration change" /></label> }</div>
                       </div></div>
+                    }
                     @for (ph of phases; track ph.k) {
                       <div class="sec ph" [class]="'ph-' + ph.k">
                         <div class="sh"><span class="pht">{{ ph.l }}</span><span class="cnt">{{ listOf(d, ph.k).length }}</span><span class="mut norm">{{ phDesc(ph.k) }}</span><span class="sp"></span><button type="button" class="lnk" (click)="addStep(ph.k)">+ Command</button><button type="button" class="lnk" (click)="addMenu($event, ph.k)" title="An API request, a curl command, a manual step, a wait, a loop, an upgrade or a traffic test">+ More ▾</button></div>
@@ -449,7 +445,10 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                                 @if (s.netconf.op === 'get-config') { <select [(ngModel)]="s.netconf.source" aria-label="Source"><option [ngValue]="undefined">running</option><option value="candidate">candidate</option><option value="startup">startup</option></select> }
                                 @if (s.netconf.op === 'edit-config') { <select [(ngModel)]="s.netconf.target" aria-label="Target"><option [ngValue]="undefined">running</option><option value="candidate">candidate (then commit)</option></select> }<span class="sp"></span> }
                               @else if (s.tgen) { <span class="mut">traffic</span><select [(ngModel)]="s.tgen.kind" aria-label="Traffic generator"><option value="stc">Spirent TestCenter</option><option value="ixnetwork">IxNetwork</option></select><input class="cmdi" [(ngModel)]="s.tgen.server" placeholder="API session or https://api-server" aria-label="Server" list="tw-api-sessions" /><label class="mut">for <input type="number" class="num2" [(ngModel)]="s.tgen.duration" placeholder="10" /> s</label> }
-                              @else if (s.web) { <span class="mut">web</span><input class="cmdi" [(ngModel)]="s.web.url" placeholder="https://device-or-app/login" aria-label="Page address" /><select [(ngModel)]="s.web.browser" aria-label="Browser"><option [ngValue]="undefined">Chromium</option><option value="firefox">Firefox</option><option value="webkit">WebKit (Safari)</option></select> }
+                              @else if (s.web) { <button type="button" class="wapp" (click)="webAppMenu($event, s.web)" [title]="'The web app the step works on: ' + (s.web.login || 'none - the address is a full URL')"><span class="wic">🌐</span><span class="ell">{{ webAppName(s.web.login) }}</span>@if (s.web.login?.startsWith('{{')) { <code>{{ s.web.login }}</code> }<span class="cv">▾</span></button>
+                                <input class="cmdi wurl" [(ngModel)]="s.web.url" [placeholder]="isWebApp(s.web.login) ? '/ (the start page) or /devices' : 'https://device-or-app/login'" aria-label="Page address" />
+                                <button type="button" class="wpill" [class.on]="webSetOpen(ph.k, i)" (click)="toggleWebSet(ph.k, i)" title="Browser, page size, certificates, pictures, step options">{{ webPill(s.web) }} ⚙</button>
+                                @if (resOf(ph.k, i); as lr) { <span class="wlast" [class.ok]="lr.passed" [class.bad]="!lr.passed && !lr.skipped">{{ lr.skipped ? '– skipped' : lr.passed ? '✓ passed' : '✗ failed' }} · {{ dur(lr.ms) }}</span> } }
                               @else if (s.traffic) { <span class="mut">traffic test</span><input class="cmdi" [(ngModel)]="s.traffic.test" placeholder="saved lab traffic test" aria-label="Traffic test" /> }
                               @else { <span class="cmd fl">{{ s.loop ? 'loop' : text(s) }}</span><span class="sp"></span> }
                               <button type="button" class="lnk" (click)="moveStep(ph.k, i, -1)" [disabled]="i === 0" title="Move up">↑</button><button type="button" class="lnk" (click)="moveStep(ph.k, i, 1)" [disabled]="lastI" title="Move down">↓</button><button type="button" class="lnk" (click)="removeStep(ph.k, i)" title="Remove the step">✕</button>
@@ -467,45 +466,77 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                             @if (s.web; as w) {
                               @if (webSt(); as ws) { @if (!ws.ready) { <div class="row opts webst"><span>🌐 {{ ws.node ? 'Playwright is not set up on this computer yet - recording, step-by-step runs and ⌖ Pick need it (once, about 150 MB).' : 'Node.js is not installed - web steps need it.' }} <small class="mut">{{ ws.hint }}</small></span><span class="sp"></span>@if (ws.node) { <button type="button" class="pri" (click)="webSetup()" [disabled]="webBusy()">{{ webBusy() ? 'Setting up…' : 'Set Up Playwright' }}</button> }</div>@if (webBusy()) { <div class="row opts"><code class="mut">{{ webLine() }}</code></div> } } }
                               @let dw = dbgOn(w);
-                              <div class="row opts webdbg">
-                                @if (dw) { <span class="ok">● browser open</span><button type="button" (click)="dbgRunAll(w)" [disabled]="dbgBusy()" title="Run all the actions in the open browser, from its page">▶ Run All</button><button type="button" (click)="dbgRestart()" [disabled]="dbgBusy()" title="Back to the step's page">↺ Start Over</button><button type="button" (click)="dbgClose()">■ Stop</button> }
-                                @else { <button type="button" (click)="dbgOpen(w)" [disabled]="dbgBusy() || !webSt()?.ready" [title]="needPw('Open the step page in a browser (logged in) and keep it open: run actions one by one with ▶, pick targets with ⌖, record more')">▶ Debug in Browser</button> }
-                                @if (dbgMsg()) { <span class="mut">{{ dbgMsg() }}</span> }<span class="sp"></span>
-                                @if (selActs().size) { <span class="mut">{{ selActs().size }} selected</span> }
-                              </div>
+                              @let lw = webRun(ph.k, i, w);
+                              @if (dw) {
+                                <div class="wdbg"><span class="ok">● browser open</span><button type="button" (click)="dbgRunAll(w)" [disabled]="dbgBusy()" title="Run all the actions in the open browser, from its page">▶ Run All</button><button type="button" (click)="dbgRestart()" [disabled]="dbgBusy()" title="Back to the step's page">↺ Start Over</button><button type="button" (click)="dbgClose()">■ Close Browser</button>
+                                  @if (dbgMsg()) { <span class="mut">{{ dbgMsg() }}</span> }<span class="sp"></span>@if (selActs().size) { <span class="mut">{{ selActs().size }} selected</span> }</div>
+                              }
+                              @if (webSetOpen(ph.k, i)) {
+                                <div class="wset">
+                                  <label title="A web app session (its address, login and settings), or any saved session whose user name and password fill {{ '{{' }}username}} and {{ '{{' }}password}}. A role works too: {{ '{{' }}app}}. Passwords never go in the test.">Web app <input class="pin lg" [(ngModel)]="w.login" list="twsess" placeholder="none: a full address" /></label>
+                                  @if (!isWebApp(w.login)) { <label title="Keep the login (cookies) under this name: the next web steps with the same name start logged in">Keep login as <input class="pin" [(ngModel)]="w.state" placeholder="optional" /></label> }
+                                  <label>Browser <select [(ngModel)]="w.browser" aria-label="Browser"><option [ngValue]="undefined">Chromium</option><option value="firefox">Firefox</option><option value="webkit">WebKit (Safari)</option></select></label>
+                                  <label title="The page size: a screen resolution or a custom one, e.g. 390x844 for a phone">Size <app-size-pick [(value)]="w.viewport" [empty]="isWebApp(w.login) ? 'As the app' : 'Browser default'" /></label>
+                                  <label title="Accept self-signed certificates (device web pages)"><input type="checkbox" [(ngModel)]="w.insecure" /> Self-signed certificate OK</label>
+                                  <label title="Show the browser window while it runs (default: hidden)"><input type="checkbox" [(ngModel)]="w.show" /> Show the browser</label>
+                                  <label title="Record a Playwright trace (every action with the page before and after) - open it with npx playwright show-trace"><input type="checkbox" [(ngModel)]="w.trace" /> Trace</label>
+                                  <label title="Pictures of the page in the run report: of a failure (the default), after every action as well (they show next to the actions here), or none">Pictures <select [ngModel]="w.pictures === 'all' || w.pictures === 'none' ? w.pictures : ''" (ngModelChange)="setPictures(w, $event, $any($event.target))"><option value="">of a failure</option><option value="all">after every action</option><option value="none">none</option></select></label>
+                                  <button type="button" class="lnk" (click)="backend.openURL(webGuide)">Web testing guide</button>
+                                </div>
+                              }
+                              <div class="wacts">
                               @for (a of w.actions ?? []; track $index; let k = $index) {
                                 @let ar = dw ? dbg()?.res?.[k] : undefined;
-                                <div class="row opts inner" [class.cur]="dw && dbg()?.at === k">
-                                  <span class="st" [class.ok]="ar?.ok && !ar.healed" [class.hw]="ar?.healed" [class.bad]="ar && !ar.ok" [title]="ar ? (ar.ok ? (ar.note || 'done') + (ar.healed ? ' - healed: ' + ar.healed : '') : ar.error || 'failed') : ''">{{ ar ? (ar.ok ? (ar.healed ? '⚠' : '✓') : '✗') : (dw && dbg()?.at === k ? '➜' : '') }}</span>
-                                  <button type="button" class="mut wn lnk" [class.sel]="isSelAct(w, k)" (click)="selAct(w, k, $event)" title="Select (Shift: a range) - to save as a block or record after it">{{ k + 1 }}</button>
-                                  <select [(ngModel)]="a.do" aria-label="Action" [title]="webAct(a.do)?.t ?? ''">@for (g of webGroups; track g.g) { <optgroup [label]="g.g">@for (o of g.a; track o.k) { <option [value]="o.k">{{ o.l }}</option> }</optgroup> }</select>
-                                  @if (a.do === 'block') {
-                                    <input class="cmdi" [(ngModel)]="a.target" list="twblocks" placeholder="block name" aria-label="Block" (focus)="loadBlocks()" />
-                                    @for (p of blockParams(a.target); track p) { <label class="bp">{{ p }} <input class="pin sm" [ngModel]="a.with?.[p] ?? ''" (ngModelChange)="setWith(a, p, $event)" [placeholder]="p" /></label> }
-                                  } @else {
-                                    @if (webAct(a.do)?.tg !== false) { <input class="cmdi" [(ngModel)]="a.target" [attr.list]="'twtgt'" [placeholder]="webTgtHint(a.do)" aria-label="Target" [title]="a.alt?.length ? 'Fallbacks when it is not found: ' + a.alt.join('   ') : ''" /> }
-                                    @if (webAct(a.do)?.v !== false) { <input class="pin" [(ngModel)]="a.value" [type]="a.secret || ((a.do === 'fill' || a.do === 'type') && isSecretTarget(a.target) && a.value !== '{{password}}') ? 'password' : 'text'" [placeholder]="webValHint(a.do)" aria-label="Value" /> }
+                                @let st = ar ? (ar.ok ? (ar.healed ? 'hw' : 'ok') : 'bad') : lw.st[k];
+                                <div class="wa" [class.open]="actOpen(w, k)" [class.cur]="dw && dbg()?.at === k" [class.drop]="dropAt() === k" [class.chk]="a.do.startsWith('expect')"
+                                  draggable="true" (dragstart)="dragAct(w, k, $event)" (dragover)="overAct(w, k, $event)" (dragleave)="dropAt.set(-1)" (drop)="dropAct(w, k, $event)" (dragend)="dropAt.set(-1)">
+                                  <div class="war" (click)="toggleAct(w, k)">
+                                    <span class="wh" title="Drag to move">⋮⋮</span>
+                                    <button type="button" class="wn" [class.sel]="isSelAct(w, k)" (click)="selAct(w, k, $event); $event.stopPropagation()" title="Select (Shift: a range) - to save as a procedure or record after it">{{ k + 1 }}</button>
+                                    @if (lw.pic[k] && picUrl(lw.pic[k]); as u) { <img class="wth" [src]="u" alt="" (click)="bigPic.set(u); $event.stopPropagation()" title="The page after this action in the last run - click to enlarge" /> }
+                                    <span class="wsay">@if (a.do.startsWith('expect')) { <b class="ck">✓</b> }{{ actWords(a) }}@if (a.do === 'block') { @for (p of blockParams(a.target); track p) { <span class="wv">{{ p }} = {{ a.with?.[p] || '…' }}</span> } }</span>
+                                    <span class="wsts" [class]="'wsts ' + (st ?? '')" [title]="ar ? (ar.ok ? (ar.note || 'done') + (ar.healed ? ' - healed: ' + ar.healed : '') : ar.error || 'failed') : st ? 'in the last run' : ''">{{ st === 'ok' ? '✓' : st === 'hw' ? '⚠' : st === 'bad' ? '✗' : dw && dbg()?.at === k ? '➜' : '' }}</span>
+                                    <span class="wtools">
+                                      <button type="button" class="lnk" (click)="dbgRunOne(w, k); $event.stopPropagation()" [disabled]="dbgBusy() || !webSt()?.ready" [title]="needPw('Run just this action in the browser (it opens at the step page when it is not open)')">▶</button>
+                                      <button type="button" class="lnk" (click)="rmWeb(w, k); $event.stopPropagation()" title="Delete the action">✕</button></span>
+                                  </div>
+                                  @if (actOpen(w, k)) {
+                                    <div class="wae">
+                                      <select [(ngModel)]="a.do" aria-label="Action" [title]="webAct(a.do)?.t ?? ''">@for (g of webGroups; track g.g) { <optgroup [label]="g.g">@for (o of g.a; track o.k) { <option [value]="o.k">{{ o.l }}</option> }</optgroup> }</select>
+                                      @if (a.do === 'block') {
+                                        <input class="cmdi" [(ngModel)]="a.target" list="twblocks" placeholder="procedure name" aria-label="Procedure" (focus)="loadBlocks()" />
+                                        @for (p of blockParams(a.target); track p) { <label class="bp">{{ p }} <input class="pin sm" [ngModel]="a.with?.[p] ?? ''" (ngModelChange)="setWith(a, p, $event)" [placeholder]="p" /></label> }
+                                      } @else {
+                                        @if (webAct(a.do)?.tg !== false) { <span class="wtg"><input class="cmdi" [(ngModel)]="a.target" [attr.list]="'twtgt'" [placeholder]="webTgtHint(a.do)" aria-label="Target" /><button type="button" class="lnk" (click)="dbgPick(w, k)" [disabled]="dbgBusy() || !webSt()?.ready" [title]="needPw('Pick on the page: click the element in the browser and its target is filled in')">⌖ Pick</button></span> }
+                                        @if (webAct(a.do)?.v !== false) { <input class="pin" [(ngModel)]="a.value" [type]="a.secret || ((a.do === 'fill' || a.do === 'type') && isSecretTarget(a.target) && a.value !== '{{password}}') ? 'password' : 'text'" [placeholder]="webValHint(a.do)" aria-label="Value" /> }
+                                      }
+                                    </div>
+                                    <div class="walt">@if (a.alt?.length) { <span class="mut">Also found by: </span>@for (x of a.alt; track x) { <code>{{ x }}</code> } <span class="mut">(used when the GUI changes)</span> · }
+                                      <button type="button" class="lnk" (click)="dbgRunTo(w, k)" [disabled]="dbgBusy() || !webSt()?.ready">▶ Run to here</button>
+                                      <button type="button" class="lnk" (click)="dupWeb(w, k)">Duplicate</button>
+                                      <button type="button" class="lnk" [disabled]="k === 0" (click)="mvWeb(w, k, -1); openAct(w, k - 1)">Move up</button>
+                                      <button type="button" class="lnk" [disabled]="k === (w.actions?.length ?? 0) - 1" (click)="mvWeb(w, k, 1); openAct(w, k + 1)">Move down</button>
+                                      <button type="button" class="lnk bad" (click)="rmWeb(w, k)">Delete</button></div>
                                   }
-                                  @if (webAct(a.do)?.tg !== false && a.do !== 'block') { <button type="button" class="lnk pick" (click)="dbgPick(w, k)" [disabled]="dbgBusy() || !webSt()?.ready" [title]="needPw('Pick on the page: click the element in the browser and its target is filled in')">⌖</button> }
-                                  <button type="button" class="lnk" (click)="dbgRunOne(w, k)" [disabled]="dbgBusy() || !webSt()?.ready" [title]="needPw('Run just this action in the open browser (opens it at the step page when it is not open)')">▶</button>
-                                  <button type="button" class="lnk" [disabled]="k === 0" (click)="mvWeb(w, k, -1)" title="Move up">↑</button>
-                                  <button type="button" class="lnk" (click)="rmWeb(w, k)" title="Remove the action">✕</button></div>
-                              }
+                                </div>
+                              } @empty { <div class="wempty mut">No actions yet: <b>● Record</b> them in the browser, <b>✦ Ask AI</b>, or <b>+ Action</b>.</div> }
+                              </div>
                               @let hl = healedOf(ph.k, i, w);
                               @if (hl.length) { <div class="row opts heal">⚠ <span><b>Healed in the last run:</b> @for (h of hl; track h.n) { action {{ h.n }} <code>{{ h.from }}</code> was not found, <code>{{ h.to }}</code> was. }</span><span class="sp"></span><button type="button" (click)="useHealed(w, hl)">Use the New Targets</button></div> }
-                              <div class="row opts"><button type="button" class="lnk" (click)="(w.actions ??= []).push({ do: 'click', target: '' }); touch()">+ Action</button>
-                                <button type="button" class="rec" (click)="dw ? dbgRecord(w) : webRecord(w)" [disabled]="webRec() || dbgBusy() || !webSt()?.ready" [title]="!webSt()?.ready ? needPw('') : dw ? 'Record in the open browser: the actions go after the selected one (or at the end)' : 'Opens the page in a browser: click, type and choose as usual (Alt+click a text to check it shows), then close the window - the actions are added here'">{{ webRec() ? (dw ? '■ Stop Recording' : '● Recording… close the browser to finish') : (dw ? '● Record from Here' : '● Record in Browser') }}</button>
+                              <div class="wfoot">
+                                <button type="button" class="rec" (click)="dw ? dbgRecord(w) : webRecord(w)" [disabled]="(webRec() && !dw) || dbgBusy() || !webSt()?.ready" [title]="!webSt()?.ready ? needPw('') : dw ? 'Record in the open browser: the actions go after the selected one (or at the end)' : 'Opens the page in a browser with the recording toolbar: use the app, Check what must be true, then Done'">{{ webRec() ? (dw ? '■ Stop Recording' : '● Recording…') : (w.actions?.length ? '● Record More' : '● Record') }}</button>
+                                <button type="button" (click)="(w.actions ??= []).push({ do: 'click', target: '' }); openAct(w, w.actions!.length - 1); touch()">+ Action</button>
                                 <button type="button" (click)="procMenu($event, w)" title="Insert a web procedure (shared actions with values) - or record a new one">+ Procedure ▾</button>
-                                <button type="button" (click)="saveBlock(w)" [disabled]="!(w.actions?.length)" title="Save the selected actions (or all) as a web procedure other tests can use - they become one 'Use procedure' action here">Save as Procedure…</button><span class="sp"></span>
-                                <label title="Accept self-signed certificates (device web pages)"><input type="checkbox" [(ngModel)]="w.insecure" /> Self-signed certificate OK</label><label title="Show the browser window while it runs (default: hidden)"><input type="checkbox" [(ngModel)]="w.show" /> Show the browser</label><label title="Record a Playwright trace (every action with the page before and after) - open it with npx playwright show-trace"><input type="checkbox" [(ngModel)]="w.trace" /> Trace</label><label title="Pictures of the page in the run report: of a failure - the action or check that failed, at its step (the default); after every action as well (bigger reports); or none">Pictures <select [ngModel]="w.pictures === 'all' || w.pictures === 'none' ? w.pictures : ''" (ngModelChange)="setPictures(w, $event, $any($event.target))"><option value="">of a failure</option><option value="all">after every action</option><option value="none">none</option></select></label></div>
-                              <div class="row opts">
-                                <label title="A web app session (its address, login and settings), or any saved session whose user name and password fill {{ '{{' }}username}} and {{ '{{' }}password}}. A testbed role works too: {{ '{{' }}app}}. Passwords never go in the test.">Web app <input class="pin lg" [(ngModel)]="w.login" list="twsess" placeholder="session (optional)" /></label>
-                                @if (!isWebApp(w.login)) { <label title="Keep the login (cookies) under this name: the next web steps with the same name start logged in">Keep login as <input class="pin" [(ngModel)]="w.state" placeholder="e.g. xiq (optional)" /></label> }
-                                <label title="The page size: a screen resolution or a custom one, e.g. 390x844 for a phone">Size <app-size-pick [(value)]="w.viewport" [empty]="isWebApp(w.login) ? 'As the app' : 'Browser default'" /></label></div>
+                                <button type="button" class="ib" (click)="webMore($event, w)" title="More: Debug in Browser, Save as Procedure">⋯</button>
+                              </div>
+                              <div class="wfoot2">
+                                <span class="wai" [class.busy]="aiWebBusy() === w"><span class="aic">✦</span><input [(ngModel)]="aiWebText" (keydown.enter)="askAIWeb(w, ph.k, i)" [disabled]="!!aiWebBusy()" placeholder="Ask AI - describe the next actions, e.g. open the device and check it is Connected" aria-label="Ask AI" />
+                                  @if (aiWebBusy() === w) { <span class="mut">{{ aiWebCount() }} recorded</span><button type="button" class="pri" (click)="takeAIWeb(w)">Add Them</button><button type="button" (click)="cancelAIWeb()">Cancel</button> }
+                                  @else { <button type="button" (click)="askAIWeb(w, ph.k, i)" [disabled]="!aiWebText.trim() || !!aiWebBusy() || !webSt()?.ready">Ask</button> }</span>
+                              </div>
                               <datalist id="twsess">@for (p of webSessions(); track p) { <option [value]="p"></option> }</datalist>
                               <datalist id="twblocks">@for (b of blocks(); track b.file) { <option [value]="b.file">{{ b.name }}</option> }</datalist>
                               <datalist id="twtgt"><option value="text="></option><option value="label="></option><option value="placeholder="></option><option value="role=button[name=&quot;&quot;]"></option><option value="testid="></option><option value="title="></option><option value="frame=iframe >> "></option></datalist>
-                              <div class="row opts"><span class="mut">The step's output is the action log, the values read and the page's text, so <b>contains</b> checks work on it. The run report shows a picture after each action, and the screenshot and video of a failure. <button type="button" class="lnk" (click)="backend.openURL(webGuide)">Web testing guide</button></span></div>
                             }
                             @if (s.netconf; as nc) {
                               @if (nc.op === 'get' || nc.op === 'get-config' || !nc.op) { <div class="row opts"><label class="wide" title="A subtree filter: only these parts of the data come back">Filter <textarea class="cmdi body" [(ngModel)]="nc.filter" rows="2" placeholder="<vlans xmlns=&quot;http://openconfig.net/yang/vlan&quot;/>"></textarea></label></div> }
@@ -525,6 +556,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                               <div class="row opts inner"><button type="button" class="lnk" (click)="lp.steps.push({ run: { session: lastSession(), command: '' } }); touch()">+ Step in the loop</button></div>
                             }
                             @if (!s.call) {
+                            @if (!s.web || webSetOpen(ph.k, i)) {
                             @let om = optMode(s);
                             <div class="row opts optbar">
                               <span class="seg sm" role="radiogroup" aria-label="Step options">
@@ -550,8 +582,9 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                                 @if (s.run) { <label title="Turn the output into a table with a TextFSM template: auto (templates/index) or a file in templates/">Parse <input class="pin" [(ngModel)]="s.run.parse" placeholder="off" list="tw-parse" /></label> }
                                 <label class="wide" title="What should happen, in words - shown with the step and in the reports">Expected <input class="cmdi exp" [(ngModel)]="s.expected" placeholder="in words, optional - e.g. VLAN 200 lists port 1:2 tagged" /></label></div>
                             }
+                            }
                             <div class="chips">@for (e of s.expect ?? []; track $index; let j = $index) { <span class="chip"><button type="button" class="lnk ckedit" (click)="openCk(ph.k, i); editCheck(s, j, ck(ph.k, i))" title="Change the check (it moves to the box on the right; + Check puts it back)">{{ label(e) }}</button> <button type="button" class="x" (click)="removeCheck(s, j)" title="Remove the check">×</button></span> }
-                              @if (!s.loop && !s.manual && ck(ph.k, i); as c) { @if (!ckOpen().has(ph.k + i) && !c.v) { <button type="button" class="addchip" (click)="openCk(ph.k, i)" title="Add a check: the output contains, does not contain, matches…">+ check</button> } @else {
+                              @if (!s.loop && !s.manual && !s.web && ck(ph.k, i); as c) { @if (!ckOpen().has(ph.k + i) && !c.v) { <button type="button" class="addchip" (click)="openCk(ph.k, i)" title="Add a check: the output contains, does not contain, matches…">+ check</button> } @else {
                                 <span class="addck"><select [(ngModel)]="c.k" aria-label="Check">@for (k of checkKinds(s); track k.k) { <option [value]="k.k">{{ k.l }}</option> }</select>
                                   <input [(ngModel)]="c.v" [placeholder]="checkHint(c.k)" aria-label="Value" (keydown.enter)="addCheck(s, c)" (contextmenu)="varMenu($event, s)" title="Right-click: insert a variable" /><button type="button" (click)="addCheck(s, c)" [disabled]="!c.v.trim()">+ Check</button></span>
                               } }</div>
@@ -562,6 +595,40 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                     }
                     <datalist id="tw-parse"><option value="auto"></option></datalist>
                     <div class="row"><span class="mut">Saving writes the test's YAML and its Go, Python and TCL code again.</span></div>
+                    </div>
+                    <aside class="eside">
+                      <div class="sbox"><h4>Devices</h4>
+                        @for (r of testRoles(d); track r) {
+                          <div class="srole"><code class="rolec">{{ '{{' }}{{ r }}{{ '}}' }}</code><span class="sk">{{ roleKind(d, r) }}</span><span class="sp"></span>
+                            @if (roleKind(d, r) !== 'web app') { <button type="button" class="lnk sm" [class.on]="needsOpen().has(r)" (click)="toggleNeeds(r)" title="What the test needs of this device (a testbed without it skips the test)">Needs</button> }
+                            <button type="button" class="lnk sm" (click)="renameTestRole(d, r)" title="Rename it in every step of the test">Rename</button></div>
+                          <input class="cmdi srin" [ngModel]="d.vars?.[r] ?? ''" (ngModelChange)="d.vars![r] = $event; touch()" [attr.list]="roleKind(d, r) === 'web app' ? 'twsess' : 'twsesslist'" [attr.aria-label]="r" />
+                          @if (roleKind(d, r) !== 'web app') { <span class="mut sm">{{ portsHint(r) }}</span> }
+                          @if (needsOpen().has(r)) {
+                          @let q = d.requires?.[r] ?? {};
+                          <div class="row needs" title="What the test needs of this device: a testbed that does not have it skips the test with the reason (not a failure)"><span class="mut">Needs</span>
+                            <select [ngModel]="q.deviceType ?? ''" (ngModelChange)="setReq(d, r, 'deviceType', $event)"><option value="">any device type</option>@for (t of deviceTypeNames(); track t) { <option [value]="t">{{ t }}</option> }</select>
+                            <select [ngModel]="q.stack === undefined ? '' : q.stack ? 'yes' : 'no'" (ngModelChange)="setReq(d, r, 'stack', $event === '' ? undefined : $event === 'yes')"><option value="">stack or not</option><option value="yes">a stack</option><option value="no">not a stack</option></select>
+                            <label>at least <input type="number" min="0" class="num2" [ngModel]="q.ports" (ngModelChange)="setReq(d, r, 'ports', $event || undefined)" placeholder="0" /> ports</label>
+                            <input class="pin" [ngModel]="(q.tags ?? []).join(', ')" (ngModelChange)="setReq(d, r, 'tags', splitTags($event))" placeholder="testbed tags, e.g. l3" /></div>
+                          }
+                        } @empty { <div class="mut sm">The steps name their sessions themselves.</div> }
+                        <div class="mut sm sfoot">A testbed or the Run panel can put other ones in.</div>
+                      <datalist id="twroles">@for (r of testRoles(d); track r) { <option [value]="'{{' + r + '}}'"></option> }</datalist>
+                      <datalist id="twsesslist">@for (p of allSessions(); track p) { <option [value]="p"></option> }</datalist>
+                      </div>
+                      <div class="sbox"><h4>Values</h4>
+                        @for (k of testValues(d); track k) {
+                          <div class="sval"><code>{{ '{{' }}{{ k }}{{ '}}' }}</code><input class="pin" [ngModel]="d.vars?.[k] ?? ''" (ngModelChange)="d.vars![k] = $event; touch()" [attr.aria-label]="k" /><button type="button" class="lnk" (click)="rmValue(d, k)" title="Remove">✕</button></div>
+                        } @empty { <div class="mut sm">None - {{ '{{name}}' }} in a step is a value the run or a testbed can change.</div> }
+                        <button type="button" class="lnk" (click)="addValue(d)">+ Value</button>
+                      </div>
+                      <div class="sbox"><h4>Settings</h4>
+                        @for (x of settingsSummary(d); track x[0]) { <div class="sset"><span>{{ x[0] }}</span><b>{{ x[1] }}</b></div> }
+                        <button type="button" class="lnk" (click)="setsOpen.set(!setsOpen())">{{ setsOpen() ? 'Hide' : 'Change…' }}</button>
+                      </div>
+                    </aside>
+                    </div>
                   } @else {
                     @for (ph of phases; track ph.k) {
                       @if (ph.k === 'steps' || listOf(t, ph.k).length) {
@@ -571,9 +638,10 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                           @for (s of listOf(t, ph.k); track $index; let i = $index) {
                             @let r = resOf(ph.k, i);
                             <div class="srow" [attr.aria-expanded]="isOpen(ph.k, i)" [class.f]="r && !r.passed && !r.skipped" [class.open]="isOpen(ph.k, i)" (click)="toggleRow(ph.k, i)" (keydown.enter)="toggleRow(ph.k, i)" (contextmenu)="stepMenu($event, ph.k, i)" tabindex="0" role="button">
-                              @if (ph.k === 'steps') { <span class="bpn" [class.on]="hasBreak(i)" (click)="toggleBreak(i); $event.stopPropagation()" [title]="hasBreak(i) ? 'Breakpoint: the run stops before this step - click to remove' : 'Click to stop before this step (breakpoint)'">{{ i + 1 }}</span> } @else { <span class="mut">{{ i + 1 }}</span> }<span class="dev" [title]="target(s)">{{ s.loop ? 'loop' : s.manual ? 'you' : shortDev(target(s)) }}</span><span class="cmd" [class.manual]="!!s.manual">{{ text(s) }}@if (logicText(s)) { <span class="logic">{{ logicText(s) }}</span> }@if (s.expected) { <span class="expd">Expected: {{ s.expected }}</span> }</span>
+                              @if (ph.k === 'steps') { <span class="bpn" [class.on]="hasBreak(i)" (click)="toggleBreak(i); $event.stopPropagation()" [title]="hasBreak(i) ? 'Breakpoint: the run stops before this step - click to remove' : 'Click to stop before this step (breakpoint)'">{{ i + 1 }}</span> } @else { <span class="mut">{{ i + 1 }}</span> }<span class="dev" [title]="target(s)">{{ s.loop ? 'loop' : s.manual ? 'you' : shortDev(target(s)) }}</span><span class="cmd" [class.manual]="!!s.manual">@if (s.web; as w) { <span class="wflow"><span class="wpath">{{ w.url || '/' }}</span>@for (x of webFlow(w).words; track $index) { <i>›</i>{{ x }} }</span> } @else { {{ text(s) }} }@if (logicText(s)) { <span class="logic">{{ logicText(s) }}</span> }@if (s.expected) { <span class="expd">Expected: {{ s.expected }}</span> }</span>
                               <span class="chips">@for (e of s.expect ?? []; track $index; let j = $index) { <span class="chip" [class.b]="r?.checks?.[j]?.passed === false">{{ r?.checks?.[j]?.passed === false ? '✗' : r ? '✓' : '' }} {{ label(e) }}</span> }
-                                @if (!(s.expect?.length) && !s.manual) { @if (isReadStep(s)) { <span class="chip w" title="A read step without checks passes whatever it shows: select text in its output and right-click to add one">○ not checked</span> } @else { <span class="chip n" title="Fails when the device answers with an error message (the device type's error patterns)">✓ device errors</span> } }@if (s.manual) { <span class="chip m">you decide</span> }</span>
+                                @if (s.web; as w) { @for (c of webFlow(w).checks; track $index) { <span class="chip">{{ c }}</span> } @empty { @if (!(s.expect?.length)) { <span class="chip w" title="Add a check: record with the toolbar's Check buttons, or + Action → Check">○ not checked</span> } } }
+                                @else if (!(s.expect?.length) && !s.manual) { @if (isReadStep(s)) { <span class="chip w" title="A read step without checks passes whatever it shows: select text in its output and right-click to add one">○ not checked</span> } @else { <span class="chip n" title="Fails when the device answers with an error message (the device type's error patterns)">✓ device errors</span> } }@if (s.manual) { <span class="chip m">you decide</span> }</span>
                               <span [class]="r ? (r.skipped ? 'mut' : r.passed ? 'ok' : 'bad') : 'mut'">{{ r ? (r.skipped ? '– skipped' : r.passed ? '✓ passed' : '✗ failed') : '' }}</span>
                               <span class="r mut">{{ r && !r.skipped ? dur(r.ms) : '' }}</span>
                             </div>
@@ -755,9 +823,20 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
         <div class="mdlg wide" role="dialog" aria-label="Record a web test">
           <h3>{{ wr.proc ? 'Record a Web Procedure' : 'Record a Web Test' }} <span class="mut">· Playwright</span></h3>
           @if (testBrowsers.count()) { <div class="webst row opts">⚠ <span>{{ testBrowsers.count() === 1 ? '1 test browser from an earlier run is still open.' : testBrowsers.count() + ' test browsers from earlier runs are still open.' }}</span><span class="sp"></span><button type="button" (click)="testBrowsers.close()">Close Them</button></div> }
+          @if (!wr.proc) {
+            <div class="seg wrseg" role="radiogroup" aria-label="Record from">
+              <button type="button" role="radio" [attr.aria-checked]="!wr.addr" [class.on]="!wr.addr" (click)="wr.addr = false">A saved web app</button>
+              <button type="button" role="radio" [attr.aria-checked]="!!wr.addr" [class.on]="!!wr.addr" (click)="wr.addr = true">An address</button>
+            </div>
+          }
+          @if (wr.addr && !wr.proc) {
+            <label class="f2">Address <input [(ngModel)]="wr.start" placeholder="https://app.example.com/login" spellcheck="false" /></label>
+            <span class="mut">No saved login: log in yourself while recording. Afterwards you can save the address as a web app session.</span>
+          } @else {
           @if (!webApps().length) { <div class="webst row opts">🌐 <span>First save the web app as a session: <b>+ New</b> in the session list, protocol <b>Web App (HTTP/HTTPS)</b>, its address, user and password, then <b>● Record Login</b>.</span></div> }
           <label class="f2">Web app <select [(ngModel)]="wr.app">@for (p of webApps(); track p) { <option [value]="p">{{ p }}</option> }</select></label>
           <label class="f2">Start page <input [(ngModel)]="wr.start" placeholder="/ (the app's address) or /contacts" spellcheck="false" /></label>
+          }
           @if (wr.proc) {
             <label class="f2">Procedure name <input [(ngModel)]="wr.name" placeholder="e.g. open-cp-gvi" spellcheck="false" /></label>
             <label class="f2">What it does <input [(ngModel)]="wr.description" placeholder="e.g. opens a configuration profile's Global Value Inheritance" /></label>
@@ -766,8 +845,8 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
           <label class="f2">Save in <input [(ngModel)]="wr.folder" list="twsuites" placeholder="cases/ folder, e.g. crm" spellcheck="false" /></label>
           }
           <datalist id="twsuites">@for (x of suiteDirs(); track x) { <option [value]="x"></option> }</datalist>
-          <span class="mut">{{ wr.proc ? 'The browser opens logged in at the start page. Do the steps the tests share, then close the window: they are saved as a procedure. In the procedure, replace values you typed (a profile, a device) with {{name}} - they become its values.' : 'The browser opens logged in. Use the app as usual; Alt+click a text to check it shows. Close the window to finish - the test opens in the editor to look over and save.' }}</span>
-          <div class="row"><span class="sp"></span><button type="button" (click)="webRecDlg.set(null)">Cancel</button><button type="button" class="pri" (click)="wr.proc ? startWebProc() : startWebRec()" [disabled]="!wr.app || !wr.name.trim() || !webSt()?.ready">● Start Recording</button></div>
+          <span class="mut">{{ wr.proc ? 'The browser opens logged in at the start page. Do the steps the tests share, then press Done in the bar at the bottom: they are saved as a procedure. In the procedure, replace values you typed (a profile, a device) with {{name}} - they become its values.' : 'Use the app as usual. The bar at the bottom of the browser pauses, checks what must be true (a text, that something is shown, a value) and undoes the last action. Press Done to finish - the test opens in the editor to look over and save.' }}</span>
+          <div class="row"><span class="sp"></span><button type="button" (click)="webRecDlg.set(null)">Cancel</button><button type="button" class="pri" (click)="wr.proc ? startWebProc() : startWebRec()" [disabled]="!recFromOk(wr) || !wr.name.trim() || !webSt()?.ready">● Start Recording</button></div>
           @if (webSt(); as ws) { @if (!ws.ready) { <div class="row webst"><span>🌐 {{ ws.node ? 'Playwright is not set up on this computer yet.' : 'Node.js is not installed: install it from nodejs.org (or brew install node) first.' }}</span><span class="sp"></span>@if (ws.node) { <button type="button" class="pri" (click)="webSetup()" [disabled]="webBusy()">{{ webBusy() ? 'Setting up…' : 'Set Up Playwright' }}</button> }</div>@if (webBusy()) { <code class="mut">{{ webLine() }}</code> } } }
         </div>
       }
@@ -911,12 +990,12 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                 @for (r of runRoles(); track r.role) {
                   @let ps = runPortsOf(r.role);
                   <div class="rdev">
-                    <code class="rr">{{ '{{' }}{{ r.role }}{{ '}}' }}</code>
+                    <div class="row"><code class="rr">{{ '{{' }}{{ r.role }}{{ '}}' }}</code>@if (r.protocol === 'Web') { <span class="rk">web app</span> }</div>
                     <div class="row"><span class="mut">Runs on</span>
                       @if (testbed) {
                         <select [ngModel]="runMapOf(r.role)" (ngModelChange)="mapRole(r.role, $event)" [class.miss]="!runMapOf(r.role)" title="A device of the testbed; it is added to the testbed under the test's name">
                           <option value="">its own session: {{ r.session.split('/').pop() }}</option>
-                          @for (d of runTbDevs(); track d.role) { @if (d.session) { <option [value]="d.session">{{ d.name }}{{ d.deviceType ? ' (' + d.deviceType + (kindOf(d) ? ' ' + kindOf(d) : '') + ')' : '' }}</option> } }
+                          @for (d of runTbDevs(); track d.role) { @if (d.session && (d.protocol === 'Web') === (r.protocol === 'Web')) { <option [value]="d.session">{{ d.name }}{{ d.deviceType ? ' (' + d.deviceType + (kindOf(d) ? ' ' + kindOf(d) : '') + ')' : '' }}</option> } }
                         </select>
                       } @else { <span class="ell">{{ r.session }}</span> }
                     </div>
@@ -1033,7 +1112,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
     .dg, .tbg { display: flex; align-items: center; gap: 8px; padding: 7px 10px 4px; font-weight: 600; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .tbg { color: var(--text); font-size: 12.5px; padding: 12px 0 2px; } .tbg .mut { font-weight: 400; }
     .dv, .tbd { display: grid; grid-template-columns: 18px minmax(120px, 1.4fr) 120px 90px minmax(80px, 1fr) minmax(110px, auto); align-items: center; gap: 10px; padding: 5px 10px 5px 28px; font-size: 12.5px; border-radius: 6px; cursor: pointer; }
     .pgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; } .pgrid label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--muted); } .pgrid input { width: 100%; font-family: var(--mono, monospace); } .pgrid label.set input { border-color: var(--accent); }
-    .rdev { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 6px 0; display: flex; flex-direction: column; gap: 6px; } .rdev .rr { font-size: 11.5px; color: var(--accent); word-break: break-all; }
+    .rdev { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 6px 0; display: flex; flex-direction: column; gap: 6px; } .rdev .rr { font-size: 11.5px; color: var(--accent); word-break: break-all; } .rdev .rk { font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 8px; padding: 0 6px; }
     .rdev .row { display: flex; gap: 8px; align-items: center; min-width: 0; } .rdev select { flex: 1; min-width: 0; } .rdev select.miss { border-color: #d29922; } .rdev .pc { font-size: 12px; }
     .pg4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; } .pg4 label { display: flex; flex-direction: column; gap: 2px; font-size: 10.5px; color: var(--muted); min-width: 0; } .pg4 input { width: 100%; min-width: 0; font-family: var(--mono, monospace); color: var(--muted); } .pg4 input.set { color: inherit; border-color: var(--accent); }
     .rmap .row { display: flex; gap: 6px; align-items: center; } .rmap code { max-width: 45%; } .rmap select { flex: 1; min-width: 0; } .rmap select.miss { border-color: #d29922; }
@@ -1107,6 +1186,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
     .pill { font-size: 11.5px; padding: 2px 9px; border-radius: 10px; white-space: nowrap; background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--muted); }
     .pill.f { background: color-mix(in srgb, var(--danger, #ef6161) 18%, transparent); color: var(--danger, #ef6161); } .pill.p { background: color-mix(in srgb, var(--ok, #3fbf75) 18%, transparent); color: var(--ok, #3fbf75); } .pill.s { background: color-mix(in srgb, var(--warn, #e0a030) 18%, transparent); color: var(--warn, #e0a030); } .pill.sm { font-size: 10.5px; padding: 0 6px; margin-left: 6px; }
     .tabs { display: flex; align-items: center; gap: 18px; } .tabs > button { border: 0 !important; border-radius: 0 !important; box-shadow: none !important; min-height: 0 !important; height: auto !important; outline: none; background: none !important; color: var(--muted); padding: 8px 0; border-bottom: 2px solid transparent; cursor: pointer; } .tabs > button.on { color: var(--text); box-shadow: inset 0 -2px var(--accent) !important; font-weight: 600; }
+    .wrseg { align-self: flex-start; margin-bottom: 4px; } .wrseg button { padding: 4px 14px !important; border: 0 !important; box-shadow: none !important; width: auto !important; min-width: max-content; flex: 0 0 auto; white-space: nowrap; } .wae button { white-space: nowrap; }
     .seg { display: flex; gap: 2px; background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: 7px; padding: 2px; } .seg button { border: 0; background: none; padding: 2px 10px; border-radius: 5px; color: var(--muted); cursor: pointer; } .seg button.on { background: color-mix(in srgb, var(--accent) 28%, transparent); color: var(--text); }
     .body { flex: 1; overflow: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; min-height: 0; } .body p { margin: 0; }
     .meta { display: flex; flex-wrap: wrap; gap: 6px 22px; color: var(--muted); font-size: 12px; } .meta b { color: var(--text); font-weight: 500; }
@@ -1119,6 +1199,52 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
     .chips { display: flex; flex-wrap: wrap; gap: 4px; } .chip { font-size: 11.5px; padding: 1px 8px; border-radius: 9px; background: color-mix(in srgb, var(--ok, #3fbf75) 14%, transparent); color: var(--ok, #3fbf75); }
     .chip.b { background: color-mix(in srgb, var(--danger, #ef6161) 14%, transparent); color: var(--danger, #ef6161); } .chip.w { background: color-mix(in srgb, var(--warn, #e0a030) 14%, transparent); color: var(--warn, #e0a030); }
     .x { border: 0; background: none; color: inherit; cursor: pointer; padding: 0 0 0 4px; }
+    /* the web step card */
+    .wapp { height: 28px; display: inline-flex; align-items: center; gap: 6px; max-width: 280px; border-radius: 14px; padding: 0 10px 0 8px; flex: none; }
+    .wapp .wic { font-size: 12px; } .wapp code { font-size: 11px; color: var(--muted); } .wapp .cv { color: var(--muted); font-size: 10px; }
+    .wurl { font-family: var(--mono); min-width: 120px; }
+    .wpill { height: 26px; font-size: 11.5px; color: var(--muted); border-radius: 13px; padding: 0 10px; white-space: nowrap; flex: none; } .wpill.on { color: var(--accent); border-color: var(--accent); }
+    .wlast { font-size: 11.5px; white-space: nowrap; color: var(--muted); flex: none; } .wlast.ok { color: var(--ok); } .wlast.bad { color: var(--danger); }
+    .wdbg { display: flex; align-items: center; gap: 8px; padding: 6px 10px; margin: 4px 0 6px 30px; border-radius: 8px; background: color-mix(in srgb, var(--ok) 8%, transparent); border: 1px solid color-mix(in srgb, var(--ok) 25%, transparent); font-size: 12px; }
+    .wdbg button { height: 24px; font-size: 12px; }
+    .wset { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 4px 0 6px 30px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; color: var(--muted); }
+    .wset label { display: inline-flex; align-items: center; gap: 6px; }
+    .wacts { margin: 2px 0 0 30px; display: flex; flex-direction: column; gap: 1px; }
+    .wa { border-radius: 7px; border: 1px solid transparent; } .wa.open { border-color: var(--border); background: color-mix(in srgb, var(--text) 3%, transparent); }
+    .wa.cur { box-shadow: inset 3px 0 0 var(--accent); } .wa.drop { box-shadow: inset 0 2px 0 var(--accent); }
+    .war { display: flex; align-items: center; gap: 8px; padding: 4px 8px; min-height: 34px; cursor: pointer; border-radius: 7px; } .war:hover { background: var(--hover); }
+    .wh { color: var(--faint); cursor: grab; font-size: 11px; letter-spacing: -2px; opacity: 0; } .war:hover .wh { opacity: 1; }
+    .wn { min-width: 22px; height: 20px; padding: 0 4px; font-size: 11.5px; color: var(--faint); background: none; border-color: transparent; } .wn.sel { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+    .wth { width: 52px; height: 30px; object-fit: cover; object-position: top left; border-radius: 4px; border: 1px solid var(--border); flex: none; cursor: zoom-in; background: #fff; }
+    .wsay { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .wa.chk .wsay { color: var(--text); }
+    .wsay .ck { color: var(--ok); margin-right: 5px; } .wv { font: 11.5px var(--mono); color: var(--muted); margin-left: 8px; }
+    .wsts { width: 16px; text-align: center; font-size: 12px; color: var(--faint); flex: none; } .wsts.ok { color: var(--ok); } .wsts.bad { color: var(--danger); } .wsts.hw { color: var(--warn); }
+    .wtools { display: inline-flex; gap: 2px; opacity: 0; flex: none; } .war:hover .wtools, .wa.open .wtools { opacity: 1; } .wtools .lnk { padding: 0 5px; }
+    .wae { display: flex; gap: 8px; align-items: center; padding: 2px 10px 6px 64px; } .wae select { width: 150px; flex: none; } .wae .pin { width: 190px; flex: none; }
+    .wae > .wtg { flex: 1 1 auto !important; display: flex; align-items: center; gap: 6px; min-width: 0; } .wtg > input { flex: 1 1 auto !important; min-width: 0; width: auto; }
+    .walt { padding: 0 10px 8px 64px; font-size: 11.5px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; } .walt code { font-size: 11px; color: var(--muted); }
+    .walt .bad { color: var(--danger); }
+    .wempty { padding: 10px 12px; font-size: 12.5px; }
+    .wfoot { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px 30px; flex-wrap: wrap; }
+    .wfoot2 { display: flex; margin: 6px 0 4px 30px; } .sbox > .lnk { align-self: flex-start; }
+    .wai { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; height: 30px; border: 1px solid color-mix(in srgb, #a371f7 40%, transparent); background: color-mix(in srgb, #a371f7 7%, transparent); border-radius: 8px; padding: 0 4px 0 10px; }
+    .wai .aic { color: #c297ff; } .wai input { flex: 1; min-width: 0; border: 0; background: transparent; height: 26px; } .wai button { height: 24px; font-size: 12px; } .wai .mut { font-size: 11.5px; white-space: nowrap; }
+    .wai.busy { border-color: #a371f7; }
+    /* the editor: steps, with devices, values and settings beside them */
+    .elay { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 14px; align-items: start; }
+    @media (max-width: 1180px) { .elay { grid-template-columns: minmax(0, 1fr); } .eside { order: -1; } }
+    .eside { position: sticky; top: 8px; display: flex; flex-direction: column; gap: 10px; }
+    .sbox { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel); display: flex; flex-direction: column; gap: 5px; }
+    .sbox h4 { margin: 0 0 2px; font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+    .srole { display: flex; align-items: center; gap: 6px; margin-top: 4px; } .srole .rolec { font-size: 12px; } .sk { font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 8px; padding: 0 6px; }
+    .srole .lnk.on { color: var(--accent); }
+    .srin { height: 26px; font-size: 12px; width: 100%; }
+    .sbox .needs { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; } .sbox .needs select, .sbox .needs .pin { max-width: 100%; }
+    .sval { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px; align-items: center; } .sval code { font-size: 12px; color: var(--accent); } .sval .pin { width: 100%; height: 26px; }
+    .sset { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--muted); } .sset b { color: var(--text); font-weight: 500; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sfoot { margin-top: 4px; }
+    .setsh { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; }
+    .wflow { display: inline; line-height: 1.7; } .wflow i { color: var(--faint); font-style: normal; margin: 0 6px; } .wpath { font-family: var(--mono); color: var(--muted); }
     .exp { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; padding: 12px 12px 14px 48px; border-top: 1px solid var(--border); background: color-mix(in srgb, var(--text) 3%, transparent); }
     .exp h4 { margin: 0 0 6px; font-size: 11px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .05em; } .exp h4 + * { margin-bottom: 10px; }
     .ev { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); gap: 4px 12px; font-size: 12px; } .ev span { overflow-wrap: anywhere; }
@@ -1429,11 +1555,12 @@ export class TestsView implements OnInit, OnDestroy {
   }
   picUrl(p: string) { return this.picCache()[p] || ''; }
   showPic(p: string) { this.bigPic.set(this.picUrl(p)); }
-  readonly webRecDlg = signal<{ app: string; start: string; name: string; folder: string; proc?: boolean; description?: string } | null>(null);
+  readonly webRecDlg = signal<{ app: string; start: string; name: string; folder: string; proc?: boolean; description?: string; addr?: boolean } | null>(null);
+  recFromOk(wr: { app: string; start: string; proc?: boolean; addr?: boolean }) { return wr.addr && !wr.proc ? /^https?:\/\/\S+$/i.test(wr.start.trim()) : !!wr.app; }
   openWebRec() {
     void this.loadWebSt(); void this.testBrowsers.refresh();
     let folder = ''; try { folder = localStorage.getItem('tw.webrec.folder') ?? ''; } catch { /* none */ }
-    this.webRecDlg.set({ app: this.webApps()[0] ?? '', start: '', name: '', folder });
+    this.webRecDlg.set({ app: this.webApps()[0] ?? '', start: '', name: '', folder, addr: !this.webApps().length });
   }
   suiteDirs() { const out = new Set<string>(); for (const c of this.tree()?.cases ?? []) { const m = /^cases\/(.+)\/[^/]+$/.exec(c.file); if (m) out.add(m[1]); } return [...out].sort(); }
   async startWebRec() {
@@ -1444,13 +1571,31 @@ export class TestsView implements OnInit, OnDestroy {
     if (await this.backend.testFile(file).then(() => true).catch(() => false)
       && !(await this.ui.confirm(tr('Replace the Test?'), tr('{0} is already there.', file), tr('Replace'), true))) return;
     try { localStorage.setItem('tw.webrec.folder', wr.folder.trim()); } catch { /* not kept */ }
-    const c: TestCase = { name: wr.name.trim(), tags: ['web'], steps: [{ name: wr.name.trim(), web: { login: wr.app, url: wr.start.trim() || undefined, actions: [] } }] } as TestCase;
+    const addr = !!wr.addr && !wr.proc;
+    const c: TestCase = { name: wr.name.trim(), tags: ['web'], steps: [{ name: wr.name.trim(), web: { login: addr ? undefined : wr.app, url: wr.start.trim() || undefined, actions: [] } }] } as TestCase;
     try {
       const rel = await this.backend.testSave(file, c);
       this.webRecDlg.set(null);
       await this.load(); this.section.set('tests'); await this.select(rel); this.edit();
       const w = this.draft()?.steps?.[0]?.web;
       if (w) await this.webRecord(w);
+      if (w && addr) await this.offerWebApp(w);
+    } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  /** After recording from an address: offers to save the address as a web app session and use it in the step. */
+  async offerWebApp(w: TestWeb) {
+    let u: URL; try { u = new URL(w.url ?? ''); } catch { return; }
+    if (!(await this.ui.confirm(tr('Save as a Web App?'), tr('Save {0} as a web app session? Steps then use it by name, and its login can be recorded once and reused.', u.origin), tr('Save Web App')))) return;
+    const name = await this.ui.input(tr('Web App Name'), tr('Its name in the session list'), u.hostname);
+    if (!name?.trim()) return;
+    try {
+      const s = await this.backend.newSessionDefaults();
+      Object.assign(s, { name: name.trim(), folder: '', protocol: 'Web', hostname: u.hostname, webUrl: u.origin } as Partial<Session>);
+      const saved = await this.backend.saveSession(s, '');
+      await this.ui.refreshTree();
+      w.login = saved.path; w.url = (u.pathname + u.search + u.hash) === '/' ? undefined : u.pathname + u.search + u.hash;
+      this.touch();
+      this.ui.toast(tr('Saved the web app {0}: record its login in the session editor', saved.path), 'success');
     } catch (e) { this.ui.toast(errText(e), 'error'); }
   }
   /** Sends a failed run with its test to the AI assistant and asks why it failed. */
@@ -1541,7 +1686,7 @@ export class TestsView implements OnInit, OnDestroy {
     const out: SessionNode[] = [];
     const all = (n: SessionNode | null) => { for (const c of n?.children ?? []) { if (c.isFolder) all(c); else out.push(c); } };
     all(this.folderNode(path));
-    return out.map(c => ({ path: c.path, name: c.name, host: c.hostname ?? '', deviceType: c.deviceType ?? '', folder: c.path.slice(0, c.path.lastIndexOf('/')) }));
+    return out.map(c => ({ path: c.path, name: c.name, host: c.hostname ?? '', deviceType: c.deviceType || (c.protocol === 'Web' ? 'web app' : ''), folder: c.path.slice(0, c.path.lastIndexOf('/')) }));
   }
   devGroups() {
     const q = this.tbDevQ.trim().toLowerCase(), m = this.tbModels();
@@ -1863,10 +2008,33 @@ export class TestsView implements OnInit, OnDestroy {
   testRoles(d: TestCase) {
     const out: string[] = [];
     for (const st of [...(d.setup ?? []), ...(d.steps ?? []), ...(d.cleanup ?? [])]) {
-      const m = /^\{\{\s*([\w-]+)\s*\}\}$/.exec(st.run?.session ?? st.snmp?.session ?? '');
+      const m = /^\{\{\s*([\w-]+)\s*\}\}$/.exec(st.run?.session ?? st.snmp?.session ?? st.web?.login ?? st.http?.session ?? '');
       if (m && d.vars?.[m[1]] && !out.includes(m[1])) out.push(m[1]);
     }
     return out;
+  }
+  /** What a role is: a web app, an API, or the device's type. */
+  roleKind(d: TestCase, r: string) {
+    const all = [...(d.setup ?? []), ...(d.steps ?? []), ...(d.cleanup ?? [])], v = '{{' + r + '}}';
+    if (all.some(s => s.web?.login === v)) return 'web app';
+    if (all.some(s => s.http?.session === v)) return 'API';
+    return this.sessionNode(d.vars?.[r] ?? '')?.deviceType || 'device';
+  }
+  /** The test's values: variables that are not devices. */
+  testValues(d: TestCase) { const roles = this.testRoles(d); return Object.keys(d.vars ?? {}).filter(k => !roles.includes(k) && !k.includes('.')).sort(); }
+  async addValue(d: TestCase) {
+    const k = (await this.ui.input(tr('New Value'), tr('Its name, used as {{name}} in steps'), ''))?.trim().replace(/[^\w-]/g, '_');
+    if (!k) return; (d.vars ??= {})[k] ??= ''; this.touch();
+  }
+  rmValue(d: TestCase, k: string) { delete d.vars![k]; this.touch(); }
+  readonly setsOpen = signal(false);
+  readonly needsOpen = signal(new Set<string>());
+  toggleNeeds(r: string) { const x = new Set(this.needsOpen()); if (x.has(r)) x.delete(r); else x.add(r); this.needsOpen.set(x); }
+  settingsSummary(d: TestCase): [string, string][] {
+    const o = d.defaults ?? {};
+    return [[tr('Timeout'), o.timeout ? o.timeout + ' s' : '60 s'], [tr('A step fails'), o.continueOnFail ? tr('go on') : tr('the test stops')],
+      [tr('Retry'), o.retry ? tr('for {0} s', String(o.retry.timeout ?? 60)) : tr('no')], [tr('Test data'), d.data ? d.data.split('/').pop()! : tr('none')],
+      [tr('Fails on'), this.watchText(d) || '-'], [tr('Configuration'), d.configDiff ? tr('compared') : '-']];
   }
   readonly rolePorts = signal<Record<string, string[]>>({});
   private async loadRolePorts(d: TestCase) {
@@ -2221,7 +2389,7 @@ export class TestsView implements OnInit, OnDestroy {
     }).catch(() => {});
     void this.loadRunMap();
   }
-  readonly runRoles = signal<{ role: string; session: string; deviceType?: string }[]>([]);
+  readonly runRoles = signal<{ role: string; session: string; deviceType?: string; protocol?: string }[]>([]);
   readonly runOwnPorts = signal<Record<string, string[]>>({});
   runVars: Record<string, string> = {};
   readonly portsOpen = signal(new Set<string>());
@@ -2440,6 +2608,100 @@ export class TestsView implements OnInit, OnDestroy {
     finally { this.dbgBusy.set(false); }
   }
   async dbgRunOne(w: TestWeb, k: number) { if (await this.dbgOpen(w)) await this.dbgRun(w, k, k + 1); }
+  /** From the step's page up to action k (opens the browser when it is not open). */
+  async dbgRunTo(w: TestWeb, k: number) { if (!(await this.dbgOpen(w))) return; await this.dbgRestart(); this.dbgSet(x => { x.res = {}; }); await this.dbgRun(w, 0, k + 1); }
+  // ---- the web step card ----
+  private webSets = signal(new Set<string>());
+  webSetOpen(p: string, i: number) { return this.webSets().has(p + i); }
+  toggleWebSet(p: string, i: number) { const x = new Set(this.webSets()); if (x.has(p + i)) x.delete(p + i); else x.add(p + i); this.webSets.set(x); }
+  webPill(w: TestWeb) {
+    const b = w.browser === 'firefox' ? 'Firefox' : w.browser === 'webkit' ? 'WebKit' : 'Chromium';
+    return [b, w.viewport ? w.viewport.replace('x', '×') : '', w.insecure ? 'self-signed OK' : '', w.show ? 'shown' : ''].filter(Boolean).join(' · ');
+  }
+  webAppName(login?: string) {
+    if (!login) return tr('No web app');
+    const m = /^\{\{\s*([^{}]+?)\s*\}\}$/.exec(login), p = m ? this.draft()?.vars?.[m[1]] ?? '' : login;
+    return p ? p.split('/').pop()! : m![1];
+  }
+  webAppMenu(ev: MouseEvent, w: TestWeb) {
+    const d = this.draft(), roles = Object.entries(d?.vars ?? {}).filter(([, v]) => this.isWebApp(v) && !v.includes('{{'));
+    const items = [
+      ...roles.map(([k, v]) => ({ label: (w.login === '{{' + k + '}}' ? '✓ ' : '') + v.split('/').pop() + '  {{' + k + '}}', icon: '', action: () => { w.login = '{{' + k + '}}'; this.touch(); } })),
+      ...this.webApps().filter(p => !roles.some(([, v]) => v === p)).map(p => ({ label: (w.login === p ? '✓ ' : '') + p, icon: '', action: () => { this.useWebApp(w, p); } })),
+      { label: (w.login ? '' : '✓ ') + tr('None (the address is a full URL)'), icon: '', action: () => { w.login = undefined; this.touch(); } },
+    ];
+    this.ui.showMenu(ev, items);
+  }
+  /** A saved web app chosen for a step: it becomes a role of the test (a testbed can bring its own). */
+  private useWebApp(w: TestWeb, path: string) {
+    const d = this.draft(); if (!d) return;
+    d.vars ??= {};
+    let k = Object.keys(d.vars).find(x => d.vars![x] === path);
+    if (!k) { const base = path.split('/').pop()!.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'app'; k = /^\d/.test(base) ? 'app_' + base : base; let n = 2; while (d.vars[k]) k = base + '_' + n++; d.vars[k] = path; }
+    w.login = '{{' + k + '}}'; this.touch();
+  }
+  webMore(ev: MouseEvent, w: TestWeb) {
+    this.ui.showMenu(ev, [
+      { label: tr('Debug in Browser (run actions one by one, pick targets)'), icon: 'play', action: () => void this.dbgOpen(w) },
+      { label: tr('Save as Procedure…'), icon: '', action: () => void this.saveBlock(w) },
+    ]);
+  }
+  /** The last run of a web step: each action's result and picture (when the run's lines match the actions). */
+  webRun(p: Phase, i: number, w: TestWeb): { st: (string | undefined)[]; pic: string[] } {
+    const out = this.resOf(p, i)?.output ?? '', st: (string | undefined)[] = [], pic: string[] = [];
+    if (!out) return { st, pic };
+    let k = -1, ok = true;
+    for (const l of out.split('\n')) {
+      if (/^[✓✗] /.test(l)) { if (k === -1 && /^✓ open /.test(l)) continue; k++; st[k] = l.startsWith('✓') ? 'ok' : 'bad'; }
+      else if (k >= 0 && /^healed /.test(l)) st[k] = 'hw';
+      else if (k >= 0 && /^picture: /.test(l)) { const pp = this.picsOf(l)[0]; if (pp) pic[k] = pp.path; }
+      else if (/^--- page text ---$/.test(l)) break;
+    }
+    if (k + 1 > (w.actions?.length ?? 0)) ok = false; // procedures ran as several actions: no per-action results
+    return ok ? { st, pic } : { st: [], pic: [] };
+  }
+  private actOpens = new WeakMap<TestWeb, Set<number>>();
+  readonly actTick = signal(0);
+  actOpen(w: TestWeb, k: number) { this.actTick(); return !!this.actOpens.get(w)?.has(k); }
+  toggleAct(w: TestWeb, k: number) { const x = this.actOpens.get(w) ?? new Set<number>(); if (x.has(k)) x.delete(k); else x.add(k); this.actOpens.set(w, x); this.actTick.update(n => n + 1); }
+  openAct(w: TestWeb, k: number) { this.actOpens.set(w, new Set([k])); this.actTick.update(n => n + 1); }
+  dupWeb(w: TestWeb, k: number) { const a = w.actions![k]; w.actions!.splice(k + 1, 0, { ...a, alt: a.alt ? [...a.alt] : undefined }); this.openAct(w, k + 1); this.touch(); }
+  readonly dropAt = signal(-1);
+  private dragFrom: { w: TestWeb; k: number } | null = null;
+  dragAct(w: TestWeb, k: number, ev: DragEvent) { this.dragFrom = { w, k }; ev.dataTransfer?.setData('text/plain', String(k)); if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'move'; }
+  overAct(w: TestWeb, k: number, ev: DragEvent) { if (this.dragFrom?.w !== w) return; ev.preventDefault(); this.dropAt.set(k); }
+  dropAct(w: TestWeb, k: number, ev: DragEvent) {
+    ev.preventDefault(); this.dropAt.set(-1);
+    const f = this.dragFrom; this.dragFrom = null;
+    if (!f || f.w !== w || f.k === k) return;
+    const [a] = w.actions!.splice(f.k, 1); w.actions!.splice(k, 0, a); this.actOpens.set(w, new Set()); this.actTick.update(n => n + 1); this.touch();
+  }
+  // ---- Ask AI: the AI drives a browser from where the step ends (the web tool); its actions are added here ----
+  aiWebText = '';
+  readonly aiWebBusy = signal<TestWeb | null>(null);
+  readonly aiWebCount = signal(0);
+  private aiWebOff?: () => void;
+  async askAIWeb(w: TestWeb, p: Phase, i: number) {
+    const what = this.aiWebText.trim();
+    if (!what || this.aiWebBusy()) return;
+    if (!this.ai.tools()['web']) { this.ui.toast(tr('Turn on the AI assistant\'s "Web browser (Playwright)" tool first (AI panel → tools).'), 'error'); return; }
+    this.aiWebBusy.set(w); this.aiWebCount.set(0);
+    try { await this.backend.webAIPrepare(w, this.dbgVars()); }
+    catch (e) { this.aiWebBusy.set(null); this.ui.toast(errText(e), 'error'); return; }
+    this.aiWebOff = this.backend.on('web:ai', (e: { count?: number }) => { if (e.count !== undefined) this.aiWebCount.set(e.count); });
+    const app = this.webAppName(w.login), n = (w.actions ?? []).length;
+    this.ai.show(true); this.ai.newChat();
+    void this.ai.send(tr('A browser is already open on {0}, at the end of step {1} of the test {2} ({3} actions done). With the web tool (snapshot first, then act; checks as expect actions; values the test has as variables as {{name}}; passwords as {{password}}), do this: {4}. Do not open another browser and do not save: the actions are added to the step in the test editor. Stop when it is done and say what you did.', app, String(i + 1), this.draft()?.name ?? '', String(n), what));
+    this.aiWebText = '';
+  }
+  async takeAIWeb(w: TestWeb) {
+    const acts = await this.backend.webAITake().catch(() => [] as TestWebAction[]);
+    this.aiWebOff?.(); this.aiWebBusy.set(null);
+    if (!acts.length) { this.ui.toast(tr('The AI has not recorded anything yet'), 'error'); return; }
+    (w.actions ??= []).push(...acts.map(a => ({ do: a.do, target: a.target, value: a.value, alt: a.alt?.length ? a.alt : undefined })));
+    this.touch(); this.ui.toast(tr('Added {0} actions from the AI', acts.length), 'success');
+  }
+  async cancelAIWeb() { await this.backend.webAITake().catch(() => []); this.aiWebOff?.(); this.aiWebBusy.set(null); }
   async dbgRunAll(w: TestWeb) { await this.dbgRestart(); this.dbgSet(x => { x.res = {}; }); await this.dbgRun(w, 0, (w.actions ?? []).length); }
   async dbgRestart() { this.dbgBusy.set(true); try { await this.backend.webDebugRestart(); this.dbgSet(x => { x.at = 0; x.res = {}; }); } catch (e) { this.ui.toast(errText(e), 'error'); } finally { this.dbgBusy.set(false); } }
   async dbgClose() { await this.backend.webDebugClose().catch(() => {}); this.dbg.set(null); this.dbgMsg.set(''); }
@@ -2457,7 +2719,13 @@ export class TestsView implements OnInit, OnDestroy {
     const acts = (w.actions ??= []);
     const sel = [...this.selActs()].sort((a, b) => a - b);
     let at = sel.length && this.selW === w ? sel[sel.length - 1] + 1 : acts.length;
-    const off = this.backend.on('web:rec', (a: TestWebAction) => { if (!this.webRec()) return; acts.splice(at++, 0, { do: a.do, target: a.target, value: a.value, alt: a.alt?.length ? a.alt : undefined }); this.touch(); });
+    const from = at;
+    const off = this.backend.on('web:rec', (a: TestWebAction) => {
+      if (!this.webRec()) return;
+      if (a.do === '__done') { off(); this.webRec.set(false); return; } // Done in the browser's toolbar
+      if (a.do === '__undo') { if (at > from) { acts.splice(--at, 1); this.touch(); } return; }
+      acts.splice(at++, 0, { do: a.do, target: a.target, value: a.value, alt: a.alt?.length ? a.alt : undefined }); this.touch();
+    });
     this.offs.push(off);
     try { await this.backend.webDebugRecord(true); this.webRec.set(true); } catch (e) { off(); this.ui.toast(errText(e), 'error'); }
   }
@@ -2509,10 +2777,10 @@ export class TestsView implements OnInit, OnDestroy {
   async startWebProc() {
     const wr = this.webRecDlg(); if (!wr) return;
     const acts: TestWebAction[] = [];
-    const off = this.backend.on('web:rec', (a: TestWebAction) => acts.push({ do: a.do, target: a.target, value: a.value, alt: a.alt?.length ? a.alt : undefined }));
+    const off = this.backend.on('web:rec', (a: TestWebAction) => recInto(acts, a));
     this.webRecDlg.set(null); this.webRec.set(true);
     try {
-      await this.backend.webRecord({ login: wr.app, url: wr.start.trim() || undefined, actions: [] });
+      await this.backend.webRecord({ login: wr.app, url: wr.start.trim() || undefined, actions: [] }, {});
       if (!acts.length) { this.ui.toast(tr('Nothing was recorded'), 'error'); return; }
       const file = await this.backend.testsSaveWebBlock(wr.name.trim(), (wr.description ?? '').trim(), acts);
       await this.loadBlocks(); await this.loadProcs();
@@ -2558,6 +2826,33 @@ export class TestsView implements OnInit, OnDestroy {
     let found: SessionNode | undefined; const w = (l: SessionNode[]) => { for (const n of l) { if (found) return; if (n.isFolder) w(n.children ?? []); else if (n.path === path) found = n; } };
     w(this.ui.tree()?.children ?? []); return found;
   }
+  /** A web action in plain words ("Type {{serial}} into “Serial number”"). */
+  actWords(a: TestWebAction): string {
+    const nm = (t?: string) => { if (!t) return 'the page'; const m = /name=("(?:[^"\\]|\\.)*")/.exec(t); if (m) { try { return JSON.parse(m[1]); } catch { /* as it is */ } }
+      const p = /^(?:label|text|placeholder|testid|title|alt)=(.*)$/.exec(t); return p ? p[1] : t.length > 34 ? t.slice(0, 32) + '…' : t; };
+    const q = (x: string) => '“' + x + '”', n = q(nm(a.target)), v = a.value ?? '';
+    switch (a.do) {
+      case 'click': return 'Click ' + n; case 'dblclick': return 'Double-click ' + n; case 'rightclick': return 'Right-click ' + n;
+      case 'fill': case 'type': return 'Type ' + (a.secret || v === '{{password}}' ? 'the password' : q(v)) + ' into ' + n; case 'clear': return 'Clear ' + n;
+      case 'select': return 'Choose ' + q(v) + ' in ' + n; case 'check': return 'Tick ' + n; case 'uncheck': return 'Untick ' + n; case 'hover': return 'Point at ' + n;
+      case 'press': return 'Press ' + (v || 'Enter') + (a.target ? ' in ' + n : ''); case 'goto': return 'Go to ' + (v || a.target || '');
+      case 'wait': return 'Wait ' + (/^\d+$/.test(v) ? v + ' s' : 'for ' + q(v)); case 'upload': return 'Upload ' + v + ' to ' + n; case 'download': return 'Download from ' + n;
+      case 'read': return 'Read ' + n + ' into {{' + v + '}}'; case 'screenshot': return 'Take a picture'; case 'tab': return 'Switch to tab ' + v;
+      case 'back': return 'Go back'; case 'reload': return 'Reload the page'; case 'dialog': return (v === 'dismiss' ? 'Dismiss' : 'Accept') + ' dialogs';
+      case 'block': return 'Do “' + (a.target ?? '') + '”';
+      case 'expect': return a.target ? (v ? n + ' shows ' + q(v) : n + ' is shown') : 'the page shows ' + q(v);
+      case 'expect_not': return (a.target ? n : q(v)) + ' is not shown'; case 'expect_value': return n + ' is ' + q(v);
+      case 'expect_count': return v + ' × ' + n; case 'expect_url': return 'the address has ' + q(v); case 'expect_title': return 'the title has ' + q(v);
+      case 'expect_checked': return n + (v === 'false' ? ' is not ticked' : ' is ticked'); case 'expect_enabled': return n + (v === 'false' ? ' is disabled' : ' is enabled');
+    }
+    return a.do + ' ' + n;
+  }
+  /** A web step's actions in words, its checks apart. */
+  webFlow(w: TestWeb): { words: string[]; checks: string[] } {
+    const words: string[] = [], checks: string[] = [];
+    for (const a of w.actions ?? []) (a.do.startsWith('expect') ? checks : words).push(this.actWords(a));
+    return { words, checks };
+  }
   isWebApp(path?: string) { return !!path && (this.sessionNode(path)?.protocol === 'Web' || path.includes('{{')); }
   webApps() { const out: string[] = []; const w = (l: SessionNode[]) => { for (const n of l) { if (n.isFolder) w(n.children ?? []); else if (n.protocol === 'Web') out.push(n.path); } }; w(this.ui.tree()?.children ?? []); return out; }
   webSessions() { const apps = this.webApps(); return [...apps, ...this.allSessions().filter(p => !apps.includes(p))]; }
@@ -2566,8 +2861,9 @@ export class TestsView implements OnInit, OnDestroy {
     this.webRec.set(true);
     const acts = (w.actions ??= []);
     if (acts.length === 1 && acts[0].do === 'expect' && !acts[0].value && !acts[0].target) acts.pop();
-    const off = this.backend.on('web:rec', (a: TestWebAction) => { acts.push({ do: a.do, target: a.target, value: a.value, alt: a.alt?.length ? a.alt : undefined }); this.touch(); });
-    try { await this.backend.webRecord({ ...w, actions: [] }); this.ui.toast(tr('Recording added'), 'success'); }
+    const off = this.backend.on('web:rec', (a: TestWebAction) => { if (recInto(acts, a)) this.touch(); });
+    const role = /^\{\{\s*([^{}]+?)\s*\}\}$/.exec(w.login ?? ''), login = role ? this.draft()?.vars?.[role[1]] ?? w.login : w.login; // the web app's role: its session
+    try { await this.backend.webRecord({ ...w, login, actions: [] }, this.draft()?.vars ?? {}); this.ui.toast(tr('Recording added'), 'success'); }
     catch (e) { this.ui.toast(errText(e), 'error'); }
     finally { off(); this.webRec.set(false); }
   }

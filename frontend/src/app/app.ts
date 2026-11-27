@@ -468,6 +468,10 @@ export class App implements OnInit {
     this.ui.actionHandler = a => void this.action(a);
     this.ui.runSnippet = s => void sendSnippet(this.ui, this.tabs, s);
     this.backend.on('toast', (t: { level: 'info' | 'error'; message: string }) => this.ui.toast(t.message, t.level));
+    this.backend.on('web:ai', (e: { open?: boolean; app?: string }) => { // an AI drives a browser (the web tool)
+      if (e.open === true) this.ui.toast(tr('An AI opened a browser on {0}: what it does is recorded as a web test until it saves or discards it.', e.app ?? ''), 'info');
+      else if (e.open === false) this.ui.toast(tr('The AI closed its browser.'), 'info');
+    });
     this.backend.on('app:confirm-quit', async () => {
       const n = this.tabs.connectedCount();
       if (n === 0 || await this.ui.confirm('Quit Termwright', `${n} session(s) are still connected. Disconnect and quit?`, 'Quit', true)) {

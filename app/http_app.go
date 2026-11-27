@@ -200,6 +200,10 @@ func (a *App) httpTarget(r HTTPSendRequest) (*apiclient.Target, *session.Session
 
 func (a *App) httpTargetDraft(r HTTPSendRequest, draft *session.Session, typed string) (*apiclient.Target, *session.Session, bool, error) {
 	t := &apiclient.Target{Vars: map[string]string{}, Tokens: httpTokens, Timeout: time.Duration(min(max(r.Timeout, 0), 600)) * time.Second, NoRedirects: r.NoRedirects}
+	if a.ctx != nil { // OAuth 2.0's authorization code and implicit grants sign in in the browser
+		ctx := a.ctx
+		t.Browse = func(u string) error { wruntime.BrowserOpenURL(ctx, u); return nil }
+	}
 	a.httpEnvVars(apiclient.GlobalsID, t)
 	if r.Collection != "" {
 		c, err := a.httpStore().Find(r.Collection)
@@ -318,7 +322,7 @@ func (a *App) httpSend(ctx context.Context, r HTTPSendRequest) (apiclient.Respon
 	}
 	t.ScriptSend = httpScriptGuard(prod, r.Confirmed)
 	res := apiclient.Run(ctx, r.Request, t)
-	a.httpKeepSet(r.Environment, res)
+	a.httpKeepSet(r.Environment, r.Collection, res)
 	a.httpRemember(r, res)
 	return res, nil
 }
@@ -579,7 +583,7 @@ func (a *App) httpRun(ctx context.Context, r HTTPRunRequest) (apiclient.RunResul
 			}
 			return nil
 		},
-		Done:    func(_ apiclient.Request, res apiclient.Response) { a.httpKeepSet(r.Environment, res) },
+		Done:    func(_ apiclient.Request, res apiclient.Response) { a.httpKeepSet(r.Environment, r.Collection, res) },
 		EnvName: a.httpEnvName(r.Environment),
 		Each: func(st apiclient.RunStep) {
 			if a.ctx != nil {

@@ -918,6 +918,8 @@ type TestRole struct {
 	Role       string `json:"role"`
 	Session    string `json:"session"`
 	DeviceType string `json:"deviceType,omitempty"`
+	// Protocol of the session ("Web" for a web app the test logs in to).
+	Protocol string `json:"protocol,omitempty"`
 }
 
 // TestsRoles lists the roles of tests: their variables that are saved sessions.
@@ -945,7 +947,7 @@ func (a *App) TestsRoles(files []string) []TestRole {
 			}
 			if s, err := a.store.Get(v); err == nil {
 				seen[k] = true
-				out = append(out, TestRole{Role: k, Session: v, DeviceType: s.DeviceType})
+				out = append(out, TestRole{Role: k, Session: v, DeviceType: s.DeviceType, Protocol: s.Protocol})
 			}
 		}
 	}

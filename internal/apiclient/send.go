@@ -20,7 +20,6 @@ import (
 	"os"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -59,6 +58,8 @@ type Target struct {
 	CollAuthData *ReqAuth
 	// CollPre and CollTests: the collection's scripts, run before each request's own.
 	CollPre, CollTests string
+	// Browse opens a URL in the browser (OAuth 2.0's authorization code and implicit grants); nil: none.
+	Browse func(url string) error
 	// ScriptSend says whether pm.sendRequest may send a request with this method (nil: any).
 	ScriptSend func(method string) error
 }
@@ -161,8 +162,8 @@ func (j *Jar) Clear() {
 
 var varRe = regexp.MustCompile(`\{\{\s*([^{}]+?)\s*\}\}`)
 
-// Resolve replaces {{name}} with its value; {{$guid}}, {{$timestamp}}, {{$isoTimestamp}}, {{$randomInt}}
-// are made each time. Unknown names stay as they are.
+// Resolve replaces {{name}} with its value; Postman's dynamic variables ({{$guid}}, {{$timestamp}},
+// {{$randomEmail}} ...) are made each time. Unknown names stay as they are.
 func Resolve(s string, vars map[string]string) string {
 	if !strings.Contains(s, "{{") {
 		return s
@@ -173,17 +174,8 @@ func Resolve(s string, vars map[string]string) string {
 			if v, ok := vars[k]; ok {
 				return v
 			}
-			switch k {
-			case "$guid", "$randomUUID":
-				return uuid()
-			case "$timestamp":
-				return strconv.FormatInt(time.Now().Unix(), 10)
-			case "$isoTimestamp":
-				return time.Now().UTC().Format(time.RFC3339)
-			case "$randomInt":
-				b := make([]byte, 2)
-				_, _ = rand.Read(b)
-				return strconv.Itoa(int(b[0])<<8 | int(b[1])) // 0..65535
+			if v, ok := dynamicVar(k); ok {
+				return v
 			}
 			return m
 		})
@@ -483,6 +475,12 @@ func build(ctx context.Context, r Request, t *Target) (*http.Request, string, er
 // Send sends a request: its variables, the session's authentication (a login or OAuth token is fetched and
 // renewed by itself; once more after a 401), cookies and timings. Scripts are run by Run, not here.
 func Send(ctx context.Context, r Request, t *Target) Response {
+	switch strings.ToUpper(r.Method) {
+	case "GRPC":
+		return sendGRPC(ctx, r, t)
+	case "WS":
+		return sendWS(ctx, r, t)
+	}
 	start := time.Now()
 	res := Response{Method: strings.ToUpper(r.Method)}
 	if res.Method == "" {
@@ -493,6 +491,8 @@ func Send(ctx context.Context, r Request, t *Target) Response {
 		res.Error = err.Error()
 		return res
 	}
+	var digest map[string]string // the server's Digest challenge, answered on the second try
+	var ntlm []byte              // the server's NTLM challenge, answered on the second try (same connection)
 	for attempt := 0; attempt < 2; attempt++ {
 		req, shown, err := build(ctx, r, t)
 		if err != nil {
@@ -510,6 +510,53 @@ func Send(ctx context.Context, r Request, t *Target) Response {
 		case "bearer", "basic", "apikey":
 			if err := ownAuth(req, mode, adata, t); err != nil {
 				res.Error = "authentication: " + err.Error()
+				res.ReqHeaders = t.headers(req.Header)
+				return res
+			}
+		case "digest", "oauth2", "awsv4", "oauth1", "hawk", "ntlm":
+			a := adata
+			if a == nil {
+				a = &ReqAuth{}
+			}
+			var aerr error
+			switch mode {
+			case "digest":
+				if digest != nil {
+					u, p := strings.TrimSpace(Resolve(a.User, t.Vars)), Resolve(a.Password, t.Vars)
+					req.Header.Set("Authorization", digestHeader(digest, req, u, p, requestBody(req)))
+					if p != "" {
+						t.Secrets = append(t.Secrets, p)
+					}
+				}
+			case "oauth2":
+				var tok string
+				if tok, aerr = oauth2Token(ctx, a, t, c, attempt > 0); aerr == nil {
+					req.Header.Set("Authorization", "Bearer "+tok)
+					t.Secrets = append(t.Secrets, tok)
+					authed = true
+				}
+			case "awsv4":
+				aerr = awsSign(req, a, t, requestBody(req), time.Now())
+			case "oauth1":
+				aerr = oauth1Sign(req, a, t, requestBody(req), "", "")
+			case "hawk":
+				var h string
+				if h, aerr = hawkHeader(req, a, t, requestBody(req), "", ""); aerr == nil {
+					req.Header.Set("Authorization", h)
+				}
+			case "ntlm":
+				u, p := strings.TrimSpace(Resolve(a.User, t.Vars)), Resolve(a.Password, t.Vars)
+				if p != "" {
+					t.Secrets = append(t.Secrets, p)
+				}
+				if ntlm == nil {
+					req.Header.Set("Authorization", ntlmNegotiate())
+				} else {
+					req.Header.Set("Authorization", ntlmAuthenticate(ntlm, u, p, strings.TrimSpace(Resolve(a.Domain, t.Vars)), strings.TrimSpace(Resolve(a.Workstation, t.Vars)), nil, time.Now()))
+				}
+			}
+			if aerr != nil {
+				res.Error = "authentication: " + aerr.Error()
 				res.ReqHeaders = t.headers(req.Header)
 				return res
 			}
@@ -545,9 +592,24 @@ func Send(ctx context.Context, r Request, t *Target) Response {
 		data, err := io.ReadAll(io.LimitReader(resp.Body, MaxBody+1))
 		resp.Body.Close()
 		tm.Total = ms(time.Since(sent))
-		if resp.StatusCode == http.StatusUnauthorized && authed && attempt == 0 && t.Auth.renews() {
+		if resp.StatusCode == http.StatusUnauthorized && authed && attempt == 0 && t.Auth.renews() && mode != "oauth2" {
 			t.Tokens.Drop(t.TokenKey) // the token expired early: log in again, once
 			continue
+		}
+		if resp.StatusCode == http.StatusUnauthorized && attempt == 0 {
+			if mode == "ntlm" && ntlm == nil {
+				if ntlm = ntlmChallenge(resp.Header); ntlm != nil {
+					continue // answer the challenge on the same connection
+				}
+			}
+			if mode == "digest" && digest == nil {
+				if digest = digestChallenge(resp.Header); digest != nil {
+					continue // answer the challenge
+				}
+			}
+			if mode == "oauth2" && authed && (adata == nil || strings.TrimSpace(Resolve(adata.Token, t.Vars)) == "") {
+				continue // the token ran out early: a new one, once
+			}
 		}
 		res.Status, res.StatusText, res.Proto, res.Timing = resp.StatusCode, resp.Status, resp.Proto, tm
 		if err != nil {
@@ -647,10 +709,11 @@ func ownAuth(req *http.Request, mode string, a *ReqAuth, t *Target) error {
 		if k == "" || val == "" {
 			return errors.New("API key: the key name or value is empty")
 		}
-		if a.In == "query" {
-			q := req.URL.Query()
-			q.Set(k, val)
-			req.URL.RawQuery = q.Encode()
+		if a.In == "query" { // appended: the other parameters stay as typed (and in their order)
+			if req.URL.RawQuery != "" {
+				req.URL.RawQuery += "&"
+			}
+			req.URL.RawQuery += url.QueryEscape(k) + "=" + url.QueryEscape(val)
 		} else {
 			req.Header.Set(k, val)
 		}

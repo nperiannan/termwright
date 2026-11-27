@@ -200,7 +200,7 @@ func (a *App) httpEnvName(idOrName string) string {
 
 // httpKeepSet keeps what scripts set with pm.environment.set (in the chosen environment) and
 // pm.globals.set, as Postman does.
-func (a *App) httpKeepSet(env string, res apiclient.Response) {
+func (a *App) httpKeepSet(env, coll string, res apiclient.Response) {
 	if a.cfg == nil {
 		return
 	}
@@ -235,6 +235,31 @@ func (a *App) httpKeepSet(env string, res apiclient.Response) {
 	}
 	save(env, res.EnvSet)
 	save(apiclient.GlobalsID, res.GlobalSet)
+	// pm.collectionVariables.set: kept in the collection the request came from
+	if len(res.CollSet) > 0 && coll != "" {
+		st := a.httpStore()
+		c, err := st.Find(coll)
+		if err != nil {
+			return
+		}
+		keys := make([]string, 0, len(res.CollSet))
+		for k := range res.CollSet {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			found := false
+			for i := range c.Vars {
+				if c.Vars[i].Key == k {
+					found, c.Vars[i].Value = true, res.CollSet[k]
+				}
+			}
+			if !found {
+				c.Vars = append(c.Vars, apiclient.KV{Key: k, Value: res.CollSet[k]})
+			}
+		}
+		_, _ = st.Save(c)
+	}
 }
 
 // httpScriptGuard stops pm.sendRequest from changing a production API without a confirmation.

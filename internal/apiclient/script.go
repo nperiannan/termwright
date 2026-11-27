@@ -12,7 +12,7 @@ import (
 
 // prelude is the pm.* subset (Postman's sandbox) and a chai-like expect.
 const prelude = `
-var __tests = [], __logs = [];
+var __tests = [], __logs = [], __req = JSON.parse(__reqJSON);
 var console = { log: function() { __logs.push(Array.prototype.map.call(arguments, function(a) { return typeof a === 'string' ? a : JSON.stringify(a); }).join(' ')); } };
 console.info = console.warn = console.error = console.log;
 function __eq(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
@@ -68,23 +68,34 @@ function __mkres(r) {
   Object.defineProperty(o.to.be, 'ok', { get: function() { if (r.status < 200 || r.status > 299) throw new Error('expected a 2xx status, got ' + r.status); } });
   Object.defineProperty(o.to.be, 'success', { get: function() { if (r.status < 200 || r.status > 299) throw new Error('expected a 2xx status, got ' + r.status); } });
   Object.defineProperty(o.to.be, 'json', { get: function() { JSON.parse(r.body); } });
+  [['clientError', 400, 499], ['serverError', 500, 599], ['info', 100, 199], ['redirection', 300, 399], ['notFound', 404, 404], ['unauthorized', 401, 401],
+   ['forbidden', 403, 403], ['badRequest', 400, 400], ['accepted', 202, 202], ['rateLimited', 429, 429]].forEach(function(e) {
+    Object.defineProperty(o.to.be, e[0], { get: function() { if (r.status < e[1] || r.status > e[2]) throw new Error('expected ' + e[0] + ', got ' + r.status); } }); });
+  o.to.not = { have: {
+      status: function(c) { var bad = typeof c === 'number' ? r.status === c : r.statusText.indexOf(c) >= 0; if (bad) throw new Error('expected status not ' + c); },
+      header: function(n) { if (o.headers.get(n) !== undefined) throw new Error('expected no header ' + n); },
+      body: function(s) { if (r.body.indexOf(s) >= 0) throw new Error('expected the body not to contain ' + s); } }, be: {} };
+  Object.defineProperty(o.to.not.be, 'ok', { get: function() { if (r.status >= 200 && r.status <= 299) throw new Error('expected a non-2xx status, got ' + r.status); } });
+  o.reason = function() { return r.statusText.replace(/^\d+\s*/, ''); };
+  o.headers.toObject = function() { var x = {}; (r.headers || []).forEach(function(h) { x[h.key.toLowerCase()] = h.value; }); return x; };
+  o.headers.all = function() { return r.headers || []; };
   return o;
 }
-var __next = { set: false, v: '' }, __skip = false, __envSet = {}, __globSet = {};
+var __next = { set: false, v: '' }, __skip = false, __envSet = {}, __globSet = {}, __collSet = {};
 function __scope(store) {
   return { get: function(k) { return __vars[k]; }, has: function(k) { return k in __vars; },
     set: function(k, v) { v = String(v); __vars[k] = v; __set[k] = v; if (store) store[k] = v; },
-    unset: function(k) { delete __vars[k]; }, clear: function() {},
+    unset: function(k) { delete __vars[k]; if (store) delete store[k]; }, clear: function() {},
     toObject: function() { var o = {}; for (var k in __vars) o[k] = __vars[k]; return o; },
-    replaceIn: function(s) { return String(s).replace(/\{\{\s*([^{}]+?)\s*\}\}/g, function(m, k) { return k in __vars ? __vars[k] : m; }); } };
+    replaceIn: function(s) { return String(s).replace(/\{\{\s*([^{}]+?)\s*\}\}/g, function(m, k) { if (k in __vars) return __vars[k]; var d = k.charAt(0) === '$' ? __dyn(k) : null; return d === null ? m : d; }); } };
 }
 var pm = {
   test: function(name, fn) { try { fn(); __tests.push({ name: name, pass: true }); } catch (e) { __tests.push({ name: name, pass: false, error: String(e && e.message || e) }); } },
-  expect: expect,
+  expect: function(v, m) { return require('chai').expect(v, m); }, // Postman's pm.expect is chai's
   variables: __scope(null),
   environment: __scope(__envSet),
   globals: __scope(__globSet),
-  collectionVariables: __scope(null),
+  collectionVariables: __scope(__collSet),
   iterationData: __scope(null),
   request: __req,
   info: __info,
@@ -103,6 +114,30 @@ pm.sendRequest = function(r, cb) {
   if (typeof cb === 'function') cb(err, res);
   return err ? Promise.reject(err) : Promise.resolve(res);
 };
+// pm.request: headers, the URL's query and the body can be changed by a pre-request script (Postman's
+// pm.request.headers.add/upsert/remove, pm.request.url.addQueryParams, pm.request.body.raw)
+(function(r) {
+  var hs = r.headers || (r.headers = []);
+  function find(k) { k = String(k).toLowerCase(); for (var i = 0; i < hs.length; i++) if (String(hs[i].key).toLowerCase() === k && !hs[i].off) return i; return -1; }
+  hs.add = function(h) { if (typeof h === 'string') { var p = h.split(':'); h = { key: p.shift().trim(), value: p.join(':').trim() }; } hs.push({ key: String(h.key), value: String(h.value) }); };
+  hs.upsert = function(h) { var i = find(h.key); if (i >= 0) hs[i].value = String(h.value); else hs.add(h); };
+  hs.remove = function(k) { var i; while ((i = find(k)) >= 0) hs.splice(i, 1); };
+  hs.get = function(k) { var i = find(k); return i >= 0 ? hs[i].value : undefined; };
+  hs.has = function(k) { return find(k) >= 0; };
+  hs.toObject = function() { var o = {}; hs.forEach(function(h) { if (!h.off) o[h.key] = h.value; }); return o; };
+  var u = String(r.url || '');
+  r.url = { toString: function() { return u; }, getRaw: function() { return u; },
+    addQueryParams: function(ps) { (Array.isArray(ps) ? ps : [ps]).forEach(function(p) { u += (u.indexOf('?') >= 0 ? '&' : '?') + (typeof p === 'string' ? p : encodeURIComponent(p.key) + '=' + encodeURIComponent(p.value == null ? '' : p.value)); }); },
+    update: function(s) { u = String(s); } };
+  Object.defineProperty(r, '__url', { get: function() { return u; } });
+  var b = r.body == null ? '' : String(r.body);
+  r.body = { mode: 'raw', toString: function() { return b; }, update: function(s) { b = typeof s === 'string' ? s : (s && s.raw !== undefined ? String(s.raw) : JSON.stringify(s)); } };
+  Object.defineProperty(r.body, 'raw', { get: function() { return b; }, set: function(v) { b = String(v); } });
+  Object.defineProperty(r, '__body', { get: function() { return b; } });
+  r.addHeader = hs.add; r.removeHeader = hs.remove;
+})(__req);
+function btoa(s) { return __b64(String(s)); }
+function atob(s) { return __unb64(String(s)); }
 var tests = {}, globals = {}, environment = {};
 if (__res) {
   pm.response = __mkres(__res);
@@ -122,11 +157,16 @@ type scriptInfo struct {
 
 // scriptOut is what a script did.
 type scriptOut struct {
-	tests          []TestResult
-	logs           []string
-	set, env, glob map[string]string
-	next           string
-	nextSet, skip  bool
+	tests                []TestResult
+	logs                 []string
+	set, env, glob, coll map[string]string
+	next                 string
+	nextSet, skip        bool
+	// pre-request: the request as the script left it (headers, URL, body)
+	reqHeaders []KV
+	reqURL     string
+	reqBody    string
+	changed    bool
 }
 
 // script runs a pre-request (res nil) or test script; vars is updated with what it set.
@@ -145,9 +185,7 @@ func script(ctx context.Context, src string, req Request, res *Response, vars ma
 	_ = vm.Set("__vars", jv)
 	_ = vm.Set("__set", set)
 	reqJSON, _ := json.Marshal(map[string]any{"method": req.Method, "url": req.URL, "headers": req.Headers, "body": req.Body.Raw, "name": req.Name})
-	var rq any
-	_ = json.Unmarshal(reqJSON, &rq)
-	_ = vm.Set("__req", rq)
+	_ = vm.Set("__reqJSON", string(reqJSON)) // a plain JS object (pm.request is changed by the script)
 	if res == nil {
 		info.EventName = "prerequest"
 		_ = vm.Set("__res", nil)
@@ -163,6 +201,7 @@ func script(ctx context.Context, src string, req Request, res *Response, vars ma
 	_ = json.Unmarshal(ib, &iv)
 	_ = vm.Set("__info", iv)
 	_ = vm.Set("__schema", func(schema, doc string) string { return ValidateSchema(schema, doc) })
+	scriptHelpers(vm)
 	_ = vm.Set("__send", func(call goja.FunctionCall) goja.Value {
 		r := scriptRequest(call.Argument(0).Export(), jv)
 		if t == nil {
@@ -188,21 +227,31 @@ func script(ctx context.Context, src string, req Request, res *Response, vars ma
 		_ = json.Unmarshal(b, &gv)
 		return vm.ToValue(gv)
 	})
-	done := make(chan struct{})
+	done, stopped := make(chan struct{}), make(chan struct{})
 	defer close(done)
 	go func() {
 		select {
 		case <-time.After(60 * time.Second):
 			vm.Interrupt("the script ran longer than 60 seconds")
+			close(stopped)
 		case <-ctx.Done():
 			vm.Interrupt("stopped")
+			close(stopped)
 		case <-done:
 		}
 	}()
+	timers := setTimers(vm)
+	if err := runLibs(vm); err != nil {
+		return out, err
+	}
 	if _, err := vm.RunString(prelude); err != nil {
 		return out, err
 	}
 	_, err := vm.RunString(src)
+	if err == nil { // setTimeout and friends: their callbacks run now, in order
+		err = timers.drain(stopped)
+	}
+	vm.ClearInterrupt() // the results below are read with the runtime (getters)
 	b, _ := json.Marshal(vm.Get("__tests").Export())
 	_ = json.Unmarshal(b, &out.tests)
 	b, _ = json.Marshal(vm.Get("__logs").Export())
@@ -221,7 +270,25 @@ func script(ctx context.Context, src string, req Request, res *Response, vars ma
 		}
 		return m
 	}
-	out.env, out.glob = strMap("__envSet"), strMap("__globSet")
+	out.env, out.glob, out.coll = strMap("__envSet"), strMap("__globSet"), strMap("__collSet")
+	if res == nil { // what the pre-request script made of the request
+		if rv, ok := vm.Get("__req").(*goja.Object); ok && rv != nil {
+			out.reqURL = rv.Get("__url").String()
+			out.reqBody = rv.Get("__body").String()
+			if hs, ok := rv.Get("headers").Export().([]any); ok {
+				for _, h := range hs {
+					if m, ok := h.(map[string]any); ok {
+						kv := KV{Key: fmt.Sprint(m["key"]), Value: fmt.Sprint(m["value"])}
+						if off, _ := m["off"].(bool); off {
+							kv.Off = true
+						}
+						out.reqHeaders = append(out.reqHeaders, kv)
+					}
+				}
+			}
+			out.changed = true
+		}
+	}
 	if nx, ok := vm.Get("__next").Export().(map[string]any); ok {
 		out.nextSet, _ = nx["set"].(bool)
 		out.next = fmt.Sprint(nx["v"])
@@ -327,30 +394,48 @@ func runInfo(ctx context.Context, r Request, t *Target, info scriptInfo) Respons
 			}
 			res.GlobalSet[k] = v
 		}
+		for k, v := range o.coll {
+			if res.CollSet == nil {
+				res.CollSet = map[string]string{}
+			}
+			res.CollSet[k] = v
+		}
 		if o.nextSet {
 			res.NextSet, res.Next = true, o.next
 		}
 	}
 	var pre scriptOut
+	var preTests []TestResult
 	for _, src := range []string{t.CollPre, r.PreScript} {
 		o, err := script(ctx, src, r, nil, t.Vars, t, info)
 		merge(o)
+		preTests = append(preTests, o.tests...) // Postman lists a pre-request script's pm.test results too
+		if o.changed && err == nil {            // pm.request.headers.add, url.addQueryParams, body.raw = ...
+			r.Headers, r.URL = o.reqHeaders, o.reqURL
+			if o.reqBody != r.Body.Raw && r.Body.Mode != "urlencoded" && r.Body.Mode != "form" && r.Body.Mode != "binary" {
+				r.Body.Raw = o.reqBody
+				if r.Body.Mode == "" {
+					r.Body.Mode = "text"
+				}
+			}
+		}
 		if o.skip {
 			pre.skip = true
 		}
 		if err != nil {
-			res.Error, res.Logs = "pre-request "+err.Error(), logs
+			res.Error, res.Logs, res.Tests = "pre-request "+err.Error(), logs, preTests
 			return res
 		}
 	}
 	keep := res
 	if pre.skip {
-		keep.Skipped, keep.Logs = true, logs
+		keep.Skipped, keep.Logs, keep.Tests = true, logs, preTests
 		return keep
 	}
 	res = Send(ctx, r, t)
 	res.Logs = append(logs, res.Logs...)
-	res.Vars, res.EnvSet, res.GlobalSet, res.NextSet, res.Next = keep.Vars, keep.EnvSet, keep.GlobalSet, keep.NextSet, keep.Next
+	res.Vars, res.EnvSet, res.GlobalSet, res.CollSet, res.NextSet, res.Next = keep.Vars, keep.EnvSet, keep.GlobalSet, keep.CollSet, keep.NextSet, keep.Next
+	res.Tests = append(preTests, res.Tests...)
 	if res.Status == 0 {
 		return res
 	}

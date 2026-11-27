@@ -447,10 +447,53 @@ func postmanAuth(a map[string]any) (string, *ReqAuth) {
 			in = "query"
 		}
 		return "apikey", &ReqAuth{Key: postmanAuthVal(a["apikey"], "key"), Value: postmanAuthVal(a["apikey"], "value"), In: in}
+	case "digest":
+		return "digest", &ReqAuth{User: postmanAuthVal(a["digest"], "username"), Password: postmanAuthVal(a["digest"], "password")}
+	case "awsv4":
+		g := func(k string) string { return postmanAuthVal(a["awsv4"], k) }
+		return "awsv4", &ReqAuth{AccessKey: g("accessKey"), SecretKey: g("secretKey"), Region: g("region"), Service: g("service"), SessionToken: g("sessionToken")}
 	case "oauth2":
-		if t := postmanAuthVal(a["oauth2"], "accessToken"); t != "" {
-			return "bearer", &ReqAuth{Token: t}
+		g := func(k string) string { return postmanAuthVal(a["oauth2"], k) }
+		if g("accessTokenUrl") == "" || g("clientId") == "" { // an access token only
+			if t := g("accessToken"); t != "" {
+				return "bearer", &ReqAuth{Token: t}
+			}
+			break
 		}
+		grant, pkce := g("grant_type"), ""
+		switch grant {
+		case "password_credentials":
+			grant = "password"
+		case "authorization_code_with_pkce":
+			grant, pkce = "authorization_code", firstNonEmpty(g("challengeAlgorithm"), "S256")
+		case "authorization_code", "implicit":
+		default:
+			grant = "client_credentials"
+		}
+		ca := ""
+		if g("client_authentication") == "body" {
+			ca = "body"
+		}
+		redir := g("redirect_uri")
+		if g("useBrowser") == "true" || strings.Contains(redir, "oauth.pstmn.io") { // Postman's own callback: Termwright listens on 127.0.0.1
+			redir = ""
+		}
+		return "oauth2", &ReqAuth{Grant: grant, TokenURL: g("accessTokenUrl"), ClientID: g("clientId"), ClientSecret: g("clientSecret"), Scope: g("scope"),
+			User: g("username"), Password: g("password"), ClientAuth: ca, AuthURL: g("authUrl"), RedirectURI: redir, PKCE: pkce, State: g("state")}
+	case "oauth1":
+		g := func(k string) string { return postmanAuthVal(a["oauth1"], k) }
+		in := ""
+		if g("addParamsToHeader") == "false" {
+			in = "query"
+		}
+		return "oauth1", &ReqAuth{ConsumerKey: g("consumerKey"), ConsumerSecret: g("consumerSecret"), Token: g("token"), TokenSecret: g("tokenSecret"),
+			SignatureMethod: g("signatureMethod"), Realm: g("realm"), In: in}
+	case "hawk":
+		g := func(k string) string { return postmanAuthVal(a["hawk"], k) }
+		return "hawk", &ReqAuth{HawkID: g("authId"), HawkKey: g("authKey"), Algorithm: g("algorithm"), Ext: g("extraData"), App: g("app"), Dlg: g("delegation"), Payload: g("includePayloadHash") == "true"}
+	case "ntlm":
+		g := func(k string) string { return postmanAuthVal(a["ntlm"], k) }
+		return "ntlm", &ReqAuth{User: g("username"), Password: g("password"), Domain: g("domain"), Workstation: g("workstation")}
 	}
 	return "", nil
 }

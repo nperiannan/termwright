@@ -4,6 +4,51 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.45.0 (2026-11-27)
+
+- **Friendlier web testing.** While recording, a bar at the bottom of the browser pauses, adds checks (*✓ Check text*, *👁 Check visible*, *= Check value*, a checkbox's state included), undoes the last action and finishes with **Done**; it shows the last actions in words and can be dragged. A typed value the test already has (e.g. `SN123` of `{{serial}}`) is recorded as `{{serial}}`. The web step card shows the web app, the page and each action in plain words, with its last ✓ / ✗ and picture; click an action to edit it (target with ⌖ Pick, value, fallbacks, ▶ Run to here, Duplicate, Move, Delete), drag ⋮⋮ to reorder, ⚙ for the settings, ⋯ for Debug in Browser and Save as Procedure. **✦ Ask AI** under the actions has the AI assistant record the next actions in the same browser (Add Them / Cancel). The test editor has a side panel with the test's devices (web apps too, with Needs and Rename), values and settings. In read view a web step reads as its page and actions with its checks (no device-error checks). **Record a Web Test** records from a saved web app or just an address, then offers to save the address as a web app session.
+
+### Tests: an AI records web tests (Termwright's own Playwright tool)
+- Added: the `web` tool (Termwright connector for Claude and other MCP apps, the in-app AI assistant, the local API): open a browser on a saved web app (it logs in by itself) or a page, `snapshot` its buttons, links and fields with targets (web components too), `act` on them (one or several actions, by target or snapshot number, with `{{variables}}`), and `save` what worked as a web test or as a web step added to a test; `watch` records what the person does in the same browser. Passwords stay `{{password}}`; expect actions become the test's checks.
+- Added: a page snapshot in the browser runner, and a headless step-by-step browser.
+- Termwright shows a message when an AI opens a browser; a production web app asks before it is opened or changed.
+
+### Tests: a testbed can hold the web app of a web test
+- Fixed: the web app a web (Playwright) test logs in to could not be part of a testbed: a run listed only the test's switches. The web app is now one of the test's roles, named after its session (`{{extremecloud_iq}}`), like a switch; tests saved before get it when they are opened or run.
+- Changed: the Run dialog marks a web app role *web app* and offers the testbed's web apps for it (and its devices for device roles); the New Testbed picker lists web app sessions with the type *web app*.
+
+### API client: WebSocket and gRPC requests
+- Added: WebSocket requests: choose WS in the method list; Connect / Disconnect, Send Message (Ctrl+Enter), binary messages, Ping, and a Messages pane with sent and received messages, times, sizes, a filter and formatted details.
+- Added: gRPC requests: choose GRPC; Load Methods from the server's reflection or .proto files (Service Definition, with import paths and TLS), the method's kind (unary, server, client or bidirectional stream), Use Example Message, JSON messages, metadata, the gRPC status, and metadata and trailers of the answer.
+- Added: `postman-collection` in scripts (`require('postman-collection')`), and `crypto.getRandomValues`.
+
+### API client: Postman's script libraries, the real ones
+- Changed: scripts now use the real libraries of Postman's sandbox instead of partial versions: lodash 4.17.21, moment 2.30.1, crypto-js 3.3.0, tv4, and `xml2Json` made with xml2js as Postman does.
+- Added: `cheerio`, `xml2js`, `chai`, `ajv`, `csv-parse/lib/sync`, `uuid` and the Node modules `path`, `url`, `querystring`, `util`, `events`, `buffer` (and `Buffer`), `assert`, `punycode`, `string_decoder`, `stream` and `timers` with `require(...)`. A library is loaded only when a script uses it.
+- Added: `setTimeout`, `setInterval` and `setImmediate` in scripts; their callbacks run before the script ends.
+- Changed: `pm.expect` is chai's `expect`, as in Postman (every chai assertion works; messages are chai's).
+- The libraries are bundled by `scripts/jslibs/build.sh`; their licenses are in `internal/apiclient/jslibs/LICENSES.txt` and NOTICE.
+
+### API client: the rest of Postman
+- Added: OAuth 1.0 (HMAC-SHA1/256/512, PLAINTEXT; header, query or body), Hawk and NTLM (NTLMv2) authorization; imported from and exported to Postman.
+- Added: OAuth 2.0 authorization code (with PKCE) and implicit grants: the sign-in opens in the browser and Termwright takes the answer on a local callback URL; refresh tokens renew the access token without the browser.
+- Added: Postman's dynamic variables (`{{$randomEmail}}`, `{{$randomFullName}}`, `{{$randomIP}}` and about a hundred more), also in `pm.variables.replaceIn`.
+- Added: lodash (`_`), moment, `xml2Json` and `tv4` in scripts, and `require('lodash' | 'moment' | 'tv4')`.
+- Added: WebSocket and gRPC engines (reflection or .proto files; unary and streaming calls); their editors come next.
+- Added: the generated code uses `--digest`, `--ntlm` and `--aws-sigv4` with curl.
+- Fixed: generated JavaScript began with a `#` comment line, which is not JavaScript.
+
+### API client: Postman checks
+- Added: Digest Auth, OAuth 2.0 (client credentials and password grants, token cached and renewed after a 401) and AWS Signature v4 in a request's or collection's Authorization; imported from and exported to Postman, and in the generated code.
+- Added: `btoa` / `atob`, `CryptoJS` (MD5, SHA-1/256/512, HMAC, Hex/Base64/Utf8) and `require('crypto-js' | 'uuid')` in scripts; response checks `notFound`, `unauthorized`, `forbidden`, `badRequest`, `clientError`, `serverError`, `to.not.*`, `pm.response.reason()`, `headers.toObject()`.
+- Fixed: a pre-request script's `pm.request.headers.add/upsert/remove`, `pm.request.url.addQueryParams` and `pm.request.body.update` were not sent.
+- Fixed: `pm.collectionVariables.set` was not kept in the collection.
+- Fixed: `pm.test` in a pre-request script was not listed with the tests.
+- Fixed: an API key in the query re-sorted the URL's other parameters.
+
+- **AI Assistant: "not signed in" instead of a page of JSON**: when Claude Code was signed out (or its sign-in ran out), the chat showed its raw JSON answer. It now says Claude Code is not signed in, with **Run it in a Termwright tab** (opens a Local Shell and starts the sign-in) and **Copy the command**.
+- **API Client: a value typed in the Variables panel counts at once**: it was taken only when the field lost focus, and was dropped when another session was chosen. It now applies as you type (and on Enter), and stays for the tab.
+
 ## 0.44.6 (2026-11-26)
 
 - **File viewer: the cursor and the selection show**: the cursor was drawn black (unseen on the dark theme) and the highlighted current line covered the selection. Both show now, also before Edit (the file stays read-only until then, but you can place the cursor and select to copy).

@@ -214,13 +214,37 @@ type line struct {
 	Text    string `json:"text"`
 	Dialogs []string
 	Reads   []struct{ Name, Value string }
-	Rec     *Action `json:"rec"`
-	Healed  string  `json:"healed"`
-	Pic     string  `json:"pic"`
-	Video   string  `json:"video"`
-	Pick    *Pick   `json:"pick"`
-	Ack     *int    `json:"ack"`
-	Closed  bool    `json:"closed"`
+	Rec     *Action   `json:"rec"`
+	Healed  string    `json:"healed"`
+	Pic     string    `json:"pic"`
+	Video   string    `json:"video"`
+	Pick    *Pick     `json:"pick"`
+	Ack     *int      `json:"ack"`
+	Closed  bool      `json:"closed"`
+	Snap    *Snapshot `json:"snap"`
+}
+
+// Snapshot is what a page offers to act on: its visible buttons, links and fields, each with a target the
+// actions accept, its headings and an open dialog.
+type Snapshot struct {
+	URL      string            `json:"url"`
+	Title    string            `json:"title"`
+	Elements []SnapshotElement `json:"elements"`
+	Headings []string          `json:"headings,omitempty"`
+	Dialog   string            `json:"dialog,omitempty"`
+}
+
+// SnapshotElement is one element of a Snapshot.
+type SnapshotElement struct {
+	Role     string   `json:"role"`
+	Name     string   `json:"name,omitempty"`
+	Target   string   `json:"target"`
+	Alt      []string `json:"alt,omitempty"`
+	Value    string   `json:"value,omitempty"`
+	Secret   bool     `json:"secret,omitempty"`
+	Options  []string `json:"options,omitempty"`
+	Checked  bool     `json:"checked,omitempty"`
+	Disabled bool     `json:"disabled,omitempty"`
 }
 
 func (r Runner) start(ctx context.Context, job map[string]any) (*exec.Cmd, *bytes.Buffer, error) {
@@ -370,9 +394,17 @@ func (r Runner) Record(ctx context.Context, w Step, onAction func(Action), x Ext
 			continue
 		}
 		if l.Rec != nil {
-			acts = append(acts, *l.Rec)
+			switch l.Rec.Do {
+			case "__undo": // the toolbar's Undo
+				if len(acts) > 0 {
+					acts = acts[:len(acts)-1]
+				}
+			case "__done":
+			default:
+				acts = append(acts, *l.Rec)
+			}
 			if onAction != nil {
-				onAction(*l.Rec)
+				onAction(*l.Rec) // __undo too: whoever shows the actions drops its last one
 			}
 		}
 		if l.Error != "" {
@@ -418,6 +450,10 @@ type Step struct {
 // Extra is what the runner gets besides the step: where files and states are, the HTTP login, the web
 // app's recorded login (done when the app asks to log in), and the name the pictures start with.
 type Extra struct {
+	// RecVars: the test's variables; a recorded value equal to one is kept as {{name}}.
+	RecVars map[string]string
+	// Headless: a step-by-step browser (Open) without a window (an AI driving it with show off; tests).
+	Headless               bool
 	Root, StateDir         string
 	HTTPUser, HTTPPassword string
 	Login                  []Action
@@ -434,7 +470,7 @@ func (x Extra) job(w Step, shots string, timeout int) map[string]any {
 		pre = "web-" + time.Now().Format("150405.000")
 	}
 	return map[string]any{"step": w, "shots": shots, "timeout": timeout, "root": x.Root, "stateDir": x.StateDir,
-		"httpUser": x.HTTPUser, "httpPassword": x.HTTPPassword, "login": x.Login, "prefix": pre, "person": x.Person,
+		"httpUser": x.HTTPUser, "httpPassword": x.HTTPPassword, "login": x.Login, "prefix": pre, "person": x.Person, "recVars": x.RecVars,
 		"pictures": w.Pictures == "all" && shots != "", "failShot": w.Pictures != "none" && shots != "", "video": !x.NoVideo && !w.Show && shots != ""}
 }
 

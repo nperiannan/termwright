@@ -17,7 +17,7 @@ export type CtxKind = 'selection' | 'clipboard' | 'terminal' | 'tab' | 'file';
 export interface Ctx { id: number; kind: CtxKind; tabId?: string; label: string; detail: string; text: string; }
 export interface Img { name: string; mediaType: string; data: string; url: string; }
 export type StepState = 'ask' | 'running' | 'done' | 'skipped' | 'error' | 'refused';
-export type StepKind = 'run' | 'open' | 'find' | 'log' | 'record' | 'lab' | 'help' | 'status' | 'snmp' | 'http' | 'syslog' | 'device' | 'tests' | 'skill';
+export type StepKind = 'run' | 'open' | 'find' | 'log' | 'record' | 'lab' | 'help' | 'status' | 'snmp' | 'http' | 'syslog' | 'device' | 'tests' | 'web' | 'skill';
 /** A step of the agent's plan: to do, being done, done. */
 export interface PlanItem { t: string; s: ' ' | '~' | 'x'; }
 export type AiMode = 'ask' | 'agent' | 'plan';
@@ -43,6 +43,7 @@ export const AGENT_TOOLS = [
   { k: 'http', name: 'API client', what: 'Sends REST API requests with the saved API sessions (their login and secrets stay in Termwright), runs, saves and imports collections; POST, PUT, PATCH and DELETE follow the permission above and always ask on production sessions' },
   { k: 'device', name: 'Device facts and type', what: 'Reads the facts of saved sessions (model, version, serial number, uptime), identifies a session\'s device type with the Detect patterns and sets it after asking - logging in in the background with the saved login' },
   { k: 'tests', name: 'Tests', what: 'Lists, writes, runs and schedules Termwright tests (YAML steps with checks on commands, REST requests and SNMP values) and reads their results' },
+  { k: 'web', name: 'Web browser (Playwright)', what: 'Drives a browser on a saved web app (logging in by itself) - reads the page, clicks, fills, checks - and saves what it did as a web test or as a web step of a test' },
   { k: 'syslog', name: 'Syslog', what: 'Reads the messages the syslog server received (by sender, severity, words, time), starts or stops it and sends test messages' },
 ] as const;
 const MAX_CHATS = 40, MAX_OUT = 12000, MAX_STEPS = 25;
@@ -380,7 +381,7 @@ export class AIChat {
     }
     if (s.kind === 'log' || s.kind === 'record') return this.evidence(s);
     if (s.kind === 'lab') return this.labStep(s, chatId);
-    if (s.kind === 'snmp' || s.kind === 'http' || s.kind === 'syslog' || s.kind === 'device' || s.kind === 'tests') return this.netStep(s, chatId, perm);
+    if (s.kind === 'snmp' || s.kind === 'http' || s.kind === 'syslog' || s.kind === 'device' || s.kind === 'tests' || s.kind === 'web') return this.netStep(s, chatId, perm);
     const t = findTab(this.tabs.tabs(), s.tab);
     if (!t) { s.state = 'error'; s.note = tr('No open tab is called {0}', s.tab); return `run ${s.tab}: no open tab has that name - open it first.`; }
     s.tab = t.title;
@@ -618,7 +619,7 @@ export function parseActions(text: string): { text: string; actions: { kind: Ste
       m = /^help\s+(.+)$/i.exec(l);
       if (m) { actions.push({ kind: 'help', tab: 'help', command: m[1].trim() }); continue; }
       if (/^status\s*$/i.test(l)) { actions.push({ kind: 'status', tab: 'status', command: '' }); continue; }
-      m = /^(snmp|http|syslog|device|tests)\s+(\{.*\})\s*$/i.exec(l);
+      m = /^(snmp|http|syslog|device|tests|web)\s+(\{.*\})\s*$/i.exec(l);
       if (m) { const k = m[1].toLowerCase() as StepKind; actions.push({ kind: k, tab: k, command: m[2] }); continue; }
       m = /^lab(?:\s+(.*))?$/i.exec(l);
       if (m) { actions.push({ kind: 'lab', tab: 'lab', command: (m[1] ?? 'show').trim() }); continue; }

@@ -558,6 +558,7 @@ func (f Folder) exportPlaywright(o ExportOptions, cases []string, name string, p
 		if p, err := f.Prepare(c); err == nil {
 			c = p
 		}
+		c = literalWebLogins(c) // the export names the web app itself
 		for _, list := range [][]Step{c.Setup, c.Steps} {
 			for _, st := range list {
 				if st.Web != nil && st.Web.Login != "" && apps[st.Web.Login] == nil && o.Device != nil {

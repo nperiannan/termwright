@@ -1,0 +1,1 @@
+module.exports = { setImmediate: function (f) { var a = Array.prototype.slice.call(arguments, 1); return setTimeout(function () { f.apply(null, a); }, 0); }, clearImmediate: function (t) { clearTimeout(t); }, setTimeout: setTimeout, clearTimeout: clearTimeout };

@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import type { TestbedMeta, TestSuiteDefaults, TestWeb, TestWebAction, WebResult, WebPick, TestbedDevice, TestExpect, WebStatus, TestBooking, TestTrends, TestProc, TestProcInfo, TemplateSpec, SNMPRow, HMockInfo, APIMonitor, APIMonitorState, SNMPDashboard, SNMPDashPoll, SNMPSimState, TestApproval, TopoPlan, TopoRequest, TopoResult, LayoutRequest, LayoutResult, TestCase, TestCaseInfo, TestRunReport, TestsTree, TestsGitInfo, TestSchedule, TestScheduleView, IntegrationsConfig, TestTable, TestHistory } from './models';
 import { EmuEngines, EmuHostNIC, EmuTrex,
   EmuServer, EmuServerView,
-  AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange, SNMPRequest, SNMPResult, SNMPMibNode, SNMPModule, SNMPSecretState, SNMPTrapState, SNMPTrapsView, HSendRequest, HResponse, HCollection, HCollectionInfo, HRunRequest, HRunResult, HHistoryItem, HRequest, AISkill, HEnv, HVar, HHostCookies, SyslogSettings, SyslogState, SyslogMsg, SyslogRule, SyslogQuery, SyslogSendIn } from './models';
+  AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange, SNMPRequest, SNMPResult, SNMPMibNode, SNMPModule, SNMPSecretState, SNMPTrapState, SNMPTrapsView, HSendRequest, HResponse, HWsOpen, HWsMessage, HGrpcSchema, HCollection, HCollectionInfo, HRunRequest, HRunResult, HHistoryItem, HRequest, AISkill, HEnv, HVar, HHostCookies, SyslogSettings, SyslogState, SyslogMsg, SyslogRule, SyslogQuery, SyslogSendIn } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -271,6 +271,11 @@ export class Backend {
   syslogExport(q: SyslogQuery) { return this.call<string>('SyslogExport', q); }
   // ---- API client ----
   httpSend(r: HSendRequest) { return this.call<HResponse>('HTTPSend', r); }
+  httpWsConnect(r: HSendRequest) { return this.call<HWsOpen>('HTTPWSConnect', r); }
+  httpWsSend(id: string, text: string, binary: boolean, vars: Record<string, string>) { return this.call<HWsMessage>('HTTPWSSend', id, text, binary, vars); }
+  httpWsPing(id: string) { return this.call<void>('HTTPWSPing', id); }
+  httpWsClose(id: string) { return this.call<void>('HTTPWSClose', id); }
+  httpGrpcDescribe(r: HSendRequest) { return this.call<HGrpcSchema>('HTTPGRPCDescribe', r); }
   httpTest(session: Session, path: string, secret: string, url = '/') { return this.call<HResponse>('HTTPTest', { session, path, secret, url }); }
   httpSecrets(path: string) { return this.call<{ secret: boolean; vars: string[] }>('HTTPSecrets', path); }
   /** null keeps a secret, '' removes it; keep: the secret variables the session still has. */
@@ -357,10 +362,12 @@ export class Backend {
   webLeftovers() { return this.call<{ pid: number; name: string; started: string }[]>('WebLeftovers'); }
   webCloseLeftovers() { return this.call<number>('WebCloseLeftovers'); }
   webSetup() { return this.call<void>('WebSetup'); }
-  webRecord(w: TestWeb) { return this.call<TestWebAction[]>('WebRecord', w); }
+  webRecord(w: TestWeb, vars: Record<string, string>) { return this.call<TestWebAction[]>('WebRecord', w, vars); }
   webRecordLogin(path: string, url: string, user: string) { return this.call<TestWebAction[]>('WebRecordLogin', path, url, user); }
   webTestLogin(path: string) { return this.call<string>('WebTestLogin', path); }
   webOpenApp(path: string) { return this.call<void>('WebOpenApp', path); }
+  webAIPrepare(w: TestWeb, vars: Record<string, string>) { return this.call<void>('WebAIPrepare', w, vars); }
+  webAITake() { return this.call<TestWebAction[]>('WebAITake'); }
   webDebugOpen(w: TestWeb, vars: Record<string, string>) { return this.call<void>('WebDebugOpen', w, vars); }
   webDebugRun(acts: TestWebAction[], from: number, vars: Record<string, string>) { return this.call<WebResult[]>('WebDebugRun', acts, from, vars); }
   webDebugPick() { return this.call<WebPick | null>('WebDebugPick'); }
@@ -371,7 +378,7 @@ export class Backend {
   testbedSetRole(file: string, role: string, session: string) { return this.call<void>('TestbedSetRole', file, role, session); }
   testbedSetValue(file: string, role: string, key: string, value: string) { return this.call<void>('TestbedSetValue', file, role, key, value); }
   testbedRenameRole(file: string, from: string, to: string) { return this.call<void>('TestbedRenameRole', file, from, to); }
-  testsRoles(files: string[]) { return this.call<{ role: string; session: string; deviceType?: string }[]>('TestsRoles', files); }
+  testsRoles(files: string[]) { return this.call<{ role: string; session: string; deviceType?: string; protocol?: string }[]>('TestsRoles', files); }
   testsUsePortVars(c: TestCase) { return this.call<{ case: TestCase; changed: number }>('TestsUsePortVars', c); }
   testsPorts(session: string) { return this.call<string[]>('TestsPorts', session); }
   testbedInfo(file: string) { return this.call<TestbedMeta>('TestbedInfo', file); }
