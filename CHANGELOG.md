@@ -4,6 +4,13 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+### API client: Postman's script libraries, the real ones
+- Changed: scripts now use the real libraries of Postman's sandbox instead of partial versions: lodash 4.17.21, moment 2.30.1, crypto-js 3.3.0, tv4, and `xml2Json` made with xml2js as Postman does.
+- Added: `cheerio`, `xml2js`, `chai`, `ajv`, `csv-parse/lib/sync`, `uuid` and the Node modules `path`, `url`, `querystring`, `util`, `events`, `buffer` (and `Buffer`), `assert`, `punycode`, `string_decoder`, `stream` and `timers` with `require(...)`. A library is loaded only when a script uses it.
+- Added: `setTimeout`, `setInterval` and `setImmediate` in scripts; their callbacks run before the script ends.
+- Changed: `pm.expect` is chai's `expect`, as in Postman (every chai assertion works; messages are chai's).
+- The libraries are bundled by `scripts/jslibs/build.sh`; their licenses are in `internal/apiclient/jslibs/LICENSES.txt` and NOTICE.
+
 ### API client: the rest of Postman
 - Added: OAuth 1.0 (HMAC-SHA1/256/512, PLAINTEXT; header, query or body), Hawk and NTLM (NTLMv2) authorization; imported from and exported to Postman.
 - Added: OAuth 2.0 authorization code (with PKCE) and implicit grants: the sign-in opens in the browser and Termwright takes the answer on a local callback URL; refresh tokens renew the access token without the browser.

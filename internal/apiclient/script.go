@@ -91,7 +91,7 @@ function __scope(store) {
 }
 var pm = {
   test: function(name, fn) { try { fn(); __tests.push({ name: name, pass: true }); } catch (e) { __tests.push({ name: name, pass: false, error: String(e && e.message || e) }); } },
-  expect: expect,
+  expect: function(v, m) { return require('chai').expect(v, m); }, // Postman's pm.expect is chai's
   variables: __scope(null),
   environment: __scope(__envSet),
   globals: __scope(__globSet),
@@ -138,34 +138,6 @@ pm.sendRequest = function(r, cb) {
 })(__req);
 function btoa(s) { return __b64(String(s)); }
 function atob(s) { return __unb64(String(s)); }
-// CryptoJS (the parts request-signing scripts use): hashes and HMACs, Hex / Base64 / Utf8 encodings
-var CryptoJS = (function() {
-  function W(hex) { this.__hex = hex; }
-  W.prototype.toString = function(enc) { return (enc || C.enc.Hex).stringify(this); };
-  function msg(m) { return m instanceof W ? { hex: m.__hex } : { text: String(m) }; }
-  var C = { lib: { WordArray: W } };
-  ['MD5', 'SHA1', 'SHA256', 'SHA512'].forEach(function(a) { C[a] = function(m) { return new W(__hash(a, msg(m))); };
-    C['Hmac' + a] = function(m, k) { return new W(__hmac(a, msg(m), msg(k))); }; });
-  C.enc = {
-    Hex: { stringify: function(w) { return w.__hex; }, parse: function(s) { return new W(String(s).toLowerCase()); } },
-    Base64: { stringify: function(w) { return __hex2b64(w.__hex); }, parse: function(s) { return new W(__b642hex(String(s))); } },
-    Utf8: { stringify: function(w) { return __hex2text(w.__hex); }, parse: function(s) { return new W(__text2hex(String(s))); } },
-  };
-  C.enc.Latin1 = C.enc.Utf8;
-  return C;
-})();
-function require(n) {
-  switch (String(n)) {
-    case 'crypto-js': return CryptoJS;
-    case 'uuid': return { v4: function() { return __uuid(); } };
-    case 'btoa': return btoa;
-    case 'atob': return atob;
-    case 'lodash': return _;
-    case 'moment': return moment;
-    case 'tv4': return tv4;
-  }
-  throw new Error('require("' + n + '") is not available in Termwright scripts (lodash, moment, crypto-js, uuid, tv4, btoa and atob are)');
-}
 var tests = {}, globals = {}, environment = {};
 if (__res) {
   pm.response = __mkres(__res);
@@ -255,17 +227,20 @@ func script(ctx context.Context, src string, req Request, res *Response, vars ma
 		_ = json.Unmarshal(b, &gv)
 		return vm.ToValue(gv)
 	})
-	done := make(chan struct{})
+	done, stopped := make(chan struct{}), make(chan struct{})
 	defer close(done)
 	go func() {
 		select {
 		case <-time.After(60 * time.Second):
 			vm.Interrupt("the script ran longer than 60 seconds")
+			close(stopped)
 		case <-ctx.Done():
 			vm.Interrupt("stopped")
+			close(stopped)
 		case <-done:
 		}
 	}()
+	timers := setTimers(vm)
 	if err := runLibs(vm); err != nil {
 		return out, err
 	}
@@ -273,6 +248,10 @@ func script(ctx context.Context, src string, req Request, res *Response, vars ma
 		return out, err
 	}
 	_, err := vm.RunString(src)
+	if err == nil { // setTimeout and friends: their callbacks run now, in order
+		err = timers.drain(stopped)
+	}
+	vm.ClearInterrupt() // the results below are read with the runtime (getters)
 	b, _ := json.Marshal(vm.Get("__tests").Export())
 	_ = json.Unmarshal(b, &out.tests)
 	b, _ = json.Marshal(vm.Get("__logs").Export())

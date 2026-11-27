@@ -1,0 +1,1 @@
+export var process = { env: {}, nextTick: function (f) { var a = Array.prototype.slice.call(arguments, 1); setTimeout(function () { f.apply(null, a); }, 0); }, version: 'v16.0.0', versions: {}, platform: 'termwright', browser: true, cwd: function () { return '/'; } };
