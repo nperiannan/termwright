@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.45.0 (2026-11-27)
+
 - **Friendlier web testing.** While recording, a bar at the bottom of the browser pauses, adds checks (*✓ Check text*, *👁 Check visible*, *= Check value*, a checkbox's state included), undoes the last action and finishes with **Done**; it shows the last actions in words and can be dragged. A typed value the test already has (e.g. `SN123` of `{{serial}}`) is recorded as `{{serial}}`. The web step card shows the web app, the page and each action in plain words, with its last ✓ / ✗ and picture; click an action to edit it (target with ⌖ Pick, value, fallbacks, ▶ Run to here, Duplicate, Move, Delete), drag ⋮⋮ to reorder, ⚙ for the settings, ⋯ for Debug in Browser and Save as Procedure. **✦ Ask AI** under the actions has the AI assistant record the next actions in the same browser (Add Them / Cancel). The test editor has a side panel with the test's devices (web apps too, with Needs and Rename), values and settings. In read view a web step reads as its page and actions with its checks (no device-error checks). **Record a Web Test** records from a saved web app or just an address, then offers to save the address as a web app session.
 
 ### Tests: an AI records web tests (Termwright's own Playwright tool)
