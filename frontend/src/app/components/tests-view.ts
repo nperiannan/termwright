@@ -911,12 +911,12 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
                 @for (r of runRoles(); track r.role) {
                   @let ps = runPortsOf(r.role);
                   <div class="rdev">
-                    <code class="rr">{{ '{{' }}{{ r.role }}{{ '}}' }}</code>
+                    <div class="row"><code class="rr">{{ '{{' }}{{ r.role }}{{ '}}' }}</code>@if (r.protocol === 'Web') { <span class="rk">web app</span> }</div>
                     <div class="row"><span class="mut">Runs on</span>
                       @if (testbed) {
                         <select [ngModel]="runMapOf(r.role)" (ngModelChange)="mapRole(r.role, $event)" [class.miss]="!runMapOf(r.role)" title="A device of the testbed; it is added to the testbed under the test's name">
                           <option value="">its own session: {{ r.session.split('/').pop() }}</option>
-                          @for (d of runTbDevs(); track d.role) { @if (d.session) { <option [value]="d.session">{{ d.name }}{{ d.deviceType ? ' (' + d.deviceType + (kindOf(d) ? ' ' + kindOf(d) : '') + ')' : '' }}</option> } }
+                          @for (d of runTbDevs(); track d.role) { @if (d.session && (d.protocol === 'Web') === (r.protocol === 'Web')) { <option [value]="d.session">{{ d.name }}{{ d.deviceType ? ' (' + d.deviceType + (kindOf(d) ? ' ' + kindOf(d) : '') + ')' : '' }}</option> } }
                         </select>
                       } @else { <span class="ell">{{ r.session }}</span> }
                     </div>
@@ -1033,7 +1033,7 @@ type LiveItem = { k: 'head' | 'out' | 'res'; t?: string; c?: string; s?: TestSte
     .dg, .tbg { display: flex; align-items: center; gap: 8px; padding: 7px 10px 4px; font-weight: 600; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .tbg { color: var(--text); font-size: 12.5px; padding: 12px 0 2px; } .tbg .mut { font-weight: 400; }
     .dv, .tbd { display: grid; grid-template-columns: 18px minmax(120px, 1.4fr) 120px 90px minmax(80px, 1fr) minmax(110px, auto); align-items: center; gap: 10px; padding: 5px 10px 5px 28px; font-size: 12.5px; border-radius: 6px; cursor: pointer; }
     .pgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; } .pgrid label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--muted); } .pgrid input { width: 100%; font-family: var(--mono, monospace); } .pgrid label.set input { border-color: var(--accent); }
-    .rdev { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 6px 0; display: flex; flex-direction: column; gap: 6px; } .rdev .rr { font-size: 11.5px; color: var(--accent); word-break: break-all; }
+    .rdev { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 6px 0; display: flex; flex-direction: column; gap: 6px; } .rdev .rr { font-size: 11.5px; color: var(--accent); word-break: break-all; } .rdev .rk { font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 8px; padding: 0 6px; }
     .rdev .row { display: flex; gap: 8px; align-items: center; min-width: 0; } .rdev select { flex: 1; min-width: 0; } .rdev select.miss { border-color: #d29922; } .rdev .pc { font-size: 12px; }
     .pg4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; } .pg4 label { display: flex; flex-direction: column; gap: 2px; font-size: 10.5px; color: var(--muted); min-width: 0; } .pg4 input { width: 100%; min-width: 0; font-family: var(--mono, monospace); color: var(--muted); } .pg4 input.set { color: inherit; border-color: var(--accent); }
     .rmap .row { display: flex; gap: 6px; align-items: center; } .rmap code { max-width: 45%; } .rmap select { flex: 1; min-width: 0; } .rmap select.miss { border-color: #d29922; }
@@ -1541,7 +1541,7 @@ export class TestsView implements OnInit, OnDestroy {
     const out: SessionNode[] = [];
     const all = (n: SessionNode | null) => { for (const c of n?.children ?? []) { if (c.isFolder) all(c); else out.push(c); } };
     all(this.folderNode(path));
-    return out.map(c => ({ path: c.path, name: c.name, host: c.hostname ?? '', deviceType: c.deviceType ?? '', folder: c.path.slice(0, c.path.lastIndexOf('/')) }));
+    return out.map(c => ({ path: c.path, name: c.name, host: c.hostname ?? '', deviceType: c.deviceType || (c.protocol === 'Web' ? 'web app' : ''), folder: c.path.slice(0, c.path.lastIndexOf('/')) }));
   }
   devGroups() {
     const q = this.tbDevQ.trim().toLowerCase(), m = this.tbModels();
@@ -2221,7 +2221,7 @@ export class TestsView implements OnInit, OnDestroy {
     }).catch(() => {});
     void this.loadRunMap();
   }
-  readonly runRoles = signal<{ role: string; session: string; deviceType?: string }[]>([]);
+  readonly runRoles = signal<{ role: string; session: string; deviceType?: string; protocol?: string }[]>([]);
   readonly runOwnPorts = signal<Record<string, string[]>>({});
   runVars: Record<string, string> = {};
   readonly portsOpen = signal(new Set<string>());
@@ -2567,7 +2567,8 @@ export class TestsView implements OnInit, OnDestroy {
     const acts = (w.actions ??= []);
     if (acts.length === 1 && acts[0].do === 'expect' && !acts[0].value && !acts[0].target) acts.pop();
     const off = this.backend.on('web:rec', (a: TestWebAction) => { acts.push({ do: a.do, target: a.target, value: a.value, alt: a.alt?.length ? a.alt : undefined }); this.touch(); });
-    try { await this.backend.webRecord({ ...w, actions: [] }); this.ui.toast(tr('Recording added'), 'success'); }
+    const role = /^\{\{\s*([^{}]+?)\s*\}\}$/.exec(w.login ?? ''), login = role ? this.draft()?.vars?.[role[1]] ?? w.login : w.login; // the web app's role: its session
+    try { await this.backend.webRecord({ ...w, login, actions: [] }); this.ui.toast(tr('Recording added'), 'success'); }
     catch (e) { this.ui.toast(errText(e), 'error'); }
     finally { off(); this.webRec.set(false); }
   }

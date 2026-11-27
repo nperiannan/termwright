@@ -497,6 +497,20 @@ The steps say `login: "{{app}}"` (and `session: "{{app}}"` in REST steps). Choos
 - in Termwright, in a schedule, or `twrun run --testbed testbeds/prod.yaml`. Each app keeps its own
 login.
 
+A recorded web test does this by itself: the web app it logs in to is one of the test's roles, named after
+the session (`Web Apps/ExtremeCloud IQ` becomes `{{extremecloud_iq}}`, with the session as its default),
+just like the switches of its device steps. So a test that configures a switch (`configure iqagent server
+…`) and then onboards it in the GUI has two roles, the switch and the web app, and a testbed can hold both:
+
+1. **Tests → Testbeds → + New** (or *Add Devices*): tick the switches and the web app session - web apps
+   are listed with the type *web app*.
+2. **Run**: under *Devices of the test* each role, the web app marked *web app*, offers the testbed's
+   devices of its kind (switches for a switch role, web apps for the web app); choose them once and the
+   testbed remembers.
+
+A test saved before keeps working: its web app becomes a role when it is opened or run, and the file
+says so the next time it is saved.
+
 ## 19. Running without Termwright (CI)
 
 Web steps run everywhere tests run:

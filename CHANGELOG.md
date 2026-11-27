@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+### Tests: a testbed can hold the web app of a web test
+- Fixed: the web app a web (Playwright) test logs in to could not be part of a testbed: a run listed only the test's switches. The web app is now one of the test's roles, named after its session (`{{extremecloud_iq}}`), like a switch; tests saved before get it when they are opened or run.
+- Changed: the Run dialog marks a web app role *web app* and offers the testbed's web apps for it (and its devices for device roles); the New Testbed picker lists web app sessions with the type *web app*.
+
 ### API client: WebSocket and gRPC requests
 - Added: WebSocket requests: choose WS in the method list; Connect / Disconnect, Send Message (Ctrl+Enter), binary messages, Ping, and a Messages pane with sent and received messages, times, sizes, a filter and formatted details.
 - Added: gRPC requests: choose GRPC; Load Methods from the server's reflection or .proto files (Service Definition, with import paths and TLS), the method's kind (unary, server, client or bidirectional stream), Use Example Message, JSON messages, metadata, the gRPC status, and metadata and trailers of the answer.
