@@ -511,6 +511,36 @@ just like the switches of its device steps. So a test that configures a switch (
 A test saved before keeps working: its web app becomes a role when it is opened or run, and the file
 says so the next time it is saved.
 
+## 18b. Recording with an AI (the web tool)
+
+Termwright has its own Playwright tool for AI apps: **web**, in the Termwright connector (Claude Desktop,
+Claude Code, any MCP app - Settings → AI Assistant → Connect an AI App), in Termwright's own AI assistant
+and in the local API (`POST /api/v1/tools/web`). The AI drives a real browser and Termwright keeps every
+action that worked, so what the AI did becomes a web test - recorded in the backend, not typed by hand.
+
+| Action | What it does |
+|---|---|
+| `open` | A browser on a saved web app session (`app`, it logs in by itself with the session's login) or a `url`; `show: false` runs it without a window. |
+| `snapshot` | What the page offers: headings, an open dialog, and each visible button, link and field as `[n] role "name" → target` (its value, options, checked, disabled). Web components (shadow DOM) included. |
+| `act` | One action (`do`, `target` or `ref` = the `[n]` of the snapshot, `value`) or several (`actions`); answers with ✓ / ✗ per action and a new snapshot. `vars` gives values for `{{names}}` now - the recording keeps `{{serial}}`. |
+| `text` | The page's text. |
+| `recorded`, `undo` | The recording so far; drop the last actions. |
+| `watch` | Records what **you** do in the same browser (the AI can hand over and take back). |
+| `save` | Writes the recording as a new web test (`file`, `name`) or adds it as a web step to a test (`append_to`, `position`). |
+| `close`, `discard` | Close the browser (the recording stays); forget the recording. |
+
+Passwords never reach the AI or the test: a password field says *use {{password}}*, and the action is
+filled with the web app session's password only in the browser. Every `expect` the AI does becomes a check
+of the test. Opening and acting on a production web app ask first; other web apps follow the AI settings
+(as the other tools do). Termwright shows a message when an AI opens a browser.
+
+**Example** - ask Claude: *"Configure the iqagent server on x465-1 to 10.1.1.5, then onboard it in
+ExtremeCloud IQ by its serial number, and make it a test."* It reads the serial number with the device tool,
+writes the CLI step with the tests tool, then opens `Web Apps/ExtremeCloud IQ` with the web tool, logs in,
+goes to the devices page, fills the serial number (`{{serial}}`), clicks Onboard, checks the device shows up
+and saves the web step into the same test. The test has two roles - the switch and the web app - so a
+testbed can bring its own of both.
+
 ## 19. Running without Termwright (CI)
 
 Web steps run everywhere tests run:

@@ -214,13 +214,37 @@ type line struct {
 	Text    string `json:"text"`
 	Dialogs []string
 	Reads   []struct{ Name, Value string }
-	Rec     *Action `json:"rec"`
-	Healed  string  `json:"healed"`
-	Pic     string  `json:"pic"`
-	Video   string  `json:"video"`
-	Pick    *Pick   `json:"pick"`
-	Ack     *int    `json:"ack"`
-	Closed  bool    `json:"closed"`
+	Rec     *Action   `json:"rec"`
+	Healed  string    `json:"healed"`
+	Pic     string    `json:"pic"`
+	Video   string    `json:"video"`
+	Pick    *Pick     `json:"pick"`
+	Ack     *int      `json:"ack"`
+	Closed  bool      `json:"closed"`
+	Snap    *Snapshot `json:"snap"`
+}
+
+// Snapshot is what a page offers to act on: its visible buttons, links and fields, each with a target the
+// actions accept, its headings and an open dialog.
+type Snapshot struct {
+	URL      string            `json:"url"`
+	Title    string            `json:"title"`
+	Elements []SnapshotElement `json:"elements"`
+	Headings []string          `json:"headings,omitempty"`
+	Dialog   string            `json:"dialog,omitempty"`
+}
+
+// SnapshotElement is one element of a Snapshot.
+type SnapshotElement struct {
+	Role     string   `json:"role"`
+	Name     string   `json:"name,omitempty"`
+	Target   string   `json:"target"`
+	Alt      []string `json:"alt,omitempty"`
+	Value    string   `json:"value,omitempty"`
+	Secret   bool     `json:"secret,omitempty"`
+	Options  []string `json:"options,omitempty"`
+	Checked  bool     `json:"checked,omitempty"`
+	Disabled bool     `json:"disabled,omitempty"`
 }
 
 func (r Runner) start(ctx context.Context, job map[string]any) (*exec.Cmd, *bytes.Buffer, error) {
@@ -418,6 +442,8 @@ type Step struct {
 // Extra is what the runner gets besides the step: where files and states are, the HTTP login, the web
 // app's recorded login (done when the app asks to log in), and the name the pictures start with.
 type Extra struct {
+	// Headless: a step-by-step browser (Open) without a window (an AI driving it with show off; tests).
+	Headless               bool
 	Root, StateDir         string
 	HTTPUser, HTTPPassword string
 	Login                  []Action

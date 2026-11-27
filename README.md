@@ -125,6 +125,7 @@ And much more - see the [feature list](docs/FEATURES.md).
 - **Scheduled runs** with a notification when one fails, and the AI assistant to **write a test** from a description or **explain why one failed**
 - **Procedures** (shared steps with parameters), **CSV/Excel test data**, **NETCONF** steps, **breakpoints** and step-through, **checks over time** (average, max, rate) and a **table maker** that turns output into a table by clicking - no TextFSM to write
 - **Spirent TestCenter and IxNetwork** traffic runs as test steps (REST API: load a configuration, run, check loss and latency per stream)
+- **AI-recorded web tests**: the `web` tool lets Claude or Termwright's AI drive a browser on a saved web app and saves what it did as a web test
 - **Web steps** with Playwright, **reruns** of flaky tests and **timeouts**, a **testbed calendar**, **Teams / e-mail notifications**, a **PDF report** and **trends** per run, test and software version
 - **Export a standalone suite** for Linux, macOS or Windows (Go, Python or TCL, with the library, testbeds, a plan and a run script that writes JUnit XML and run logs), and **debug** a failing test: pause at the failed step, retry it, run one step or from a step
 - **Import and teams**: Excel/CSV manual test cases, Postman collections and OpenAPI descriptions become tests; `roles.yaml` says who edits, runs and approves, and runs on production can wait for an approval

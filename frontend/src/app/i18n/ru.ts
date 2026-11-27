@@ -5561,6 +5561,10 @@ const ru: Record<string, string> = {
   'Connected. Send Message sends the message in the editor.': 'Подключено. «Отправить сообщение» отправляет сообщение из редактора.',
   'Connect to open the WebSocket. Messages sent and received appear here.': 'Подключитесь, чтобы открыть WebSocket. Здесь появятся отправленные и полученные сообщения.',
   'No message matches the filter.': 'Ни одно сообщение не подходит под фильтр.',
+  'An AI opened a browser on {0}: what it does is recorded as a web test until it saves or discards it.': 'ИИ открыл браузер на {0}: его действия записываются как веб-тест, пока он их не сохранит или не отменит.',
+  'The AI closed its browser.': 'ИИ закрыл свой браузер.',
+  'Web browser (Playwright)': 'Веб-браузер (Playwright)',
+  'Drives a browser on a saved web app (logging in by itself) - reads the page, clicks, fills, checks - and saves what it did as a web test or as a web step of a test': 'Управляет браузером в сохранённом веб-приложении (входит сам): читает страницу, нажимает, заполняет, проверяет и сохраняет сделанное как веб-тест или веб-шаг теста',
 };
 
 export default ru;

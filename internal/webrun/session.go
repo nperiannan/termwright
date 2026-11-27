@@ -48,6 +48,9 @@ func (r Runner) Open(ctx context.Context, w Step, shots string, x Extra, drive .
 	}
 	job := x.job(w, shots, tmo)
 	job["serve"], job["pictures"], job["video"] = true, false, false
+	if x.Headless {
+		job["headless"] = true
+	}
 	if len(drive) > 0 {
 		job["drive"] = true
 	}
@@ -196,6 +199,22 @@ func (s *Session) Page() (url, title, text string, err error) {
 		}
 	}
 	return "", "", "", err
+}
+
+// Snapshot lists what the page offers to act on now.
+func (s *Session) Snapshot() (Snapshot, error) {
+	ls, err := s.do(map[string]any{"cmd": "snapshot"})
+	for _, l := range ls {
+		if l.Done && l.Snap != nil {
+			sn := *l.Snap
+			sn.URL, sn.Title = l.URL, l.Title
+			return sn, err
+		}
+	}
+	if err == nil {
+		err = errors.New("the page did not answer")
+	}
+	return Snapshot{}, err
 }
 
 // Closed is closed when the browser has gone.

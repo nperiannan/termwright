@@ -4,6 +4,11 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+### Tests: an AI records web tests (Termwright's own Playwright tool)
+- Added: the `web` tool (Termwright connector for Claude and other MCP apps, the in-app AI assistant, the local API): open a browser on a saved web app (it logs in by itself) or a page, `snapshot` its buttons, links and fields with targets (web components too), `act` on them (one or several actions, by target or snapshot number, with `{{variables}}`), and `save` what worked as a web test or as a web step added to a test; `watch` records what the person does in the same browser. Passwords stay `{{password}}`; expect actions become the test's checks.
+- Added: a page snapshot in the browser runner, and a headless step-by-step browser.
+- Termwright shows a message when an AI opens a browser; a production web app asks before it is opened or changed.
+
 ### Tests: a testbed can hold the web app of a web test
 - Fixed: the web app a web (Playwright) test logs in to could not be part of a testbed: a run listed only the test's switches. The web app is now one of the test's roles, named after its session (`{{extremecloud_iq}}`), like a switch; tests saved before get it when they are opened or run.
 - Changed: the Run dialog marks a web app role *web app* and offers the testbed's web apps for it (and its devices for device roles); the New Testbed picker lists web app sessions with the type *web app*.

@@ -262,6 +262,51 @@ async function run(req) {
   }
 }
 
+// ---- snapshot: the page's visible elements a person (or an AI) can act on, each with a target ----
+const SNAPSHOT = `(() => {
+  const q = s => JSON.stringify(s);
+  const all = (root, out) => { for (const el of root.querySelectorAll('*')) { out.push(el); if (el.shadowRoot) all(el.shadowRoot, out); } return out; };
+  const els = all(document, []);
+  const unique = (root, s) => { try { return root.querySelectorAll(s).length === 1; } catch { return false; } };
+  const visible = el => { const r = el.getBoundingClientRect(); if (r.width < 2 || r.height < 2) return false; const st = getComputedStyle(el); return st.visibility !== 'hidden' && st.display !== 'none' && st.opacity !== '0'; };
+  const role = el => { const t = el.tagName.toLowerCase(), ty = (el.getAttribute('type') || 'text').toLowerCase();
+    return el.getAttribute('role') || (t === 'button' || (t === 'input' && ['button', 'submit', 'reset'].includes(ty)) ? 'button' : t === 'a' && el.hasAttribute('href') ? 'link'
+      : t === 'select' ? 'combobox' : t === 'input' && ty === 'checkbox' ? 'checkbox' : t === 'input' && ty === 'radio' ? 'radio' : t === 'textarea' || (t === 'input' && !['hidden', 'file', 'image'].includes(ty)) ? 'textbox'
+      : t === 'input' && ty === 'file' ? 'file' : el.isContentEditable ? 'textbox' : t === 'summary' ? 'button' : ''); };
+  const label = el => { const l = el.labels && el.labels[0]; if (l) return l.innerText.trim().split('\\n')[0];
+    const by = el.getAttribute('aria-labelledby'); if (by) { const x = by.split(/\\s+/).map(i => document.getElementById(i)).filter(Boolean).map(e => e.innerText.trim()).join(' '); if (x) return x; } return ''; };
+  const own = el => { const t = (el.innerText || '').trim(); if (t) return t; const r = el.getRootNode(); return r && r.host ? (r.host.getAttribute('aria-label') || r.host.innerText || '').trim() : ''; }; // a button in a web component: its host's text
+  const name = el => (el.getAttribute('aria-label') || label(el) || el.getAttribute('title') || (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) ? '' : own(el).split('\\n')[0]) || el.getAttribute('placeholder') || el.value || '').replace(/\\s+/g, ' ').trim().slice(0, 80);
+  const randomId = id => /^[A-Za-z0-9_-]{12,}$/.test(id) && /[A-Z]/.test(id) && /[a-z]/.test(id) && /\\d/.test(id);
+  const out = [], seen = new Set();
+  for (const el of els) {
+    if (out.length >= 300) break;
+    const r = role(el); if (!r || !visible(el) || seen.has(el)) continue;
+    const t = el.tagName.toLowerCase(), field = ['input', 'textarea', 'select'].includes(t) || el.isContentEditable, nm = name(el), root = el.getRootNode();
+    if (!field && r !== 'checkbox' && r !== 'radio' && !nm) continue;
+    const tg = [], add = x => { if (x && !tg.includes(x)) tg.push(x); };
+    const tid = el.getAttribute('data-testid') || el.getAttribute('data-test-id') || el.getAttribute('data-test'); if (tid) add('testid=' + tid);
+    if (field) { const lb = label(el); if (lb && lb.length < 50) add('label=' + lb); if (el.placeholder) add('placeholder=' + el.placeholder); }
+    if (nm && r !== 'textbox') add('role=' + r + '[name=' + q(nm) + ']');
+    if (el.id && !/^\\d|[:\\s]|\\d{3,}/.test(el.id) && !randomId(el.id) && unique(root, '#' + CSS.escape(el.id))) add('#' + CSS.escape(el.id));
+    if (field && el.name && unique(root, t + '[name=' + q(el.name) + ']')) add(t + '[name=' + q(el.name) + ']');
+    if (root && root.host) { const hc = [...root.host.classList].find(c => !/^(ng-|en-u-|is-|has-)/.test(c) && c.length > 3); if (hc) add(root.host.tagName.toLowerCase() + '.' + CSS.escape(hc) + ' ' + t); }
+    if (!tg.length && nm && nm.length < 40) add('text=' + nm);
+    if (!tg.length) continue;
+    seen.add(el);
+    const e = { role: r, name: nm, target: tg[0] };
+    if (tg.length > 1) e.alt = tg.slice(1, 3);
+    if (field && r !== 'checkbox' && r !== 'radio') { const v = t === 'select' ? (el.selectedOptions[0] || {}).text : el.isContentEditable ? el.innerText : el.value; if (v && el.type !== 'password') e.value = String(v).slice(0, 80); if (el.type === 'password') e.secret = true; }
+    if (t === 'select') e.options = [...el.options].slice(0, 30).map(o => o.text.trim());
+    if (r === 'checkbox' || r === 'radio') e.checked = !!el.checked || el.getAttribute('aria-checked') === 'true';
+    if (el.disabled || el.getAttribute('aria-disabled') === 'true') e.disabled = true;
+    out.push(e);
+  }
+  const heads = els.filter(e => /^H[1-3]$/.test(e.tagName) && visible(e)).slice(0, 20).map(e => e.innerText.trim().slice(0, 80)).filter(Boolean);
+  const dialog = els.find(e => (e.getAttribute('role') === 'dialog' || e.tagName === 'DIALOG') && visible(e));
+  return { elements: out, headings: heads, dialog: dialog ? (dialog.getAttribute('aria-label') || dialog.innerText.trim().split('\\n')[0] || 'a dialog').slice(0, 80) : '' };
+})()`;
+
 // ---- recording: what the person does in the browser becomes actions ----
 const RECORDER = `(() => {
   if (window.__twRecOn) return; window.__twRecOn = true;
@@ -442,7 +487,7 @@ async function record(req) {
 // by its lines and then { ack: id }. The browser closing ends it ({ closed: true }).
 async function serve(req, lines) {
   const w = req.step;
-  const S = await open(req, w, !req.drive);
+  const S = await open(req, w, !req.drive && !req.headless);
   await recorder(S);
   if (req.trace) await S.ctx.tracing.start({ screenshots: true, snapshots: true });
   let busy = Promise.resolve();
@@ -464,6 +509,7 @@ async function serve(req, lines) {
         case 'pick': { await S.page.bringToFront(); const v = await S.page.evaluate(PICKER).catch(() => null); out({ pick: v }); break; }
         case 'record': await S.setRec(!!c.on); break;
         case 'drive': await drive(S, c.drive || []); break;
+        case 'snapshot': out({ done: true, url: S.page.url(), title: await S.page.title(), snap: await S.page.evaluate(SNAPSHOT) }); break;
         case 'text': out({ done: true, url: S.page.url(), title: await S.page.title(), text: (await S.page.innerText('body').catch(() => '')).slice(0, 20000), reads: S.reads, dialogs: S.dialogs }); break;
         case 'close': await bye(); break;
       }
