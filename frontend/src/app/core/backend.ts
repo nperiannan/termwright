@@ -362,10 +362,12 @@ export class Backend {
   webLeftovers() { return this.call<{ pid: number; name: string; started: string }[]>('WebLeftovers'); }
   webCloseLeftovers() { return this.call<number>('WebCloseLeftovers'); }
   webSetup() { return this.call<void>('WebSetup'); }
-  webRecord(w: TestWeb) { return this.call<TestWebAction[]>('WebRecord', w); }
+  webRecord(w: TestWeb, vars: Record<string, string>) { return this.call<TestWebAction[]>('WebRecord', w, vars); }
   webRecordLogin(path: string, url: string, user: string) { return this.call<TestWebAction[]>('WebRecordLogin', path, url, user); }
   webTestLogin(path: string) { return this.call<string>('WebTestLogin', path); }
   webOpenApp(path: string) { return this.call<void>('WebOpenApp', path); }
+  webAIPrepare(w: TestWeb, vars: Record<string, string>) { return this.call<void>('WebAIPrepare', w, vars); }
+  webAITake() { return this.call<TestWebAction[]>('WebAITake'); }
   webDebugOpen(w: TestWeb, vars: Record<string, string>) { return this.call<void>('WebDebugOpen', w, vars); }
   webDebugRun(acts: TestWebAction[], from: number, vars: Record<string, string>) { return this.call<WebResult[]>('WebDebugRun', acts, from, vars); }
   webDebugPick() { return this.call<WebPick | null>('WebDebugPick'); }

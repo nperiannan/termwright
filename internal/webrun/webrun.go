@@ -394,9 +394,17 @@ func (r Runner) Record(ctx context.Context, w Step, onAction func(Action), x Ext
 			continue
 		}
 		if l.Rec != nil {
-			acts = append(acts, *l.Rec)
+			switch l.Rec.Do {
+			case "__undo": // the toolbar's Undo
+				if len(acts) > 0 {
+					acts = acts[:len(acts)-1]
+				}
+			case "__done":
+			default:
+				acts = append(acts, *l.Rec)
+			}
 			if onAction != nil {
-				onAction(*l.Rec)
+				onAction(*l.Rec) // __undo too: whoever shows the actions drops its last one
 			}
 		}
 		if l.Error != "" {
@@ -442,6 +450,8 @@ type Step struct {
 // Extra is what the runner gets besides the step: where files and states are, the HTTP login, the web
 // app's recorded login (done when the app asks to log in), and the name the pictures start with.
 type Extra struct {
+	// RecVars: the test's variables; a recorded value equal to one is kept as {{name}}.
+	RecVars map[string]string
 	// Headless: a step-by-step browser (Open) without a window (an AI driving it with show off; tests).
 	Headless               bool
 	Root, StateDir         string
@@ -460,7 +470,7 @@ func (x Extra) job(w Step, shots string, timeout int) map[string]any {
 		pre = "web-" + time.Now().Format("150405.000")
 	}
 	return map[string]any{"step": w, "shots": shots, "timeout": timeout, "root": x.Root, "stateDir": x.StateDir,
-		"httpUser": x.HTTPUser, "httpPassword": x.HTTPPassword, "login": x.Login, "prefix": pre, "person": x.Person,
+		"httpUser": x.HTTPUser, "httpPassword": x.HTTPPassword, "login": x.Login, "prefix": pre, "person": x.Person, "recVars": x.RecVars,
 		"pictures": w.Pictures == "all" && shots != "", "failShot": w.Pictures != "none" && shots != "", "video": !x.NoVideo && !w.Show && shots != ""}
 }
 

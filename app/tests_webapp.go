@@ -152,6 +152,7 @@ func (a *App) WebDebugOpen(w testrec.WebStep, vars map[string]string) error {
 	acts := w.Actions
 	w.Actions = nil
 	w2, x, shots := a.webExtra(w)
+	x.RecVars = vars
 	s, err := webRunner().Open(context.Background(), w2, shots, x)
 	if err != nil {
 		return err

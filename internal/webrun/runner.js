@@ -357,7 +357,9 @@ const RECORDER = `(() => {
   const T = el => { const l = targets(el); return { target: l[0], alt: l.slice(1, 3) }; };
   window.__twTargets = targets;
   const clickable = el => el.closest('a,button,[role=button],[role=link],[role=tab],[role=menuitem],input[type=button],input[type=submit],input[type=checkbox],input[type=radio],label,summary,option,li,td,span,div') || el;
-  const send = a => window.__twRecOn2 && window.__twRec && window.__twRec(a);
+  const mine = e => e.composedPath && e.composedPath().some(n => n && n.id === '__tw_rec'); // the toolbar's own clicks
+  const on = () => window.__twRecOn2 && !window.__twPaused;
+  const send = (a, el) => { if (!on() || !window.__twRec) return; if (window.__twSay) a.words = window.__twSay(a, el); window.__twRec(a).then(st => st && window.__twShow && window.__twShow(st)); };
   // the element itself, also inside a web component (shadow DOM): e.target is only its host there
   const real = e => (e.composedPath && e.composedPath()[0]) || e.target;
   // typing in a field of a web component: its change event does not leave the component, so the value is
@@ -369,28 +371,37 @@ const RECORDER = `(() => {
     send({ do: 'fill', ...T(el), value: ty === 'password' ? '{{password}}' : el.value, secret: ty === 'password' });
   };
   document.addEventListener('input', e => {
-    if (!window.__twRecOn2) return;
+    if (!on() || mine(e)) return;
     const el = real(e), t = el.tagName && el.tagName.toLowerCase(), ty = (el.getAttribute && el.getAttribute('type') || '').toLowerCase();
     if (el === e.target) return; // not in a web component: its change records it
     if ((t === 'input' && !['checkbox', 'radio', 'file', 'button', 'submit'].includes(ty)) || t === 'textarea') { if (pend && pend !== el) flush(); pend = el; }
   }, true);
-  document.addEventListener('focusout', e => { if (window.__twRecOn2 && pend && real(e) === pend) flush(); }, true);
-  window.addEventListener('beforeunload', () => { if (window.__twRecOn2) flush(); });
+  document.addEventListener('focusout', e => { if (on() && pend && real(e) === pend) flush(); }, true);
+  window.addEventListener('beforeunload', () => { if (on()) flush(); });
+  // a check instead of a click (the toolbar's Check modes, or Alt+click): what must be true there
+  const check = (mode, tg) => {
+    const field = tg.closest && tg.closest('input,textarea,select'), el = field || clickable(tg), g = T(el), ty = field ? (field.getAttribute('type') || '').toLowerCase() : '';
+    if (mode === 'visible') send({ do: 'expect', ...g }, el);
+    else if (mode === 'value' && field && (ty === 'checkbox' || ty === 'radio')) send({ do: 'expect_checked', ...g, value: field.checked ? 'false' : 'true' }); // the click flipped it already (it is cancelled): the state before
+    else if (mode === 'value' && field) send({ do: 'expect_value', ...g, value: field.tagName === 'SELECT' ? field.value : field.value });
+    else send(g.target.startsWith('text=') ? { do: 'expect', value: text(el) } : { do: 'expect', ...g, value: text(el) }, el);
+    flash(el, '#3fb950');
+  };
   document.addEventListener('click', e => {
-    if (!window.__twRecOn2) return;
+    if (!on() || mine(e)) return;
     flush();
-    const tg = real(e);
-    if (!e.altKey && tg.closest && tg.closest('input,textarea,select,option')) return; // fields: their change
+    const tg = real(e), mode = window.__twMode || 'rec';
+    if (mode !== 'rec' || e.altKey) { e.preventDefault(); e.stopPropagation(); check(mode === 'rec' ? 'text' : mode, tg); if (!e.shiftKey) window.__twSetMode('rec'); return; }
+    if (tg.closest && tg.closest('input,textarea,select,option')) return; // fields: their change
     const el = clickable(tg);
-    if (e.altKey) { e.preventDefault(); e.stopPropagation(); const tg = T(el); send(tg.target.startsWith('text=') ? { do: 'expect', value: text(el) } : { do: 'expect', ...tg, value: text(el) }); flash(el, '#3fb950'); return; }
     const t = el.tagName.toLowerCase(), ty = (el.getAttribute('type') || '').toLowerCase();
     if (t === 'label' && el.control) return; // its field records the change
     if ((t === 'input' && !['button', 'submit', 'reset', 'checkbox', 'radio'].includes(ty)) || t === 'textarea' || t === 'select' || t === 'option') return;
     if (t === 'input' && (ty === 'checkbox' || ty === 'radio')) return;
-    send({ do: 'click', ...T(el) }); flash(el, '#58a6ff');
+    send({ do: 'click', ...T(el) }, el); flash(el, '#58a6ff');
   }, true);
   document.addEventListener('change', e => {
-    if (!window.__twRecOn2) return;
+    if (!on() || mine(e)) return;
     const el = e.target, t = el.tagName.toLowerCase(), ty = (el.getAttribute('type') || '').toLowerCase();
     if (t === 'select') send({ do: 'select', ...T(el), value: el.options[el.selectedIndex] ? el.options[el.selectedIndex].text.trim() : el.value });
     else if (ty === 'checkbox' || ty === 'radio') send({ do: el.checked ? 'check' : 'uncheck', ...T(el) });
@@ -398,7 +409,9 @@ const RECORDER = `(() => {
     else if (t === 'input' || t === 'textarea') send({ do: 'fill', ...T(el), value: ty === 'password' ? '{{password}}' : el.value, secret: ty === 'password' });
   }, true);
   document.addEventListener('keydown', e => {
-    if (!window.__twRecOn2) return;
+    if (!window.__twRecOn2 || mine(e)) return;
+    if (e.key === 'Escape' && (window.__twMode || 'rec') !== 'rec') { window.__twSetMode('rec'); return; }
+    if (!on()) return;
     const el = real(e);
     if (e.key === 'Enter' && el && ['INPUT'].includes(el.tagName)) {
       if (pend === el) pend = null;
@@ -407,13 +420,96 @@ const RECORDER = `(() => {
       send({ do: 'press', ...T(el), value: 'Enter' });
     }
   }, true);
+  for (const ev of ['mousedown', 'mouseup', 'pointerdown', 'pointerup']) document.addEventListener(ev, e => {
+    if (on() && !mine(e) && (window.__twMode || 'rec') !== 'rec') { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+  // hover: the element under the mouse and the target the action would use
+  let hoverEl = null, raf = 0;
+  document.addEventListener('mousemove', e => {
+    if (!on() || mine(e)) { window.__twHover && window.__twHover(null); return; }
+    hoverEl = real(e); if (raf) return;
+    raf = requestAnimationFrame(() => { raf = 0; const el = hoverEl && (window.__twMode === 'value' ? (hoverEl.closest('input,textarea,select') || hoverEl) : clickable(hoverEl)); window.__twHover && window.__twHover(el, el ? T(el).target : ''); });
+  }, true);
   function flash(el, c) { const o = el.style.outline; el.style.outline = '2px solid ' + c; setTimeout(() => { el.style.outline = o; }, 500); }
-  const bar = () => { if (document.getElementById('__tw_rec') || !document.body) return; const d = document.createElement('div'); d.id = '__tw_rec';
-    d.innerHTML = '<b style="color:#f85149">●</b> Termwright is recording - click, type and choose as usual; Alt+click a text to check it is shown; close this window to finish';
-    d.style.cssText = 'position:fixed;z-index:2147483647;left:50%;bottom:12px;transform:translateX(-50%);background:#1f2328;color:#fff;font:12px system-ui;padding:6px 12px;border-radius:14px;box-shadow:0 4px 16px #0006;pointer-events:none;opacity:.92';
-    document.body.appendChild(d); };
-  window.__twSetRec = on => { window.__twRecOn2 = on; const d = document.getElementById('__tw_rec'); if (on) bar(); else if (d) d.remove(); };
-  const init = () => (window.__twState ? window.__twState() : Promise.resolve({ rec: true })).then(st => window.__twSetRec(!!st.rec));
+  // the toolbar: in its own shadow root (the page's styles do not reach it), its clicks are not recorded
+  const say = (a, el) => { const nm = t => { if (!t) return 'the page'; if (el && /^[#.\\[a-z]/i.test(t) && !/^(label|text|placeholder|testid|title|alt|role)=/.test(t)) { const x = (el.getAttribute('aria-label') || text(el) || '').trim(); if (x) return x.length > 32 ? x.slice(0, 30) + '…' : x; } let m = /name=("(?:[^"\\\\]|\\\\.)*")/.exec(t); if (m) { try { return JSON.parse(m[1]); } catch { } }
+      m = /^(?:label|text|placeholder|testid|title|alt)=(.*)$/.exec(t); return m ? m[1] : t.length > 32 ? t.slice(0, 30) + '…' : t; };
+    const q = x => '“' + x + '”', n = q(nm(a.target)), v = a.value || '';
+    switch (a.do) { case 'click': return 'Click ' + n; case 'fill': return 'Type ' + q(v) + ' into ' + n; case 'select': return 'Choose ' + q(v) + ' in ' + n;
+      case 'check': return 'Tick ' + n; case 'uncheck': return 'Untick ' + n; case 'press': return 'Press ' + v; case 'upload': return 'Upload ' + v;
+      case 'expect': { const nn = nm(a.target); return a.target ? (v ? (nn.indexOf(v) >= 0 || v.indexOf(nn) >= 0 ? '✓ ' + q(v) + ' is shown' : '✓ ' + n + ' shows ' + q(v)) : '✓ ' + n + ' is shown') : '✓ the page shows ' + q(v); }
+      case 'expect_value': return '✓ ' + n + ' is ' + q(v); case 'expect_checked': return '✓ ' + n + (v === 'false' ? ' is not ticked' : ' is ticked'); case 'tab': return 'Go to the new tab'; }
+    return a.do + ' ' + n; };
+  window.__twSay = say;
+  let ui = null;
+  const build = () => {
+    if (ui || !document.body) return ui;
+    const host = document.createElement('div'); host.id = '__tw_rec';
+    host.style.cssText = 'all:initial;position:fixed;z-index:2147483647;bottom:14px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column-reverse;align-items:center'; // bottom centre: app menus are on top
+    const r = host.attachShadow({ mode: 'open' });
+    r.innerHTML = \`<style>
+      :host{all:initial} *{box-sizing:border-box;font:12.5px -apple-system,system-ui,Segoe UI,sans-serif}
+      .tb{display:flex;align-items:center;gap:2px;background:#1b1f24;color:#e6e8eb;border:1px solid #30363d;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.35);padding:5px;user-select:none}
+      .st{display:flex;align-items:center;gap:7px;padding:0 9px;font-weight:600;cursor:move;white-space:nowrap} .dot{width:8px;height:8px;border-radius:50%;background:#f85149;box-shadow:0 0 0 3px rgba(248,81,73,.25)}
+      .tb.paused .dot{background:#d29922;box-shadow:none}
+      button{all:unset;cursor:pointer;padding:5px 9px;border-radius:6px;color:#c9d1d9;white-space:nowrap} button:hover{background:#2d333b} button.on{background:rgba(47,129,247,.22);color:#79c0ff}
+      button.done{color:#3fb950;font-weight:600} button:disabled{opacity:.35;cursor:default;background:none}
+      .sep{width:1px;height:18px;background:#30363d;margin:0 3px}
+      .feed{margin-bottom:6px;background:#1b1f24;border:1px solid #30363d;border-radius:10px;padding:5px 0;box-shadow:0 10px 30px rgba(0,0,0,.35);max-width:420px}
+      .feed div{padding:3px 12px;color:#c9d1d9;display:flex;gap:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .feed div span{color:#8b949e;min-width:16px;text-align:right}
+      .feed div:last-child{background:rgba(47,129,247,.1)} .feed:empty{display:none}
+      .hint{margin-bottom:6px;background:#2f81f7;color:#fff;border-radius:8px;padding:5px 10px;display:none} .hint.show{display:block}
+    </style>
+    <div class="wrap" style="display:flex;flex-direction:column-reverse;align-items:center"><div class="tb" part="bar"><span class="st" title="Drag to move"><span class="dot"></span><span class="lab">Recording</span></span><span class="sep"></span>
+      <button data-a="pause" title="Stop recording for a while (actions are not kept)">⏸ Pause</button>
+      <button data-m="text" title="Click a text: the test checks it is shown there">✓ Check text</button>
+      <button data-m="visible" title="Click an element: the test checks it is visible">👁 Check visible</button>
+      <button data-m="value" title="Click a field: the test checks its value (or that a checkbox is ticked)">= Check value</button>
+      <span class="sep"></span><button data-a="undo" title="Drop the last recorded action">⤺ Undo</button><button data-a="done" class="done" title="Finish recording">Done</button></div>
+    <div class="hint"></div><div class="feed"></div></div>\`;
+    document.documentElement.appendChild(host);
+    const box = document.createElement('div'), tag = document.createElement('div');
+    box.style.cssText = 'position:fixed;z-index:2147483646;pointer-events:none;border:2px solid #2f81f7;border-radius:3px;display:none;transition:all .05s';
+    tag.style.cssText = 'position:fixed;z-index:2147483646;pointer-events:none;background:#2f81f7;color:#fff;font:11px ui-monospace,Menlo,monospace;padding:2px 6px;border-radius:4px;display:none;max-width:60vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+    host.__box = box; host.__tag = tag; document.documentElement.appendChild(box); document.documentElement.appendChild(tag);
+    const $ = s => r.querySelector(s), tb = $('.tb');
+    r.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b || b.disabled) return;
+      if (b.dataset.m) window.__twSetMode(window.__twMode === b.dataset.m ? 'rec' : b.dataset.m);
+      else if (b.dataset.a === 'pause') { window.__twPaused = !window.__twPaused; window.__twSetMode('rec'); paint(); }
+      else if (b.dataset.a === 'undo') window.__twRec({ undo: true }).then(st => st && window.__twShow(st));
+      else if (b.dataset.a === 'done') { flush(); window.__twRec({ done: true }); }
+    });
+    // drag the toolbar out of the way
+    let drag = null;
+    $('.st').addEventListener('mousedown', e => { const b = host.getBoundingClientRect(); drag = { x: e.clientX - b.left, y: e.clientY - b.top }; e.preventDefault(); });
+    addEventListener('mousemove', e => { if (!drag) return; host.style.transform = 'none'; host.style.bottom = 'auto'; host.style.left = Math.max(0, e.clientX - drag.x) + 'px'; host.style.top = Math.max(0, e.clientY - drag.y) + 'px'; }, true);
+    addEventListener('mouseup', () => { drag = null; }, true);
+    ui = { host, r, tb, box, tag };
+    return ui;
+  };
+  let last = { count: 0, last: [] };
+  const paint = () => {
+    const u = build(); if (!u) return;
+    const m = window.__twMode || 'rec', $ = s => u.r.querySelector(s);
+    u.tb.classList.toggle('paused', !!window.__twPaused);
+    $('.lab').textContent = (window.__twPaused ? 'Paused' : 'Recording') + (last.count ? ' · ' + last.count : '');
+    $('[data-a=pause]').textContent = window.__twPaused ? '▶ Resume' : '⏸ Pause';
+    for (const b of u.r.querySelectorAll('[data-m]')) { b.classList.toggle('on', b.dataset.m === m); b.disabled = !!window.__twPaused; }
+    $('[data-a=undo]').disabled = !last.count;
+    const h = $('.hint'); h.classList.toggle('show', m !== 'rec');
+    h.textContent = m === 'text' ? 'Click the text to check (Esc: back to recording, Shift+click: several)' : m === 'visible' ? 'Click what must be visible (Esc: back)' : m === 'value' ? 'Click the field to check its value (Esc: back)' : '';
+    $('.feed').innerHTML = last.last.map((w, i) => '<div><span>' + (last.count - last.last.length + i + 1) + '</span>' + w.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])) + '</div>').join('');
+  };
+  window.__twShow = st => { last = { count: st.count || 0, last: (st.last || []).slice(-3) }; paint(); };
+  window.__twSetMode = m => { window.__twMode = m; if (m === 'rec') window.__twHover && window.__twHover(null); paint(); };
+  window.__twHover = (el, target) => { const u = ui; if (!u) return;
+    if (!el || !el.getBoundingClientRect) { u.box.style.display = u.tag.style.display = 'none'; return; }
+    const b = el.getBoundingClientRect(), c = (window.__twMode || 'rec') === 'rec' ? '#2f81f7' : '#3fb950';
+    Object.assign(u.box.style, { display: 'block', left: b.left - 2 + 'px', top: b.top - 2 + 'px', width: b.width + 4 + 'px', height: b.height + 4 + 'px', borderColor: c });
+    Object.assign(u.tag.style, { display: 'block', left: Math.max(0, b.left - 2) + 'px', top: Math.max(0, b.top - 22) + 'px', background: c }); u.tag.textContent = target; };
+  window.__twSetRec = on => { window.__twRecOn2 = on; if (on) { build(); paint(); } else if (ui) { ui.host.remove(); ui.box.remove(); ui.tag.remove(); ui = null; } };
+  const init = () => (window.__twState ? window.__twState() : Promise.resolve({ rec: true })).then(st => { window.__twSetRec(!!st.rec); if (st.rec) window.__twShow(st); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();`;
 
@@ -433,20 +529,31 @@ const PICKER = `new Promise(resolve => {
 })`;
 
 // recorder sets up recording in a browser: recorded actions are printed while S.rec is on.
-async function recorder(S) {
+async function recorder(S, req) {
   const filled = {};
-  S.rec = false;
-  await S.ctx.exposeBinding('__twState', () => ({ rec: S.rec }));
-  await S.ctx.exposeBinding('__twRec', (src, a) => {
-    if (!a || !a.do || !S.rec) return;
+  S.rec = false; S.recLog = [];
+  const st = () => ({ rec: S.rec, count: S.recLog.length, last: S.recLog.slice(-3).map(x => x.words) });
+  // values the test already has as variables are recorded as {{name}} (longest first)
+  const vars = Object.entries((req && req.recVars) || {}).filter(([k, v]) => k && v && String(v).length > 1).sort((a, b) => String(b[1]).length - String(a[1]).length);
+  const named = v => { if (typeof v !== 'string' || !v) return v; for (const [k, x] of vars) if (v === x) return '{{' + k + '}}'; for (const [k, x] of vars) if (String(x).length > 3 && v.includes(x)) v = v.split(x).join('{{' + k + '}}'); return v; };
+  await S.ctx.exposeBinding('__twState', () => st());
+  await S.ctx.exposeBinding('__twRec', async (src, a) => {
+    if (!a) return st();
+    if (a.done) { if (S.onDone) await S.onDone(); return st(); }
+    if (a.undo) { if (S.recLog.length) { S.recLog.pop(); out({ rec: { do: '__undo' } }); } return st(); }
+    if (!a.do || !S.rec) return st();
     if (a.do === 'fill') { // the same value again (Enter, then the change event): once
-      if (filled[a.target] === a.value) return;
+      if (filled[a.target] === a.value) return st();
       filled[a.target] = a.value;
     }
+    if (!a.secret && a.value !== undefined) a.value = named(a.value);
+    const words = a.words || ''; delete a.words;
+    S.recLog.push({ words: words || a.do });
     out({ rec: a });
+    return st();
   });
   await S.ctx.addInitScript(RECORDER);
-  S.ctx.on('page', p => { if (S.rec && S.pages.length > 1) out({ rec: { do: 'tab', value: 'last' } }); });
+  S.ctx.on('page', p => { if (S.rec && S.pages.length > 1) { S.recLog.push({ words: 'Go to the new tab' }); out({ rec: { do: 'tab', value: 'last' } }); } });
   S.setRec = async on => { S.rec = on; for (const p of S.pages) await p.evaluate(v => window.__twSetRec && window.__twSetRec(v), on).catch(() => {}); };
 }
 
@@ -472,7 +579,8 @@ async function drive(S, list) { // tests: do these as a person would
 async function record(req) {
   const w = req.step;
   const S = await open(req, w, !req.drive);
-  await recorder(S);
+  await recorder(S, req);
+  S.onDone = async () => { await saveState(S); await S.ctx.close().catch(() => {}); }; // Done: the same as closing the window
   try { await start(S, req, w); } catch (e) { out({ i: -1, ok: false, error: String(e.message || e).split('\n')[0] }); }
   await saveState(S);
   await S.setRec(true);
@@ -488,7 +596,8 @@ async function record(req) {
 async function serve(req, lines) {
   const w = req.step;
   const S = await open(req, w, !req.drive && !req.headless);
-  await recorder(S);
+  await recorder(S, req);
+  S.onDone = async () => { await S.setRec(false); out({ rec: { do: '__done' } }); }; // Done in a step-by-step browser: stop recording, keep it open
   if (req.trace) await S.ctx.tracing.start({ screenshots: true, snapshots: true });
   let busy = Promise.resolve();
   const bye = async () => { await saveState(S); out({ closed: true }); await quit(0); };

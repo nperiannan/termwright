@@ -133,7 +133,15 @@ func (a *App) webAI(ctx context.Context, args map[string]any, ask netAsker) (str
 		s.OnRec = func(ac webrun.Action) { // what the person does while watch is on
 			go func() { // not here: the browser's reader must not wait for a tool call that waits for it
 				aiWeb.Lock()
-				aiWeb.rec = append(aiWeb.rec, ac)
+				switch ac.Do {
+				case "__undo":
+					if len(aiWeb.rec) > 0 {
+						aiWeb.rec = aiWeb.rec[:len(aiWeb.rec)-1]
+					}
+				case "__done":
+				default:
+					aiWeb.rec = append(aiWeb.rec, ac)
+				}
 				aiWeb.Unlock()
 				emitter{a}.Emit("web:ai", map[string]any{"recorded": ac})
 			}()
@@ -458,4 +466,67 @@ func webArgRaw(m map[string]any, k string) string {
 		return strconv.FormatBool(v)
 	}
 	return ""
+}
+
+// WebAIPrepare opens the AI's browser for a web step being edited ("Ask AI"): at the step's page, with its
+// actions done (not recorded), so the AI goes on from where the step ends. What it does with the web tool is
+// recorded; WebAITake gives it back to add to the step.
+func (a *App) WebAIPrepare(w testrec.WebStep, vars map[string]string) error {
+	aiWeb.Lock()
+	defer aiWeb.Unlock()
+	if aiWeb.s != nil {
+		aiWeb.s.Close()
+		aiWeb.s = nil
+	}
+	w = testrec.FillWeb(w, vars) // {{xiq}} (a role) is its session
+	acts := w.Actions
+	w.Actions = nil
+	w2, x, shots := a.webExtra(w)
+	x.RecVars = vars
+	s, err := webRunner().Open(context.Background(), w2, shots, x)
+	if err != nil {
+		return err
+	}
+	if len(acts) > 0 {
+		run := w
+		run.URL, run.Actions = "", acts
+		r2, _, _ := a.webExtra(run)
+		res, err := s.Run(r2.Actions, 0)
+		for _, r := range res {
+			if !r.OK {
+				err = fmt.Errorf("action %d does not work now (%s): fix it first, or ask the AI from there", r.I+1, r.Error)
+			}
+		}
+		if err != nil {
+			s.Close()
+			return err
+		}
+	}
+	aiWeb.s, aiWeb.step, aiWeb.opened, aiWeb.rec, aiWeb.prod = s, testrec.WebStep{Login: w.Login, URL: w.URL, Browser: w.Browser, Insecure: w.Insecure}, time.Now(), nil, false
+	aiWeb.vars = map[string]string{}
+	for k, v := range vars {
+		aiWeb.vars[k] = v
+	}
+	aiWeb.password = ""
+	if w.Login != "" {
+		if sess, err := a.store.Get(w.Login); err == nil {
+			aiWeb.password, _ = a.secret(sess.Path)
+		}
+	}
+	emitter{a}.Emit("web:ai", map[string]any{"open": true, "app": orStr(w.Login, w.URL), "count": 0})
+	return nil
+}
+
+// WebAITake gives the actions the AI recorded since WebAIPrepare and closes its browser.
+func (a *App) WebAITake() []webrun.Action {
+	aiWeb.Lock()
+	defer aiWeb.Unlock()
+	out := append([]webrun.Action(nil), aiWeb.rec...)
+	aiWeb.rec = nil
+	if aiWeb.s != nil {
+		aiWeb.s.Close()
+		aiWeb.s = nil
+	}
+	emitter{a}.Emit("web:ai", map[string]any{"open": false, "count": 0})
+	return out
 }

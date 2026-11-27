@@ -70,7 +70,7 @@ var webRecMu sync.Mutex
 
 // WebRecord opens the step's page in a browser and records what the person does there until the window is
 // closed: the actions (each also sent as a "web:rec" event while recording).
-func (a *App) WebRecord(w testrec.WebStep) ([]webrun.Action, error) {
+func (a *App) WebRecord(w testrec.WebStep, vars map[string]string) ([]webrun.Action, error) {
 	if !webRecMu.TryLock() {
 		return nil, errors.New("a recording is already open: close its browser window first")
 	}
@@ -79,6 +79,7 @@ func (a *App) WebRecord(w testrec.WebStep) ([]webrun.Action, error) {
 	defer cancel()
 	w.Actions = nil
 	w2, x, _ := a.webExtra(w)
+	x.RecVars = vars // a typed value the test has as a variable is recorded as {{name}}
 	return webRunner().Record(ctx, w2, func(ac webrun.Action) { emitter{a}.Emit("web:rec", ac) }, x)
 }
 

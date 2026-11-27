@@ -74,19 +74,35 @@ test account without them.
 
    ![Record a Web Test](screenshots/web-guide/06-record-web-test.png)
 
-2. Choose the **web app**, the **start page** (`/contacts`, or empty for the address), a **name** and the
-   folder.
-3. **Start Recording.** The browser opens logged in, with a banner at the bottom:
+2. Record from **A saved web app** (choose it and the **start page**: `/contacts`, or empty for its address)
+   or from **An address** (any full `https://…` address, no session needed - log in yourself while
+   recording). Give it a **name** and the folder.
+3. **Start Recording.** The browser opens (logged in, for a saved web app) with the **recording bar** at the
+   bottom of the page:
 
    ![The browser while recording](screenshots/web-guide/04-browser-recording.png)
 
+   | Button | What it does |
+   |---|---|
+   | **⏸ Pause** / **▶ Resume** | Stop keeping actions for a while (e.g. to look around), then go on. |
+   | **✓ Check text** | Click a text: the test checks it is shown there. |
+   | **👁 Check visible** | Click an element: the test checks it is visible. |
+   | **= Check value** | Click a field: the test checks its value (or that a checkbox is ticked or not). |
+   | **⤺ Undo** | Drop the last recorded action. |
+   | **Done** | Finish: the browser closes and the test opens in the editor. |
+
+   The last three actions show in plain words above the bar. A check button is for one click (hold
+   **Shift** to keep it on, **Esc** to leave it). Drag the bar by its status to move it.
 4. Do the task: click, type, choose, tick, upload. Each one becomes an action (a blue outline flashes).
-5. To add a **check**, hold **Alt** (Option on a Mac) and click a text: *Check it shows* (green outline).
-6. Close the browser. The test opens in the editor:
+   A value you type that the test already has as a value (e.g. the serial number `SN123` of `{{serial}}`)
+   is recorded as `{{serial}}`.
+5. Add the **checks** with the bar's check buttons, then press **Done**. The test opens in the editor:
 
    ![The recorded actions](screenshots/web-guide/03-recording.png)
 
-7. Look it over, **▶ Debug in Browser** to try it ([7](#7-step-by-step-in-a-live-browser-debug--and--pick)),
+6. Recorded from an address? Termwright offers to **save it as a web app** session: the step then uses it
+   by name, and its login can be recorded once ([2](#2-save-the-web-app-as-a-session)) and reused.
+7. Look it over, **⋯ → Debug in Browser** to try it ([7](#7-step-by-step-in-a-live-browser-debug--and--pick)),
    then **Save** and **Run Test**.
 
 What the recorder writes:
@@ -100,14 +116,32 @@ What the recorder writes:
 | Tick / untick | `check` / `uncheck` |
 | Choose a file | `upload` with the file names (put the files in the tests folder) |
 | A link opens a new tab | `tab last` |
-| Alt+click a text | `expect "the text"` |
+| ✓ Check text, then click a text | `expect "the text"` (in that element) |
+| 👁 Check visible, then click | `expect` with the target (it is visible) |
+| = Check value, then click a field | `expect_value` (a checkbox: `expect_checked true/false`) |
 
-You can also record into any existing web step: **● Record in Browser** (or, with the debug browser open,
-**● Record from Here** - the actions go after the selected one).
+You can also record into any existing web step: **● Record More** at the bottom of its card (with the
+debug browser open, the actions go after the selected one).
 
 ## 4. The web step, field by field
 
 ![A web step in the editor](screenshots/web-guide/01-web-step.png)
+
+The step's card reads like the test does:
+
+- **The top line**: the web app (a chip - click it to choose another web app, a testbed role, or none for a
+  full address), the **page address**, a summary of the settings (**⚙** opens them) and how the last run went.
+- **The actions**, one per row, in plain words - *Click "Devices"*, *Type "{{serial}}" into "Serial number"*,
+  *Check "Onboarded" is shown*. After a run, each row has its ✓ / ✗ and a small picture of the page after it
+  (with *Pictures: after every action*); click the picture to enlarge it.
+- **Click a row** to edit it: the action, the target (**⌖ Pick** it in the open browser) and the value, its
+  fallback targets, **▶ Run to here**, **Duplicate**, **Move up / down** and **Delete**. Drag **⋮⋮** to move
+  a row; hover a row for **▶** (run it in the open browser) and **✕**.
+- **The footer**: **● Record** (or **● Record More**), **+ Action**, **+ Procedure**, and **⋯** for
+  **Debug in Browser** and **Save as Procedure** (of the selected rows).
+- **✦ Ask AI** ([18b](#18b-recording-with-an-ai-the-web-tool)): describe the next actions in words.
+
+The settings (**⚙**):
 
 | Field | What it does |
 |---|---|
@@ -122,6 +156,22 @@ You can also record into any existing web step: **● Record in Browser** (or, w
 | **Pictures** | *of a failure* (the default): the page when an action or a check of the step fails, shown at that step; *after every action*: also a picture after each action (bigger reports - it asks first); *none*: no pictures at all. |
 | **Size** | The page size: a screen resolution (qHD to 4K) or **Custom…**, e.g. `390x844` to see a phone layout; *As the app* uses the web app's. |
 | **Checks** | The usual checks of a step; they look at the step's output (see [10](#10-checks)). |
+
+### The side panel
+
+While you edit a test, the panel on the right keeps what the whole test uses in one place:
+
+- **Devices**: every session the steps use - switches, web apps, API sessions - with its kind. **Rename**
+  changes the name in every step; **Needs** says what a testbed must have for the test (a testbed without
+  it skips the test with the reason).
+- **Values**: the test's values (`{{serial}}` = `SN123`); **+ Value** adds one. Recording turns a typed value
+  into its `{{name}}`.
+- **Settings**: timeout, what happens when a step fails, retry, test data, and the rest; **Change…** opens
+  them above the steps.
+
+In read view a web step shows as its page and actions in words (*/devices › Click "Add" › …*) with its
+checks;
+it never shows the device *error* checks, which are for CLI steps.
 
 In the YAML file the step looks like this:
 
@@ -214,12 +264,13 @@ browser (logged in) and **keeps it open** while you edit:
 
 - **▶** on an action runs just that action in the open browser; its result shows on the left
   (✓, ⚠ healed, ✗ with the reason). Change the action and press ▶ again - no rerun from the start.
-- **▶ Run All** runs the step from its page; **↺ Start Over** goes back to the page; **■ Stop** closes
+- **▶ Run All** runs the step from its page; **↺ Start Over** goes back to the page; **■ Close Browser** closes
   the browser.
 - **⌖ Pick**: click ⌖ on an action, then click the element in the browser (a blue box follows the mouse,
   Esc cancels). Its target - and fallbacks - are filled in. Nobody needs to write selectors.
-- **● Record from Here**: records in the open browser; the actions go after the selected action (click
-  an action's number to select it; Shift+click selects a range).
+- **● Record More**: records in the open browser; the actions go after the selected action (click
+  an action's number to select it; Shift+click selects a range). **▶ Run to here** in an action's editor
+  runs the step up to it.
 
 The variables of the test (its defaults and the first data row) are used, and procedures run as their actions.
 
@@ -450,7 +501,7 @@ staging and production unchanged.
 
 1. Start from either side: **Record a Web Test** (the GUI part) or **Record a Device Test** (the CLI part).
 2. Add the other side in the editor: **+ Command** for a device command, **+ More ▾ → Web Page (Playwright)**
-   for a web step - or record into the test again: **● Record in Browser** in a web step, or record device
+   for a web step - or record into the test again: **● Record More** in a web step, or record device
    steps from a terminal tab.
 3. Pass values between them: a web step's **Read into variable** keeps a text of the page as `{{name}}` for
    the CLI steps; a CLI step's *save* keeps a value of the output for the web steps.
@@ -498,7 +549,7 @@ The steps say `login: "{{app}}"` (and `session: "{{app}}"` in REST steps). Choos
 login.
 
 A recorded web test does this by itself: the web app it logs in to is one of the test's roles, named after
-the session (`Web Apps/ExtremeCloud IQ` becomes `{{extremecloud_iq}}`, with the session as its default),
+the session (`Web Apps/Cloud Manager` becomes `{{cloud_manager}}`, with the session as its default),
 just like the switches of its device steps. So a test that configures a switch (`configure iqagent server
 …`) and then onboards it in the GUI has two roles, the switch and the web app, and a testbed can hold both:
 
@@ -534,9 +585,17 @@ filled with the web app session's password only in the browser. Every `expect` t
 of the test. Opening and acting on a production web app ask first; other web apps follow the AI settings
 (as the other tools do). Termwright shows a message when an AI opens a browser.
 
+### Ask AI in the step card
+
+The **✦ Ask AI** box under a web step's actions asks Termwright's own AI assistant to carry on in the same
+browser: *"open the device and check it is Connected"*. Termwright opens the browser (if it is not open),
+runs the step's actions so far, and the AI goes on from that page with the web tool. What it does shows
+as **N recorded**; **Add Them** puts the actions at the end of the step, **Cancel** drops them. Turn on the
+assistant's *Web browser (Playwright)* tool first (AI panel → tools).
+
 **Example** - ask Claude: *"Configure the iqagent server on x465-1 to 10.1.1.5, then onboard it in
-ExtremeCloud IQ by its serial number, and make it a test."* It reads the serial number with the device tool,
-writes the CLI step with the tests tool, then opens `Web Apps/ExtremeCloud IQ` with the web tool, logs in,
+the cloud manager by its serial number, and make it a test."* It reads the serial number with the device tool,
+writes the CLI step with the tests tool, then opens `Web Apps/Cloud Manager` with the web tool, logs in,
 goes to the devices page, fills the serial number (`{{serial}}`), clicks Onboard, checks the device shows up
 and saves the web step into the same test. The test has two roles - the switch and the web app - so a
 testbed can bring its own of both.
