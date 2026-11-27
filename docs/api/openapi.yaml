@@ -2699,6 +2699,124 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /tools/web:
+        post:
+            operationId: net_web
+            tags:
+                - Network tools
+            summary: The web tool
+            description: 'Drive a real browser with Playwright and record it as a Termwright web test - like a Playwright MCP server whose session is kept. open starts a browser on a saved web app session (app: its path, e.g. Web Apps/ExtremeCloud IQ - it logs in by itself with the session''s saved login) or on a url; show=false runs it without a window. snapshot lists what the page offers: headings, an open dialog and each visible button, link and field as [n] role "name" → target (value, options, checked, disabled). act does one action (do, target or ref = the [n] of the last snapshot, value) or several (actions); do is one of goto, click, dblclick, fill, type, clear, press, select, check, uncheck, hover, scroll, wait, expect, expect_not, expect_value, expect_count, expect_url, expect_title, read, screenshot, upload, dialog, tab, back, reload. Put passwords as {{password}} (the web app session''s), never the real one. Every action that works is recorded (with fallback targets for self-healing); expect actions become the test''s checks. act answers with the results and a new snapshot. text gives the page''s text; recorded lists the recording; undo drops the last n recorded actions (the page stays as it is); watch on|off records what the person does in the browser; save writes the recording as a web test (file, name; a new test) or as a web step added to a test (append_to, position start|end) - add device steps with the tests tool; close closes the browser (the recording stays until save or discard); discard forgets it. Opening and acting on a production web app ask first (other web apps follow the AI settings, as the other tools do). Through the API it runs without asking.'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    description: what to do
+                                    enum:
+                                        - open
+                                        - snapshot
+                                        - act
+                                        - text
+                                        - recorded
+                                        - undo
+                                        - watch
+                                        - save
+                                        - close
+                                        - discard
+                                        - status
+                                    type: string
+                                actions:
+                                    description: 'act: several actions in order ({do, target or ref, value}); it stops at the first that fails'
+                                    items:
+                                        type: object
+                                    type: array
+                                app:
+                                    description: 'open: a saved web app session (or any session whose login fills {{username}} / {{password}})'
+                                    type: string
+                                append_to:
+                                    description: 'save: an existing test to add the web step to (instead of file)'
+                                    type: string
+                                browser:
+                                    description: 'open: the browser (default the app''s, else chromium)'
+                                    enum:
+                                        - chromium
+                                        - firefox
+                                        - webkit
+                                    type: string
+                                do:
+                                    description: 'act: the action'
+                                    type: string
+                                file:
+                                    description: 'save: the new test''s file, e.g. cases/onboard/onboard-switch.yaml'
+                                    type: string
+                                insecure:
+                                    description: 'open: accept self-signed certificates (device web pages)'
+                                    type: boolean
+                                n:
+                                    description: 'undo: how many (default 1)'
+                                    type: integer
+                                name:
+                                    description: 'save: the test''s (or the step''s) name'
+                                    type: string
+                                on:
+                                    description: 'watch: on or off'
+                                    type: boolean
+                                position:
+                                    description: 'save with append_to: where the step goes (default end)'
+                                    enum:
+                                        - end
+                                        - start
+                                    type: string
+                                ref:
+                                    description: 'act: the [n] of an element of the last snapshot (instead of target)'
+                                    type: integer
+                                show:
+                                    description: 'open: show the browser window (default true, so the person sees what is done)'
+                                    type: boolean
+                                snapshot:
+                                    description: 'act: answer with a new snapshot (default true)'
+                                    type: boolean
+                                tags:
+                                    description: 'save: tags of a new test'
+                                    items:
+                                        type: string
+                                    type: array
+                                target:
+                                    description: 'act: what to act on - a target from the snapshot (role=button[name="Save"], label=Serial number, testid=…, CSS)'
+                                    type: string
+                                url:
+                                    description: 'open: the page (with app: a path or page of the app; without app: a full address)'
+                                    type: string
+                                value:
+                                    description: 'act: the text, key, option, address, seconds, expected text or variable name'
+                                    type: string
+                                vars:
+                                    description: 'act: values for {{names}} in the actions now ({"serial": "SN123"}); the recording keeps {{serial}} and a new test gets these as its defaults'
+                                    type: object
+                            required:
+                                - action
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /lab/tools/add_switches:
         post:
             operationId: tool_add_switches
@@ -6251,6 +6369,21 @@ components:
                 - loss
                 - latAvg
                 - latMax
+        GRPCSpec:
+            type: object
+            properties:
+                method:
+                    description: 'Method: "package.Service/Method".'
+                    type: string
+                proto:
+                    description: 'Proto: .proto files (separated by ";"); none: the server''s reflection.'
+                    type: string
+                importPaths:
+                    description: 'ImportPaths: folders where imports are looked up (separated by ";").'
+                    type: string
+                tls:
+                    description: 'TLS: "" (by the URL: grpcs:// or https:// or port 443), "on" or "off".'
+                    type: string
         HTTPBody:
             type: object
             properties:
@@ -6301,7 +6434,7 @@ components:
                     items:
                         $ref: '#/components/schemas/HTTPRequestDef'
                 auth:
-                    description: 'Auth of its requests that inherit: "" (the session''s), "none", "bearer", "basic" or "apikey".'
+                    description: 'Auth of its requests that inherit: "" (the session''s), "none", "bearer", "basic", "apikey", "digest", "oauth2" or "awsv4".'
                     type: string
                 authData:
                     description: 'AuthData: the values of its authentication.'
@@ -6514,6 +6647,70 @@ components:
                 in:
                     description: 'In: where the API key goes, "header" (default) or "query".'
                     type: string
+                grant:
+                    description: 'OAuth 2.0 (Postman''s "Get New Access Token"): Grant "client_credentials" (default) or "password" (User and Password are the resource owner''s), TokenURL, ClientID, ClientSecret, Scope; ClientAuth "body" sends the client''s id and secret in the form instead of a Basic header. Token, when set, is used as it is.'
+                    type: string
+                tokenUrl:
+                    type: string
+                clientId:
+                    type: string
+                clientSecret:
+                    type: string
+                scope:
+                    type: string
+                clientAuth:
+                    type: string
+                accessKey:
+                    description: 'AWS Signature (v4): AccessKey, SecretKey, Region, Service and SessionToken (temporary credentials).'
+                    type: string
+                secretKey:
+                    type: string
+                region:
+                    type: string
+                service:
+                    type: string
+                sessionToken:
+                    type: string
+                authUrl:
+                    description: 'OAuth 2.0 in a browser: Grant "authorization_code" or "implicit"; AuthURL, RedirectURI (an http://localhost or 127.0.0.1 address Termwright listens on; default one with a free port), PKCE "S256" or "plain" ("" none) and State ("" a random one).'
+                    type: string
+                redirectUri:
+                    type: string
+                pkce:
+                    type: string
+                state:
+                    type: string
+                consumerKey:
+                    description: 'OAuth 1.0: ConsumerKey, ConsumerSecret, Token (the access token), TokenSecret, SignatureMethod ("HMAC-SHA1" default, "HMAC-SHA256", "HMAC-SHA512" or "PLAINTEXT"), Realm; In "header" (default), "query" or "body".'
+                    type: string
+                consumerSecret:
+                    type: string
+                tokenSecret:
+                    type: string
+                signatureMethod:
+                    type: string
+                realm:
+                    type: string
+                hawkId:
+                    description: 'Hawk: HawkID, HawkKey, Algorithm ("sha256" default or "sha1"), Ext, App, Dlg; Payload adds the body''s hash.'
+                    type: string
+                hawkKey:
+                    type: string
+                algorithm:
+                    type: string
+                ext:
+                    type: string
+                app:
+                    type: string
+                dlg:
+                    type: string
+                payload:
+                    type: boolean
+                domain:
+                    description: 'NTLM: User and Password, with Domain and Workstation.'
+                    type: string
+                workstation:
+                    type: string
         HTTPRequestDef:
             type: object
             description: 'A request: method, URL, parameters, headers, body, pre-request script and tests.'
@@ -6528,8 +6725,13 @@ components:
                     description: Folder in the collection ("Interfaces/Ports"), "" = top level.
                     type: string
                 method:
-                    description: 'Method: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS or any other word.'
+                    description: 'Method: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS or any other word; "WS" is a WebSocket and "GRPC" a gRPC call (see GRPC).'
                     type: string
+                grpc:
+                    description: 'GRPC: a gRPC call''s method and schema.'
+                    anyOf:
+                        - $ref: '#/components/schemas/GRPCSpec'
+                        - type: "null"
                 url:
                     description: 'URL: absolute, or a path (/rest/...) that goes after the session''s base URL.'
                     type: string
@@ -6558,7 +6760,7 @@ components:
                     $ref: '#/components/schemas/HTTPBody'
                     description: Body sent with it.
                 auth:
-                    description: 'Auth: "" inherits (the collection''s, else the session''s), "none", "bearer", "basic" or "apikey".'
+                    description: 'Auth: "" inherits (the collection''s, else the session''s), "none", "bearer", "basic", "apikey", "digest", "oauth2" or "awsv4".'
                     type: string
                 authData:
                     description: 'AuthData: the values of its own authentication.'
@@ -6698,6 +6900,13 @@ components:
                         type: string
                 globalSet:
                     description: 'GlobalSet: values the scripts set with pm.globals.set (kept in the globals).'
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
+                collSet:
+                    description: 'CollSet: values the scripts set with pm.collectionVariables.set (kept in the collection).'
                     type:
                         - object
                         - "null"
