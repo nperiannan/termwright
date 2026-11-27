@@ -337,6 +337,7 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
                   @empty { <div class="mut pad">No tests. Add some in the request's Scripts tab (After response).</div> }
                   @if (r.vars && keys(r.vars).length) { <div class="sub">Variables set: @for (k of keys(r.vars); track k) { <code>{{ k }}</code> } </div> }
                   @if (r.envSet && keys(r.envSet).length) { <div class="sub">Kept in the environment: @for (k of keys(r.envSet); track k) { <code>{{ k }}</code> } </div> }
+                  @if (r.collSet && keys(r.collSet).length) { <div class="sub">Kept in the collection: @for (k of keys(r.collSet); track k) { <code>{{ k }}</code> } </div> }
                   @if (r.logs?.length) { <div class="sub">Console</div><pre class="out small">{{ r.logs!.join('\\n') }}</pre> }
                 }
                 @case ('timeline') {
@@ -977,7 +978,9 @@ export class ApiClient implements OnInit, OnDestroy {
   autoHeaders(): HKV[] {
     const out: HKV[] = [], r = this.draft().req, s = this.sess();
     const mode = r.auth || this.collAuth();
-    if (mode === 'bearer' || mode === 'basic') out.push({ key: 'Authorization', value: mode === 'bearer' ? 'Bearer ••••••••' : 'Basic ••••••••', desc: 'from Authorization' });
+    if (mode === 'bearer' || mode === 'basic' || mode === 'oauth2') out.push({ key: 'Authorization', value: mode === 'basic' ? 'Basic ••••••••' : 'Bearer ••••••••', desc: 'from Authorization' });
+    else if (mode === 'digest') out.push({ key: 'Authorization', value: 'Digest ••••••••', desc: 'from Authorization, after the server\'s 401 challenge' });
+    else if (mode === 'awsv4') { out.push({ key: 'Authorization', value: 'AWS4-HMAC-SHA256 ••••••••', desc: 'from Authorization' }); out.push({ key: 'X-Amz-Date', value: '<when sent>', desc: 'from Authorization' }); }
     else if (mode === 'apikey') { const a = r.auth ? r.authData : this.collAuthData(); if (a?.in !== 'query') out.push({ key: a?.key || 'API key', value: '••••••••', desc: 'from Authorization' }); }
     else if (mode !== 'none' && s?.apiAuth) out.push({ key: this.authHeader(), value: '••••••••', desc: '🔒 the session\'s authentication' });
     const ct = this.bodyType();
@@ -1091,7 +1094,7 @@ export class ApiClient implements OnInit, OnDestroy {
   usedVars(): string[] {
     const r = this.draft().req, a = (r.auth ? r.authData : this.collAuthData()) ?? {};
     const text = [r.url, ...(r.params ?? []).flatMap(p => [p.key, p.value]), ...(r.pathVars ?? []).map(p => p.value), ...(r.headers ?? []).flatMap(h => [h.key, h.value]),
-      r.body?.raw, r.body?.graphqlVars, r.body?.file, ...(r.body?.form ?? []).flatMap(f => [f.key, f.value]), a.token, a.user, a.password, a.key, a.value].join(' ');
+      r.body?.raw, r.body?.graphqlVars, r.body?.file, ...(r.body?.form ?? []).flatMap(f => [f.key, f.value]), a.token, a.user, a.password, a.key, a.value, a.tokenUrl, a.clientId, a.clientSecret, a.scope, a.accessKey, a.secretKey, a.region, a.service, a.sessionToken].join(' ');
     const out = new Set<string>();
     for (const m of text.matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g)) if (!m[1].startsWith('$')) out.add(m[1]);
     return [...out];
@@ -1195,6 +1198,7 @@ export class ApiClient implements OnInit, OnDestroy {
       }
       Object.assign(this.vars, res.vars ?? {});
       if (res.envSet || res.globalSet || res.vars) { void this.loadEnvs(); void this.refreshVars(); }
+      if (res.collSet && Object.keys(res.collSet).length) void this.loadColls(); // pm.collectionVariables.set is saved in the collection
       if (download && res.status) void this.saveRes(res);
       if (res.tests?.length && this.resTab() === 'body' && res.tests.some(t => !t.pass)) this.resTab.set('tests');
       this.history.set(await this.backend.httpHistory().catch(() => this.history()));
@@ -1401,7 +1405,7 @@ export class ApiClient implements OnInit, OnDestroy {
         r = await this.backend.httpRun({ ...req, confirmed: prod && changes });
       }
       this.runRes.set(r); this.runSteps.set(r.steps);
-      void this.loadEnvs();
+      void this.loadEnvs(); void this.loadColls();
     } catch (e) { this.runErr.set(errText(e)); }
     this.running.set(false);
   }

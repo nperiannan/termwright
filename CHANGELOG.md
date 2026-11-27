@@ -4,6 +4,14 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+### API client: Postman checks
+- Added: Digest Auth, OAuth 2.0 (client credentials and password grants, token cached and renewed after a 401) and AWS Signature v4 in a request's or collection's Authorization; imported from and exported to Postman, and in the generated code.
+- Added: `btoa` / `atob`, `CryptoJS` (MD5, SHA-1/256/512, HMAC, Hex/Base64/Utf8) and `require('crypto-js' | 'uuid')` in scripts; response checks `notFound`, `unauthorized`, `forbidden`, `badRequest`, `clientError`, `serverError`, `to.not.*`, `pm.response.reason()`, `headers.toObject()`.
+- Fixed: a pre-request script's `pm.request.headers.add/upsert/remove`, `pm.request.url.addQueryParams` and `pm.request.body.update` were not sent.
+- Fixed: `pm.collectionVariables.set` was not kept in the collection.
+- Fixed: `pm.test` in a pre-request script was not listed with the tests.
+- Fixed: an API key in the query re-sorted the URL's other parameters.
+
 - **AI Assistant: "not signed in" instead of a page of JSON**: when Claude Code was signed out (or its sign-in ran out), the chat showed its raw JSON answer. It now says Claude Code is not signed in, with **Run it in a Termwright tab** (opens a Local Shell and starts the sign-in) and **Copy the command**.
 - **API Client: a value typed in the Variables panel counts at once**: it was taken only when the field lost focus, and was dropped when another session was chosen. It now applies as you type (and on Enter), and stays for the tab.
 

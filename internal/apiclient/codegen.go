@@ -47,6 +47,9 @@ func Code(r Request, t *Target, lang string) (string, error) {
 		if ad.In != "query" {
 			hs = append(hs, KV{Key: Resolve(ad.Key, t.Vars), Value: "$API_KEY"})
 		}
+	case "oauth2": // the token from the token URL, in an environment variable
+		env = "API_TOKEN"
+		hs = append(hs, KV{Key: "Authorization", Value: "Bearer $API_TOKEN"})
 	}
 	if mode == "" {
 		switch t.Auth.Type {
@@ -349,6 +352,18 @@ func postmanAuthOut(mode string, a *ReqAuth) map[string]any {
 		return map[string]any{"type": "basic", "basic": kv("username", a.User, "password", a.Password)}
 	case "apikey":
 		return map[string]any{"type": "apikey", "apikey": kv("key", a.Key, "value", a.Value, "in", firstNonEmpty(a.In, "header"))}
+	case "digest":
+		return map[string]any{"type": "digest", "digest": kv("username", a.User, "password", a.Password)}
+	case "awsv4":
+		return map[string]any{"type": "awsv4", "awsv4": kv("accessKey", a.AccessKey, "secretKey", a.SecretKey, "region", a.Region, "service", a.Service, "sessionToken", a.SessionToken)}
+	case "oauth2":
+		grant := firstNonEmpty(a.Grant, "client_credentials")
+		ca := "header"
+		if a.ClientAuth == "body" {
+			ca = "body"
+		}
+		return map[string]any{"type": "oauth2", "oauth2": kv("grant_type", grant, "accessTokenUrl", a.TokenURL, "clientId", a.ClientID, "clientSecret", a.ClientSecret,
+			"scope", a.Scope, "username", a.User, "password", a.Password, "client_authentication", ca, "accessToken", a.Token, "addTokenTo", "header")}
 	}
 	return nil
 }

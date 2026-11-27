@@ -564,7 +564,9 @@ export interface SNMPTrapsView { state: SNMPTrapState; traps: SNMPTrapView[]; }
 export interface APIVar { name: string; value: string; prod?: string; secret?: boolean; }
 export interface HKV { key: string; value: string; off?: boolean; desc?: string; type?: string; }
 export interface HBody { mode?: string; raw?: string; form?: HKV[]; graphqlVars?: string; file?: string; }
-export interface HReqAuth { token?: string; user?: string; password?: string; key?: string; value?: string; in?: string; }
+export interface HReqAuth { token?: string; user?: string; password?: string; key?: string; value?: string; in?: string;
+  grant?: string; tokenUrl?: string; clientId?: string; clientSecret?: string; scope?: string; clientAuth?: string;
+  accessKey?: string; secretKey?: string; region?: string; service?: string; sessionToken?: string; }
 export interface HSettings { httpVersion?: string; verify?: string; noRedirects?: boolean; followMethod?: boolean; followAuth?: boolean; removeReferer?: boolean; noEncode?: boolean; noCookies?: boolean; maxRedirects?: number; timeoutMs?: number; }
 export interface HRequest { examples?: HExample[]; schema?: string; id?: string; name?: string; folder?: string; method: string; url: string; params?: HKV[]; pathVars?: HKV[]; headers?: HKV[]; body?: HBody; auth?: string; authData?: HReqAuth;
   settings?: HSettings; preScript?: string; tests?: string; description?: string; }
@@ -578,7 +580,7 @@ export interface HTestResult { name: string; pass: boolean; error?: string; }
 export interface HCookie { name: string; value: string; domain?: string; path?: string; expires?: string; httpOnly?: boolean; secure?: boolean; }
 export interface HResponse { status: number; statusText: string; proto?: string; headers: HKV[]; body: string; base64?: boolean; contentType?: string; size: number; truncated?: boolean;
   ms: number; timing: { dns: number; connect: number; tls: number; firstByte: number; total: number }; method: string; url: string; reqHeaders: HKV[]; reqBody?: string;
-  cookies?: HCookie[]; tests?: HTestResult[]; logs?: string[]; vars?: Record<string, string>; error?: string; skipped?: boolean; envSet?: Record<string, string>; globalSet?: Record<string, string>; }
+  cookies?: HCookie[]; tests?: HTestResult[]; logs?: string[]; vars?: Record<string, string>; error?: string; skipped?: boolean; envSet?: Record<string, string>; globalSet?: Record<string, string>; collSet?: Record<string, string>; }
 export interface HSendRequest { session?: string; env?: string; collection?: string; environment?: string; request: HRequest; vars?: Record<string, string>; timeout?: number; noRedirects?: boolean; confirmed?: boolean; }
 export interface HRunStep { iteration: number; id: string; name: string; method: string; url: string; status: number; ms: number; tests?: HTestResult[]; error?: string; pass: boolean; }
 export interface HRunResult { steps: HRunStep[]; passed: number; failed: number; tests: number; ms: number; stopped?: boolean; }

@@ -318,7 +318,7 @@ func (a *App) httpSend(ctx context.Context, r HTTPSendRequest) (apiclient.Respon
 	}
 	t.ScriptSend = httpScriptGuard(prod, r.Confirmed)
 	res := apiclient.Run(ctx, r.Request, t)
-	a.httpKeepSet(r.Environment, res)
+	a.httpKeepSet(r.Environment, r.Collection, res)
 	a.httpRemember(r, res)
 	return res, nil
 }
@@ -579,7 +579,7 @@ func (a *App) httpRun(ctx context.Context, r HTTPRunRequest) (apiclient.RunResul
 			}
 			return nil
 		},
-		Done:    func(_ apiclient.Request, res apiclient.Response) { a.httpKeepSet(r.Environment, res) },
+		Done:    func(_ apiclient.Request, res apiclient.Response) { a.httpKeepSet(r.Environment, r.Collection, res) },
 		EnvName: a.httpEnvName(r.Environment),
 		Each: func(st apiclient.RunStep) {
 			if a.ctx != nil {

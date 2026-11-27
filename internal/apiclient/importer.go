@@ -447,10 +447,32 @@ func postmanAuth(a map[string]any) (string, *ReqAuth) {
 			in = "query"
 		}
 		return "apikey", &ReqAuth{Key: postmanAuthVal(a["apikey"], "key"), Value: postmanAuthVal(a["apikey"], "value"), In: in}
+	case "digest":
+		return "digest", &ReqAuth{User: postmanAuthVal(a["digest"], "username"), Password: postmanAuthVal(a["digest"], "password")}
+	case "awsv4":
+		g := func(k string) string { return postmanAuthVal(a["awsv4"], k) }
+		return "awsv4", &ReqAuth{AccessKey: g("accessKey"), SecretKey: g("secretKey"), Region: g("region"), Service: g("service"), SessionToken: g("sessionToken")}
 	case "oauth2":
-		if t := postmanAuthVal(a["oauth2"], "accessToken"); t != "" {
-			return "bearer", &ReqAuth{Token: t}
+		g := func(k string) string { return postmanAuthVal(a["oauth2"], k) }
+		if g("accessTokenUrl") == "" || g("clientId") == "" { // an access token only
+			if t := g("accessToken"); t != "" {
+				return "bearer", &ReqAuth{Token: t}
+			}
+			break
 		}
+		grant := g("grant_type")
+		if grant == "password_credentials" {
+			grant = "password"
+		}
+		if grant != "password" {
+			grant = "client_credentials" // authorization code and implicit need a browser: the client's own token
+		}
+		ca := ""
+		if g("client_authentication") == "body" {
+			ca = "body"
+		}
+		return "oauth2", &ReqAuth{Grant: grant, TokenURL: g("accessTokenUrl"), ClientID: g("clientId"), ClientSecret: g("clientSecret"), Scope: g("scope"),
+			User: g("username"), Password: g("password"), ClientAuth: ca}
 	}
 	return "", nil
 }

@@ -493,6 +493,7 @@ func Send(ctx context.Context, r Request, t *Target) Response {
 		res.Error = err.Error()
 		return res
 	}
+	var digest map[string]string // the server's Digest challenge, answered on the second try
 	for attempt := 0; attempt < 2; attempt++ {
 		req, shown, err := build(ctx, r, t)
 		if err != nil {
@@ -510,6 +511,36 @@ func Send(ctx context.Context, r Request, t *Target) Response {
 		case "bearer", "basic", "apikey":
 			if err := ownAuth(req, mode, adata, t); err != nil {
 				res.Error = "authentication: " + err.Error()
+				res.ReqHeaders = t.headers(req.Header)
+				return res
+			}
+		case "digest", "oauth2", "awsv4":
+			a := adata
+			if a == nil {
+				a = &ReqAuth{}
+			}
+			var aerr error
+			switch mode {
+			case "digest":
+				if digest != nil {
+					u, p := strings.TrimSpace(Resolve(a.User, t.Vars)), Resolve(a.Password, t.Vars)
+					req.Header.Set("Authorization", digestHeader(digest, req, u, p, requestBody(req)))
+					if p != "" {
+						t.Secrets = append(t.Secrets, p)
+					}
+				}
+			case "oauth2":
+				var tok string
+				if tok, aerr = oauth2Token(ctx, a, t, c, attempt > 0); aerr == nil {
+					req.Header.Set("Authorization", "Bearer "+tok)
+					t.Secrets = append(t.Secrets, tok)
+					authed = true
+				}
+			case "awsv4":
+				aerr = awsSign(req, a, t, requestBody(req), time.Now())
+			}
+			if aerr != nil {
+				res.Error = "authentication: " + aerr.Error()
 				res.ReqHeaders = t.headers(req.Header)
 				return res
 			}
@@ -545,9 +576,19 @@ func Send(ctx context.Context, r Request, t *Target) Response {
 		data, err := io.ReadAll(io.LimitReader(resp.Body, MaxBody+1))
 		resp.Body.Close()
 		tm.Total = ms(time.Since(sent))
-		if resp.StatusCode == http.StatusUnauthorized && authed && attempt == 0 && t.Auth.renews() {
+		if resp.StatusCode == http.StatusUnauthorized && authed && attempt == 0 && t.Auth.renews() && mode != "oauth2" {
 			t.Tokens.Drop(t.TokenKey) // the token expired early: log in again, once
 			continue
+		}
+		if resp.StatusCode == http.StatusUnauthorized && attempt == 0 {
+			if mode == "digest" && digest == nil {
+				if digest = digestChallenge(resp.Header); digest != nil {
+					continue // answer the challenge
+				}
+			}
+			if mode == "oauth2" && authed && (adata == nil || strings.TrimSpace(Resolve(adata.Token, t.Vars)) == "") {
+				continue // the token ran out early: a new one, once
+			}
 		}
 		res.Status, res.StatusText, res.Proto, res.Timing = resp.StatusCode, resp.Status, resp.Proto, tm
 		if err != nil {
@@ -647,10 +688,11 @@ func ownAuth(req *http.Request, mode string, a *ReqAuth, t *Target) error {
 		if k == "" || val == "" {
 			return errors.New("API key: the key name or value is empty")
 		}
-		if a.In == "query" {
-			q := req.URL.Query()
-			q.Set(k, val)
-			req.URL.RawQuery = q.Encode()
+		if a.In == "query" { // appended: the other parameters stay as typed (and in their order)
+			if req.URL.RawQuery != "" {
+				req.URL.RawQuery += "&"
+			}
+			req.URL.RawQuery += url.QueryEscape(k) + "=" + url.QueryEscape(val)
 		} else {
 			req.Header.Set(k, val)
 		}
