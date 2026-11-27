@@ -1,7 +1,7 @@
 import { Component, OnDestroy, OnInit, computed, effect, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend, errText } from '../core/backend';
-import { APIMonitorState, HMockInfo, HCollection, HEnv, HHistoryItem, HHostCookies, HKV, HRequest, HResponse, HRunResult, HRunStep, HSendRequest, HSettings, HVar, Session, SessionNode } from '../core/models';
+import { APIMonitorState, HGrpcMethod, HGrpcSpec, HWsEvent, HWsMessage, HMockInfo, HCollection, HEnv, HHistoryItem, HHostCookies, HKV, HRequest, HResponse, HRunResult, HRunStep, HSendRequest, HSettings, HVar, Session, SessionNode } from '../core/models';
 import { TabView } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
@@ -116,7 +116,7 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
           @let d = i === active() ? draft() : t;
           <div class="rt" role="tab" [class.on]="i === active()" [attr.aria-selected]="i === active()" (click)="switchTab(i)" (auxclick)="$event.button === 1 && closeTab(i, $event)" [title]="d.req.url">
             <span [class]="'m ' + d.req.method">{{ d.req.method === 'DELETE' ? 'DEL' : d.req.method }}</span>
-            <span class="nm" translate="no">{{ d.req.name || shortUrl(d.req.url) || 'Untitled Request' }}</span>
+            <span class="nm" translate="no">{{ tabTitle(d.req) || 'Untitled Request' }}</span>
             @if (d.dirty) { <span class="dot" title="Not saved"></span> }
             <a class="cx" (click)="closeTab(i, $event)" title="Close">✕</a>
           </div>
@@ -139,10 +139,27 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
         <div class="split-btn"><button type="button" (click)="save()" [title]="draft().coll ? 'Save to the collection' : 'Save to a collection'">Save{{ draft().dirty ? ' •' : '' }}</button><button type="button" class="dd" (click)="saveMenu($event)" title="More">▾</button></div>
       </div>
       <div class="bar">
-        <app-combo class="meth" [class]="'meth m-' + draft().req.method" [value]="draft().req.method" (valueChange)="setReq({ method: $event.toUpperCase().trim() || 'GET' })" [options]="methodOpts" placeholder="GET" emptyText="Type a new method" name="method" label="Method" />
-        <app-var-input class="url" [value]="draft().req.url" (valueChange)="setUrl($event)" (enter)="send()" [known]="known()" placeholder="Enter URL, a path after the session's base URL, or paste a cURL command" label="URL" />
-        <div class="split-btn send"><button type="button" class="pri" (click)="send()" [disabled]="busy() || !draft().req.url.trim()">{{ busy() ? 'Sending…' : 'Send' }}</button><button type="button" class="pri dd" (click)="sendMenu($event)" [disabled]="busy() || !draft().req.url.trim()" title="Send and Download">▾</button></div>
+        <app-combo class="meth" [class]="'meth m-' + draft().req.method" [value]="draft().req.method" (valueChange)="setMethod($event)" [options]="methodOpts" placeholder="GET" emptyText="Type a new method" name="method" label="Method" />
+        <app-var-input class="url" [value]="draft().req.url" (valueChange)="kind() === 'grpc' ? setReq({ url: $event }) : setUrl($event)" (enter)="primary()" [known]="known()" [placeholder]="urlHint()" label="URL" />
+        @if (kind() === 'http') {
+          <div class="split-btn send"><button type="button" class="pri" (click)="send()" [disabled]="busy() || !draft().req.url.trim()">{{ busy() ? 'Sending…' : 'Send' }}</button><button type="button" class="pri dd" (click)="sendMenu($event)" [disabled]="busy() || !draft().req.url.trim()" title="Send and Download">▾</button></div>
+        } @else {
+          <button type="button" class="pri go" [class.stop]="!!ws()" (click)="primary()" [disabled]="(busy() && !ws()) || !draft().req.url.trim()">{{ primaryLabel() }}</button>
+        }
       </div>
+      @if (kind() === 'grpc') {
+        <div class="gbar">
+          <button type="button" class="gpick" (click)="grpcMenu($event)" [title]="grpcMethods().length ? 'Choose the method' : 'Load the methods first'">
+            @if (grpc().method; as m) { <b translate="no">{{ m }}</b>@if (grpcCur(); as c) { <span class="gtag">{{ grpcKindText(c) }}</span> } }
+            @else { <span class="mut">{{ grpcMethods().length ? 'Choose a method' : 'No methods loaded' }}</span> }
+            <span class="cv">▾</span></button>
+          <button type="button" class="gload" (click)="loadGrpc()" [disabled]="grpcBusy()">{{ grpcBusy() ? 'Loading…' : 'Load Methods' }}</button>
+          <span class="mut gnote">{{ grpcSource() }}</span>
+          <span class="sp"></span>
+          @if (grpcCur()) { <a class="lk" (click)="useGrpcExample()">Use Example Message</a> }
+        </div>
+        @if (grpcErr()) { <div class="gerr">{{ grpcErr() }}</div> }
+      }
       <div class="chips">
         @if (sess(); as s) {
           <span class="chip s" translate="no">Session: {{ s.name }} · {{ s.apiBaseUrl }}</span>
@@ -158,8 +175,8 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
       <div class="split">
         <div class="card req">
           <div class="tabs">
-            @for (t of reqTabs; track t.k) { <a [class.on]="reqTab() === t.k" (click)="reqTab.set(t.k); t.k === 'code' && loadCode()">{{ t.l }}@if (count(t.k); as n) { <i>{{ n }}</i> }@if (dot(t.k)) { <b class="gd"></b> }</a> }
-            <span class="sp"></span><a class="lk" (click)="openCookies()">Cookies</a>
+            @for (t of reqTabsNow(); track t.k) { <a [class.on]="reqTab() === t.k" (click)="reqTab.set(t.k); t.k === 'code' && loadCode()">{{ t.l }}@if (count(t.k); as n) { <i>{{ n }}</i> }@if (dot(t.k)) { <b class="gd"></b> }</a> }
+            <span class="sp"></span>@if (kind() === 'http') { <a class="lk" (click)="openCookies()">Cookies</a> }
           </div>
           <div class="body">
             @switch (reqTab()) {
@@ -220,6 +237,23 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
                 }
               }
               @case ('body') {
+                @if (kind() === 'ws') {
+                  <div class="pane" (keydown)="wsKey($event)">
+                    <div class="sh"><b>Message</b><span class="mut">{{ '{{variables}}' }} are filled in when it is sent</span><span class="sp"></span>
+                      <label class="chk"><input type="checkbox" [(ngModel)]="wsBinary" /> Binary (base64)</label></div>
+                    <app-code-area class="ce grow" [value]="draft().req.body?.raw ?? ''" (valueChange)="setBody({ mode: 'text', raw: $event })" placeholder='{ "op": "subscribe", "topic": "alarms" }' [minHeight]="120" />
+                    <div class="acts"><button type="button" class="pri" (click)="wsSend()" [disabled]="!ws() || !draft().req.body?.raw?.trim()">Send Message</button>
+                      <button type="button" (click)="wsPing()" [disabled]="!ws()">Ping</button>
+                      <span class="mut">{{ ws() ? 'Ctrl+Enter sends' : 'Connect first, then send messages' }}</span></div>
+                  </div>
+                } @else if (kind() === 'grpc') {
+                  <div class="pane">
+                    <div class="sh"><b>Message</b><span class="mut" translate="no">{{ grpcCur() ? 'JSON · ' + grpcCur()!.input : 'JSON' }}</span>
+                      @if (grpcCur()?.clientStream) { <span class="mut">· a JSON array of messages, or one message per line</span> }
+                      <span class="sp"></span><a class="lk" (click)="beautify()">Beautify</a></div>
+                    <app-code-area class="ce grow" [value]="draft().req.body?.raw ?? ''" (valueChange)="setBody({ mode: 'json', raw: $event })" placeholder="{ }" [minHeight]="120" />
+                  </div>
+                } @else {
                 <div class="modes">
                   @for (m of bodyKinds; track m.v) { <label><input type="radio" name="bm" [checked]="bodyKind() === m.v" (change)="setKind(m.v)" /> {{ m.l }}</label> }
                   @if (bodyKind() === 'raw') { <a class="lk lang" (click)="langMenu($event)">{{ rawLabel() }} ▾</a> }
@@ -253,6 +287,24 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
                   }
                   @default { <app-code-area class="ce pad3" [value]="draft().req.body?.raw ?? ''" (valueChange)="setBody({ raw: $event })" [minHeight]="140" /> }
                 }
+                }
+              }
+              @case ('grpc') {
+                <div class="sets">
+                  <div class="st"><div><b>Schema</b><div class="mut">Where the methods and message types come from.</div></div>
+                    <div class="seg"><a [class.on]="!grpcUsesProto()" (click)="setGrpc({ proto: undefined, importPaths: undefined })">Server reflection</a><a [class.on]="grpcUsesProto()" (click)="!grpcUsesProto() && setGrpc({ proto: '' })">.proto files</a></div></div>
+                  @if (grpcUsesProto()) {
+                    <div class="st"><div><b>.proto files</b><div class="mut">Separated by ";". Imports are looked up beside them and in the import paths; google/protobuf types are built in.</div>
+                      <div class="fr"><input [ngModel]="grpc().proto ?? ''" (ngModelChange)="setGrpc({ proto: $event })" placeholder="/path/to/service.proto" spellcheck="false" translate="no" /><button type="button" (click)="addProto()">Browse…</button></div></div></div>
+                    <div class="st"><div><b>Import paths</b><div class="mut">Folders where imported files are looked up (optional).</div>
+                      <div class="fr"><input [ngModel]="grpc().importPaths ?? ''" (ngModelChange)="setGrpc({ importPaths: $event || undefined })" placeholder="/path/to/protos" spellcheck="false" translate="no" /><button type="button" (click)="addImportPath()">Browse…</button></div></div></div>
+                  } @else {
+                    <div class="st"><div><div class="mut">The server lists its services (gRPC server reflection must be on). Use .proto files when it is not.</div></div></div>
+                  }
+                  <div class="st"><div><b>TLS</b><div class="mut">Auto: TLS for grpcs:// and port 443, plain HTTP/2 otherwise. The certificate check follows the session (Settings for a request).</div></div>
+                    <select class="fs" [ngModel]="grpc().tls ?? ''" (ngModelChange)="setGrpc({ tls: $event || undefined })"><option value="">Auto</option><option value="on">On</option><option value="off">Off</option></select></div>
+                  @for (w of grpcWarn(); track $index) { <div class="mut gwarn">⚠ {{ w }}</div> }
+                </div>
               }
               @case ('scripts') {
                 <div class="scr">
@@ -290,7 +342,7 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
                 </div>
               }
               @case ('code') {
-                <div class="modes"><select class="fs" [ngModel]="lang()" (ngModelChange)="lang.set($event); loadCode()">@for (l of langs; track l.v) { <option [value]="l.v">{{ l.l }}</option> }</select>
+                <div class="modes"><select class="fs" [ngModel]="lang()" (ngModelChange)="lang.set($event); loadCode()">@for (l of langsNow(); track l.v) { <option [value]="l.v">{{ l.l }}</option> }</select>
                   <a class="lk" (click)="copy(code())">Copy</a><span class="mut">Secrets are environment variables in the code, never written out.</span></div>
                 <pre class="out" translate="no">{{ code() }}</pre>
               }
@@ -298,9 +350,28 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
           </div>
         </div>
         <div class="card res">
+          @if (kind() === 'ws') {
+          <div class="tabs">
+            <b class="rh">Messages</b><span class="cnt">{{ wsLog().length }}</span>
+            <input class="wsf" [(ngModel)]="wsFilter" placeholder="Filter" spellcheck="false" aria-label="Filter messages" />
+            <span class="sp"></span>
+            @if (ws()) { <span class="state on"><i></i>Connected · {{ wsUptime() }}</span> } @else { <span class="state">Not connected</span> }
+            <button type="button" class="clr" (click)="wsClear()" [disabled]="!wsLog().length">Clear</button>
+          </div>
+          <div class="body wsl" translate="no">
+            @for (m of wsShown(); track $index) {
+              <div class="wm" [class]="'wm ' + m.dir" [class.open]="wsOpen() === $index" (click)="wsOpen.set(wsOpen() === $index ? -1 : $index)">
+                <span class="ar">{{ m.dir === 'sent' ? '↑' : m.dir === 'received' ? '↓' : m.dir === 'error' ? '!' : '•' }}</span>
+                <span class="tx">{{ m.binary ? '[binary ' + size(m.size) + '] ' + m.text : m.text }}</span>
+                <span class="tm">{{ wsTime(m.at) }}</span><span class="sz">{{ m.size ? size(m.size) : '' }}</span>
+              </div>
+              @if (wsOpen() === $index) { <div class="wd"><pre>{{ wsPretty(m) }}</pre><a class="lk" (click)="copy(m.text); $event.stopPropagation()">Copy</a></div> }
+            } @empty { <div class="empty">{{ wsLog().length ? 'No message matches the filter.' : 'Connect to open the WebSocket. Messages sent and received appear here.' }}</div> }
+          </div>
+          } @else {
           <div class="tabs">
             <b class="rh">Response</b>
-            @for (t of resTabs; track t.k) { <a [class.on]="resTab() === t.k" (click)="resTab.set(t.k)">{{ t.l }}@if (resCount(t.k); as n) { <i [class.bad]="t.k === 'tests' && failed() > 0">{{ n }}</i> }</a> }
+            @for (t of resTabsNow(); track t.k) { <a [class.on]="resTab() === t.k" (click)="resTab.set(t.k)">{{ t.l }}@if (resCount(t.k); as n) { <i [class.bad]="t.k === 'tests' && failed() > 0">{{ n }}</i> }</a> }
             <span class="sp"></span>
             @if (res(); as r) {
               @if (r.status) { <span class="pill" [class.ok]="r.status < 300" [class.wn]="r.status >= 300 && r.status < 400" [class.bad]="r.status >= 400">{{ r.statusText }}</span> }
@@ -349,8 +420,10 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
                   @if (r.reqBody) { <pre class="out small" translate="no">{{ r.reqBody }}</pre> }
                 }
               }
-            } @else { <div class="empty">Choose an API session or an environment, type a URL and press Send (or Enter).<br />Import a Postman collection or environment, an OpenAPI / Swagger document or cURL commands with Import.</div> }
+            } @else if (kind() === 'grpc') { <div class="empty">Type the server address (host:port), Load Methods, choose one and press Invoke.<br />Methods come from the server's reflection, or from .proto files in Service Definition.</div> }
+            @else { <div class="empty">Choose an API session or an environment, type a URL and press Send (or Enter).<br />Import a Postman collection or environment, an OpenAPI / Swagger document or cURL commands with Import.</div> }
           </div>
+          }
         </div>
       </div>
       <div class="con" [class.open]="consoleOpen()">
@@ -636,6 +709,29 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
     .bar .url { flex: 1; min-width: 120px; height: 30px; } .bar .send { height: 30px; } .bar .send button { height: 30px; }
     .meth { width: 124px; flex: none; height: 30px; } .meth ::ng-deep input { font: 700 12px var(--mono); height: 30px; }
     .meth.m-GET ::ng-deep input, .meth.m-HEAD ::ng-deep input { color: var(--ok); } .meth.m-POST ::ng-deep input { color: #e5a33b; } .meth.m-PUT ::ng-deep input { color: #4f9cf7; }
+    .meth.m-WS ::ng-deep input { color: #a78bfa; } .meth.m-GRPC ::ng-deep input { color: #2dd4bf; } .m.WS { color: #a78bfa !important; } .m.GRPC { color: #2dd4bf !important; }
+    .bar .go { height: 30px; min-width: 108px; } .bar .go.stop { background: transparent; color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent); }
+    .gbar { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .gpick { height: 28px; min-width: 320px; max-width: 560px; display: inline-flex; align-items: center; gap: 8px; text-align: left; }
+    .gpick b { font: 600 12px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .gpick .cv { margin-left: auto; }
+    .gtag { font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 9px; padding: 0 7px; white-space: nowrap; }
+    .gload { height: 28px; white-space: nowrap; flex: none; } .gnote { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .gerr { color: var(--danger); font-size: 12px; padding: 2px 2px 0; white-space: pre-wrap; } .gwarn { padding: 8px 0 0; font-size: 12px; }
+    .pane { display: flex; flex-direction: column; height: 100%; min-height: 0; } .pane .grow { flex: 1; margin: 0 12px; min-height: 0; }
+    .pane .acts { display: flex; align-items: center; gap: 8px; padding: 8px 12px; } .pane .chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+    .st > .seg { flex: none; } .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; flex: none; } .seg a { padding: 4px 12px; font-size: 12px; cursor: pointer; color: var(--muted); }
+    .seg a.on { background: var(--selected); color: var(--text); } .seg a + a { border-left: 1px solid var(--border); }
+    .st .fr { margin-top: 6px; max-width: 640px; } .st .fr input { font: 12px var(--mono); }
+    .cnt { color: var(--muted); font-size: 12px; margin-left: -4px; }
+    .wsf { height: 24px; width: 180px; font-size: 12px; margin-left: 6px; }
+    .state { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; } .state.on { color: var(--ok); }
+    .state i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); } .clr { height: 24px; font-size: 12px; }
+    .wsl { overflow: auto; } .wm { display: grid; grid-template-columns: 18px minmax(0, 1fr) 70px 58px; gap: 8px; padding: 5px 12px; border-bottom: 1px solid var(--line); cursor: pointer; font: 12px var(--mono); align-items: baseline; }
+    .wm:hover { background: var(--hover); } .wm.open { background: var(--selected); }
+    .wm .tx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .wm .tm, .wm .sz { color: var(--muted); font-size: 11px; text-align: right; }
+    .wm .ar { font-weight: 700; text-align: center; } .wm.sent .ar { color: var(--accent); } .wm.received .ar { color: var(--ok); }
+    .wm.info .ar, .wm.info .tx { color: var(--muted); } .wm.error .ar, .wm.error .tx { color: var(--danger); }
+    .wd { padding: 6px 12px 10px 38px; border-bottom: 1px solid var(--line); background: var(--selected); } .wd pre { margin: 0 0 6px; font: 12px var(--mono); white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow: auto; }
     .meth.m-PATCH ::ng-deep input { color: #a78bfa; } .meth.m-DELETE ::ng-deep input { color: var(--danger); } .meth.m-OPTIONS ::ng-deep input { color: #ec4899; }
     .m.OPTIONS { color: #ec4899 !important; } .m.HEAD { color: var(--ok) !important; }
     .gd { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); margin-left: 5px; vertical-align: middle; }
@@ -695,7 +791,141 @@ export class ApiClient implements OnInit, OnDestroy {
 
   readonly methods = METHODS; readonly modes = MODES; readonly langs = LANGS; readonly snippets = SNIPPETS;
   readonly reqTabs = [{ k: 'docs', l: 'Docs' }, { k: 'params', l: 'Params' }, { k: 'auth', l: 'Authorization' }, { k: 'headers', l: 'Headers' }, { k: 'body', l: 'Body' }, { k: 'scripts', l: 'Scripts' }, { k: 'settings', l: 'Settings' }, { k: 'code', l: 'Code' }];
-  readonly methodOpts: ComboOption[] = METHODS.map(m => ({ value: m }));
+  readonly methodOpts: ComboOption[] = [...METHODS.map(m => ({ value: m })), { value: 'WS', hint: 'WebSocket' }, { value: 'GRPC', hint: 'gRPC' }];
+  /** What the request is: an HTTP request, a WebSocket or a gRPC call. */
+  readonly kind = computed<'http' | 'ws' | 'grpc'>(() => { const m = this.draft().req.method; return m === 'WS' ? 'ws' : m === 'GRPC' ? 'grpc' : 'http'; });
+  readonly reqTabsNow = computed(() => {
+    const k = this.kind(), t = (x: string) => this.reqTabs.find(y => y.k === x)!;
+    if (k === 'ws') return [{ k: 'body', l: 'Message' }, t('params'), t('auth'), t('headers'), t('settings'), t('docs'), t('code')];
+    if (k === 'grpc') return [{ k: 'body', l: 'Message' }, t('auth'), { k: 'headers', l: 'Metadata' }, { k: 'grpc', l: 'Service Definition' }, t('scripts'), t('docs'), t('code')];
+    return this.reqTabs;
+  });
+  readonly resTabsNow = computed(() => this.kind() === 'grpc'
+    ? [{ k: 'body', l: 'Body' }, { k: 'headers', l: 'Metadata & Trailers' }, { k: 'tests', l: 'Tests' }, { k: 'timeline', l: 'Request' }] : this.resTabs);
+  readonly langsNow = computed(() => this.kind() === 'grpc' ? [{ v: 'curl', l: 'grpcurl' }] : this.kind() === 'ws'
+    ? [{ v: 'curl', l: 'websocat' }, { v: 'javascript', l: 'JavaScript' }, { v: 'python', l: 'Python (websockets)' }] : LANGS);
+  urlHint() {
+    const k = this.kind();
+    return k === 'ws' ? 'wss://host/path or ws://host:port/path' : k === 'grpc' ? 'host:port, grpc://host:port (plain) or grpcs://host:port (TLS)'
+      : 'Enter URL, a path after the session\'s base URL, or paste a cURL command';
+  }
+  primaryLabel() { const k = this.kind(); return k === 'ws' ? (this.ws() ? 'Disconnect' : this.busy() ? 'Connecting…' : 'Connect') : k === 'grpc' ? (this.busy() ? 'Invoking…' : 'Invoke') : this.busy() ? 'Sending…' : 'Send'; }
+  primary() { if (this.kind() === 'ws') void this.wsToggle(); else void this.send(); }
+  setMethod(v: string) {
+    const m = v.toUpperCase().trim() || 'GET', was = this.kind();
+    const p: Partial<HRequest> = { method: m };
+    if (m === 'GRPC' && !this.draft().req.body?.raw) p.body = { mode: 'json', raw: '' };
+    if ((m === 'WS' || m === 'GRPC') && was === 'http' && (this.draft().req.headers ?? []).every(h => h.key === 'Accept' || h.key === 'Cache-Control')) p.headers = [];
+    this.setReq(p);
+    if (this.kind() !== was) { if (this.kind() !== 'http') this.reqTab.set('body'); this.resTab.set('body'); if (!this.langsNow().some(l => l.v === this.lang())) this.lang.set('curl'); }
+  }
+
+  // ---- WebSocket: one connection per request tab ----
+  readonly wsState = signal<Record<number, { id: string; since: number; log: HWsMessage[] }>>({});
+  readonly wsLogs = signal<Record<number, HWsMessage[]>>({});
+  readonly ws = computed(() => this.wsState()[this.draft().key]);
+  readonly wsLog = computed(() => this.wsLogs()[this.draft().key] ?? []);
+  readonly wsOpen = signal(-1);
+  wsFilter = ''; wsBinary = false;
+  readonly tick = signal(0);
+  private tickTimer?: ReturnType<typeof setInterval>;
+  wsShown() { const f = this.wsFilter.trim().toLowerCase(); this.tick(); return f ? this.wsLog().filter(m => m.text.toLowerCase().includes(f)) : this.wsLog(); }
+  wsUptime() { this.tick(); const w = this.ws(); if (!w) return ''; const s = Math.floor((Date.now() - w.since) / 1000); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; }
+  private wsPush(key: number, m: HWsMessage) { this.wsLogs.update(l => ({ ...l, [key]: [...(l[key] ?? []), m].slice(-2000) })); }
+  private wsKeyOf(id: string) { const e = Object.entries(this.wsState()).find(([, v]) => v.id === id); return e ? +e[0] : -1; }
+  private onWs(e: HWsEvent) {
+    const key = this.wsKeyOf(e.id);
+    if (key < 0) return;
+    this.wsPush(key, e.msg);
+    if (e.closed) this.wsState.update(l => { const n = { ...l }; delete n[key]; return n; });
+  }
+  async wsToggle() {
+    const d = this.draft(), w = this.ws();
+    if (w) { await this.backend.httpWsClose(w.id).catch(() => undefined); return; }
+    if (this.busy() || !d.req.url.trim()) return;
+    this.busy.set(true);
+    const r = this.sendReq(), now = () => new Date().toISOString();
+    try {
+      let o;
+      try { o = await this.backend.httpWsConnect(r); } catch (e) {
+        if (!/production session/i.test(errText(e))) throw e;
+        if (!(await this.ui.confirm(tr('Connect to a Production API?'), tr('A WebSocket to {0} with the Production session {1}.', r.request.url, this.path()), tr('Connect'), true))) { this.busy.set(false); return; }
+        o = await this.backend.httpWsConnect({ ...r, confirmed: true });
+      }
+      this.wsState.update(l => ({ ...l, [d.key]: { id: o.id, since: Date.now(), log: [] } }));
+      this.wsPush(d.key, { dir: 'info', text: `Connected · ${o.handshake.statusText || '101 Switching Protocols'}`, size: 0, at: now() });
+      this.res.set(o.handshake);
+      this.tickTimer ??= setInterval(() => this.tick.update(n => n + 1), 1000);
+      if (d.req.body?.raw?.trim()) this.ui.toast(tr('Connected. Send Message sends the message in the editor.'), 'info');
+    } catch (e) {
+      this.wsPush(d.key, { dir: 'error', text: errText(e), size: 0, at: now() });
+    }
+    this.busy.set(false);
+  }
+  async wsSend() {
+    const w = this.ws(), text = this.draft().req.body?.raw ?? '';
+    if (!w || !text.trim()) return;
+    try { this.wsPush(this.draft().key, await this.backend.httpWsSend(w.id, text, this.wsBinary, this.vars)); }
+    catch (e) { this.wsPush(this.draft().key, { dir: 'error', text: errText(e), size: 0, at: new Date().toISOString() }); }
+  }
+  wsPing() { const w = this.ws(); if (w) void this.backend.httpWsPing(w.id).catch(e => this.ui.toast(errText(e), 'error')); }
+  wsKey(ev: KeyboardEvent) { if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); void this.wsSend(); } }
+  wsClear() { const k = this.draft().key; this.wsLogs.update(l => ({ ...l, [k]: [] })); this.wsOpen.set(-1); }
+  wsTime(at: string) { const d = new Date(at); return isNaN(+d) ? at : d.toLocaleTimeString([], { hour12: false }); }
+  wsPretty(m: HWsMessage) { if (m.binary) return m.text; try { return JSON.stringify(JSON.parse(m.text), null, 2); } catch { return m.text; } }
+
+  // ---- gRPC: the methods of the server or the .proto files, per request tab ----
+  readonly grpcInfo = signal<Record<number, { methods: HGrpcMethod[]; warnings: string[]; source: string }>>({});
+  readonly grpcMethods = computed(() => this.grpcInfo()[this.draft().key]?.methods ?? []);
+  readonly grpcNote = computed(() => { const g = this.grpcInfo()[this.draft().key]; return g ? `${g.methods.length} ${g.methods.length === 1 ? 'method' : 'methods'} from ${g.source}` : ''; });
+  readonly grpcWarn = computed(() => this.grpcInfo()[this.draft().key]?.warnings ?? []);
+  readonly grpcBusy = signal(false);
+  readonly grpcErr = signal('');
+  grpcSource() { return this.grpcNote() || (this.grpcUsesProto() ? tr('Methods from the .proto files (Service Definition)') : tr('Methods from the server\'s reflection')); }
+  tabTitle(r: HRequest) {
+    if (r.name) return r.name;
+    if (r.method === 'GRPC') return r.grpc?.method ? r.grpc.method.split('/').pop()! : r.url;
+    return shortPath(r.url);
+  }
+  grpc(): HGrpcSpec { return this.draft().req.grpc ?? {}; }
+  grpcCur() { return this.grpcMethods().find(m => m.name === this.grpc().method); }
+  setGrpc(p: Partial<HGrpcSpec>) { this.setReq({ grpc: { ...this.grpc(), ...p } }); }
+  grpcUsesProto() { return this.grpc().proto !== undefined; }
+  grpcKindText(m?: HGrpcMethod) { return !m ? '' : m.clientStream && m.serverStream ? 'bidirectional stream' : m.clientStream ? 'client stream' : m.serverStream ? 'server stream' : 'unary'; }
+  async loadGrpc() {
+    const d = this.draft();
+    if (this.grpcBusy()) return;
+    if (!this.grpcUsesProto() && !d.req.url.trim()) { this.grpcErr.set(tr('Type the server address first (host:port).')); return; }
+    this.grpcBusy.set(true); this.grpcErr.set('');
+    try {
+      const s = await this.backend.httpGrpcDescribe(this.sendReq());
+      const src = this.grpc().proto?.trim() ? tr('the .proto files') : tr('the server\'s reflection');
+      this.grpcInfo.update(l => ({ ...l, [d.key]: { methods: s.methods ?? [], warnings: s.warnings ?? [], source: src } }));
+      if (!this.grpc().method && s.methods?.length === 1) this.pickGrpc(s.methods[0].name);
+    } catch (e) { this.grpcErr.set(errText(e)); }
+    this.grpcBusy.set(false);
+  }
+  pickGrpc(name: string) {
+    const old = this.grpcCur(), m = this.grpcMethods().find(x => x.name === name);
+    const raw = this.draft().req.body?.raw ?? '';
+    this.setGrpc({ method: name || undefined });
+    if (m && (!raw.trim() || raw.trim() === '{}' || (old && raw === this.grpcExample(old)))) this.setBody({ mode: 'json', raw: this.grpcExample(m) });
+  }
+  grpcExample(m: HGrpcMethod) { return m.clientStream ? '[\n' + m.example.replace(/^/gm, '  ') + '\n]' : m.example; }
+  useGrpcExample() { const m = this.grpcCur(); if (m) this.setBody({ mode: 'json', raw: this.grpcExample(m) }); }
+  grpcMenu(ev: MouseEvent) {
+    const l = this.grpcMethods();
+    if (!l.length) { void this.loadGrpc(); return; }
+    this.ui.showMenu(ev, l.map(m => ({ label: (m.name === this.grpc().method ? '✓ ' : '') + m.name + (m.clientStream || m.serverStream ? '  ·  ' + this.grpcKindText(m) : ''), icon: '', action: () => this.pickGrpc(m.name) })));
+  }
+  async addProto() {
+    const p = await this.backend.chooseOpenFile(tr('Choose a .proto file'), [{ displayName: 'Protocol Buffers', pattern: '*.proto' }]).catch(() => '');
+    if (p) { const cur = (this.grpc().proto ?? '').trim(); this.setGrpc({ proto: cur ? cur + '; ' + p : p }); }
+  }
+  async addImportPath() {
+    const p = await this.backend.chooseDirectory(tr('Folder where imports are looked up')).catch(() => '');
+    if (p) { const cur = (this.grpc().importPaths ?? '').trim(); this.setGrpc({ importPaths: cur ? cur + '; ' + p : p }); }
+  }
   readonly bodyKinds = [{ v: '', l: 'none' }, { v: 'form', l: 'form-data' }, { v: 'urlencoded', l: 'x-www-form-urlencoded' }, { v: 'raw', l: 'raw' }, { v: 'binary', l: 'binary' }, { v: 'graphql', l: 'GraphQL' }];
   readonly collTabs = [{ k: 'overview', l: 'Overview' }, { k: 'auth', l: 'Authorization' }, { k: 'scripts', l: 'Scripts' }, { k: 'vars', l: 'Variables' }];
   readonly settingToggles: { k: keyof HSettings; l: string; d: string; inv?: boolean }[] = [
@@ -827,8 +1057,14 @@ export class ApiClient implements OnInit, OnDestroy {
     void this.refreshVars();
     this.offMon = this.backend.on('api:monitor', () => void this.loadExtras());
     this.offRun = this.backend.on('http:run', (st: HRunStep) => { if (this.running()) this.runSteps.update(l => [...l, st]); });
+    this.offWs = this.backend.on('api:ws', (e: HWsEvent) => this.onWs(e));
   }
-  ngOnDestroy() { this.offRun?.(); this.offMon?.(); }
+  private offWs?: () => void;
+  ngOnDestroy() {
+    this.offRun?.(); this.offMon?.(); this.offWs?.();
+    for (const w of Object.values(this.wsState())) void this.backend.httpWsClose(w.id).catch(() => undefined);
+    if (this.tickTimer) clearInterval(this.tickTimer);
+  }
 
   async choose(p: string) {
     this.path.set(p);
@@ -915,6 +1151,8 @@ export class ApiClient implements OnInit, OnDestroy {
     const d = i === this.active() ? this.draft() : this.openTabs()[i];
     if (d.dirty && (d.req.url.trim() || d.coll) && !(await this.ui.confirm(tr('Close Request'), tr('{0} has changes that are not saved. Close it anyway?', d.req.name || d.req.url || tr('This request')), tr('Close'), true))) return;
     this.stash();
+    const w = this.wsState()[d.key];
+    if (w) void this.backend.httpWsClose(w.id).catch(() => undefined);
     const l = this.openTabs().filter((_, j) => j !== i);
     if (!l.length) l.push(mkDraft(newReq()));
     const a = Math.min(i <= this.active() ? Math.max(0, this.active() - (i < this.active() ? 1 : 0)) : this.active(), l.length - 1);
@@ -962,7 +1200,7 @@ export class ApiClient implements OnInit, OnDestroy {
   count(k: string): number {
     const r = this.draft().req;
     if (k === 'params') return (r.params ?? []).filter(p => p.key && !p.off).length;
-    if (k === 'headers') return (r.headers ?? []).filter(p => p.key && !p.off).length + this.autoHeaders().length;
+    if (k === 'headers') return (r.headers ?? []).filter(p => p.key && !p.off).length + (this.kind() === 'http' ? this.autoHeaders().length : 0);
     return 0;
   }
   dot(k: string): boolean {

@@ -16,7 +16,8 @@ mk() {
 echo "module.exports = require('buffer');" > build/e-buffer.js
 npx esbuild build/e-buffer.js $opts --outfile=build/buffer.js
 for p in cheerio:cheerio xml2js:xml2js crypto-js:crypto-js tv4:tv4 chai:chai ajv:ajv csv-parse:csv-parse/lib/sync uuid:uuid path:path-browserify \
-  url:url querystring:querystring-es3 util:util events:events assert:assert punycode:punycode string_decoder:string_decoder stream:stream-browserify; do
+  url:url querystring:querystring-es3 util:util events:events assert:assert punycode:punycode string_decoder:string_decoder stream:stream-browserify \
+  postman-collection:postman-collection; do
   mk "${p%%:*}" "${p#*:}"
 done
 sed '/sourceMappingURL/d' node_modules/lodash/lodash.min.js > build/lodash.js

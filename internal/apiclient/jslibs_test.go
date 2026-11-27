@@ -90,8 +90,30 @@ var n = 0, iv = setInterval(function() { if (++n === 3) { clearInterval(iv); pm.
 		t.Fatalf("%d tests (%s): %s", len(res.Tests), strings.Join(names, ", "), f)
 	}
 	t.Logf("all libraries in %v", time.Since(start))
-	res = Run(context.Background(), Request{URL: s.URL, PreScript: `require('postman-collection')`}, &Target{})
-	if !strings.Contains(res.Error, "is not available") || !strings.Contains(res.Error, "cheerio") {
+	pc := time.Now()
+	res = Run(context.Background(), Request{URL: s.URL, PreScript: `
+var sdk = require('postman-collection');
+pm.test("postman-collection", function() {
+  var u = new sdk.Url('https://api.example.com:8443/v1/ports/{{id}}?state=up&limit=10');
+  pm.expect(u.getHost()).to.eql('api.example.com');
+  pm.expect(u.query.get('limit')).to.eql('10');
+  var h = new sdk.HeaderList(null, 'Content-Type: application/json\nX-Id: 7');
+  pm.expect(h.get('x-id')).to.eql('7');
+  var r = new sdk.Request({ url: 'https://h/x', method: 'POST', body: { mode: 'raw', raw: '{"a":1}' } });
+  pm.expect(r.method).to.eql('POST');
+  pm.expect(r.body.raw).to.eql('{"a":1}');
+  var c = new sdk.Collection({ info: { name: 'lab' }, item: [{ name: 'ports', request: 'https://h/ports' }] });
+  pm.expect(c.items.count()).to.eql(1);
+  var v = new sdk.VariableScope({ values: [{ key: 'id', value: '5' }] });
+  pm.expect(v.replaceIn('/ports/{{id}}')).to.eql('/ports/5');
+  pm.expect(sdk.Collection.isCollection(c)).to.be.true;
+});`}, &Target{})
+	if f := failed(res); f != "" || len(res.Tests) != 1 {
+		t.Fatalf("%d: %s", len(res.Tests), f)
+	}
+	t.Logf("postman-collection loaded and used in %v", time.Since(pc))
+	res = Run(context.Background(), Request{URL: s.URL, PreScript: `require('newman')`}, &Target{})
+	if !strings.Contains(res.Error, "is not available") || !strings.Contains(res.Error, "postman-collection") {
 		t.Fatal(res.Error)
 	}
 	// a script that never ends its timers is stopped

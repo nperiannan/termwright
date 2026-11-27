@@ -3,6 +3,7 @@ package apiclient
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/rand"
 	"embed"
 	"errors"
 	"fmt"
@@ -16,7 +17,7 @@ import (
 
 // The libraries of Postman's script sandbox, the real ones (bundled with esbuild, gzip, in jslibs; their
 // licenses in jslibs/LICENSES.txt): lodash, moment, cheerio, xml2js, crypto-js, tv4, chai, ajv, csv-parse,
-// uuid and the Node modules path, url, querystring, util, events, buffer, assert, punycode, string_decoder,
+// postman-collection, uuid and the Node modules path, url, querystring, util, events, buffer, assert, punycode, string_decoder,
 // stream and timers. Each is compiled once and run in a script's runtime only when the script uses it.
 
 //go:embed jslibs/*.js.gz
@@ -105,6 +106,15 @@ func runLibs(vm *goja.Runtime) error {
 		}
 		return vm.Get(g)
 	})
+	_ = vm.Set("__randBytes", func(n int) []any { // crypto.getRandomValues (uuid in postman-collection)
+		b := make([]byte, max(0, min(n, 65536)))
+		_, _ = rand.Read(b)
+		out := make([]any, len(b))
+		for i, x := range b {
+			out[i] = int(x)
+		}
+		return out
+	})
 	_, err := vm.RunString(scriptLibs)
 	return err
 }
@@ -178,6 +188,12 @@ func (ts *jsTimers) drain(stop <-chan struct{}) error {
 
 // scriptLibs: the libraries as globals (loaded when first used), require(), and xml2Json as Postman has it.
 const scriptLibs = `
+var crypto = { getRandomValues: function(a) {
+  if (a.length * (a.BYTES_PER_ELEMENT || 1) > 65536) throw new Error('getRandomValues: more than 65536 bytes');
+  var u = new Uint8Array(a.buffer, a.byteOffset, a.byteLength), r = __randBytes(u.length);
+  for (var i = 0; i < u.length; i++) u[i] = r[i];
+  return a;
+} };
 var __libs = {};
 function __getLib(n) {
   if (!Object.prototype.hasOwnProperty.call(__libs, n)) { __libs[n] = undefined; try { __libs[n] = __loadLib(n); } catch (e) { delete __libs[n]; throw e; } } // undefined while it loads: lodash reads _ then
@@ -194,7 +210,8 @@ function __getLib(n) {
 })(this);
 var __requireNames = { 'lodash': 'lodash', 'moment': 'moment', 'cheerio': 'cheerio', 'xml2js': 'xml2js', 'crypto-js': 'crypto-js', 'tv4': 'tv4', 'chai': 'chai',
   'ajv': 'ajv', 'csv-parse/lib/sync': 'csv-parse', 'uuid': 'uuid', 'path': 'path', 'url': 'url', 'querystring': 'querystring', 'util': 'util', 'events': 'events',
-  'buffer': 'buffer', 'assert': 'assert', 'punycode': 'punycode', 'string_decoder': 'string_decoder', 'stream': 'stream' };
+  'buffer': 'buffer', 'assert': 'assert', 'punycode': 'punycode', 'string_decoder': 'string_decoder', 'stream': 'stream',
+  'postman-collection': 'postman-collection' };
 function require(n) {
   n = String(n);
   if (n === 'atob') return atob;

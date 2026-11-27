@@ -570,7 +570,13 @@ export interface HReqAuth { token?: string; user?: string; password?: string; ke
   authUrl?: string; redirectUri?: string; pkce?: string; state?: string; consumerKey?: string; consumerSecret?: string; tokenSecret?: string; signatureMethod?: string; realm?: string;
   hawkId?: string; hawkKey?: string; algorithm?: string; ext?: string; app?: string; dlg?: string; payload?: boolean; domain?: string; workstation?: string; }
 export interface HSettings { httpVersion?: string; verify?: string; noRedirects?: boolean; followMethod?: boolean; followAuth?: boolean; removeReferer?: boolean; noEncode?: boolean; noCookies?: boolean; maxRedirects?: number; timeoutMs?: number; }
-export interface HRequest { examples?: HExample[]; schema?: string; id?: string; name?: string; folder?: string; method: string; url: string; params?: HKV[]; pathVars?: HKV[]; headers?: HKV[]; body?: HBody; auth?: string; authData?: HReqAuth;
+export interface HGrpcSpec { method?: string; proto?: string; importPaths?: string; tls?: string; }
+export interface HGrpcMethod { name: string; service: string; method: string; input: string; output: string; clientStream?: boolean; serverStream?: boolean; example: string; }
+export interface HGrpcSchema { methods: HGrpcMethod[]; warnings?: string[]; }
+export interface HWsMessage { dir: 'sent' | 'received' | 'info' | 'error'; text: string; binary?: boolean; size: number; at: string; }
+export interface HWsEvent { id: string; msg: HWsMessage; closed?: boolean; }
+export interface HWsOpen { id: string; handshake: HResponse; }
+export interface HRequest { grpc?: HGrpcSpec; examples?: HExample[]; schema?: string; id?: string; name?: string; folder?: string; method: string; url: string; params?: HKV[]; pathVars?: HKV[]; headers?: HKV[]; body?: HBody; auth?: string; authData?: HReqAuth;
   settings?: HSettings; preScript?: string; tests?: string; description?: string; }
 export interface HCollection { id: string; name: string; session?: string; vars?: HKV[]; requests: HRequest[]; description?: string; auth?: string; authData?: HReqAuth; preScript?: string; tests?: string; }
 export interface HEnvVar { key: string; value: string; secret?: boolean; off?: boolean; desc?: string; hasValue?: boolean; }

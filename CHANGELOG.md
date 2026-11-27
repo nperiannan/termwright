@@ -4,6 +4,11 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+### API client: WebSocket and gRPC requests
+- Added: WebSocket requests: choose WS in the method list; Connect / Disconnect, Send Message (Ctrl+Enter), binary messages, Ping, and a Messages pane with sent and received messages, times, sizes, a filter and formatted details.
+- Added: gRPC requests: choose GRPC; Load Methods from the server's reflection or .proto files (Service Definition, with import paths and TLS), the method's kind (unary, server, client or bidirectional stream), Use Example Message, JSON messages, metadata, the gRPC status, and metadata and trailers of the answer.
+- Added: `postman-collection` in scripts (`require('postman-collection')`), and `crypto.getRandomValues`.
+
 ### API client: Postman's script libraries, the real ones
 - Changed: scripts now use the real libraries of Postman's sandbox instead of partial versions: lodash 4.17.21, moment 2.30.1, crypto-js 3.3.0, tv4, and `xml2Json` made with xml2js as Postman does.
 - Added: `cheerio`, `xml2js`, `chai`, `ajv`, `csv-parse/lib/sync`, `uuid` and the Node modules `path`, `url`, `querystring`, `util`, `events`, `buffer` (and `Buffer`), `assert`, `punycode`, `string_decoder`, `stream` and `timers` with `require(...)`. A library is loaded only when a script uses it.

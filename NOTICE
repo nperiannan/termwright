@@ -19,7 +19,8 @@ Third-party components (licenses in their respective packages):
   miekg/pkcs11 (BSD-3-Clause)            https://github.com/miekg/pkcs11
   danieljoos/wincred (MIT)               https://github.com/danieljoos/wincred
   API client script libraries, bundled in internal/apiclient/jslibs (licenses in jslibs/LICENSES.txt):
-    lodash, moment, cheerio, xml2js, crypto-js, chai, ajv, tv4, csv-parse, uuid, buffer, events, util,
+    lodash, moment, cheerio, xml2js, crypto-js, chai, ajv, tv4, csv-parse, postman-collection (with
+    faker, iconv-lite, mime-types, semver), uuid, buffer, events, util,
     url, querystring-es3, path-browserify, assert, punycode, string_decoder, stream-browserify (MIT, ISC, BSD,
     BlueOak and public-domain licenses as listed there)
 
