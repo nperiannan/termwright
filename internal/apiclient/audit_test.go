@@ -225,7 +225,9 @@ func TestPostmanAuthRoundTrip(t *testing.T) {
 	}{
 		{`{"type":"digest","digest":[{"key":"username","value":"u"},{"key":"password","value":"{{p}}"}]}`, "digest", func(a *ReqAuth) bool { return a.User == "u" && a.Password == "{{p}}" }},
 		{`{"type":"awsv4","awsv4":[{"key":"accessKey","value":"AK"},{"key":"secretKey","value":"{{sk}}"},{"key":"region","value":"eu-west-1"},{"key":"service","value":"s3"}]}`, "awsv4", func(a *ReqAuth) bool { return a.AccessKey == "AK" && a.Region == "eu-west-1" && a.Service == "s3" }},
-		{`{"type":"oauth2","oauth2":[{"key":"grant_type","value":"password_credentials"},{"key":"accessTokenUrl","value":"https://h/t"},{"key":"clientId","value":"c"},{"key":"scope","value":"s"}]}`, "oauth2", func(a *ReqAuth) bool { return a.Grant == "password" && a.TokenURL == "https://h/t" && a.ClientID == "c" && a.Scope == "s" }},
+		{`{"type":"oauth2","oauth2":[{"key":"grant_type","value":"password_credentials"},{"key":"accessTokenUrl","value":"https://h/t"},{"key":"clientId","value":"c"},{"key":"scope","value":"s"}]}`, "oauth2", func(a *ReqAuth) bool {
+			return a.Grant == "password" && a.TokenURL == "https://h/t" && a.ClientID == "c" && a.Scope == "s"
+		}},
 	}
 	for _, c := range cases {
 		col := `{"info":{"name":"c","schema":"https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},"item":[{"name":"r","request":{"method":"GET","url":"https://h/x","auth":` + c.in + `}}]}`

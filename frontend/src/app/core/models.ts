@@ -566,7 +566,9 @@ export interface HKV { key: string; value: string; off?: boolean; desc?: string;
 export interface HBody { mode?: string; raw?: string; form?: HKV[]; graphqlVars?: string; file?: string; }
 export interface HReqAuth { token?: string; user?: string; password?: string; key?: string; value?: string; in?: string;
   grant?: string; tokenUrl?: string; clientId?: string; clientSecret?: string; scope?: string; clientAuth?: string;
-  accessKey?: string; secretKey?: string; region?: string; service?: string; sessionToken?: string; }
+  accessKey?: string; secretKey?: string; region?: string; service?: string; sessionToken?: string;
+  authUrl?: string; redirectUri?: string; pkce?: string; state?: string; consumerKey?: string; consumerSecret?: string; tokenSecret?: string; signatureMethod?: string; realm?: string;
+  hawkId?: string; hawkKey?: string; algorithm?: string; ext?: string; app?: string; dlg?: string; payload?: boolean; domain?: string; workstation?: string; }
 export interface HSettings { httpVersion?: string; verify?: string; noRedirects?: boolean; followMethod?: boolean; followAuth?: boolean; removeReferer?: boolean; noEncode?: boolean; noCookies?: boolean; maxRedirects?: number; timeoutMs?: number; }
 export interface HRequest { examples?: HExample[]; schema?: string; id?: string; name?: string; folder?: string; method: string; url: string; params?: HKV[]; pathVars?: HKV[]; headers?: HKV[]; body?: HBody; auth?: string; authData?: HReqAuth;
   settings?: HSettings; preScript?: string; tests?: string; description?: string; }

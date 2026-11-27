@@ -113,16 +113,30 @@ func oauth2Token(ctx context.Context, a *ReqAuth, t *Target, c *http.Client, fre
 		return tok, nil // an access token typed or kept in a variable
 	}
 	tu, id, sec := v(a.TokenURL), v(a.ClientID), v(a.ClientSecret)
-	if tu == "" || id == "" {
-		return "", errors.New("OAuth 2.0: the token URL and the client ID are needed")
-	}
 	grant := a.Grant
 	if grant == "" {
 		grant = "client_credentials"
 	}
-	key := "oauth2|" + tu + "|" + id + "|" + grant + "|" + v(a.User) + "|" + v(a.Scope)
+	if id == "" || (tu == "" && grant != "implicit") {
+		return "", errors.New("OAuth 2.0: the token URL and the client ID are needed")
+	}
+	key := "oauth2|" + tu + "|" + id + "|" + grant + "|" + v(a.User) + "|" + v(a.Scope) + "|" + v(a.AuthURL)
 	return t.Tokens.Get(key, fresh, func() (string, time.Duration, error) {
 		form := url.Values{"grant_type": {grant}}
+		switch grant {
+		case "authorization_code", "implicit":
+			if rt := refreshTokens.get(key); rt != "" { // renew without the browser when the provider gave a refresh token
+				f := url.Values{"grant_type": {"refresh_token"}, "refresh_token": {rt}}
+				if s := v(a.Scope); s != "" {
+					f.Set("scope", s)
+				}
+				if tok, life, err := tokenPost(ctx, c, a, tu, id, sec, f, key); err == nil {
+					return tok, life, nil
+				}
+				refreshTokens.set(key, "")
+			}
+			return browserGrant(ctx, a, t, c, tu, id, sec, grant, key)
+		}
 		if s := v(a.Scope); s != "" {
 			form.Set("scope", s)
 		}
@@ -130,52 +144,77 @@ func oauth2Token(ctx context.Context, a *ReqAuth, t *Target, c *http.Client, fre
 			form.Set("username", v(a.User))
 			form.Set("password", v(a.Password))
 		}
-		if a.ClientAuth == "body" {
-			form.Set("client_id", id)
+		return tokenPost(ctx, c, a, tu, id, sec, form, key)
+	})
+}
+
+// tokenPost asks the token URL for an access token (and keeps a refresh token when one comes).
+func tokenPost(ctx context.Context, c *http.Client, a *ReqAuth, tu, id, sec string, form url.Values, key string) (string, time.Duration, error) {
+	if a.ClientAuth == "body" {
+		form.Set("client_id", id)
+		if sec != "" {
 			form.Set("client_secret", sec)
 		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, tu, strings.NewReader(form.Encode()))
-		if err != nil {
-			return "", 0, err
-		}
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		req.Header.Set("Accept", "application/json")
-		if a.ClientAuth != "body" {
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tu, strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", 0, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	if a.ClientAuth != "body" {
+		if sec == "" { // a public client (PKCE): its id goes in the form
+			form.Set("client_id", id)
+			req.Body = io.NopCloser(strings.NewReader(form.Encode()))
+			req.ContentLength = int64(len(form.Encode()))
+		} else {
 			req.SetBasicAuth(url.QueryEscape(id), url.QueryEscape(sec))
 		}
-		resp, err := c.Do(req)
-		if err != nil {
-			return "", 0, fmt.Errorf("OAuth 2.0 token: %w", err)
-		}
-		defer resp.Body.Close()
-		data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		var tr struct {
-			AccessToken string `json:"access_token"`
-			ExpiresIn   any    `json:"expires_in"`
-			Error       string `json:"error"`
-			Desc        string `json:"error_description"`
-		}
-		if json.Unmarshal(data, &tr) != nil || tr.AccessToken == "" {
+	}
+	resp, err := c.Do(req)
+	if err != nil {
+		return "", 0, fmt.Errorf("OAuth 2.0 token: %w", err)
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	var tr struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		ExpiresIn    any    `json:"expires_in"`
+		Error        string `json:"error"`
+		Desc         string `json:"error_description"`
+	}
+	if json.Unmarshal(data, &tr) != nil || tr.AccessToken == "" {
+		if q, err := url.ParseQuery(string(data)); err == nil && q.Get("access_token") != "" { // some providers answer as a form
+			tr.AccessToken, tr.RefreshToken, tr.ExpiresIn = q.Get("access_token"), q.Get("refresh_token"), q.Get("expires_in")
+		} else {
 			if tr.Error != "" {
 				return "", 0, fmt.Errorf("OAuth 2.0 token: %s %s", tr.Error, tr.Desc)
 			}
 			return "", 0, fmt.Errorf("OAuth 2.0 token: the token URL answered %s without an access_token", resp.Status)
 		}
-		life := time.Duration(0)
-		switch e := tr.ExpiresIn.(type) {
-		case float64:
-			life = time.Duration(e) * time.Second
-		case string:
-			var n int
-			if _, err := fmt.Sscan(e, &n); err == nil {
-				life = time.Duration(n) * time.Second
-			}
+	}
+	if tr.RefreshToken != "" {
+		refreshTokens.set(key, tr.RefreshToken)
+	}
+	return tr.AccessToken, tokenLife(tr.ExpiresIn, tr.AccessToken), nil
+}
+
+func tokenLife(e any, tok string) time.Duration {
+	life := time.Duration(0)
+	switch e := e.(type) {
+	case float64:
+		life = time.Duration(e) * time.Second
+	case string:
+		var n int
+		if _, err := fmt.Sscan(e, &n); err == nil {
+			life = time.Duration(n) * time.Second
 		}
-		if life == 0 {
-			life = jwtLife(tr.AccessToken, time.Hour)
-		}
-		return tr.AccessToken, life, nil
-	})
+	}
+	if life == 0 {
+		life = jwtLife(tok, time.Hour)
+	}
+	return life
 }
 
 // ---- AWS Signature v4 ----

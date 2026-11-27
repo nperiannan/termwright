@@ -4,6 +4,15 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+### API client: the rest of Postman
+- Added: OAuth 1.0 (HMAC-SHA1/256/512, PLAINTEXT; header, query or body), Hawk and NTLM (NTLMv2) authorization; imported from and exported to Postman.
+- Added: OAuth 2.0 authorization code (with PKCE) and implicit grants: the sign-in opens in the browser and Termwright takes the answer on a local callback URL; refresh tokens renew the access token without the browser.
+- Added: Postman's dynamic variables (`{{$randomEmail}}`, `{{$randomFullName}}`, `{{$randomIP}}` and about a hundred more), also in `pm.variables.replaceIn`.
+- Added: lodash (`_`), moment, `xml2Json` and `tv4` in scripts, and `require('lodash' | 'moment' | 'tv4')`.
+- Added: WebSocket and gRPC engines (reflection or .proto files; unary and streaming calls); their editors come next.
+- Added: the generated code uses `--digest`, `--ntlm` and `--aws-sigv4` with curl.
+- Fixed: generated JavaScript began with a `#` comment line, which is not JavaScript.
+
 ### API client: Postman checks
 - Added: Digest Auth, OAuth 2.0 (client credentials and password grants, token cached and renewed after a 401) and AWS Signature v4 in a request's or collection's Authorization; imported from and exported to Postman, and in the generated code.
 - Added: `btoa` / `atob`, `CryptoJS` (MD5, SHA-1/256/512, HMAC, Hex/Base64/Utf8) and `require('crypto-js' | 'uuid')` in scripts; response checks `notFound`, `unauthorized`, `forbidden`, `badRequest`, `clientError`, `serverError`, `to.not.*`, `pm.response.reason()`, `headers.toObject()`.

@@ -3,11 +3,13 @@ package apiclient
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -16,6 +18,10 @@ func b64(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) 
 // Code is the request as a curl command, Python (requests), JavaScript (fetch) or PowerShell. Variables are
 // filled in except the secret ones; the session's authentication is an environment variable ($API_TOKEN).
 func Code(r Request, t *Target, lang string) (string, error) {
+	switch strings.ToUpper(r.Method) {
+	case "GRPC", "WS":
+		return streamCode(r, t, lang)
+	}
 	u, err := FullURL(r, t)
 	if err != nil {
 		return "", err
@@ -27,7 +33,7 @@ func Code(r Request, t *Target, lang string) (string, error) {
 			hs = append(hs, KV{Key: Resolve(h.Key, t.Vars), Value: Resolve(h.Value, t.Vars)})
 		}
 	}
-	env := ""
+	env, curlAuth, note := "", "", ""
 	mode, ad := r.Auth, r.AuthData
 	if mode == "" && t.CollAuth != "" {
 		mode, ad = t.CollAuth, t.CollAuthData
@@ -50,6 +56,16 @@ func Code(r Request, t *Target, lang string) (string, error) {
 	case "oauth2": // the token from the token URL, in an environment variable
 		env = "API_TOKEN"
 		hs = append(hs, KV{Key: "Authorization", Value: "Bearer $API_TOKEN"})
+	case "digest", "ntlm":
+		env = "API_PASSWORD"
+		curlAuth = " \\\n  --" + mode + " -u \"" + Resolve(ad.User, t.Vars) + ":$API_PASSWORD\""
+		note = map[string]string{"digest": "Digest", "ntlm": "NTLM"}[mode] + " authentication of " + Resolve(ad.User, t.Vars) + " (curl: --" + mode + ")"
+	case "awsv4":
+		env = "API_SECRET"
+		curlAuth = " \\\n  --aws-sigv4 \"aws:amz:" + Resolve(ad.Region, t.Vars) + ":" + Resolve(ad.Service, t.Vars) + "\" -u \"" + Resolve(ad.AccessKey, t.Vars) + ":$API_SECRET\""
+		note = "AWS Signature v4 (curl: --aws-sigv4); other languages need an AWS SDK or signer"
+	case "oauth1", "hawk":
+		note = map[string]string{"oauth1": "OAuth 1.0", "hawk": "Hawk"}[mode] + ": the Authorization header is signed for each request; use a library for it"
 	}
 	if mode == "" {
 		switch t.Auth.Type {
@@ -117,6 +133,7 @@ func Code(r Request, t *Target, lang string) (string, error) {
 		} else if body != "" {
 			fmt.Fprintf(&b, " \\\n  --data-raw %s", sq(body))
 		}
+		b.WriteString(curlAuth)
 		if t.Insecure {
 			b.WriteString(" \\\n  -k")
 		}
@@ -164,10 +181,17 @@ func Code(r Request, t *Target, lang string) (string, error) {
 	default:
 		return "", fmt.Errorf("no code for %q (curl, python, javascript, powershell)", lang)
 	}
-	if env != "" && lang != "powershell" {
-		return "# " + env + ": the session's secret (not shown here)\n" + strings.TrimRight(b.String(), "\n") + "\n", nil
+	out, c := b.String(), "# "
+	if lang == "javascript" {
+		c = "// "
 	}
-	return b.String(), nil
+	if note != "" {
+		out = c + note + "\n" + out
+	}
+	if env != "" && lang != "powershell" {
+		return c + env + ": the session's secret (not shown here)\n" + strings.TrimRight(out, "\n") + "\n", nil
+	}
+	return out, nil
 }
 
 func hasHeader(hs []KV, k string) bool {
@@ -362,8 +386,24 @@ func postmanAuthOut(mode string, a *ReqAuth) map[string]any {
 		if a.ClientAuth == "body" {
 			ca = "body"
 		}
+		if grant == "password" {
+			grant = "password_credentials"
+		}
+		pk := ""
+		if grant == "authorization_code" && a.PKCE != "" {
+			grant, pk = "authorization_code_with_pkce", a.PKCE
+		}
 		return map[string]any{"type": "oauth2", "oauth2": kv("grant_type", grant, "accessTokenUrl", a.TokenURL, "clientId", a.ClientID, "clientSecret", a.ClientSecret,
-			"scope", a.Scope, "username", a.User, "password", a.Password, "client_authentication", ca, "accessToken", a.Token, "addTokenTo", "header")}
+			"scope", a.Scope, "username", a.User, "password", a.Password, "client_authentication", ca, "accessToken", a.Token, "addTokenTo", "header",
+			"authUrl", a.AuthURL, "redirect_uri", a.RedirectURI, "challengeAlgorithm", pk, "state", a.State)}
+	case "oauth1":
+		return map[string]any{"type": "oauth1", "oauth1": kv("consumerKey", a.ConsumerKey, "consumerSecret", a.ConsumerSecret, "token", a.Token, "tokenSecret", a.TokenSecret,
+			"signatureMethod", firstNonEmpty(a.SignatureMethod, "HMAC-SHA1"), "realm", a.Realm, "version", "1.0", "addParamsToHeader", fmt.Sprint(a.In != "query" && a.In != "body"))}
+	case "hawk":
+		return map[string]any{"type": "hawk", "hawk": kv("authId", a.HawkID, "authKey", a.HawkKey, "algorithm", firstNonEmpty(a.Algorithm, "sha256"), "extraData", a.Ext,
+			"app", a.App, "delegation", a.Dlg, "includePayloadHash", fmt.Sprint(a.Payload))}
+	case "ntlm":
+		return map[string]any{"type": "ntlm", "ntlm": kv("username", a.User, "password", a.Password, "domain", a.Domain, "workstation", a.Workstation)}
 	}
 	return nil
 }
@@ -518,4 +558,72 @@ func (c Collection) Request(idOrName string) (Request, bool) {
 		}
 	}
 	return Request{}, false
+}
+
+// streamCode: a gRPC call as a grpcurl command, a WebSocket as websocat or JavaScript.
+func streamCode(r Request, t *Target, lang string) (string, error) {
+	sq := func(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
+	var hs []string
+	for _, h := range r.Headers {
+		if !h.Off && h.Key != "" {
+			hs = append(hs, Resolve(h.Key, t.Vars)+": "+Resolve(h.Value, t.Vars))
+		}
+	}
+	if r.Auth == "bearer" || r.Auth == "oauth2" {
+		hs = append(hs, "Authorization: Bearer $API_TOKEN")
+	}
+	var b strings.Builder
+	if strings.EqualFold(r.Method, "WS") {
+		u := Resolve(r.URL, t.Vars)
+		switch lang {
+		case "", "curl":
+			b.WriteString("websocat")
+			for _, h := range hs {
+				fmt.Fprintf(&b, " -H %s", strings.ReplaceAll(sq(h), "$API_TOKEN'", "'\"$API_TOKEN\""))
+			}
+			fmt.Fprintf(&b, " %s\n", sq(u))
+		case "javascript":
+			fmt.Fprintf(&b, "const ws = new WebSocket(%q);\nws.onopen = () => ws.send(%s);\nws.onmessage = (e) => console.log(e.data);\n", u, strconv.Quote(Resolve(r.Body.Raw, t.Vars)))
+		case "python":
+			fmt.Fprintf(&b, "import asyncio, websockets\n\nasync def main():\n    async with websockets.connect(%q) as ws:\n        await ws.send(%s)\n        print(await ws.recv())\n\nasyncio.run(main())\n", u, strconv.Quote(Resolve(r.Body.Raw, t.Vars)))
+		default:
+			return "", fmt.Errorf("no %s code for a WebSocket (curl gives websocat, javascript, python)", lang)
+		}
+		return b.String(), nil
+	}
+	if lang != "" && lang != "curl" {
+		return "", errors.New("a gRPC call is exported as a grpcurl command (choose cURL)")
+	}
+	spec := GRPCSpec{}
+	if r.GRPC != nil {
+		spec = *r.GRPC
+	}
+	a, err := grpcTarget(r.URL, spec, t)
+	if err != nil {
+		return "", err
+	}
+	b.WriteString("grpcurl")
+	if !a.tls {
+		b.WriteString(" -plaintext")
+	} else if t.Insecure {
+		b.WriteString(" -insecure")
+	}
+	for _, p := range splitList(spec.ImportPaths) {
+		fmt.Fprintf(&b, " -import-path %s", sq(p))
+	}
+	for _, p := range splitList(spec.Proto) {
+		fmt.Fprintf(&b, " -proto %s", sq(p))
+	}
+	for _, h := range hs {
+		if strings.Contains(h, "$API_TOKEN") {
+			fmt.Fprintf(&b, " \\\n  -H \"%s\"", h)
+		} else {
+			fmt.Fprintf(&b, " \\\n  -H %s", sq(h))
+		}
+	}
+	if body := strings.TrimSpace(Resolve(r.Body.Raw, t.Vars)); body != "" {
+		fmt.Fprintf(&b, " \\\n  -d %s", sq(body))
+	}
+	fmt.Fprintf(&b, " \\\n  %s %s\n", strings.TrimPrefix(a.base, map[bool]string{true: "https://", false: "http://"}[a.tls]), strings.TrimPrefix(spec.Method, "/"))
+	return b.String(), nil
 }

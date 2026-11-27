@@ -87,7 +87,7 @@ function __scope(store) {
     set: function(k, v) { v = String(v); __vars[k] = v; __set[k] = v; if (store) store[k] = v; },
     unset: function(k) { delete __vars[k]; if (store) delete store[k]; }, clear: function() {},
     toObject: function() { var o = {}; for (var k in __vars) o[k] = __vars[k]; return o; },
-    replaceIn: function(s) { return String(s).replace(/\{\{\s*([^{}]+?)\s*\}\}/g, function(m, k) { return k in __vars ? __vars[k] : m; }); } };
+    replaceIn: function(s) { return String(s).replace(/\{\{\s*([^{}]+?)\s*\}\}/g, function(m, k) { if (k in __vars) return __vars[k]; var d = k.charAt(0) === '$' ? __dyn(k) : null; return d === null ? m : d; }); } };
 }
 var pm = {
   test: function(name, fn) { try { fn(); __tests.push({ name: name, pass: true }); } catch (e) { __tests.push({ name: name, pass: false, error: String(e && e.message || e) }); } },
@@ -160,8 +160,11 @@ function require(n) {
     case 'uuid': return { v4: function() { return __uuid(); } };
     case 'btoa': return btoa;
     case 'atob': return atob;
+    case 'lodash': return _;
+    case 'moment': return moment;
+    case 'tv4': return tv4;
   }
-  throw new Error('require("' + n + '") is not available in Termwright scripts (crypto-js, uuid, btoa and atob are)');
+  throw new Error('require("' + n + '") is not available in Termwright scripts (lodash, moment, crypto-js, uuid, tv4, btoa and atob are)');
 }
 var tests = {}, globals = {}, environment = {};
 if (__res) {
@@ -263,6 +266,9 @@ func script(ctx context.Context, src string, req Request, res *Response, vars ma
 		case <-done:
 		}
 	}()
+	if err := runLibs(vm); err != nil {
+		return out, err
+	}
 	if _, err := vm.RunString(prelude); err != nil {
 		return out, err
 	}
@@ -425,7 +431,7 @@ func runInfo(ctx context.Context, r Request, t *Target, info scriptInfo) Respons
 		o, err := script(ctx, src, r, nil, t.Vars, t, info)
 		merge(o)
 		preTests = append(preTests, o.tests...) // Postman lists a pre-request script's pm.test results too
-		if o.changed && err == nil { // pm.request.headers.add, url.addQueryParams, body.raw = ...
+		if o.changed && err == nil {            // pm.request.headers.add, url.addQueryParams, body.raw = ...
 			r.Headers, r.URL = o.reqHeaders, o.reqURL
 			if o.reqBody != r.Body.Raw && r.Body.Mode != "urlencoded" && r.Body.Mode != "form" && r.Body.Mode != "binary" {
 				r.Body.Raw = o.reqBody

@@ -200,6 +200,10 @@ func (a *App) httpTarget(r HTTPSendRequest) (*apiclient.Target, *session.Session
 
 func (a *App) httpTargetDraft(r HTTPSendRequest, draft *session.Session, typed string) (*apiclient.Target, *session.Session, bool, error) {
 	t := &apiclient.Target{Vars: map[string]string{}, Tokens: httpTokens, Timeout: time.Duration(min(max(r.Timeout, 0), 600)) * time.Second, NoRedirects: r.NoRedirects}
+	if a.ctx != nil { // OAuth 2.0's authorization code and implicit grants sign in in the browser
+		ctx := a.ctx
+		t.Browse = func(u string) error { wruntime.BrowserOpenURL(ctx, u); return nil }
+	}
 	a.httpEnvVars(apiclient.GlobalsID, t)
 	if r.Collection != "" {
 		c, err := a.httpStore().Find(r.Collection)

@@ -20,7 +20,6 @@ import (
 	"os"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -59,6 +58,8 @@ type Target struct {
 	CollAuthData *ReqAuth
 	// CollPre and CollTests: the collection's scripts, run before each request's own.
 	CollPre, CollTests string
+	// Browse opens a URL in the browser (OAuth 2.0's authorization code and implicit grants); nil: none.
+	Browse func(url string) error
 	// ScriptSend says whether pm.sendRequest may send a request with this method (nil: any).
 	ScriptSend func(method string) error
 }
@@ -161,8 +162,8 @@ func (j *Jar) Clear() {
 
 var varRe = regexp.MustCompile(`\{\{\s*([^{}]+?)\s*\}\}`)
 
-// Resolve replaces {{name}} with its value; {{$guid}}, {{$timestamp}}, {{$isoTimestamp}}, {{$randomInt}}
-// are made each time. Unknown names stay as they are.
+// Resolve replaces {{name}} with its value; Postman's dynamic variables ({{$guid}}, {{$timestamp}},
+// {{$randomEmail}} ...) are made each time. Unknown names stay as they are.
 func Resolve(s string, vars map[string]string) string {
 	if !strings.Contains(s, "{{") {
 		return s
@@ -173,17 +174,8 @@ func Resolve(s string, vars map[string]string) string {
 			if v, ok := vars[k]; ok {
 				return v
 			}
-			switch k {
-			case "$guid", "$randomUUID":
-				return uuid()
-			case "$timestamp":
-				return strconv.FormatInt(time.Now().Unix(), 10)
-			case "$isoTimestamp":
-				return time.Now().UTC().Format(time.RFC3339)
-			case "$randomInt":
-				b := make([]byte, 2)
-				_, _ = rand.Read(b)
-				return strconv.Itoa(int(b[0])<<8 | int(b[1])) // 0..65535
+			if v, ok := dynamicVar(k); ok {
+				return v
 			}
 			return m
 		})
@@ -483,6 +475,12 @@ func build(ctx context.Context, r Request, t *Target) (*http.Request, string, er
 // Send sends a request: its variables, the session's authentication (a login or OAuth token is fetched and
 // renewed by itself; once more after a 401), cookies and timings. Scripts are run by Run, not here.
 func Send(ctx context.Context, r Request, t *Target) Response {
+	switch strings.ToUpper(r.Method) {
+	case "GRPC":
+		return sendGRPC(ctx, r, t)
+	case "WS":
+		return sendWS(ctx, r, t)
+	}
 	start := time.Now()
 	res := Response{Method: strings.ToUpper(r.Method)}
 	if res.Method == "" {
@@ -494,6 +492,7 @@ func Send(ctx context.Context, r Request, t *Target) Response {
 		return res
 	}
 	var digest map[string]string // the server's Digest challenge, answered on the second try
+	var ntlm []byte              // the server's NTLM challenge, answered on the second try (same connection)
 	for attempt := 0; attempt < 2; attempt++ {
 		req, shown, err := build(ctx, r, t)
 		if err != nil {
@@ -514,7 +513,7 @@ func Send(ctx context.Context, r Request, t *Target) Response {
 				res.ReqHeaders = t.headers(req.Header)
 				return res
 			}
-		case "digest", "oauth2", "awsv4":
+		case "digest", "oauth2", "awsv4", "oauth1", "hawk", "ntlm":
 			a := adata
 			if a == nil {
 				a = &ReqAuth{}
@@ -538,6 +537,23 @@ func Send(ctx context.Context, r Request, t *Target) Response {
 				}
 			case "awsv4":
 				aerr = awsSign(req, a, t, requestBody(req), time.Now())
+			case "oauth1":
+				aerr = oauth1Sign(req, a, t, requestBody(req), "", "")
+			case "hawk":
+				var h string
+				if h, aerr = hawkHeader(req, a, t, requestBody(req), "", ""); aerr == nil {
+					req.Header.Set("Authorization", h)
+				}
+			case "ntlm":
+				u, p := strings.TrimSpace(Resolve(a.User, t.Vars)), Resolve(a.Password, t.Vars)
+				if p != "" {
+					t.Secrets = append(t.Secrets, p)
+				}
+				if ntlm == nil {
+					req.Header.Set("Authorization", ntlmNegotiate())
+				} else {
+					req.Header.Set("Authorization", ntlmAuthenticate(ntlm, u, p, strings.TrimSpace(Resolve(a.Domain, t.Vars)), strings.TrimSpace(Resolve(a.Workstation, t.Vars)), nil, time.Now()))
+				}
 			}
 			if aerr != nil {
 				res.Error = "authentication: " + aerr.Error()
@@ -581,6 +597,11 @@ func Send(ctx context.Context, r Request, t *Target) Response {
 			continue
 		}
 		if resp.StatusCode == http.StatusUnauthorized && attempt == 0 {
+			if mode == "ntlm" && ntlm == nil {
+				if ntlm = ntlmChallenge(resp.Header); ntlm != nil {
+					continue // answer the challenge on the same connection
+				}
+			}
 			if mode == "digest" && digest == nil {
 				if digest = digestChallenge(resp.Header); digest != nil {
 					continue // answer the challenge

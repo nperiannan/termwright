@@ -15,6 +15,12 @@ import (
 
 // scriptHelpers gives the script sandbox btoa/atob, uuid and the hashes CryptoJS's shim needs (all in Go).
 func scriptHelpers(vm *goja.Runtime) {
+	_ = vm.Set("__dyn", func(k string) any { // Postman's dynamic variables in replaceIn
+		if v, ok := dynamicVar(k); ok {
+			return v
+		}
+		return nil
+	})
 	raw := func(m map[string]any) []byte {
 		if h, ok := m["hex"].(string); ok {
 			b, _ := hex.DecodeString(h)

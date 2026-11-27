@@ -980,6 +980,9 @@ export class ApiClient implements OnInit, OnDestroy {
     const mode = r.auth || this.collAuth();
     if (mode === 'bearer' || mode === 'basic' || mode === 'oauth2') out.push({ key: 'Authorization', value: mode === 'basic' ? 'Basic ••••••••' : 'Bearer ••••••••', desc: 'from Authorization' });
     else if (mode === 'digest') out.push({ key: 'Authorization', value: 'Digest ••••••••', desc: 'from Authorization, after the server\'s 401 challenge' });
+    else if (mode === 'ntlm') out.push({ key: 'Authorization', value: 'NTLM ••••••••', desc: 'from Authorization (negotiated with the server)' });
+    else if (mode === 'hawk') out.push({ key: 'Authorization', value: 'Hawk ••••••••', desc: 'from Authorization' });
+    else if (mode === 'oauth1') { const a = r.auth ? r.authData : this.collAuthData(); if (!a?.in) out.push({ key: 'Authorization', value: 'OAuth ••••••••', desc: 'from Authorization' }); }
     else if (mode === 'awsv4') { out.push({ key: 'Authorization', value: 'AWS4-HMAC-SHA256 ••••••••', desc: 'from Authorization' }); out.push({ key: 'X-Amz-Date', value: '<when sent>', desc: 'from Authorization' }); }
     else if (mode === 'apikey') { const a = r.auth ? r.authData : this.collAuthData(); if (a?.in !== 'query') out.push({ key: a?.key || 'API key', value: '••••••••', desc: 'from Authorization' }); }
     else if (mode !== 'none' && s?.apiAuth) out.push({ key: this.authHeader(), value: '••••••••', desc: '🔒 the session\'s authentication' });
@@ -1094,7 +1097,7 @@ export class ApiClient implements OnInit, OnDestroy {
   usedVars(): string[] {
     const r = this.draft().req, a = (r.auth ? r.authData : this.collAuthData()) ?? {};
     const text = [r.url, ...(r.params ?? []).flatMap(p => [p.key, p.value]), ...(r.pathVars ?? []).map(p => p.value), ...(r.headers ?? []).flatMap(h => [h.key, h.value]),
-      r.body?.raw, r.body?.graphqlVars, r.body?.file, ...(r.body?.form ?? []).flatMap(f => [f.key, f.value]), a.token, a.user, a.password, a.key, a.value, a.tokenUrl, a.clientId, a.clientSecret, a.scope, a.accessKey, a.secretKey, a.region, a.service, a.sessionToken].join(' ');
+      r.body?.raw, r.body?.graphqlVars, r.body?.file, ...(r.body?.form ?? []).flatMap(f => [f.key, f.value]), a.token, a.user, a.password, a.key, a.value, a.tokenUrl, a.clientId, a.clientSecret, a.scope, a.accessKey, a.secretKey, a.region, a.service, a.sessionToken, a.authUrl, a.redirectUri, a.consumerKey, a.consumerSecret, a.tokenSecret, a.hawkId, a.hawkKey, a.domain].join(' ');
     const out = new Set<string>();
     for (const m of text.matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g)) if (!m[1].startsWith('$')) out.add(m[1]);
     return [...out];
