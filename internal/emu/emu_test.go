@@ -1016,4 +1016,17 @@ func TestWireWith(t *testing.T) {
 	if len(l.Cables) != 0 {
 		t.Fatal("none")
 	}
+	// added to a lab, own: a leaf-spine of the new ones only - nothing to the lab's first switches
+	l = &Lab{VMs: mk(5)}
+	l.WireWith(l.VMs[:2], WireOpts{Kind: "leaf-spine"}, imgs)
+	n := len(l.Cables)
+	l.WireWith(l.VMs[2:], WireOpts{Kind: "leaf-spine", Own: true}, imgs)
+	for _, k := range l.Cables[n:] {
+		if k.A == "a" || k.B == "a" || k.A == "b" || k.B == "b" {
+			t.Fatalf("own wiring reached the lab's switches: %+v", l.Cables[n:])
+		}
+	}
+	if len(l.Cables) == n || len(l.VMs) != 5 {
+		t.Fatalf("own wiring %+v (%d VMs)", l.Cables[n:], len(l.VMs))
+	}
 }

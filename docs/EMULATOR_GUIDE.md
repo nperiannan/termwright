@@ -149,13 +149,14 @@ Working on the canvas:
 ## 6. Use several hosts
 
 1. Add and set up each host as in section 2.
-2. In **Add Switches** (or New Topology) choose another checked host for the new switches; the canvas can draw an area round each host (*Hosts → Areas*).
+2. **Where new devices go.** The **host chip** in the lab's header (★ and the host's name) shows where a device you add is made, with four small bars for that host's CPU, memory, disk and network, the number of hosts, and a red dot when any host is above 90 %. Click it for the **Hosts** table: every host on one row with its switches, CPU, memory, disk of the lab folder and network port (in / out now, against the port's speed), sortable and filtered, read every 6 s. Click a row - or a host in the **Hosts** block at the top of the right panel (the busiest first), or the palette's **Add to ★** list - to make it the host new devices go to; the choice is kept per topology. Green is under 70 %, amber to 90 %, red above; hover a bar for the exact numbers. ↗ opens the host in Hosts, − removes it (allowed once no switch of this topology is on it). In **Add Switches** the host starts as the ★ one, and the cabling starts as *none* when the lab has switches: a shape joins only the new switches unless you tick *Also cable them to switches already in the lab*, so nothing is cabled to another host unless you choose it. The canvas can draw an area round each host (*Hosts → Areas*).
 3. **Cables between hosts** are UDP between the hosts' addresses; a new cable between two hosts works once both of its switches restart.
 4. **Move to Host** (right-click a switch) moves a switch:
    - **Live (No Downtime)** - while it runs (TCP 29400-29999 between the hosts, KVM on both);
    - **Save, Copy and Resume** (or **Copy Its Disk** when it is stopped) - its disk and state go along, about a minute off;
    - **From Its Image** - it boots there from day 0.
-5. The **hosts** button in the lab's header shows each host's switches, vCPU, memory and load, its management and the cables between hosts.
+5. The **management** button next to the host chip shows each host's switches, vCPU, memory and load, its management and the cables between hosts.
+6. A topology whose switches are all deleted belongs to no host: its next device is made on the ★ host, and the old host can be removed.
 
 ---
 

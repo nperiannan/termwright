@@ -140,7 +140,9 @@ export interface EmuImage { id: string; name: string; file: string; fileName: st
   hasPassword?: boolean; onHost?: boolean; upload?: string; missing?: boolean;  url?: string; md5?: string; page?: string; download?: string; disks?: { slot: string; fileName: string; file: string; sha256: string; size: number; url?: string; md5?: string; page?: string; bus?: string }[] | null; }
 export interface EmuGroup { template?: string; diskGb?: number; model?: string; module?: string; serialStart?: string; macStart?: string; image: string; count: number; names: string; cpus?: number; ram?: number; role?: string; }
 export interface EmuDupRequest { ids: string[]; count: number; cables: boolean; start: boolean; }
-export interface EmuRequest { host: string; groups: EmuGroup[]; cabling: string; mgmt: string; mgmtNet: string; start: boolean; perPair?: number; lagMode?: string; }
+export interface EmuRequest { host: string; groups: EmuGroup[]; cabling: string; mgmt: string; mgmtNet: string; start: boolean; perPair?: number; lagMode?: string; /** Cable the new switches only among themselves. */ own?: boolean; }
+/** How busy a KVM host is now (percentages; -1 = not known). */
+export interface EmuHostStat { host: string; name: string; addr: string; switches: number; running: number; cpu: number; cores: number; mem: number; memTotal: number; memUsed: number; disk: number; diskTotal: number; diskUsed: number; net: number; if: string; speed: number; rx: number; tx: number; err?: string; }
 export interface LabOutput { os: string; command: string; text: string; }
 export interface LabGroup { os?: string; model: string; count: number; names: string; }
 export interface LabRequest { groups: LabGroup[]; mgmtNet: string; cabling: string; password: string; start: boolean; }

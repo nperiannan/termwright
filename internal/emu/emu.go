@@ -1352,10 +1352,19 @@ type WireOpts struct {
 	Spines  map[string]bool // VM ids
 	Per     int
 	LagMode string // lacp, static ("" = cables only)
+	Own     bool   // cable the new VMs only among themselves (never to the lab's other VMs)
 }
 
 // WireWith cables new VMs (see WireOpts). Leaf-spine without spines is Wire's (the lab's first two are the cores).
 func (l *Lab) WireWith(add []VM, o WireOpts, imgs map[string]*Image) {
+	if o.Own && len(l.VMs) > len(add) { // a lab of only the new ones: the shape cannot reach the others
+		t := *l
+		t.VMs, t.Cables, t.Lags = add, slices.Clone(l.Cables), slices.Clone(l.Lags)
+		o.Own = false
+		t.WireWith(add, o, imgs)
+		l.Cables, l.Lags = t.Cables, t.Lags
+		return
+	}
 	kind := o.Kind
 	if kind == "line" {
 		kind = "chain"

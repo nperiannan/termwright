@@ -719,6 +719,7 @@ type EmuRequest struct {
 	Mgmt    string     `json:"mgmt"`              // auto, forward, bridge
 	MgmtNet string     `json:"mgmtNet"`
 	Start   bool       `json:"start"`
+	Own     bool       `json:"own,omitempty"` // cable the new switches only among themselves (not to the lab's)
 }
 
 func (a *App) emuFilePath() string { return filepath.Join(a.labDir(), "emu.json") }
@@ -2438,7 +2439,7 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 		l.VMs = append(l.VMs, add...)
 		emuPlace(add, l.VMs)
 	}
-	l.WireWith(add, emu.WireOpts{Kind: r.Cabling, Spines: spines, Per: r.PerPair, LagMode: r.LagMode}, imgs)
+	l.WireWith(add, emu.WireOpts{Kind: r.Cabling, Spines: spines, Per: r.PerPair, LagMode: r.LagMode, Own: r.Own}, imgs)
 	if err := a.emuSave(); err != nil {
 		emuLab.mu.Unlock()
 		return EmuView{}, err

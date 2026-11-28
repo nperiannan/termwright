@@ -297,6 +297,7 @@ type Shape = 'leaf-spine' | 'ring' | 'full-mesh' | 'star' | 'line' | 'none';
         <div class="shapes">@for (c of cablings(); track c.v) {
           <a class="sh" [class.on]="shape() === c.v" (click)="setShape(c.v)"><span class="shi" [innerHTML]="c.svg"></span>{{ tr(c.label) }}</a> }</div>
         @if (shapeNote(); as n) { <div class="note" [class.warn]="n.warn">{{ n.text }}</div> }
+        @if (emu() && exists() && shape() !== 'none') { <label class="note"><input type="checkbox" [ngModel]="alsoLab()" (ngModelChange)="alsoLab.set($event)" /> {{ tr('Also cable them to switches already in the lab') }} <span class="muted">{{ tr('(else the shape joins only the new switches; a cable to another host is made only when you choose it)') }}</span></label> }
         @if (emu() && !exists()) {
           <div class="sec">{{ tr('Device icons') }}<span class="muted small">{{ tr('how this topology draws its devices (Style on the canvas changes it later)') }}</span></div>
           <div class="looks">@for (st of looks; track st.k) { <a class="lk" [class.on]="(look || 'rack') === st.k" (click)="look = st.k" [title]="tr(st.name)"><app-dev-icon role="access" [look]="st.k" [size]="46" state="idle" /><span>{{ tr(st.name) }}</span></a> }</div>
@@ -411,6 +412,8 @@ export class LabNew implements OnInit {
   protected mgmt = 'forward'; protected cloudAddr = ''; protected cloudGw = '';
   protected shape = signal<Shape>('leaf-spine');
   protected per = signal(1);
+  /** Added to a lab: also cable the new switches to the ones already there (else only among themselves). */
+  protected alsoLab = signal(false);
   protected lagMode = signal('lacp');
   protected start = true;
   protected rows = signal<NRow[]>([]);
@@ -438,9 +441,10 @@ export class LabNew implements OnInit {
   });
   ngOnInit() {
     const ok = this.hosts().filter(h => !(h.info.problems ?? []).length).sort((a, b) => (b.info.memFree || 0) - (a.info.memFree || 0));
-    this.host = this.exists() ? this.lab.emu()?.host ?? '' : (ok.find(h => h.session === this.lab.emu()?.host) ?? ok[0])?.session ?? '';
+    const tg = ok.find(h => h.session === this.lab.target())?.session; // the ★ host of the lab view
+    this.host = tg ?? (this.exists() ? this.lab.emu()?.host ?? '' : (ok.find(h => h.session === this.lab.emu()?.host) ?? ok[0])?.session ?? '');
     this.pickMgmt();
-    if (this.exists()) this.shape.set('line');
+    if (this.exists()) this.shape.set('none'); // added to a lab: no cables unless chosen
     const pre = this.options().find(o => o.key === this.preset());
     if (pre) this.pick(pre.key);
     this.emitPlan();
@@ -586,7 +590,7 @@ export class LabNew implements OnInit {
         const d = this.dt(r.key); if (!d) continue;
         groups.push({ image: r.image || d.images[0], model: d.model, module: r.module, count: r.count, names: r.names, serialStart: r.serial.trim(), macStart: r.mac.trim(), cpus: d.cpus, ram: d.ram, role: this.isHost(r.key) ? 'host' : roles ? r.role : '' });
       }
-      ok = await this.lab.addEmu({ host: this.host, groups, cabling: this.shape() === 'none' ? '' : this.shape(), perPair: this.per(), lagMode: this.per() > 1 ? this.lagMode() : '', mgmt: this.exists() && this.inLab(this.host) ? '' : this.mgmt, mgmtNet: this.mgmt === 'cloud' || (this.mgmt === 'lan' && this.cloudAddr.trim()) ? (this.cloudAddr.trim() + ' ' + (this.cloudGw.trim() || this.hostsInfo()?.gateway || '')).trim() : '', start: this.start });
+      ok = await this.lab.addEmu({ host: this.host, groups, own: this.exists() && !this.alsoLab(), cabling: this.shape() === 'none' ? '' : this.shape(), perPair: this.per(), lagMode: this.per() > 1 ? this.lagMode() : '', mgmt: this.exists() && this.inLab(this.host) ? '' : this.mgmt, mgmtNet: this.mgmt === 'cloud' || (this.mgmt === 'lan' && this.cloudAddr.trim()) ? (this.cloudAddr.trim() + ' ' + (this.cloudGw.trim() || this.hostsInfo()?.gateway || '')).trim() : '', start: this.start });
     } else {
       const c = this.simCable();
       ok = await this.lab.add({ groups: this.rows().filter(x => x.count > 0).map(r => { const [model, os] = r.key.split('|'); return { os, model, count: r.count, names: r.names }; }), mgmtNet: '', cabling: c === 'none' ? '' : c, password: '', start: this.start });

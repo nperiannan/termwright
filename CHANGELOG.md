@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Emulated lab: host load, and where new devices go.** The lab header has a host chip: the ★ host new devices go to, with small bars for its CPU, memory, disk and network, the number of hosts, and a red dot when any host is above 90 %. Click it for the **Hosts** table - every host on one row (switches, CPU, memory, disk of the lab folder, network port in / out against its speed), sortable, filtered, read every 6 s, for any number of hosts; the right panel has a compact **Hosts** block (busiest first). Click a host to make it the ★ host (kept per topology); the palette shows **Add to ★** and a dragged device is made there - also the first device of an empty topology, without the New Lab page. **Remove Host** is one click from the table once no switch of the topology is on it. Nothing over the canvas.
+- **No cables you did not ask for.** Add Switches to a lab that has switches starts with *no cabling*, and a chosen shape joins only the new switches unless you tick *Also cable them to switches already in the lab* - so a switch added on another host is no longer cabled across to the first host by itself.
+- **Dragging a switch keeps going over the toolbar and the panels**, so it can be placed right at the canvas's edges.
+
 - **Emulated lab: Duplicate.** Right-click a switch → **Duplicate** (or **Ctrl+D**; **Ctrl+C** then **Ctrl+V**) adds a copy next to it, as in GNS3: the next free name (`5520-24t-1` → `5520-24t-2`), the next serial number and base MAC that no switch in the lab has (stack members get the next serials too), a free management address, and the same image, model, modules, vCPU, memory, disk and host. The copy is not cabled and not started (▶ Start in the message), and boots from day 0. **Duplicate Several…** makes many at once (up to 500), optionally cabled to the original's neighbours on their next free ports and started. Several selected switches duplicate together, with the cables between them.
 
 ## 0.45.0 (2026-11-27)

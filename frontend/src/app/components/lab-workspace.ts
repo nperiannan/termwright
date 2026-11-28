@@ -12,7 +12,7 @@ import { RadiusDialog } from './radius-dialog';
 import { VmScreen } from './vm-screen';
 import { LabOverview, OverviewAct } from './lab-overview';
 import { CmdPalette, PaletteCmd } from './cmd-palette';
-import type { LabHub, LabNote } from '../core/models';
+import type { EmuHostStat, LabHub, LabNote } from '../core/models';
 import { LabService } from '../core/lab.service';
 import { Backend, errText } from '../core/backend';
 import { LOCAL_HOST, EmuHostNIC, EmuServer, LabHubDetail, EmuBoard, EmuClientState, EmuSTPState, EmuVRRPState, EmuBFDState, EmuEncap, EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel, EmuChange } from '../core/models';
@@ -50,7 +50,7 @@ export function nextDevName(name: string, used: Set<string>) {
   selector: 'app-lab-workspace',
   imports: [FormsModule, DecimalPipe, NgTemplateOutlet, Icon, TrafficQuick, ReportMenu, TrafficEngines, LabServer, LabConfigure, LabHosts, LabAppliances, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage, TrafficStats, TrafficLibrary, RadiusDialog, VmScreen, LabOverview, CmdPalette],
   template: `
-  <div class="ws" [style.--ctbh.px]="page() === 'new' ? 0 : tbMode() === 'labels' ? 54 : 44" (click)="menu.set(null); topos.set(null); mgOpen.set(false); moreOpen.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + (dockLow() ? 40 : dockH()) + 'px 26px'">
+  <div class="ws" [style.--ctbh.px]="page() === 'new' ? 0 : tbMode() === 'labels' ? 54 : 44" (click)="menu.set(null); topos.set(null); mgOpen.set(false); hsOpen.set(false); moreOpen.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + (dockLow() ? 40 : dockH()) + 'px 26px'">
         @if (pcWin() && pcDev(); as d) { <app-pc-window [dev]="d" [links]="pcLinks(d)" [testers]="traf()?.testers ?? []" (closed)="pcWin.set('')" (console)="pcWin.set(''); console(d)" (capture)="pcCapture(d, $event)" (screen)="pcWin.set(''); screenDev.set(d)" /> }
     <div class="tb">
       <b class="lname">{{ emu() ? tr('Emulated Lab') : tr('Simulated Lab') }}</b>
@@ -103,6 +103,38 @@ export function nextDevName(name: string, used: Set<string>) {
       }
       @if (jobs().length) { <a class="jobs" (click)="dock.set('events'); $event.stopPropagation()" [title]="jobsTip()"><i class="spin"></i><span>{{ jobs()[0] }}</span>@if (jobs().length > 1) { <b>+{{ jobs().length - 1 }}</b> }</a> }
       <span class="sp"></span>
+      @if (emu() && hstats().length) { @let tg = tgtStat();
+        <span class="hsw">
+          <button type="button" class="hchip" (click)="hsOpen.set(!hsOpen()); mgOpen.set(false); $event.stopPropagation()" [title]="tr('New devices go to {0}. Click for every host: CPU, memory, disk and network', tgtName())">
+            <span class="star">★</span><b>{{ tgtName() }}</b>
+            @if (tg) { <span class="mm">@for (k of HSK; track k) { <i [title]="hsTip(tg, k)"><b [class]="lvl(met(tg, k))" [style.height.%]="bar(met(tg, k))"></b></i> }</span> }
+            <span class="muted">· {{ hstats().length === 1 ? tr('1 host') : tr('{0} hosts', hstats().length) }}</span>
+            @if (hot(); as n) { <i class="hot" [title]="tr('{0} above 90 % (CPU, memory, disk or network)', n)"></i> }
+            <span class="muted">▾</span>
+          </button>
+          @if (hsOpen()) {
+            <div class="hsp" (click)="$event.stopPropagation()" role="dialog" [attr.aria-label]="tr('Hosts')">
+              <div class="hsph"><b>{{ tr('Hosts') }}</b><span class="muted">{{ hstats().length }} · {{ tr('{0} switches', hsTotal()) }}</span><span class="sp"></span>
+                <input class="hsq" [ngModel]="hsQ()" (ngModelChange)="hsQ.set($event)" [placeholder]="tr('Filter…')" spellcheck="false" />
+                <button type="button" class="sm" (click)="hsOpen.set(false); wizard()">＋ {{ tr('Add Host') }}</button></div>
+              <div class="hstw"><table class="hst">
+                <tr><th></th>@for (c of HSCOLS; track c.k) { <th [class.s]="hsSort().k === c.k" (click)="sortHs(c.k)">{{ tr(c.t) }}@if (hsSort().k === c.k) { {{ hsSort().desc ? '▾' : '▴' }} }</th> }<th></th></tr>
+                @for (h of hsRows(); track h.host) {
+                  <tr [class.tg]="h.host === tgt()" (click)="setTarget(h.host)" [title]="tr('Click: new devices go to {0}', h.name)">
+                    <td><i class="hd" [style.background]="hcol(h.host)"></i></td>
+                    <td class="hn">@if (h.host === tgt()) { <span class="star">★</span> }<b>{{ h.name }}</b><span class="muted ha">{{ h.addr }}</span></td>
+                    <td class="muted num">{{ h.switches }}</td>
+                    @if (h.err) { <td colspan="4" class="muted">✗ {{ tr('not reachable') }} <span class="xs">{{ h.err }}</span></td> }
+                    @else { @for (k of HSK; track k) { <td [title]="hsTip(h, k)"><span class="hm"><span class="num">{{ pctTxt(met(h, k)) }}</span><span class="hb"><i [class]="lvl(met(h, k))" [style.width.%]="bar(met(h, k))"></i></span>@if (k === 'net') { <span class="muted xs">{{ netTxt(h) }}</span> }</span></td> } }
+                    <td class="hx" (click)="$event.stopPropagation()"><a (click)="openHost(h.host)" [title]="tr('Open it in Hosts')">↗</a><a [class.dis]="h.switches > 0" (click)="h.switches > 0 ? null : removeHost(h.host)" [title]="h.switches > 0 ? tr('{0} switches of this topology run there: move or delete them first', h.switches) : tr('Remove Host…')">−</a></td>
+                  </tr>
+                }
+              </table></div>
+              <div class="hspf"><span>{{ tr('Click a row: new devices go there') }}</span><span class="sp"></span><span class="lg"><i class="lv-g"></i>&lt;70 %<i class="lv-y"></i>70-90<i class="lv-r"></i>&gt;90</span><span>{{ tr('every 6 s') }}</span></div>
+            </div>
+          }
+        </span>
+      }
       @if (emu() && devs().length) {
         <span class="mgw">
           <button type="button" class="mgb" (click)="mgOpen.set(!mgOpen()); $event.stopPropagation()" [title]="tr('The hosts of this topology: their use, and how the switches’ first port (management) is connected')">@if (multi()) { @for (r of mgRows(); track r.host) { <i class="hd" [style.background]="r.c"></i> } }<span class="mgt">{{ mgSummary() }}</span> ▾</button>
@@ -200,6 +232,7 @@ export function nextDevName(name: string, used: Set<string>) {
       @if (page() === 'new') { <app-lab-new [emu]="emu()" [preset]="preset()" (closed)="page.set(''); ghost.set(null)" (changed)="ghost.set($event)" (hostsPage)="page.set('hosts')" (made)="ui.refreshTree()" /> }
       <div class="pal">
         <input class="srch" [(ngModel)]="q" name="pq" [placeholder]="tr('Search devices')" spellcheck="false" />
+        @if (emu() && hstats().length > 1) { <label class="addto" [title]="tr('The host a device you drag onto the canvas is made on')"><span>{{ tr('Add to') }} <span class="star">★</span></span><select [ngModel]="tgt()" (ngModelChange)="setTarget($event)">@for (h of hstats(); track h.host) { <option [value]="h.host" [disabled]="!!h.err">{{ h.name }}{{ h.err ? ' - ' + tr('not reachable') : ' · ' + pctTxt(busy(h)) }}</option> }</select></label> }
         @for (g of groups(); track g.name) {
           <div class="grp"><span>{{ g.name }}</span><span>{{ g.ver }}</span></div>
           @for (p of g.items; track p.key) {
@@ -598,6 +631,20 @@ export function nextDevName(name: string, used: Set<string>) {
             <p class="muted xs">{{ tr('Add Link from a switch port to the cloud: the port goes on the host’s network. One cloud per host, with up to 8 ports.') }}</p>
           </div>
         }
+        @if (emu() && hstats().length) {
+          <h3 class="hsh">{{ tr('Hosts') }} <span class="muted">{{ hstats().length }}</span><span class="sp"></span><a (click)="hsOpen.set(true); $event.stopPropagation()">{{ tr('All') }} ▸</a></h3>
+          <div class="hsb">
+            <div class="hsr hhd"><span></span><span>{{ tr('busiest first') }}</span><span>sw</span>@for (k of HSK; track k) { <span>{{ k === 'mem' ? 'RAM' : k === 'cpu' ? 'CPU' : k === 'disk' ? tr('Disk') : tr('Net') }}</span> }</div>
+            @for (h of hsSide(); track h.host) {
+              <div class="hsr" [class.tg]="h.host === tgt()" (click)="setTarget(h.host)" [title]="tr('Click: new devices go to {0}', h.name)">
+                <i class="hd" [style.background]="hcol(h.host)"></i><span class="hn">@if (h.host === tgt()) { <span class="star">★</span> }{{ h.name }}</span><span class="muted num">{{ h.switches }}</span>
+                @if (h.err) { <span class="muted xs hse">✗ {{ tr('not reachable') }}</span> }
+                @else { @for (k of HSK; track k) { <span class="vb" [title]="hsTip(h, k)"><b [class]="lvl(met(h, k))" [style.height.%]="bar(met(h, k))"></b></span> } }
+              </div>
+            }
+            @if (hstats().length > hsSide().length) { <a class="muted xs hsm" (click)="hsOpen.set(true); $event.stopPropagation()">{{ tr('+ {0} more', hstats().length - hsSide().length) }} · {{ tr('All') }} ▸</a> }
+          </div>
+        }
         <h3>{{ tr('Topology summary') }}</h3>
         <div class="card tbl"><table>
           @for (d of devs(); track d.id) { <tr [class.on]="sel() === d.id" (click)="select(d)"><td><i class="d" [class]="'d ' + stateOf(d)"></i>{{ d.hostname }}</td><td class="mono">{{ emu() ? ':' + d.console : ':' + d.port }}</td><td class="mono">{{ addrOf(d) }}</td></tr> }
@@ -617,7 +664,7 @@ export function nextDevName(name: string, used: Set<string>) {
     </ng-template>
     @switch (page()) {
       @case ('configure') { <app-lab-configure [devId]="cfgId()" [emu]="emu()" (closed)="page.set('')" (images)="imgPick.set($event); page.set('images')" /> }
-      @case ('hosts') { <app-lab-hosts [select]="hostPick()" (closed)="page.set(''); hostPick.set('')" /> }
+      @case ('hosts') { <app-lab-hosts [select]="hostPick()" [removeNow]="hostRm()" (closed)="page.set(''); hostPick.set(''); hostRm.set(false)" /> }
     }
     <div class="dock">
       <div class="grip" (pointerdown)="gripDown($event)" [title]="tr('Drag to make the pane taller or shorter')"></div>
@@ -975,6 +1022,22 @@ export function nextDevName(name: string, used: Set<string>) {
       a.on { border-color: var(--accent); } a.off { opacity: .5; } a.hlh { border: 0; background: none; padding: 2px 4px; color: var(--muted); font-size: 11.5px; } i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; } }
     .mini { position: absolute; right: 312px; bottom: 14px; z-index: 6; padding: 6px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border, var(--line)); box-shadow: 0 6px 18px rgba(0,0,0,.25); cursor: pointer; line-height: 0;
       svg { background: var(--bg); border-radius: 6px; } .vp { fill: color-mix(in srgb, var(--accent) 12%, transparent); stroke: var(--accent); stroke-width: 1.2; } }
+    .hsw { position: relative; } .hchip { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 9px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border, var(--line))); background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 7px; }
+    .star { color: #e3b341; } .mm { display: inline-flex; gap: 2px; align-items: flex-end; height: 16px; } .mm i, .vb { position: relative; display: inline-block; background: color-mix(in srgb, var(--text) 12%, transparent); border-radius: 2px; overflow: hidden; } .mm i { width: 4px; height: 16px; }
+    .mm b, .vb b { position: absolute; left: 0; right: 0; bottom: 0; display: block; } .lv-g { background: #3fb950; } .lv-y { background: #d29922; } .lv-r { background: #f85149; } .lv-u { background: transparent; }
+    .hot { width: 7px; height: 7px; border-radius: 50%; background: #f85149; display: inline-block; }
+    .hsp { position: absolute; right: 0; top: 36px; z-index: 40; width: min(760px, calc(100vw - 40px)); background: var(--surface); border: 1px solid var(--border, var(--line)); border-radius: 10px; box-shadow: 0 18px 40px rgba(0,0,0,.4); }
+    .hsph { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border, var(--line)); } .hsq { width: 170px; }
+    .hstw { max-height: min(460px, 60vh); overflow: auto; } .hst { border-collapse: collapse; width: 100%; font-size: 12px; } .hst th { position: sticky; top: 0; background: var(--surface); font-size: 10.5px; color: var(--muted); font-weight: 600; text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border, var(--line)); cursor: pointer; white-space: nowrap; } .hst th.s { color: var(--text); }
+    .hst td { padding: 0 8px; height: 27px; border-bottom: 1px solid color-mix(in srgb, var(--text) 6%, transparent); white-space: nowrap; } .hst tr:not(:first-child) { cursor: pointer; } .hst tr:not(:first-child):hover td { background: color-mix(in srgb, var(--text) 4%, transparent); } .hst tr.tg td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+    .hm { display: inline-flex; align-items: center; gap: 6px; } .num { font-variant-numeric: tabular-nums; } .hm .num { min-width: 32px; text-align: right; } .hb { width: 46px; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--text) 12%, transparent); overflow: hidden; display: inline-block; } .hb i { display: block; height: 100%; }
+    .hn .ha { margin-left: 6px; } .hd { width: 8px; height: 8px; border-radius: 50%; display: inline-block; } .hx a { padding: 0 5px; color: var(--muted); } .hx a:hover { color: var(--text); } .hx a.dis { opacity: .35; cursor: not-allowed; }
+    .hspf { display: flex; align-items: center; gap: 12px; padding: 7px 12px; font-size: 11.5px; color: var(--muted); } .hspf .lg i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin: 0 3px 0 8px; }
+    .addto { display: flex; align-items: center; gap: 6px; margin: 6px 0 4px; font-size: 12px; } .addto select { flex: 1; min-width: 0; }
+    .hsh { display: flex; align-items: center; gap: 6px; } .hsh a { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--accent); cursor: pointer; }
+    .hsb { margin-bottom: 12px; } .hsr { display: grid; grid-template-columns: 10px minmax(0, 1fr) 30px repeat(4, 24px); gap: 5px; align-items: center; height: 24px; padding: 0 4px; border-radius: 5px; font-size: 11.5px; cursor: pointer; }
+    .hsr.hhd { height: 16px; font-size: 10px; color: var(--muted); cursor: default; } .hsr.hhd span:nth-child(n+3) { text-align: center; } .hsr.tg { background: color-mix(in srgb, var(--accent) 10%, transparent); } .hsr:not(.hhd):hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+    .hsr .hn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .hsr .num { text-align: right; } .vb { width: 20px; height: 14px; margin: 0 auto; } .hse { grid-column: span 4; } .hsm { display: block; padding: 3px 4px; cursor: pointer; }
     .dupdlg { width: min(440px, calc(100vw - 40px)); background: var(--surface); border: 1px solid var(--border, var(--line)); border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,.45); padding: 14px 16px; }
     .dupdlg h3 { margin: 0 0 10px; font-size: 14px; } .dupdlg .f { display: flex; align-items: center; gap: 10px; margin: 8px 0; } .dupdlg .f > span { width: 90px; flex: none; color: var(--muted); }
     .dupdlg .f input { width: 90px; } .dupdlg .f code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .dupdlg .ck { display: flex; gap: 8px; align-items: center; margin: 7px 0; flex-wrap: wrap; }
@@ -2009,7 +2072,7 @@ export class LabWorkspace implements OnDestroy {
   protected hnameFn = (h: string) => this.hname(h);
   protected hcolFn = (h: string) => this.hcol(h);
   addrOfHost(h: string) { const u = this.hostUse().find(x => x.host === h); return (u?.addr || (h === this.st()?.host ? this.st()?.hostInfo?.lanAddr ?? '' : '')).split('/')[0]; }
-  hcol(h: string) { const i = this.hostUse().findIndex(u => u.host === h); return ['#3b8cf6', '#a46cf0', '#1fb5a5', '#e3842a', '#d65db1', '#8fb339'][Math.max(0, i) % 6]; }
+  hcol(h: string) { const u = this.hostUse(); let i = u.findIndex(x => x.host === h); if (i < 0) { const j = this.hstats().filter(x => !u.some(y => y.host === x.host)).findIndex(x => x.host === h); i = j < 0 ? 0 : u.length + j; } return ['#3b8cf6', '#a46cf0', '#1fb5a5', '#e3842a', '#d65db1', '#8fb339', '#e5534b', '#57ab5a', '#c69026', '#6cb6ff'][i % 10]; }
   /** Hosts the switch could move to: the checked hosts without problems. */
   protected moveSel = '';
   useOf(d: LabDevice) { return this.hostUse().find(u => u.host === this.hostOfDev(d)); }
@@ -2398,7 +2461,10 @@ export class LabWorkspace implements OnDestroy {
     // the workflow picture shows once each time an emulated lab opens, unless turned off (Help → Emulated Lab Workflow… shows it any time)
     effect(() => { if (this.visible() && this.emu() && !this.wfAsked) { this.wfAsked = true; if (!labWorkflowHidden()) setTimeout(() => this.ui.open('labWorkflow'), 0); } });
     effect(() => { if (this.visible()) { this.lab.kind.set(this.emu() ? 'emu' : 'sim'); this.lab.watch('ws-' + this.tab().id, true); void this.lab.refresh(); } else this.lab.watch('ws-' + this.tab().id, false); });
-    this.timer = setInterval(() => { if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); if (this.visible() && this.emu() && this.dock() === 'log') void this.loadLog(); if (this.visible() && this.emu() && (this.dock() === 'changes' || ++this.chTick % 10 === 1)) void this.loadChanges(); if (this.visible() && this.emu() && this.dock() === 'cap' && this.capCur()?.running) void this.loadCaps(); if (this.visible() && this.emu() && this.dock() !== 'cap' && ++this.capTick % 5 === 1) void this.backend.emuCaptures().then(c => this.caps.set(c ?? []), () => undefined); if (this.visible() && this.emu() && !this.trafTimer && (this.dock() === 'traffic' || this.page() === 'traffic' || !this.traf() || ++this.trafTick % 5 === 0)) void this.loadTraf(); }, 3000);
+    effect(() => { const k = this.tgtKey(); untracked(() => this.tgtPick.set(this.lsGet(k, ''))); });
+    effect(() => { const t = this.tgt(); untracked(() => this.lab.target.set(this.emu() ? t : '')); });
+    effect(() => { if (this.visible() && this.emu()) untracked(() => void this.loadHs()); });
+    this.timer = setInterval(() => { if (this.visible() && this.emu() && ++this.hsTick % 2 === 0) void this.loadHs(); if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); if (this.visible() && this.emu() && this.dock() === 'log') void this.loadLog(); if (this.visible() && this.emu() && (this.dock() === 'changes' || ++this.chTick % 10 === 1)) void this.loadChanges(); if (this.visible() && this.emu() && this.dock() === 'cap' && this.capCur()?.running) void this.loadCaps(); if (this.visible() && this.emu() && this.dock() !== 'cap' && ++this.capTick % 5 === 1) void this.backend.emuCaptures().then(c => this.caps.set(c ?? []), () => undefined); if (this.visible() && this.emu() && !this.trafTimer && (this.dock() === 'traffic' || this.page() === 'traffic' || !this.traf() || ++this.trafTick % 5 === 0)) void this.loadTraf(); }, 3000);
   }
   @HostListener('document:keydown', ['$event']) onDelKey(e: KeyboardEvent) {
     if (this.visible() && (e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey) && !(e.target as HTMLElement)?.closest?.('.xterm')) { e.preventDefault(); this.palOpen.set(!this.palOpen()); return; }
@@ -2694,7 +2760,7 @@ export class LabWorkspace implements OnDestroy {
       if (!this.devs().length) {
         // a new lab: straight away on the only host (or the lab's), else the New Lab panel with this device
         const good = (e?.hosts ?? []).filter(h => !(h.info.problems ?? []).length && (p.board || h.session !== LOCAL_HOST));
-        const host = local || (good.find(h => h.session === e?.host)?.session ?? (good.length === 1 ? good[0].session : ''));
+        const host = local || (good.find(h => h.session === this.tgt())?.session ?? good.find(h => h.session === e?.host)?.session ?? (good.length === 1 ? good[0].session : ''));
         if (!host) { this.preset.set(p.key); this.page.set('new'); return; }
         const s0 = await this.backend.emuSuggest(p.dt?.model || p.dt?.kind || '').catch(() => null);
         const n0 = (p.dt?.model || p.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-{n}';
@@ -2710,7 +2776,7 @@ export class LabWorkspace implements OnDestroy {
       if (!e?.host) { this.preset.set(p.key); this.page.set('new'); return; }
       const s = await this.backend.emuSuggest(p.dt?.model || p.dt?.kind || '').catch(() => null);
       const names = (p.dt?.model || p.name).toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-{n}';
-      ok = await this.lab.addEmu({ host: local || e.host, groups: [{ image: p.dt!.images[0], model: p.dt!.model, module: p.tpl?.module ?? '', template: p.tpl?.id, diskGb: p.tpl?.diskGb, count: 1, names, serialStart: s?.serial ?? '', macStart: s?.mac ?? '', cpus: p.dt!.cpus, ram: p.dt!.ram }], cabling: 'none', mgmt: '', mgmtNet: '', start: false });
+      ok = await this.lab.addEmu({ host: local || this.tgt() || e.host, groups: [{ image: p.dt!.images[0], model: p.dt!.model, module: p.tpl?.module ?? '', template: p.tpl?.id, diskGb: p.tpl?.diskGb, count: 1, names, serialStart: s?.serial ?? '', macStart: s?.mac ?? '', cpus: p.dt!.cpus, ram: p.dt!.ram }], cabling: 'none', mgmt: '', mgmtNet: '', start: false });
     } else {
       if (!this.lab.sim()?.pack) { this.dialog('list'); return; }
       ok = await this.lab.add({ groups: [{ os: p.os, model: p.name, count: 1, names: '' }], mgmtNet: '', cabling: 'none', password: '', start: false });
@@ -2870,6 +2936,7 @@ export class LabWorkspace implements OnDestroy {
     const grp = inGrp ? this.devs().filter(x => this.ms().has(x.id) && x.id !== d.id).map(x => ({ id: x.id, ...this.pos(x) })) : [];
     const x = this.msX(), ext = inGrp ? { tp: this.tps().filter(t => x.tp.has(t.t.id)).map(t => ({ t: t.t, x: t.x, y: t.y })), cloud: this.clouds().filter(c => x.cloud.has(c.host)).map(c => ({ h: c.host, x: c.x, y: c.y })), hub: this.hubs().filter(h => x.hub.has(h.h.id)).map(h => ({ h: h.h, x: h.x, y: h.y })) } : null;
     this.dragging = { id: d.id, dx: p.x - q.x, dy: p.y - q.y, moved: false, q0: { x: q.x, y: q.y }, grp, ext };
+    try { (ev.currentTarget as HTMLElement)?.setPointerCapture?.(ev.pointerId); } catch { /* not capturable */ } // the drag goes on over the toolbar and the panels, up to the edges
   }
   move(ev: PointerEvent, cv: HTMLElement) {
     const p = this.toCanvas(ev, cv);
@@ -2963,6 +3030,64 @@ export class LabWorkspace implements OnDestroy {
     const msg = (this.emu() ? tr('Remove {0} emulated switches? They stop, their disks on the host and their sessions are deleted.', ds.length) : tr('Remove {0} simulated switches and their sessions? Their configuration is lost.', ds.length)) + '\n\n' + names;
     if (await this.ui.confirm(ds.length === 1 ? tr('Remove {0}?', ds[0].hostname) : tr('Remove {0} switches?', ds.length), msg, tr('Remove'), true) && await this.lab.remove(ds.map(d => d.id), true)) { this.ms.set(new Set()); if (ids.includes(this.sel())) this.sel.set(''); }
   }
+  // ---- Hosts: how busy each is, and where new devices go (★) ----
+  protected hstats = signal<EmuHostStat[]>([]);
+  private hsBusy = false; private hsTick = 0;
+  protected hsOpen = signal(false);
+  protected hsQ = signal('');
+  protected hsSort = signal<{ k: string; desc: boolean }>({ k: 'busy', desc: true });
+  protected hostRm = signal(false);
+  protected readonly HSK = ['cpu', 'mem', 'disk', 'net'] as const;
+  protected readonly HSCOLS = [{ k: 'name', t: 'Host' }, { k: 'switches', t: 'Switches' }, { k: 'cpu', t: 'CPU' }, { k: 'mem', t: 'RAM' }, { k: 'disk', t: 'Disk' }, { k: 'net', t: 'Network' }];
+  private tgtPick = signal('');
+  private tgtKey() { return 'tw.lab.target.' + (this.st()?.topology ?? ''); }
+  /** The host new devices go to: the one chosen for this topology, else the lab's own (it has switches), else the one with most room. */
+  protected tgt = computed(() => {
+    const p = this.tgtPick(), hs = this.hstats();
+    if (p && hs.some(h => h.host === p && !h.err)) return p;
+    const e = this.st();
+    if (e?.host && this.devs().length && hs.some(h => h.host === e.host)) return e.host;
+    return this.bestHost() || e?.host || '';
+  });
+  protected tgtStat = computed(() => this.hstats().find(h => h.host === this.tgt()) ?? null);
+  protected tgtName() { return this.tgtStat()?.name || this.hname(this.tgt()); }
+  setTarget(h: string) { this.tgtPick.set(h); try { localStorage.setItem(this.tgtKey(), h); } catch { /* not kept */ } }
+  met(h: EmuHostStat, k: string) { return (h as unknown as Record<string, number>)[k] ?? -1; }
+  busy(h: EmuHostStat) { return Math.max(h.cpu, h.mem, h.net); }
+  private bestHost() { const ok = this.hstats().filter(h => !h.err && h.cpu >= 0); return ok.length ? ok.reduce((a, b) => (this.busy(b) < this.busy(a) ? b : a)).host : ''; }
+  protected hot = computed(() => this.hstats().filter(h => !h.err && Math.max(h.cpu, h.mem, h.disk, h.net) > 90).length);
+  protected hsTotal = computed(() => this.hstats().reduce((a, h) => a + h.switches, 0));
+  lvl(v: number) { return v < 0 ? 'lv-u' : v < 70 ? 'lv-g' : v < 90 ? 'lv-y' : 'lv-r'; }
+  bar(v: number) { return v < 0 ? 0 : Math.min(100, Math.max(v, 3)); }
+  pctTxt(v: number) { return v < 0 ? '-' : Math.round(v) + '%'; }
+  private bits(b: number) { return b >= 1e9 ? (b / 1e9).toFixed(1) + ' Gb/s' : b >= 1e6 ? Math.round(b / 1e6) + ' Mb/s' : b >= 1e3 ? Math.round(b / 1e3) + ' kb/s' : Math.round(b) + ' b/s'; }
+  netTxt(h: EmuHostStat) { const sp = h.speed ? (h.speed >= 1000 ? h.speed / 1000 + 'G' : h.speed + 'M') : ''; return this.bits(Math.max(h.rx, h.tx)) + (sp ? ' ' + tr('of {0}', sp) : ''); }
+  hsTip(h: EmuHostStat, k: string) {
+    const gbv = (mb: number) => (mb / 1024).toFixed(mb >= 10240 ? 0 : 1) + ' GB';
+    switch (k) {
+      case 'cpu': return tr('CPU {0} of {1} cores', this.pctTxt(h.cpu), h.cores || '?');
+      case 'mem': return tr('Memory {0} - {1} of {2} used', this.pctTxt(h.mem), gbv(h.memUsed), gbv(h.memTotal));
+      case 'disk': return tr('Disk of the lab folder {0} - {1} of {2} used', this.pctTxt(h.disk), gbv(h.diskUsed), gbv(h.diskTotal));
+      default: return tr('{0}: in {1}, out {2}', h.if || tr('network'), this.bits(h.rx), this.bits(h.tx)) + (h.speed ? ' · ' + tr('{0} Mb/s port', h.speed) : ' · ' + tr('speed not known'));
+    }
+  }
+  sortHs(k: string) { const c = this.hsSort(); this.hsSort.set({ k, desc: c.k === k ? !c.desc : k !== 'name' }); }
+  protected hsRows = computed(() => {
+    const q = this.hsQ().trim().toLowerCase(), { k, desc } = this.hsSort();
+    const v = (h: EmuHostStat): number | string => k === 'name' ? h.name.toLowerCase() : k === 'busy' ? (h.err ? -2 : Math.max(h.cpu, h.mem, h.disk, h.net)) : h.err ? -2 : this.met(h, k);
+    return this.hstats().filter(h => !q || (h.name + ' ' + h.addr + ' ' + h.host).toLowerCase().includes(q))
+      .sort((a, b) => { const x = v(a), y = v(b); const c = x < y ? -1 : x > y ? 1 : 0; return desc ? -c : c; });
+  });
+  /** The side panel: the six busiest, the ★ host always among them. */
+  protected hsSide = computed(() => {
+    const all = [...this.hstats()].sort((a, b) => (b.err ? -2 : Math.max(b.cpu, b.mem, b.disk, b.net)) - (a.err ? -2 : Math.max(a.cpu, a.mem, a.disk, a.net)));
+    const top = all.slice(0, 6), t = all.find(h => h.host === this.tgt());
+    if (t && !top.includes(t)) top[top.length - 1] = t;
+    return top;
+  });
+  async loadHs() { if (this.hsBusy) return; this.hsBusy = true; try { this.hstats.set((await this.backend.emuHostStats()) ?? []); } catch { /* an older backend */ } finally { this.hsBusy = false; } }
+  openHost(h: string) { this.hsOpen.set(false); this.hostPick.set(h); this.hostRm.set(false); this.page.set('hosts'); }
+  removeHost(h: string) { this.hsOpen.set(false); this.hostPick.set(h); this.hostRm.set(true); this.page.set('hosts'); }
   // ---- Duplicate (right-click, Ctrl+D, Ctrl+C / Ctrl+V) ----
   protected dupDlg = signal<{ ids: string[]; count: number; cables: boolean; start: boolean } | null>(null);
   private copied: string[] = [];

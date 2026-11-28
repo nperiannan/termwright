@@ -19,6 +19,8 @@ export class LabService {
   readonly goto = signal<{ kind: 'sim' | 'emu'; page: 'overview' | 'traffic' | 'appliances' | 'hosts' } | null>(null);
   readonly state = computed(() => (this.kind() === 'emu' ? this.emu() : this.sim()));
   readonly busy = signal(false);
+  /** The KVM host new devices go to (★ in the lab), set by the lab view. */
+  readonly target = signal('');
   /** The Lab window opens on this tab (and switch), from the workspace. */
   readonly dialogTab = signal<{ tab: string; focus: string; action?: 'pack' } | null>(null);
   /** The Lab window is open (refresh more often). */

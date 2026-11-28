@@ -296,6 +296,8 @@ interface AddRow { path: string; name: string; hostname: string; have: boolean; 
 export class LabHosts implements OnInit, OnDestroy {
   readonly closed = output<void>();
   readonly pick0 = input('', { alias: 'select' });
+  /** Opened from the lab's Remove Host: start removing the selected host. */
+  readonly startRemove = input(false, { alias: 'removeNow' });
   protected lab = inject(LabService);
   private backend = inject(Backend);
   private ui = inject(Ui);
@@ -317,7 +319,7 @@ export class LabHosts implements OnInit, OnDestroy {
   private mTimer?: ReturnType<typeof setTimeout>;
 
   constructor() { effect(() => { if (this.addOpen()) setTimeout(() => this.aqi()?.nativeElement.focus(), 0); }); }
-  ngOnInit() { if (this.pick0()) this.sel.set(this.pick0()); void this.loadRunning(); void this.loadMatrix(); }
+  ngOnInit() { if (this.pick0()) this.sel.set(this.pick0()); void this.loadRunning(); void this.loadMatrix(); if (this.pick0() && this.startRemove()) setTimeout(() => void this.remove(), 0); }
   ngOnDestroy() { clearInterval(this.runTimer); clearTimeout(this.mTimer); }
 
   // the list
