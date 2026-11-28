@@ -2998,7 +2998,7 @@ func (a *App) emuStart(host string, ids []string) {
 			switch {
 			case err == nil && strings.HasPrefix(lastLine(out), "ok "):
 				if vv := l.VMByID(w.v.ID); vv != nil && vv.Persona != nil {
-					vv.Persona.Applied = w.hash
+					vv.Persona.Applied, vv.Persona.Fail = w.hash, ""
 				}
 				emuLab.pinfo[w.v.ID] = "written to " + strings.TrimPrefix(lastLine(out), "ok ")
 				emuEv(w.v.ID, "ok", "persona "+emuLab.pinfo[w.v.ID]+", read back")
@@ -3010,6 +3010,9 @@ func (a *App) emuStart(host string, ids []string) {
 				emuEv(w.v.ID, "info", "persona: "+strings.TrimPrefix(lastLine(out), "fail ")+" - it boots once, then the file is written")
 			default:
 				emuLab.perr[w.v.ID] = strings.TrimSpace(strings.TrimPrefix(lastLine(out+errText(err)), "fail "))
+				if vv := l.VMByID(w.v.ID); vv != nil && vv.Persona != nil { // kept: a restart of Termwright must not make it look written
+					vv.Persona.Fail = "persona not written: " + emuLab.perr[w.v.ID]
+				}
 				emuEv(w.v.ID, "error", "persona not written: "+emuLab.perr[w.v.ID])
 			}
 			emuLab.mu.Unlock()
@@ -4437,6 +4440,9 @@ func (a *App) emuView() EmuView {
 			for _, n := range vm.Uplinks {
 				d.Uplinks = append(d.Uplinks, im.PortNameOf(n))
 			}
+		}
+		if im != nil && im.Persona != nil && vm.Persona != nil && d.PersonaError == "" && strings.HasPrefix(vm.Persona.Fail, "persona not written") {
+			d.PersonaError = vm.Persona.Fail // a write that failed before Termwright was restarted
 		}
 		if im != nil && im.Persona != nil && vm.Persona != nil {
 			if txt, err := im.Persona.Render(vm, vm.Persona); err == nil && emu.Hash(txt) == vm.Persona.Applied {
