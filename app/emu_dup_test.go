@@ -96,3 +96,25 @@ func TestEmuDuplicate(t *testing.T) {
 		t.Fatalf("pod cable %+v", k)
 	}
 }
+
+func TestEmuPersonaSeen(t *testing.T) {
+	dir := t.TempDir()
+	cfg, _ := config.Load(dir)
+	a := &App{cfg: cfg}
+	emuLab.loaded, emuLab.f = false, emuFile{}
+	defer func() { emuLab.loaded, emuLab.f = false, emuFile{} }()
+	emuLab.mu.Lock()
+	defer emuLab.mu.Unlock()
+	a.emuLoad()
+	emuLab.f.Lab = &emu.Lab{ID: "a1", VMs: []emu.VM{{ID: "v1", Name: "5520-24t-2", Persona: &emu.Persona{Applied: "w3-x", Fail: "the switch did not take the persona", Slots: []emu.Slot{{Num: 1, Model: "5520-24T"}}}}}}
+	emuLab.perr["v1"] = "the switch did not take the persona"
+	emuPersonaSeen(a, "v1", "System Type:      EXOS-VM")
+	if emuLab.perr["v1"] == "" {
+		t.Fatal("cleared on output without the model")
+	}
+	emuPersonaSeen(a, "v1", "System Type:      5520-24T")
+	p := emuLab.f.Lab.VMs[0].Persona
+	if emuLab.perr["v1"] != "" || p.Fail != "" || p.Took != "w3-x" {
+		t.Fatalf("not cleared: %q %+v", emuLab.perr["v1"], p)
+	}
+}

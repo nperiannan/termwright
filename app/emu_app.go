@@ -3775,7 +3775,7 @@ func (a *App) emuReadFacts(ctx context.Context, c *emu.Console, im *emu.Image, v
 	if len(im.Facts) == 0 {
 		return
 	}
-	fw, sn := "", ""
+	fw, sn, all := "", "", ""
 	for _, f := range im.Facts {
 		var out string
 		for _, cmd := range strings.Split(f.Cmd, "\n") {
@@ -3806,17 +3806,36 @@ func (a *App) emuReadFacts(ctx context.Context, c *emu.Console, im *emu.Image, v
 			return ""
 		}
 		fw, sn = orStr(fw, grab(f.Version)), orStr(sn, grab(f.Serial))
-	}
-	if fw == "" && sn == "" {
-		return
+		all += out + "\n"
 	}
 	emuLab.mu.Lock()
 	defer emuLab.mu.Unlock()
+	emuPersonaSeen(a, v.ID, all)
+	if fw == "" && sn == "" {
+		return
+	}
 	if cur := emuLab.f.Lab.VMByID(v.ID); cur != nil && (cur.FW != fw || cur.HWSerial != sn) {
 		cur.FW, cur.HWSerial = orStr(fw, cur.FW), orStr(sn, cur.HWSerial)
 		_ = a.emuSave()
 		emuEv(v.ID, "info", fmt.Sprintf("it reports software %s, serial number %s", orStr(cur.FW, "?"), orStr(cur.HWSerial, "?")))
 	}
+}
+
+// emuPersonaSeen: the switch's own output (its facts) shows the persona's model, so it took the persona -
+// a "did not take the persona" from a check that was answered too early goes away (mu held).
+func emuPersonaSeen(a *App, id, out string) {
+	cur := emuLab.f.Lab.VMByID(id)
+	if cur == nil || cur.Persona == nil || cur.Persona.Applied == "" || len(cur.Persona.Slots) == 0 || cur.Persona.Slots[0].Model == "" {
+		return
+	}
+	if !strings.Contains(strings.ToLower(out), strings.ToLower(cur.Persona.Slots[0].Model)) || (emuLab.perr[id] == "" && cur.Persona.Took == cur.Persona.Applied) {
+		return
+	}
+	delete(emuLab.perr, id)
+	cur.Persona.Took, cur.Persona.Fail = cur.Persona.Applied, ""
+	emuLab.pinfo[id] = "checked: the switch shows " + cur.Persona.Slots[0].Model
+	_ = a.emuSave()
+	emuEv(id, "ok", "persona "+emuLab.pinfo[id])
 }
 
 // emuHostOfID0 is a VM's host for the log (no lock needed: the name only).
@@ -3838,13 +3857,27 @@ func (a *App) emuCheckPersona(ctx context.Context, c *emu.Console, im *emu.Image
 	emuLab.mu.Unlock()
 	var out string
 	var err error
-	for _, cmd := range strings.Split(im.Persona.Check, "\n") { // "enable\nshow inventory"
-		if cmd = strings.TrimSpace(cmd); cmd != "" && err == nil {
-			var o string
-			o, err = emu.Ask(ctx, c, im, cmd)
-			out += o
+	// a busy host (many switches booting at once) can answer before the CLI shows everything: up to 3 tries
+	for try := 0; try < 3; try++ {
+		if try > 0 {
+			select {
+			case <-ctx.Done():
+			case <-time.After(15 * time.Second):
+			}
+		}
+		out, err = "", nil
+		for _, cmd := range strings.Split(im.Persona.Check, "\n") { // "enable\nshow inventory"
+			if cmd = strings.TrimSpace(cmd); cmd != "" && err == nil {
+				var o string
+				o, err = emu.Ask(ctx, c, im, cmd)
+				out += o
+			}
+		}
+		if err != nil || strings.Contains(strings.ToLower(emu.CleanConsole(out)), strings.ToLower(model)) || ctx.Err() != nil {
+			break
 		}
 	}
+	out = emu.CleanConsole(out) + "\n" + out
 	// not that model: is the file where the switch looks for it?
 	where := ""
 	if err == nil && !strings.Contains(strings.ToLower(out), strings.ToLower(model)) {
@@ -5894,6 +5927,61 @@ func (a *App) EmuReadLags(ids []string) (EmuView, error) {
 			emuLab.mu.Unlock()
 			continue
 		}
+	}
+	return a.EmuState()
+}
+
+// EmuCheckPersonaNow asks running switches on their console which model they are (the image's persona check)
+// and keeps the answer: a persona error from an earlier check that was answered too early goes away.
+func (a *App) EmuCheckPersonaNow(ids []string) (EmuView, error) {
+	host, ids := a.emuIDs(ids)
+	if host == "" {
+		return EmuView{}, errors.New("there is no emulated lab")
+	}
+	st := a.emuPollFresh()
+	for _, id := range ids {
+		if _, up := st.Up[id]; !up {
+			continue
+		}
+		emuLab.mu.Lock()
+		v := emuLab.f.Lab.VMByID(id)
+		var vv emu.VM
+		var im *emu.Image
+		if v != nil {
+			vv, im = *v, emuImage(v.Image)
+		}
+		emuLab.mu.Unlock()
+		if im == nil || im.Persona == nil || im.Persona.Check == "" || vv.Persona == nil || len(vv.Persona.Slots) == 0 {
+			continue
+		}
+		var cmds []string
+		for _, c := range strings.Split(im.Persona.Check, "\n") {
+			if c = strings.TrimSpace(c); c != "" {
+				cmds = append(cmds, c)
+			}
+		}
+		out, err := a.emuOnConsole(a.emuHostOfID(id), vv, *im, false, cmds...)
+		emuLab.mu.Lock()
+		switch model := vv.Persona.Slots[0].Model; {
+		case err != nil:
+			emuEv(id, "warn", "persona not checked: "+err.Error())
+		case strings.Contains(strings.ToLower(out), strings.ToLower(model)):
+			if c := emuLab.f.Lab.VMByID(id); c != nil && c.Persona != nil {
+				if c.Persona.Applied == "" { // written by the persona file of an earlier Termwright: it shows, so it counts
+					if txt, rerr := im.Persona.Render(*c, c.Persona); rerr == nil {
+						c.Persona.Applied = emu.Hash(txt)
+					}
+				}
+				c.Persona.Took, c.Persona.Fail = c.Persona.Applied, ""
+			}
+			delete(emuLab.perr, id)
+			emuLab.pinfo[id] = "checked: the switch shows " + model
+			_ = a.emuSave()
+			emuEv(id, "ok", "persona "+emuLab.pinfo[id])
+		default:
+			emuEv(id, "warn", "the switch does not show "+model+" on "+strings.ReplaceAll(im.Persona.Check, "\n", " + "))
+		}
+		emuLab.mu.Unlock()
 	}
 	return a.EmuState()
 }

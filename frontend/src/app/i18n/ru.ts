@@ -5682,6 +5682,11 @@ const ru: Record<string, string> = {
   'speed not known': 'скорость неизвестна',
   'Also cable them to switches already in the lab': 'Также соединить их с коммутаторами, уже имеющимися в лаборатории',
   '(else the shape joins only the new switches; a cable to another host is made only when you choose it)': '(иначе схема соединяет только новые коммутаторы; кабель на другой хост создаётся, только если вы это выберете)',
+  'Asks the switch on its console which model it is (one or the selected switches); a persona error that was wrong goes away': 'Спрашивает у коммутатора в консоли, какая это модель (один или выбранные коммутаторы); ошибочная ошибка персоны исчезает',
+  'Check {0} Personas Again': 'Проверить персоны ещё раз ({0})',
+  'Check Persona Again': 'Проверить персону ещё раз',
+  'Persona checked - see the Events': 'Персона проверена - см. события',
+  'Personas checked - see the Events': 'Персоны проверены - см. события',
 };
 
 export default ru;

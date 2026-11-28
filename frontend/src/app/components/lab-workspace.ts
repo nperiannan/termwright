@@ -373,6 +373,7 @@ export function nextDevName(name: string, used: Set<string>) {
               <a (click)="mdo('link', d)">{{ tr('Add Link from Here') }}</a>
               @if (emu()) { <a (click)="uplink(d)" [title]="tr('Like a cloud node on a data port: the port joins the host’s network (applies when the switch starts)')">{{ tr('Port on the Host’s Network…') }}</a>
                 @for (u of d.uplinks ?? []; track u) { <a (click)="setUplink(d, u, false)">{{ tr('Take {0} off the Host’s Network', u) }}</a> } }
+              @if (emu() && d.persona?.slots?.length) { <a (click)="menu.set(null); void lab.checkPersona(dupIds(d))" [class.off]="!d.running" [title]="tr('Asks the switch on its console which model it is (one or the selected switches); a persona error that was wrong goes away')">✓ {{ dupIds(d).length > 1 ? tr('Check {0} Personas Again', dupIds(d).length) : tr('Check Persona Again') }}</a> }
               @if (emu()) { <a (click)="mdo('reset', d)">{{ tr('Back to Day 0') }}</a> }
               @if (emu()) { <a (click)="menu.set(null); newTester(d)">⇄ {{ tr('Add Test Port…') }}</a> }
               @if (emu()) { @if (mgmtCap(d); as c) { <a (click)="menu.set(null); stopCap(c.key)">◼ {{ tr('Stop the Management Capture') }}</a><a (click)="menu.set(null); dock.set('cap'); capSel.set(c.key); capStarted.set(c.started); loadCaps()">{{ tr('Show the Management Packets') }}</a> }

@@ -139,6 +139,8 @@ export class LabService {
   setDNS(servers: string[]) { return this.run(() => this.backend.emuSetDNS(servers), 'Name servers set - devices get them when they start'); }
   setMgmt(mgmt: string, mgmtNet = '') { return this.run(() => this.backend.emuSetMgmt(mgmt, mgmtNet), 'Management changed - it applies when the switches start'); }
   reset(ids: string[]) { return this.run(() => this.backend.emuReset(ids), 'Back to day 0: the switches boot as new'); }
+  /** Asks running switches which model they are, and keeps it (clears a persona error that was wrong). */
+  checkPersona(ids: string[]) { return this.run(() => this.backend.emuCheckPersonaNow(ids), ids.length === 1 ? 'Persona checked - see the Events' : 'Personas checked - see the Events'); }
   /** Copies emulated switches (the next names, serials and MACs); true when done. */
   duplicate(ids: string[], count = 1, cables = false, start = false) { return this.run(() => this.backend.emuDuplicate({ ids, count, cables, start })); }
   async remove(ids: string[], sessions: boolean) {

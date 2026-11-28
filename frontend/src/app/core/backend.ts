@@ -223,6 +223,7 @@ export class Backend {
   emuDeleteTopology(name: string) { return this.call<void>('EmuDeleteTopology', name); }
   emuRestart(ids: string[]) { return this.call<LabView>('EmuRestart', ids); }
   emuReset(ids: string[]) { return this.call<LabView>('EmuReset', ids); }
+  emuCheckPersonaNow(ids: string[]) { return this.call<LabView>('EmuCheckPersonaNow', ids); }
   emuHostStats() { return this.call<EmuHostStat[]>('EmuHostStats'); }
   emuDuplicate(r: EmuDupRequest) { return this.call<LabView>('EmuDuplicate', r); }
   emuRemove(ids: string[], sessions: boolean) { return this.call<LabView>('EmuRemove', ids, sessions); }
