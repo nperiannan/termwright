@@ -72,6 +72,10 @@ esac
 command -v qemu-system-x86_64 >/dev/null 2>&1 || { echo "@@fail qemu-system-x86_64 is still missing"; exit 1; }
 # libguestfs (persona files) reads the host's kernel, which Ubuntu keeps readable by root only
 chmod 0644 /boot/vmlinuz-* 2>/dev/null || true
+# ... and the kernels that updates install later (they come readable by root only)
+if [ -d /etc/kernel/postinst.d ] && [ ! -f /etc/kernel/postinst.d/zz-termwright-vmlinuz ]; then
+ printf '#!/bin/sh\n# Termwright: libguestfs (persona files of emulated switches) reads the kernel\nchmod 0644 /boot/vmlinuz-* 2>/dev/null || true\nexit 0\n' > /etc/kernel/postinst.d/zz-termwright-vmlinuz && chmod 0755 /etc/kernel/postinst.d/zz-termwright-vmlinuz && { grep -qx kernelhook $rec || echo kernelhook >> $rec; } && echo "@@note new kernels stay readable for libguestfs (/etc/kernel/postinst.d/zz-termwright-vmlinuz)"
+fi
 echo "@@step nat"
 # libvirt's default network: a NAT bridge (virbr0) with DHCP for the switches' management ports
 if ! ip link show virbr0 >/dev/null 2>&1; then
@@ -133,6 +137,7 @@ func UndoScript(sudo, group, pkgs bool) string {
 	return strings.TrimSpace(`
 rec=/var/lib/termwright/setup; [ -f $rec ] || touch $rec
 SUDO=` + b(sudo) + `; GROUP=` + b(group) + `; PKGS=` + b(pkgs) + `
+if grep -qx kernelhook $rec 2>/dev/null; then rm -f /etc/kernel/postinst.d/zz-termwright-vmlinuz && sed -i '/^kernelhook$/d' $rec; fi
 if [ -n "$SUDO" ] && [ -f /etc/sudoers.d/termwright ]; then rm -f /etc/sudoers.d/termwright && sed -i '/^sudo$/d' $rec && echo "@@note the sudo rule is removed"; fi
 if [ -n "$GROUP" ] && [ -n "$TWUSER" ] && grep -qx "group $TWUSER" $rec; then gpasswd -d "$TWUSER" kvm >/dev/null 2>&1 && sed -i "/^group $TWUSER\$/d" $rec && echo "@@note $TWUSER is out of the kvm group"; fi
 if [ -n "$PKGS" ]; then

@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, OnDestroy, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, Signal, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { ChartSeries } from './traffic-chart';
@@ -12,7 +12,7 @@ import { RadiusDialog } from './radius-dialog';
 import { VmScreen } from './vm-screen';
 import { LabOverview, OverviewAct } from './lab-overview';
 import { CmdPalette, PaletteCmd } from './cmd-palette';
-import type { EmuHostStat, LabHub, LabNote } from '../core/models';
+import type { EmuHostStat, LabEvent, LabHub, LabNote } from '../core/models';
 import { LabService } from '../core/lab.service';
 import { Backend, errText } from '../core/backend';
 import { LOCAL_HOST, EmuHostNIC, EmuServer, LabHubDetail, EmuBoard, EmuClientState, EmuSTPState, EmuVRRPState, EmuBFDState, EmuEncap, EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel, EmuChange } from '../core/models';
@@ -509,8 +509,8 @@ export function nextDevName(name: string, used: Set<string>) {
             <div class="btns act">@if (emu()) { <button type="button" class="sm" (click)="lab.restart([d.id])" [disabled]="!d.running || lab.busy()">{{ tr('Restart') }}</button> }@else { <button type="button" class="primary sm" (click)="ssh(d)" [disabled]="!d.running">{{ tr('Open Session') }}</button> }
               <button type="button" class="sm" (click)="configure(d)">{{ tr('Configure…') }}</button>@if (emu() && d.computer) { <button type="button" class="sm" (click)="pcWin.set(d.id)">{{ tr('Open Desktop') }}</button> }</div>
             @if (d.restart) { <div class="rsbox"><span>↻ <b>{{ tr('Restart needed') }}</b> {{ tr('It runs with its old settings until it restarts: {0}', d.restart) }}</span></div> }
-            @if (d.error || d.personaError) { <div class="kv alert">@if (d.error) { <span>{{ tr('Problem') }}</span><span class="r"><span class="clamp" [title]="d.error + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.error) }}</span><a class="evl" (click)="dock.set('events')">{{ tr('Details in Events') }} ›</a>@if (d.running && d.error.startsWith('Day-0')) { <a class="evl" (click)="lab.day0Again(d.id)" [title]="tr('Its disk and configuration stay')">{{ tr('Type Day 0 Again') }}</a> }</span> }
-              @if (d.personaError) { <span>{{ tr('Persona') }}</span><span class="r"><span class="clamp" [title]="d.personaError + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.personaError) }}</span><a class="evl" (click)="dock.set('events')">{{ tr('Details in Events') }} ›</a></span> }</div> }
+            @if (d.error || d.personaError) { <div class="kv alert">@if (d.error) { <span>{{ tr('Problem') }}</span><span class="r"><span class="clamp" [title]="d.error + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.error) }}</span><a class="evl" (click)="dock.set('events'); evView.q.set(d.hostname)">{{ tr('Details in Events') }} ›</a>@if (d.running && d.error.startsWith('Day-0')) { <a class="evl" (click)="lab.day0Again(d.id)" [title]="tr('Its disk and configuration stay')">{{ tr('Type Day 0 Again') }}</a> }</span> }
+              @if (d.personaError) { <span>{{ tr('Persona') }}</span><span class="r"><span class="clamp" [title]="d.personaError + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.personaError) }}</span><a class="evl" (click)="dock.set('events'); evView.q.set(d.hostname)">{{ tr('Details in Events') }} ›</a></span> }</div> }
             @if (emu() && d.board; as bk) { @let bd = boardOf(bk);
               <div class="kv mcu">
                 <span>{{ tr('Board') }}</span><span>{{ bd?.name ?? bk }}@if (bd?.cpu) { <small class="muted"> · {{ bd!.cpu }}</small> }</span>
@@ -2465,6 +2465,8 @@ export class LabWorkspace implements OnDestroy {
     effect(() => { const k = this.tgtKey(); untracked(() => this.tgtPick.set(this.lsGet(k, ''))); });
     effect(() => { const t = this.tgt(); untracked(() => this.lab.target.set(this.emu() ? t : '')); });
     effect(() => { if (this.visible() && this.emu()) untracked(() => void this.loadHs()); });
+    effect(() => { const q = this.evView.q(); untracked(() => this.findEvents(q)); });
+    effect(() => { this.st()?.events?.length; untracked(() => { if (this.evFindQ && this.dock() === 'events') this.findEvents(this.evFindQ); }); }); // new events while searching
     this.timer = setInterval(() => { if (this.visible() && this.emu() && ++this.hsTick % 2 === 0) void this.loadHs(); if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); if (this.visible() && this.emu() && this.dock() === 'log') void this.loadLog(); if (this.visible() && this.emu() && (this.dock() === 'changes' || ++this.chTick % 10 === 1)) void this.loadChanges(); if (this.visible() && this.emu() && this.dock() === 'cap' && this.capCur()?.running) void this.loadCaps(); if (this.visible() && this.emu() && this.dock() !== 'cap' && ++this.capTick % 5 === 1) void this.backend.emuCaptures().then(c => this.caps.set(c ?? []), () => undefined); if (this.visible() && this.emu() && !this.trafTimer && (this.dock() === 'traffic' || this.page() === 'traffic' || !this.traf() || ++this.trafTick % 5 === 0)) void this.loadTraf(); }, 3000);
   }
   @HostListener('document:keydown', ['$event']) onDelKey(e: KeyboardEvent) {
@@ -2526,7 +2528,16 @@ export class LabWorkspace implements OnDestroy {
     { key: 'order', label: 'Order', get: x => { const r = this.resOf(x.id); return r?.tx ? (r.ooo ?? 0) + (r.dup ?? 0) : null; }, kind: 'num' },
     { key: 'result', label: 'Result', get: x => { const r = this.resOf(x.id); return r?.running ? tr('running') : r?.result === 'pass' ? 'PASS' : r?.result === 'fail' ? 'FAIL' : ''; } },
   ]);
-  protected events = computed(() => [...(this.st()?.events ?? [])].reverse());
+  /** A search goes through the whole kept Events log (the view itself carries only the newest 200). */
+  private evFound = signal<LabEvent[] | null>(null);
+  private evFindT?: ReturnType<typeof setTimeout>;
+  private evFindQ = '';
+  protected events: Signal<LabEvent[]> = computed<LabEvent[]>(() => [...(this.evView?.q().trim() && this.evFound() ? this.evFound()! : this.st()?.events ?? [])].reverse());
+  private findEvents(q: string) {
+    clearTimeout(this.evFindT);
+    if (!q.trim() || !this.emu()) { this.evFindQ = ''; this.evFound.set(null); return; }
+    this.evFindT = setTimeout(async () => { this.evFindQ = q; try { const r = await this.backend.emuEventsFind(q); if (this.evFindQ === q) this.evFound.set(r ?? []); } catch { this.evFound.set(null); } }, 300);
+  }
   /** The emulator's log, line by line (time, level, host, switch, message; continued lines joined). */
   protected logRows = computed(() => {
     const out: { time: string; at: string; level: string; lvl: string; host: string; sw: string; text: string }[] = [];

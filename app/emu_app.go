@@ -351,8 +351,8 @@ func emuEvOn(host, id, level, text string) {
 	e := EmuEvent{At: time.Now(), VM: id, Name: name, Level: level, Text: text, Host: host, By: emuWho()}
 	emuLogf(emuLevel(level), host, name, "%s", text)
 	emuLab.events = append(emuLab.events, e)
-	if n := len(emuLab.events); n > 400 {
-		emuLab.events = append([]EmuEvent(nil), emuLab.events[n-300:]...)
+	if n := len(emuLab.events); n > 3000 { // the view shows the newest 200; a search reaches all of these (and the file)
+		emuLab.events = append([]EmuEvent(nil), emuLab.events[n-2500:]...)
 	}
 	emuEvKeep(e)
 }
@@ -391,19 +391,52 @@ func emuEventsLoad(path string) []EmuEvent {
 			out = append(out, e)
 		}
 	}
-	if len(out) > 300 {
-		out = out[len(out)-300:]
-	}
-	if len(lines) > 1000 {
+	if len(lines) > 20000 { // the newest 10000 stay on disk
 		var w strings.Builder
-		for _, e := range out {
+		for _, e := range out[max(0, len(out)-10000):] {
 			if j, err := json.Marshal(e); err == nil {
 				w.Write(append(j, '\n'))
 			}
 		}
 		_ = os.WriteFile(path, []byte(w.String()), 0o600)
 	}
+	if len(out) > 2500 {
+		out = out[len(out)-2500:]
+	}
 	return out
+}
+
+// EmuEventsFind searches the whole kept Events log (not only the newest lines the view shows): the
+// events whose switch, host or message has every word of q, newest last (at most 1000).
+func (a *App) EmuEventsFind(q string) []EmuEvent {
+	words := strings.Fields(strings.ToLower(q))
+	emuLab.mu.Lock()
+	all := emuLab.events
+	file := emuEventsFile
+	emuLab.mu.Unlock()
+	if file != "" {
+		if b, err := os.ReadFile(file); err == nil {
+			all = nil
+			for _, ln := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+				var e EmuEvent
+				if json.Unmarshal([]byte(ln), &e) == nil && !e.At.IsZero() {
+					all = append(all, e)
+				}
+			}
+		}
+	}
+	var out []EmuEvent
+	for _, e := range all {
+		hay := strings.ToLower(e.Name + " " + e.Host + " " + e.Level + " " + e.Text)
+		ok := true
+		for _, w := range words {
+			ok = ok && strings.Contains(hay, w)
+		}
+		if ok {
+			out = append(out, e)
+		}
+	}
+	return out[max(0, len(out)-1000):]
 }
 
 // emuBootAnswer types a boot menu's answer on a switch's console (its boot stopped there).

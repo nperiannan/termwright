@@ -183,8 +183,9 @@ func (l *Lab) WriteFileScript(v VM, file, content string, has ...string) string 
 	tmp := l.VMDir() + "/" + v.ID + ".persona"
 	return fmt.Sprintf(`command -v guestfish >/dev/null 2>&1 || { echo "fail libguestfs-tools (guestfish) is not installed on the host: use Set Up QEMU/KVM"; exit 0; }
 export LIBGUESTFS_BACKEND=direct
+for k in /boot/vmlinuz-*; do [ -e "$k" ] && [ ! -r "$k" ] && { sudo -n chmod 0644 /boot/vmlinuz-* 2>/dev/null; break; }; done # a kernel update: readable again where sudo allows it
 d=%[1]s; t=%[2]s; dir=%[3]s
-hint() { case "$1" in *vmlinuz*|*"Permission denied"*|*supermin*) echo "fail libguestfs cannot start (it needs to read the host's kernel): run Set Up QEMU/KVM, which makes /boot/vmlinuz readable";; *) echo "fail $2$(echo $1 | tr '\n' ' ' | cut -c1-300)";; esac; rm -f "$t" "$t.gf"; exit 0; }
+hint() { case "$1" in *vmlinuz*|*"Permission denied"*|*supermin*) echo "fail libguestfs cannot start: it needs to read the host's kernel, and $(for k in /boot/vmlinuz-*; do [ -r "$k" ] || printf '%%s ' "$k"; done)can be read by root only (a kernel update puts it there) - run Set Up QEMU/KVM on the host (Hosts), which makes it readable and keeps the next kernels readable, then Configure → Persona → Apply";; *) echo "fail $2$(echo $1 | tr '\n' ' ' | cut -c1-300)";; esac; rm -f "$t" "$t.gf"; exit 0; }
 cat > "$t" <<'TW_PERSONA_END'
 %[4]sTW_PERSONA_END
 fsl=$(guestfish --ro -a "$d" run : list-filesystems 2>&1) || hint "$fsl" "libguestfs: "

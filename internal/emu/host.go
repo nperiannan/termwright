@@ -36,6 +36,7 @@ type HostInfo struct {
 	LanIf    string   `json:"lanIf"`    // where switches join the host's network: a bridge, or the uplink (macvtap)
 	LanKind  string   `json:"lanKind"`  // "bridge" or "macvtap" ("" = not possible)
 	Guestfs  bool     `json:"guestfs"`  // libguestfs is there (persona files)
+	KernelRO string   `json:"kernelRo,omitempty"` // a kernel in /boot only root can read (a kernel update): libguestfs cannot start
 	Virt     string   `json:"virt"`     // the host is itself a VM: vmware, kvm, microsoft… ("none" = hardware)
 	Nat      string   `json:"nat"`      // the host's address on libvirt's NAT network virbr0 (192.168.122.1/24), "" = none
 	Libvirt  bool     `json:"libvirt"`  // virsh is there
@@ -58,6 +59,7 @@ mkdir -p ` + Q(dir) + ` 2>/dev/null && echo "diskfree=$(df -Pk ` + Q(dir) + ` | 
 sudo -n true 2>/dev/null && echo sudoall=yes
 command -v base64 >/dev/null 2>&1 || echo nobase64=yes
 command -v guestfish >/dev/null 2>&1 && echo guestfs=yes
+for k in /boot/vmlinuz-*; do [ -e "$k" ] && [ ! -r "$k" ] && echo "kernelro=$k"; done
 command -v virsh >/dev/null 2>&1 && echo libvirt=yes
 echo "nat=$(ip -4 -o addr show dev virbr0 2>/dev/null | awk '{print $4}' | head -1)"
 echo "virt=$(systemd-detect-virt 2>/dev/null || echo unknown)"
@@ -112,6 +114,8 @@ func ParseProbe(out, dir string) HostInfo {
 			h.Virt = v
 		case "guestfs":
 			h.Guestfs = true
+		case "kernelro":
+			h.KernelRO = v
 		case "libvirt":
 			h.Libvirt = true
 		case "nat":
@@ -186,7 +190,10 @@ func ParseProbe(out, dir string) HostInfo {
 	if !h.Guestfs && h.QEMU != "" {
 		h.Notes = append(h.Notes, "libguestfs-tools is not installed: persona files (a device model and serial number for the image) cannot be written. Set Up installs it.")
 	}
-	needs := !h.Guestfs || h.Nat == "" || h.QEMU == "" || !h.QemuImg || h.KVM == "noaccess" || h.KVM == "none" && h.VT || !h.Sudo
+	if h.Guestfs && h.KernelRO != "" {
+		h.Notes = append(h.Notes, h.KernelRO+" can be read by root only (a kernel update put it there): persona files cannot be written, so new switches start as the plain image. Set Up makes it readable, and keeps the next kernels readable too.")
+	}
+	needs := !h.Guestfs || h.KernelRO != "" || h.Nat == "" || h.QEMU == "" || !h.QemuImg || h.KVM == "noaccess" || h.KVM == "none" && h.VT || !h.Sudo
 	if needs && h.Arch == "x86_64" || needs && h.Arch == "" {
 		h.CanSetup = h.Pkg != "" || h.QEMU != ""
 		h.Plan = SetupPlan(h)

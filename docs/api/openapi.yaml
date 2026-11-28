@@ -5595,6 +5595,9 @@ components:
                 guestfs:
                     description: libguestfs is there (persona files)
                     type: boolean
+                kernelRo:
+                    description: 'a kernel in /boot only root can read (a kernel update): libguestfs cannot start'
+                    type: string
                 virt:
                     description: 'the host is itself a VM: vmware, kvm, microsoft… ("none" = hardware)'
                     type: string
