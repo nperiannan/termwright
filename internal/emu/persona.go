@@ -184,15 +184,22 @@ func (l *Lab) WriteFileScript(v VM, file, content string, has ...string) string 
 	return fmt.Sprintf(`command -v guestfish >/dev/null 2>&1 || { echo "fail libguestfs-tools (guestfish) is not installed on the host: use Set Up QEMU/KVM"; exit 0; }
 export LIBGUESTFS_BACKEND=direct
 for k in /boot/vmlinuz-*; do [ -e "$k" ] && [ ! -r "$k" ] && { sudo -n chmod 0644 /boot/vmlinuz-* 2>/dev/null; break; }; done # a kernel update: readable again where sudo allows it
-kv=$(uname -r); if [ ! -r "/boot/vmlinuz-$kv" ]; then # still root only: the same kernel from the distribution's package, in the lab folder (no root needed)
- kd="$HOME/%[8]s/kernel"; kf="$kd/vmlinuz-$kv"
- if [ ! -s "$kf" ] && command -v apt-get >/dev/null 2>&1 && command -v dpkg-deb >/dev/null 2>&1; then
-  kt=$(mktemp -d) && ( cd "$kt" && { apt-get download "linux-image-unsigned-$kv" >/dev/null 2>&1 || apt-get download "linux-image-$kv" >/dev/null 2>&1; } && for p in ./*.deb; do dpkg-deb -x "$p" x; done && mkdir -p "$kd" && cp "x/boot/vmlinuz-$kv" "$kf" && chmod 0644 "$kf" ) >/dev/null 2>&1; rm -rf "$kt"
+kv=$(uname -r); kst="not needed"; if [ ! -r "/boot/vmlinuz-$kv" ]; then # still root only: the same kernel from the distribution's package, in the lab folder (no root needed)
+ kd="$HOME/%[8]s/kernel"; kf="$kd/vmlinuz-$kv"; mkdir -p "$kd"
+ if [ ! -s "$kf" ]; then
+  if command -v apt-get >/dev/null 2>&1 && command -v dpkg-deb >/dev/null 2>&1; then
+   kst=$( exec 9>"$kd/.lock"; flock -w 300 9 2>/dev/null; [ -s "$kf" ] && { echo ok; exit 0; }
+    kt=$(mktemp -d) || exit 0; cd "$kt" || exit 0
+    o=$(apt-get download "linux-image-unsigned-$kv" 2>&1) || o=$(apt-get download "linux-image-$kv" 2>&1) || { echo "the package linux-image-unsigned-$kv could not be downloaded ($(echo $o | tr '\n' ' ' | cut -c1-150)) - sudo apt update on the host may help"; rm -rf "$kt"; exit 0; }
+    for p in ./*.deb; do dpkg-deb -x "$p" x; done
+    if cp "x/boot/vmlinuz-$kv" "$kf.part" 2>/dev/null && chmod 0644 "$kf.part" && mv -f "$kf.part" "$kf"; then echo ok; else echo "the package has no boot/vmlinuz-$kv"; fi
+    cd / && rm -rf "$kt" )
+  else kst="no apt-get on the host to fetch it"; fi
  fi
- [ -s "$kf" ] && export SUPERMIN_KERNEL="$kf" SUPERMIN_MODULES="/lib/modules/$kv" SUPERMIN_KERNEL_VERSION="$kv"
+ if [ -s "$kf" ]; then export SUPERMIN_KERNEL="$kf" SUPERMIN_MODULES="/lib/modules/$kv" SUPERMIN_KERNEL_VERSION="$kv"; kst="used its own copy $kf"; fi
 fi
 d=%[1]s; t=%[2]s; dir=%[3]s
-hint() { case "$1" in *vmlinuz*|*"Permission denied"*|*supermin*) echo "fail libguestfs cannot start: it needs to read the host's kernel, and $(for k in /boot/vmlinuz-*; do [ -r "$k" ] || printf '%%s ' "$k"; done)can be read by root only (a kernel update puts it there) - run Set Up QEMU/KVM on the host (Hosts), which makes it readable and keeps the next kernels readable, then Configure → Persona → Apply";; *) echo "fail $2$(echo $1 | tr '\n' ' ' | cut -c1-300)";; esac; rm -f "$t" "$t.gf"; exit 0; }
+hint() { case "$1" in *vmlinuz*|*"Permission denied"*|*supermin*) echo "fail libguestfs cannot start: it needs to read the host's kernel, and $(for k in /boot/vmlinuz-*; do [ -r "$k" ] || printf '%%s ' "$k"; done)can be read by root only (a kernel update puts it there). Termwright's own copy of the kernel: $kst. libguestfs said: $(echo $1 | tr '\n' ' ' | cut -c1-240) - Set Up QEMU/KVM on the host (Hosts) makes the kernel readable for good, then Configure → Persona → Apply";; *) echo "fail $2$(echo $1 | tr '\n' ' ' | cut -c1-300)";; esac; rm -f "$t" "$t.gf"; exit 0; }
 cat > "$t" <<'TW_PERSONA_END'
 %[4]sTW_PERSONA_END
 fsl=$(guestfish --ro -a "$d" run : list-filesystems 2>&1) || hint "$fsl" "libguestfs: "
