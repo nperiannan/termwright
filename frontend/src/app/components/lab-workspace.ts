@@ -1304,6 +1304,11 @@ export function nextDevName(name: string, used: Set<string>) {
     .dock { border-top: 1px solid var(--line); background: var(--surface); display: grid; grid-template-rows: 5px 34px minmax(0, 1fr); min-height: 0; }
     .grip { cursor: ns-resize; background: transparent; &:hover { background: var(--accent-soft); } }
     .dtabs button { margin-left: 4px; } .hint2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* every tab of the bottom panel: its search bar and its column headers stay while the rows scroll */
+    .dock app-tv-bar { position: sticky; top: var(--tvtop, -6px); z-index: 3; display: block; background: var(--surface); padding-top: 6px; margin-top: -6px; }
+    .dock .inv, .dock .trt { --tvtop: 0px; --tvbh: 33px; } .dock .inv app-tv-bar, .dock .trt app-tv-bar { padding-top: 0; margin-top: 0; }
+    .dock .ev .evh { top: calc(var(--tvtop, -6px) + var(--tvbh, 38px)); }
+    .dock app-tv-bar ~ table th, .dock app-tv-bar + table th, .dock app-tv-bar ~ * table th { top: calc(var(--tvtop, -6px) + var(--tvbh, 38px)) !important; z-index: 2; }
     .ev div { user-select: text; } .tail { user-select: text; }
     .dtabs { display: flex; align-items: center; gap: 2px; padding: 0 10px; border-bottom: 1px solid var(--line);
       a { padding: 6px 12px; color: var(--muted); font-weight: 500; cursor: pointer; } a.on { color: var(--text); box-shadow: inset 0 -2px var(--accent); }

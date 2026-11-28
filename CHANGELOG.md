@@ -4,6 +4,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Emulated lab: persona without root after a kernel update.** When the host's kernel is readable by root only and Termwright has no sudo for it, it now downloads the same kernel package from the host's distribution (apt, no root needed), keeps it in the lab folder and lets libguestfs use it - persona files are written again without Set Up. Switches already flagged: Configure → Persona → Apply (or restart them).
+- **Lab bottom panel: the search bar and column headers stay** in every tab (Events, Inventory, Changes, CPU, Traffic, Log) while the rows scroll.
+
 - **Emulated lab: Duplicate copies the software the switch runs now.** A plain Duplicate (Ctrl+D, Ctrl+C / Ctrl+V) gives a fresh switch, without configuration, on the software the original runs - when it was upgraded on the switch, from an image of that version in Appliances, or else from a copy of its disk whose configuration is set back to factory default on its first boot (one more restart). **Duplicate Several…** offers three choices with their software versions: a fresh switch from its image, a fresh switch with the software it runs now (the default), or its software and configuration (its disk is copied; a running switch pauses a moment) with a warning that addresses, router-ids, VRRP/MLAG peers and LAGs come along. The choice is kept.
 - **Copies no longer land on top of each other.** They go into free places as the topology is laid out: beside the original in its row, then the rows below; a selection is copied as a block of the same shape.
 - **Events by date.** The Events tab shows Today, Yesterday and today (the default), the last N days or all kept - from its bar or Settings → Files & Folders, kept across restarts. Events are kept on disk for 30 days (adjustable).

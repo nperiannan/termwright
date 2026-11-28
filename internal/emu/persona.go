@@ -184,6 +184,13 @@ func (l *Lab) WriteFileScript(v VM, file, content string, has ...string) string 
 	return fmt.Sprintf(`command -v guestfish >/dev/null 2>&1 || { echo "fail libguestfs-tools (guestfish) is not installed on the host: use Set Up QEMU/KVM"; exit 0; }
 export LIBGUESTFS_BACKEND=direct
 for k in /boot/vmlinuz-*; do [ -e "$k" ] && [ ! -r "$k" ] && { sudo -n chmod 0644 /boot/vmlinuz-* 2>/dev/null; break; }; done # a kernel update: readable again where sudo allows it
+kv=$(uname -r); if [ ! -r "/boot/vmlinuz-$kv" ]; then # still root only: the same kernel from the distribution's package, in the lab folder (no root needed)
+ kd="$HOME/%[8]s/kernel"; kf="$kd/vmlinuz-$kv"
+ if [ ! -s "$kf" ] && command -v apt-get >/dev/null 2>&1 && command -v dpkg-deb >/dev/null 2>&1; then
+  kt=$(mktemp -d) && ( cd "$kt" && { apt-get download "linux-image-unsigned-$kv" >/dev/null 2>&1 || apt-get download "linux-image-$kv" >/dev/null 2>&1; } && for p in ./*.deb; do dpkg-deb -x "$p" x; done && mkdir -p "$kd" && cp "x/boot/vmlinuz-$kv" "$kf" && chmod 0644 "$kf" ) >/dev/null 2>&1; rm -rf "$kt"
+ fi
+ [ -s "$kf" ] && export SUPERMIN_KERNEL="$kf" SUPERMIN_MODULES="/lib/modules/$kv" SUPERMIN_KERNEL_VERSION="$kv"
+fi
 d=%[1]s; t=%[2]s; dir=%[3]s
 hint() { case "$1" in *vmlinuz*|*"Permission denied"*|*supermin*) echo "fail libguestfs cannot start: it needs to read the host's kernel, and $(for k in /boot/vmlinuz-*; do [ -r "$k" ] || printf '%%s ' "$k"; done)can be read by root only (a kernel update puts it there) - run Set Up QEMU/KVM on the host (Hosts), which makes it readable and keeps the next kernels readable, then Configure → Persona → Apply";; *) echo "fail $2$(echo $1 | tr '\n' ' ' | cut -c1-300)";; esac; rm -f "$t" "$t.gf"; exit 0; }
 cat > "$t" <<'TW_PERSONA_END'
@@ -225,7 +232,7 @@ p="$at/%[6]s"; [ "$at" = / ] && p="/%[6]s"
 out=$(guestfish -a "$d" -m "$fs" upload "$t" "$p" : cat "$p" 2>&1) || hint "$out" ""
 if [ "$out" = "$(cat "$t")" ]; then echo "ok $fs $p ($how)"; else echo "fail the file read back from $fs $p differs: $(echo $out | cut -c1-200)"; fi
 rm -f "$t" "$t.gf"
-`, Q(disk), Q(tmp), Q(dir), ensureNL(content), Q(label), base, Q(strings.Join(has, " ")))
+`, Q(disk), Q(tmp), Q(dir), ensureNL(content), Q(label), base, Q(strings.Join(has, " ")), l.Dir)
 }
 
 // ShutdownScript asks VMs to power off (ACPI) and waits up to secs seconds,
