@@ -2992,8 +2992,22 @@ func (a *App) emuStart(host string, ids []string) {
 		prep := l.PrepareScript(wv, ptrs)
 		emuLab.mu.Unlock()
 		_, _ = a.emuRun(host, prep, 5*time.Minute)
-		for _, w := range writes {
-			out, err := a.emuRun(host, w.script, 5*time.Minute)
+		// six at a time (each runs a small libguestfs VM on the host): 34 copies no longer wait minutes for one another
+		outs, errs := make([]string, len(writes)), make([]error, len(writes))
+		var wg sync.WaitGroup
+		sem := make(chan struct{}, 6)
+		for i, w := range writes {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
+				outs[i], errs[i] = a.emuRun(host, w.script, 5*time.Minute)
+			}()
+		}
+		wg.Wait()
+		for i, w := range writes {
+			out, err := outs[i], errs[i]
 			emuLab.mu.Lock()
 			switch {
 			case err == nil && strings.HasPrefix(lastLine(out), "ok "):
