@@ -2977,7 +2977,7 @@ func (a *App) emuStart(host string, ids []string) {
 	for _, v := range vms {
 		if im := ptrs[v.Image]; im != nil && im.Persona != nil && v.Persona != nil {
 			if txt, err := im.Persona.Render(v, v.Persona); err == nil && txt != "" && emu.Hash(txt) != v.Persona.Applied {
-				writes = append(writes, pw{v, l.WriteFileScript(v, im.Persona.File, txt, im.Persona.FSHas...), emu.Hash(txt)})
+				writes = append(writes, pw{v, l.WriteFileScriptAt(v, im.Persona.File, txt, emuPersonaAt[v.Image], im.Persona.FSHas...), emu.Hash(txt)})
 			} else if err != nil {
 				emuLab.errs[v.ID] = err.Error()
 			}
@@ -3015,6 +3015,17 @@ func (a *App) emuStart(host string, ids []string) {
 					vv.Persona.Applied, vv.Persona.Fail = w.hash, ""
 				}
 				emuLab.pinfo[w.v.ID] = "written to " + strings.TrimPrefix(lastLine(out), "ok ")
+				if f := strings.Fields(lastLine(out)); len(f) >= 3 { // where this image keeps it: the next switches are written in one go
+					at := strings.TrimSuffix(f[2], "/"+path.Base(f[2]))
+					if at == "" {
+						at = "/"
+					}
+					how := "found before"
+					if i := strings.Index(lastLine(out), "("); i > 0 {
+						how = strings.TrimSuffix(strings.SplitN(lastLine(out)[i+1:], ", as for", 2)[0], ")")
+					}
+					emuPersonaAt[w.v.Image] = f[1] + " " + at + " " + how
+				}
 				emuEv(w.v.ID, "ok", "persona "+emuLab.pinfo[w.v.ID]+", read back")
 				delete(emuLab.personaTried, w.v.ID)
 				delete(emuLab.perr, w.v.ID)
@@ -3915,6 +3926,9 @@ func (a *App) emuReadFacts(ctx context.Context, c *emu.Console, im *emu.Image, v
 		emuEv(v.ID, "info", fmt.Sprintf("it reports software %s, serial number %s", orStr(cur.FW, "?"), orStr(cur.HWSerial, "?")))
 	}
 }
+
+// emuPersonaAt: per image, where its persona file goes ("<filesystem> <folder> <how>"), from the last write (mu held).
+var emuPersonaAt = map[string]string{}
 
 // emuPersonaSeen: the switch's own output (its facts) shows the persona's model, so it took the persona -
 // a "did not take the persona" from a check that was answered too early goes away (mu held).

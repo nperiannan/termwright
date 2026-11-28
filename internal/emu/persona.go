@@ -177,6 +177,13 @@ func ParsePorts(s string) ([]PortMap, error) {
 // mounts from its own start scripts). An empty folder on a root filesystem is
 // taken for a mount point, not the place to write.
 func (l *Lab) WriteFileScript(v VM, file, content string, has ...string) string {
+	return l.WriteFileScriptAt(v, file, content, "", has...)
+}
+
+// WriteFileScriptAt is WriteFileScript with where the image keeps the file, as an earlier write found it
+// ("<filesystem> <folder> <how>"): written straight there in one start of libguestfs (a third of the time),
+// else found again as WriteFileScript does.
+func (l *Lab) WriteFileScriptAt(v VM, file, content, known string, has ...string) string {
 	disk := l.VMDir() + "/" + v.ID + ".qcow2"
 	dir, base := path.Dir(file), path.Base(file)
 	label := path.Base(dir)
@@ -205,6 +212,10 @@ d=%[1]s; t=%[2]s; dir=%[3]s
 hint() { case "$1" in *vmlinuz*|*"Permission denied"*|*supermin*) echo "fail libguestfs cannot start: it needs to read the host's kernel, and $(for k in /boot/vmlinuz-*; do [ -r "$k" ] || printf '%%s ' "$k"; done)can be read by root only (a kernel update puts it there). Termwright's own copy of the kernel: $kst. libguestfs said: $(echo $1 | tr '\n' ' ' | cut -c1-240) - Set Up QEMU/KVM on the host (Hosts) makes the kernel readable for good, then Configure → Persona → Apply";; *) echo "fail $2$(echo $1 | tr '\n' ' ' | cut -c1-300)";; esac; rm -f "$t" "$t.gf"; exit 0; }
 cat > "$t" <<'TW_PERSONA_END'
 %[4]sTW_PERSONA_END
+known=%[9]s
+if [ -n "$known" ]; then set -- $known; kfs=$1; kat=$2; shift 2; kp="$kat/%[6]s"; [ "$kat" = / ] && kp="/%[6]s"
+ out=$(guestfish -a "$d" -m "$kfs" upload "$t" "$kp" : cat "$kp" 2>&1) && [ "$out" = "$(cat "$t")" ] && { echo "ok $kfs $kp ($*, as for the other switches of this image)"; rm -f "$t" "$t.gf"; exit 0; }
+fi
 fsl=$(guestfish --ro -a "$d" run : list-filesystems 2>&1) || hint "$fsl" "libguestfs: "
 { echo run
   echo "$fsl" | while IFS= read -r line; do f=${line%%%%:*}; ty=${line#*: }
@@ -242,7 +253,7 @@ p="$at/%[6]s"; [ "$at" = / ] && p="/%[6]s"
 out=$(guestfish -a "$d" -m "$fs" upload "$t" "$p" : cat "$p" 2>&1) || hint "$out" ""
 if [ "$out" = "$(cat "$t")" ]; then echo "ok $fs $p ($how)"; else echo "fail the file read back from $fs $p differs: $(echo $out | cut -c1-200)"; fi
 rm -f "$t" "$t.gf"
-`, Q(disk), Q(tmp), Q(dir), ensureNL(content), Q(label), base, Q(strings.Join(has, " ")), l.Dir)
+`, Q(disk), Q(tmp), Q(dir), ensureNL(content), Q(label), base, Q(strings.Join(has, " ")), l.Dir, Q(known))
 }
 
 // ShutdownScript asks VMs to power off (ACPI) and waits up to secs seconds,
