@@ -139,7 +139,7 @@ export const LOCAL_HOST = '@this-computer';
 export interface EmuImage { id: string; name: string; file: string; fileName: string; size: number; sha256: string; deviceType: string; board?: string; flashMb?: number; cpus: number; ram: number; nics: number; nic: string; portMacs?: string; disk: string; portName: string; ready: string; login: string; password?: string; prompt: string; day0: string[] | null; answers: EmuAnswer[] | null; extra: string; source: string; serial: string; addrCmd: string; dhcpOn?: string[] | null; portAddr?: string[] | null; addrSet?: string[] | null; persona?: EmuPersonaDef | null; version?: string;
   hasPassword?: boolean; onHost?: boolean; upload?: string; missing?: boolean;  url?: string; md5?: string; page?: string; download?: string; disks?: { slot: string; fileName: string; file: string; sha256: string; size: number; url?: string; md5?: string; page?: string; bus?: string }[] | null; }
 export interface EmuGroup { template?: string; diskGb?: number; model?: string; module?: string; serialStart?: string; macStart?: string; image: string; count: number; names: string; cpus?: number; ram?: number; role?: string; }
-export interface EmuDupRequest { ids: string[]; count: number; cables: boolean; start: boolean; }
+export interface EmuDupRequest { ids: string[]; count: number; cables: boolean; start: boolean; /** "image", "" = the software it runs, "config". */ mode?: string; }
 export interface EmuRequest { host: string; groups: EmuGroup[]; cabling: string; mgmt: string; mgmtNet: string; start: boolean; perPair?: number; lagMode?: string; /** Cable the new switches only among themselves. */ own?: boolean; }
 /** How busy a KVM host is now (percentages; -1 = not known). */
 export interface EmuHostStat { host: string; name: string; addr: string; switches: number; running: number; cpu: number; cores: number; mem: number; memTotal: number; memUsed: number; disk: number; diskTotal: number; diskUsed: number; net: number; if: string; speed: number; rx: number; tx: number; err?: string; }
@@ -176,6 +176,7 @@ export interface Settings {
   backupDir?: string; backupJobs?: BackupJob[] | null;
   checklists?: Checklist[] | null; checklistDir?: string; recordHistory?: boolean | null; keepAwake?: boolean | null;
   recordSessions?: boolean; recordDir?: string; recordKeepDays?: number;
+  /** Emulated lab: what Events shows ("today", "" = yesterday and today, "days:N", "all"), days kept on disk (0 = 30), Duplicate Several's choice. */ labEventsShow?: string; labEventsKeepDays?: number; labDupMode?: string;
   smartCardLibraries?: string[] | null; smartCardPinEachTime?: boolean;
   collections?: Collection[] | null; collectDir?: string;
   keywordSets: KeywordSet[] | null; defaultKeywordSet: string; showConnectBar: boolean; keyMap: KeyBinding[] | null;

@@ -679,6 +679,7 @@ export function nextDevName(name: string, used: Set<string>) {
         @if (emu()) { <a [class.on]="dock() === 'log'" (click)="dock.set('log'); loadLog()" [title]="tr('The emulator’s own log: everything the lab does, at the level you choose')">{{ tr('Log') }}</a> }
         @if (emu() && selDev(); as d) { <a [class.on]="dock() === 'console'" (click)="dock.set('console'); loadTail()">{{ tr('{0} console', d.hostname) }}</a><a [class.on]="dock() === 'clog'" (click)="dock.set('clog'); loadClog()" [title]="tr('Everything its console showed since it started, with its Events')">{{ tr('Console Log') }}</a> }
         <span class="sp"></span><span class="muted small hint2">{{ dock() === 'changes' ? tr('What Claude and the API changed, each with Revert') : dock() === 'cpu' ? tr('CPU requests, limits and use of every device') : dock() === 'traffic' ? tr('Test ports send and count frames on switch ports') : dock() === 'cap' ? tr('Both ways on the port, as the switch sends and gets it') : dock() === 'log' ? tr('The emulator’s own log') : dock() === 'clog' ? tr('Its console since it started, with its Events') : dock() === 'inv' ? tr('Every switch under its host: console, management, what it uses now') : dock() === 'events' ? tr('Everything Termwright does to a switch shows here') : (dockTab() ? tr('Live console - day-0 and checks wait while it is connected') : tr('The end of its console; click it to type')) }}</span>
+        @if (dock() === 'events' && emu()) { <select class="evr" [ngModel]="evShowSel()" (ngModelChange)="setEvShow($event)" [title]="tr('Which Events to show (kept in Settings)')"><option value="today">{{ tr('Today') }}</option><option value="">{{ tr('Yesterday and today') }}</option><option value="days">{{ evDays() > 0 ? tr('Last {0} days', evDays()) : tr('Last N days…') }}</option><option value="all">{{ tr('All kept') }}</option></select> }
         @if (dock() === 'console' && dockTab(); as t) { <button type="button" class="sm" (click)="undock()" [title]="tr('Close the connection to its console')">{{ tr('Disconnect') }}</button> }
         @if (dock() === 'inv' && inventory().length > 1) { <button type="button" class="sm" (click)="flipAll()">{{ invClosed().size === inventory().length ? tr('Expand All') : tr('Collapse All') }}</button> }
         @else { <button type="button" class="sm" (click)="copyDock()" [title]="tr('Copy to the clipboard')">{{ tr('Copy') }}</button> }
@@ -810,6 +811,13 @@ export function nextDevName(name: string, used: Set<string>) {
           <h3>{{ dd.ids.length === 1 ? tr('Duplicate {0}', nameOf(dd.ids[0])) : tr('Duplicate {0} switches', dd.ids.length) }}</h3>
           <label class="f"><span>{{ tr('How many') }}</span><input type="number" min="1" max="500" [(ngModel)]="dd.count" autofocus /></label>
           <div class="f"><span>{{ tr('Names') }}</span><code class="muted">{{ dupNames(dd) }}</code></div>
+          @let dv = dupVer(dd.ids);
+          <div class="dopts">
+            <label class="dop" [class.on]="dd.mode === 'image'"><input type="radio" name="dupm" value="image" [(ngModel)]="dd.mode" /><span><b>{{ tr('A fresh switch from its image') }}</b><small>{{ dv.image }} · {{ tr('no configuration') }}</small></span></label>
+            @if (dv.differs) { <label class="dop" [class.on]="dd.mode === ''"><input type="radio" name="dupm" value="" [(ngModel)]="dd.mode" /><span><b>{{ tr('A fresh switch with the software it runs now') }}</b><small>{{ dv.runs }} · {{ tr('no configuration') }} · {{ dv.hasImage ? tr('from the image of that version') : tr('its disk is copied and its configuration set back to factory default (one more restart)') }}</small></span></label> }
+            <label class="dop" [class.on]="dd.mode === 'config'"><input type="radio" name="dupm" value="config" [(ngModel)]="dd.mode" /><span><b>{{ tr('Its software and configuration') }}</b><small>{{ dv.runs }} · {{ tr('with its configuration - its disk is copied (a running switch pauses a moment); what it saved is what the copies get') }}</small></span></label>
+          </div>
+          @if (dd.mode === 'config') { <div class="dwarn">⚠ {{ tr('The copies get its whole configuration: addresses on VLANs and loopbacks, router-ids, VRRP and MLAG peers, LAGs. Change them on each copy before you cable it into the same network, or they clash with the original.') }}@if (dd.cables) { <b> {{ tr('With "Cable each copy like the original" they are on the same network as soon as they start.') }}</b> }</div> }
           <label class="ck"><input type="checkbox" [(ngModel)]="dd.cables" /> {{ tr('Cable each copy like the original') }} <span class="muted">{{ tr('(to the same neighbours, next free ports)') }}</span></label>
           <label class="ck"><input type="checkbox" [(ngModel)]="dd.start" /> {{ tr('Start them') }}</label>
           @if (dd.ids.length > 1) { <div class="muted small">{{ tr('The cables between the chosen switches are copied too.') }}</div> }
@@ -1039,9 +1047,13 @@ export function nextDevName(name: string, used: Set<string>) {
     .hsb { margin-bottom: 12px; } .hsr { display: grid; grid-template-columns: 10px minmax(0, 1fr) 30px repeat(4, 24px); gap: 5px; align-items: center; height: 24px; padding: 0 4px; border-radius: 5px; font-size: 11.5px; cursor: pointer; }
     .hsr.hhd { height: 16px; font-size: 10px; color: var(--muted); cursor: default; } .hsr.hhd span:nth-child(n+3) { text-align: center; } .hsr.tg { background: color-mix(in srgb, var(--accent) 10%, transparent); } .hsr:not(.hhd):hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
     .hsr .hn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .hsr .num { text-align: right; } .vb { width: 20px; height: 14px; margin: 0 auto; } .hse { grid-column: span 4; } .hsm { display: block; padding: 3px 4px; cursor: pointer; }
-    .dupdlg { width: min(440px, calc(100vw - 40px)); background: var(--surface); border: 1px solid var(--border, var(--line)); border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,.45); padding: 14px 16px; }
+    .evr { height: 24px; font-size: 12px; margin-right: 6px; }
+    .dupdlg { width: min(540px, calc(100vw - 40px)); background: var(--surface); border: 1px solid var(--border, var(--line)); border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,.45); padding: 14px 16px; }
     .dupdlg h3 { margin: 0 0 10px; font-size: 14px; } .dupdlg .f { display: flex; align-items: center; gap: 10px; margin: 8px 0; } .dupdlg .f > span { width: 90px; flex: none; color: var(--muted); }
     .dupdlg .f input { width: 90px; } .dupdlg .f code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .dupdlg .ck { display: flex; gap: 8px; align-items: center; margin: 7px 0; flex-wrap: wrap; }
+    .dopts { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; } .dop { display: flex; gap: 9px; align-items: flex-start; border: 1px solid var(--border, var(--line)); border-radius: 8px; padding: 7px 10px; cursor: pointer; } .dop.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+    .dop input { margin-top: 3px; } .dop span { display: flex; flex-direction: column; gap: 2px; } .dop small { color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+    .dwarn { border: 1px solid color-mix(in srgb, #d29922 50%, transparent); background: color-mix(in srgb, #d29922 10%, transparent); border-radius: 8px; padding: 7px 10px; font-size: 12px; line-height: 1.45; margin: 6px 0; }
     .dupdlg .btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
     .dabg { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; }
     .dadlg { width: min(860px, calc(100vw - 40px)); max-height: calc(100vh - 60px); overflow: auto; background: var(--surface); border: 1px solid var(--border, var(--line)); border-radius: 14px; box-shadow: 0 20px 50px rgba(0,0,0,.45); display: flex; flex-direction: column; }
@@ -2533,6 +2545,14 @@ export class LabWorkspace implements OnDestroy {
   private evFindT?: ReturnType<typeof setTimeout>;
   private evFindQ = '';
   private evLast: string | undefined;
+  protected evShowSel = computed(() => { const v = this.ui.settings()?.labEventsShow ?? ''; return v.startsWith('days:') ? 'days' : v; });
+  protected evDays = computed(() => { const v = this.ui.settings()?.labEventsShow ?? ''; return v.startsWith('days:') ? +v.slice(5) || 0 : 0; });
+  async setEvShow(v: string) {
+    const st = this.ui.settings(); if (!st) return;
+    if (v === 'days') { const n = await this.ui.input(tr('Events of the Last Days'), tr('How many days (today counts as one)'), String(this.evDays() || 7)); const k = Math.round(Number(n)); if (!n || !(k >= 1)) { this.ui.settings.set({ ...st }); return; } v = 'days:' + k; }
+    await this.ui.saveSettings({ ...st, labEventsShow: v });
+    this.findEvents(this.evView.q());
+  }
   protected events: Signal<LabEvent[]> = computed<LabEvent[]>(() => [...(this.evFound() ?? this.st()?.events ?? [])].reverse());
   /** The Events tab shows the whole kept log (2,500 lines), searched on the backend; the view itself carries only the newest 200. */
   private findEvents(q: string) {
@@ -3103,22 +3123,44 @@ export class LabWorkspace implements OnDestroy {
   openHost(h: string) { this.hsOpen.set(false); this.hostPick.set(h); this.hostRm.set(false); this.page.set('hosts'); }
   removeHost(h: string) { this.hsOpen.set(false); this.hostPick.set(h); this.hostRm.set(true); this.page.set('hosts'); }
   // ---- Duplicate (right-click, Ctrl+D, Ctrl+C / Ctrl+V) ----
-  protected dupDlg = signal<{ ids: string[]; count: number; cables: boolean; start: boolean } | null>(null);
+  protected dupDlg = signal<{ ids: string[]; count: number; cables: boolean; start: boolean; mode: string } | null>(null);
+  /** The software of the switches to copy: their image's version, what they run now, and whether an image of that version is there. */
+  dupVer(ids: string[]) {
+    const ds = this.devs().filter(d => ids.includes(d.id)), ims = this.st()?.images ?? [];
+    const imOf = (d: LabDevice) => ims.find(i => i.id === d.image);
+    const same = (a = '', b = '') => !a || !b || a.startsWith(b) || b.startsWith(a);
+    const one = ds.length === 1 ? ds[0] : null;
+    const name = (d: LabDevice | null, v: string) => (one ? (imOf(one)?.deviceType || one.os || '') + ' ' : '') + (v || '?');
+    const differs = ds.some(d => d.version && !same(d.version, imOf(d)?.version));
+    const hasImage = ds.every(d => !d.version || same(d.version, imOf(d)?.version) || ims.some(i => i.deviceType === imOf(d)?.deviceType && i.version && same(d.version, i.version)));
+    return { image: one ? name(one, imOf(one)?.version ?? '') : tr('their images'), runs: one ? name(one, one.version || imOf(one)?.version || '') : tr('the software each runs'), differs, hasImage };
+  }
   private copied: string[] = [];
   /** What Duplicate copies: the selection when the switch is in it, else the switch. */
   dupIds(d: LabDevice) { return this.msCount() > 1 && this.ms().has(d.id) ? [...this.ms()].filter(id => this.devs().some(x => x.id === id)) : [d.id]; }
-  dupAsk(ids: string[]) { this.dupDlg.set({ ids, count: 2, cables: false, start: false }); }
+  dupAsk(ids: string[]) {
+    let mode = this.ui.settings()?.labDupMode ?? '';
+    if (mode === '' && !this.dupVer(ids).differs) mode = 'image'; // the same software: the image is it
+    this.dupDlg.set({ ids, count: 2, cables: false, start: false, mode: mode === '' && !this.dupVer(ids).differs ? 'image' : mode });
+  }
   /** The names the copies get, as the backend gives them: the highest number in use + 1. */
   dupNames(dd: { ids: string[]; count: number }) {
     const used = new Set(this.devs().map(d => d.hostname)), out: string[] = [];
     for (let r = 0; r < Math.min(dd.count || 0, 500); r++) for (const id of dd.ids) { const n = nextDevName(this.nameOf(id), used); used.add(n); out.push(n); }
     return out.length > 3 ? out[0] + ' … ' + out[out.length - 1] + ' (' + out.length + ')' : out.join(', ');
   }
-  async dupGo() { const dd = this.dupDlg(); if (!dd || !(dd.count >= 1 && dd.count <= 500)) return; this.dupDlg.set(null); await this.dup(dd.ids, dd.count, dd.cables, dd.start); }
-  async dup(ids: string[], count = 1, cables = false, start = false) {
+  async dupGo() {
+    const dd = this.dupDlg(); if (!dd || !(dd.count >= 1 && dd.count <= 500)) return;
+    this.dupDlg.set(null);
+    const st = this.ui.settings(), keep = dd.mode === 'image' && !this.dupVer(dd.ids).differs ? (st?.labDupMode ?? '') : dd.mode; // kept for next time
+    if (st && (st.labDupMode ?? '') !== keep) void this.ui.saveSettings({ ...st, labDupMode: keep });
+    await this.dup(dd.ids, dd.count, dd.cables, dd.start, dd.mode);
+  }
+  /** Plain Duplicate (and Ctrl+D, Ctrl+V): a fresh switch with the software the original runs now. */
+  async dup(ids: string[], count = 1, cables = false, start = false, mode = '') {
     if (!this.emu() || !ids.length) return;
     const before = new Set(this.devs().map(d => d.id));
-    if (!(await this.lab.duplicate(ids, count, cables, start))) return;
+    if (!(await this.lab.duplicate(ids, count, cables, start, mode))) return;
     const fresh = this.devs().filter(d => !before.has(d.id));
     if (!fresh.length) return;
     this.clearMs(); if (fresh.length === 1) this.sel.set(fresh[0].id); else { this.sel.set(''); this.ms.set(new Set(fresh.map(d => d.id))); }

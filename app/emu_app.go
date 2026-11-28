@@ -375,7 +375,13 @@ func emuEvKeep(e EmuEvent) {
 	}
 	_, _ = f.Write(append(b, '\n'))
 	_ = f.Close()
+	if time.Since(emuEventsTrimmed) > 24*time.Hour { // once a day: the days kept, no more
+		emuEventsTrimmed = time.Now()
+		emuEventsLoad(emuEventsFile) // rewrites the file without the days no longer kept
+	}
 }
+
+var emuEventsTrimmed = time.Now()
 
 // emuEventsLoad reads the kept Events log (its last 300), and shortens the file when it has grown long.
 func emuEventsLoad(path string) []EmuEvent {
@@ -391,9 +397,14 @@ func emuEventsLoad(path string) []EmuEvent {
 			out = append(out, e)
 		}
 	}
-	if len(lines) > 20000 { // the newest 10000 stay on disk
+	if len(lines) > 2000 && len(out) > 0 && time.Since(out[0].At) > time.Duration(emuEventsKeepDays)*24*time.Hour { // older than the days kept: dropped
+		cut := time.Now().Add(-time.Duration(emuEventsKeepDays) * 24 * time.Hour)
+		i := 0
+		for i < len(out) && out[i].At.Before(cut) {
+			i++
+		}
 		var w strings.Builder
-		for _, e := range out[max(0, len(out)-10000):] {
+		for _, e := range out[i:] {
 			if j, err := json.Marshal(e); err == nil {
 				w.Write(append(j, '\n'))
 			}
@@ -406,8 +417,28 @@ func emuEventsLoad(path string) []EmuEvent {
 	return out
 }
 
+// emuEventsKeepDays: how many days of Events stay on disk (Settings: labEventsKeepDays, 30 by default).
+var emuEventsKeepDays = 30
+
+// emuEventsSince is where the Events tab starts: today, yesterday and today (the default), the last N days, or all kept.
+func emuEventsSince(show string, now time.Time) time.Time {
+	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	switch {
+	case show == "all":
+		return time.Time{}
+	case show == "today":
+		return day
+	case strings.HasPrefix(show, "days:"):
+		if n, err := strconv.Atoi(strings.TrimPrefix(show, "days:")); err == nil && n > 0 {
+			return day.AddDate(0, 0, -(n - 1))
+		}
+	}
+	return day.AddDate(0, 0, -1)
+}
+
 // EmuEventsFind searches the whole kept Events log (not only the newest lines the view shows): the
-// events whose switch, host or message has every word of q (all with an empty q), newest last (at most 2500).
+// events in the range the Events tab shows (Settings: labEventsShow) whose switch, host or message has every
+// word of q (all with an empty q), newest last (at most 5000).
 func (a *App) EmuEventsFind(q string) []EmuEvent {
 	words := strings.Fields(strings.ToLower(q))
 	emuLab.mu.Lock()
@@ -425,8 +456,15 @@ func (a *App) EmuEventsFind(q string) []EmuEvent {
 			}
 		}
 	}
+	if d := a.cfg.Get().LabEventsKeepDays; d > 0 {
+		emuEventsKeepDays = d
+	}
+	since := emuEventsSince(a.cfg.Get().LabEventsShow, time.Now())
 	var out []EmuEvent
 	for _, e := range all {
+		if e.At.Before(since) {
+			continue
+		}
 		hay := strings.ToLower(e.Name + " " + e.Host + " " + e.Level + " " + e.Text)
 		ok := true
 		for _, w := range words {
@@ -436,7 +474,7 @@ func (a *App) EmuEventsFind(q string) []EmuEvent {
 			out = append(out, e)
 		}
 	}
-	return out[max(0, len(out)-2500):]
+	return out[max(0, len(out)-5000):]
 }
 
 // emuBootAnswer types a boot menu's answer on a switch's console (its boot stopped there).
@@ -799,6 +837,9 @@ func (a *App) emuLoad() {
 	}
 	_ = os.MkdirAll(a.labDir(), 0o700)
 	emuEventsFile = filepath.Join(a.labDir(), "events.jsonl")
+	if d := a.cfg.Get().LabEventsKeepDays; d > 0 {
+		emuEventsKeepDays = d
+	}
 	emuLab.events = append(emuEventsLoad(emuEventsFile), emuLab.events...)
 }
 
@@ -3188,6 +3229,10 @@ func (a *App) emuWatch(host string, ids []string) {
 			}
 			delete(pending, id)
 			if emuLab.resumed[id] { // as it was saved: booted, day 0 and its persona done
+				continue
+			}
+			if v.Wipe { // a copy of a disk: its configuration goes first, then it boots again for its day 0
+				emuGo(func() { a.emuWipe(host, id) })
 				continue
 			}
 			if emuLab.personaAfterBoot[id] {

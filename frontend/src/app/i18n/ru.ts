@@ -5687,6 +5687,26 @@ const ru: Record<string, string> = {
   'Check Persona Again': 'Проверить персону ещё раз',
   'Persona checked - see the Events': 'Персона проверена - см. события',
   'Personas checked - see the Events': 'Персоны проверены - см. события',
+  // ---- лаборатория: дублирование и события ----
+  'A fresh switch from its image': 'Новый коммутатор из его образа',
+  'no configuration': 'без конфигурации',
+  'A fresh switch with the software it runs now': 'Новый коммутатор с его текущим ПО',
+  'from the image of that version': 'из образа этой версии',
+  'its disk is copied and its configuration set back to factory default (one more restart)': 'его диск копируется, а конфигурация сбрасывается к заводской (ещё одна перезагрузка)',
+  'Its software and configuration': 'Его ПО и конфигурация',
+  'with its configuration - its disk is copied (a running switch pauses a moment); what it saved is what the copies get': 'с его конфигурацией - его диск копируется (работающий коммутатор ненадолго приостанавливается); копии получают то, что он сохранил',
+  'The copies get its whole configuration: addresses on VLANs and loopbacks, router-ids, VRRP and MLAG peers, LAGs. Change them on each copy before you cable it into the same network, or they clash with the original.': 'Копии получают всю его конфигурацию: адреса на VLAN и loopback, router-id, пиров VRRP и MLAG, LAG. Измените их на каждой копии до подключения к той же сети, иначе они будут конфликтовать с оригиналом.',
+  'With "Cable each copy like the original" they are on the same network as soon as they start.': 'С параметром «Соединить каждую копию как оригинал» они окажутся в той же сети сразу после запуска.',
+  'their images': 'их образы',
+  'the software each runs': 'ПО, которое работает на каждом',
+  'Which Events to show (kept in Settings)': 'Какие события показывать (хранится в настройках)',
+  'Today': 'Сегодня',
+  'Yesterday and today': 'Вчера и сегодня',
+  'Last {0} days': 'Последние {0} дн.',
+  'Last N days…': 'Последние N дней…',
+  'All kept': 'Все сохранённые',
+  'Events of the Last Days': 'События за последние дни',
+  'How many days (today counts as one)': 'Сколько дней (сегодня считается одним)',
 };
 
 export default ru;

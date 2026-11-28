@@ -24,24 +24,24 @@ type HostInfo struct {
 	Sudo     bool     `json:"sudo"`     // password-less sudo for the network commands (bridge mode)
 	SudoAll  bool     `json:"sudoAll"`  // password-less sudo for anything (Set Up runs without asking for the password)
 	Dir      string   `json:"dir"`
-	OSID     string   `json:"osId"`     // ID and ID_LIKE of /etc/os-release
-	Pkg      string   `json:"pkg"`      // the package manager Set Up uses (apt, dnf, dnf-fedora, zypper, pacman)
-	Plan     []string `json:"plan"`     // what Set Up would do
-	CanSetup bool     `json:"canSetup"` // Set Up can fix the problems
-	Uplink   string   `json:"uplink"`   // the port of the default route
-	LanAddr  string   `json:"lanAddr"`  // the host's address on it (10.200.100.20/24)
-	Gateway  string   `json:"gateway"`  // the default route's gateway
-	Bridges  []string `json:"bridges"`  // the host's bridges with a network port in them
-	Wifi     bool     `json:"wifi"`     // the uplink is Wi-Fi
-	LanIf    string   `json:"lanIf"`    // where switches join the host's network: a bridge, or the uplink (macvtap)
-	LanKind  string   `json:"lanKind"`  // "bridge" or "macvtap" ("" = not possible)
-	Guestfs  bool     `json:"guestfs"`  // libguestfs is there (persona files)
+	OSID     string   `json:"osId"`               // ID and ID_LIKE of /etc/os-release
+	Pkg      string   `json:"pkg"`                // the package manager Set Up uses (apt, dnf, dnf-fedora, zypper, pacman)
+	Plan     []string `json:"plan"`               // what Set Up would do
+	CanSetup bool     `json:"canSetup"`           // Set Up can fix the problems
+	Uplink   string   `json:"uplink"`             // the port of the default route
+	LanAddr  string   `json:"lanAddr"`            // the host's address on it (10.200.100.20/24)
+	Gateway  string   `json:"gateway"`            // the default route's gateway
+	Bridges  []string `json:"bridges"`            // the host's bridges with a network port in them
+	Wifi     bool     `json:"wifi"`               // the uplink is Wi-Fi
+	LanIf    string   `json:"lanIf"`              // where switches join the host's network: a bridge, or the uplink (macvtap)
+	LanKind  string   `json:"lanKind"`            // "bridge" or "macvtap" ("" = not possible)
+	Guestfs  bool     `json:"guestfs"`            // libguestfs is there (persona files)
 	KernelRO string   `json:"kernelRo,omitempty"` // a kernel in /boot only root can read (a kernel update): libguestfs cannot start
-	Virt     string   `json:"virt"`     // the host is itself a VM: vmware, kvm, microsoft… ("none" = hardware)
-	Nat      string   `json:"nat"`      // the host's address on libvirt's NAT network virbr0 (192.168.122.1/24), "" = none
-	Libvirt  bool     `json:"libvirt"`  // virsh is there
-	Problems []string `json:"problems"` // what stops VMs from running
-	Notes    []string `json:"notes"`    // what works, but differently
+	Virt     string   `json:"virt"`               // the host is itself a VM: vmware, kvm, microsoft… ("none" = hardware)
+	Nat      string   `json:"nat"`                // the host's address on libvirt's NAT network virbr0 (192.168.122.1/24), "" = none
+	Libvirt  bool     `json:"libvirt"`            // virsh is there
+	Problems []string `json:"problems"`           // what stops VMs from running
+	Notes    []string `json:"notes"`              // what works, but differently
 }
 
 // ProbeScript checks a host (dir: the lab folder, relative to the home folder).

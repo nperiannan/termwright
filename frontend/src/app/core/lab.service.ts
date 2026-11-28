@@ -142,7 +142,7 @@ export class LabService {
   /** Asks running switches which model they are, and keeps it (clears a persona error that was wrong). */
   checkPersona(ids: string[]) { return this.run(() => this.backend.emuCheckPersonaNow(ids), ids.length === 1 ? 'Persona checked - see the Events' : 'Personas checked - see the Events'); }
   /** Copies emulated switches (the next names, serials and MACs); true when done. */
-  duplicate(ids: string[], count = 1, cables = false, start = false) { return this.run(() => this.backend.emuDuplicate({ ids, count, cables, start })); }
+  duplicate(ids: string[], count = 1, cables = false, start = false, mode = '') { return this.run(() => this.backend.emuDuplicate({ ids, count, cables, start, mode })); }
   async remove(ids: string[], sessions: boolean) {
     const ok = await this.run(() => (this.e ? this.backend.emuRemove(ids, sessions) : this.backend.labRemove(ids, sessions)));
     if (ok) await this.ui.refreshTree();

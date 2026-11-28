@@ -243,6 +243,11 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', folders: 'Files &
                   <label><input type="checkbox" name="recall" [(ngModel)]="s.recordSessions" /> Record every connection of every session</label>
                   <label>Delete recordings after <input name="rkeep" type="number" min="0" style="width: 70px" [(ngModel)]="s.recordKeepDays" /> days (0 = keep them)</label>
                 </div>
+                <label>Emulated lab Events</label>
+                <div class="checks">
+                  <label>Show <select name="levshow" [(ngModel)]="s.labEventsShow"><option value="today">Today</option><option value="">Yesterday and today</option><option value="days:7">Last 7 days</option><option value="days:30">Last 30 days</option><option value="all">All kept</option></select> <span class="hint">(also in the Events tab)</span></label>
+                  <label>Keep <input name="levkeep" type="number" min="1" max="3650" style="width: 70px" [(ngModel)]="s.labEventsKeepDays" placeholder="30" /> days of Events on disk</label>
+                </div>
 
                 <h4 class="gsec">Tests and web tests (Playwright)</h4>
                 @if (paths()['tests']; as p) { <label>Tests folder</label><div class="row"><span class="hint mono fpath" [title]="p">{{ p }}</span><button type="button" (click)="openF(p)">Open</button></div> }

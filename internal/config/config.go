@@ -203,6 +203,9 @@ type Settings struct {
 	RecordSessions       bool                         `json:"recordSessions"`                  // record every connection (.cast)
 	RecordDir            string                       `json:"recordDir"`                       // "" = Documents/Termwright Recordings
 	RecordKeepDays       int                          `json:"recordKeepDays"`                  // 0 = keep
+	LabEventsShow        string                       `json:"labEventsShow,omitempty"`         // the emulated lab's Events tab: "today", "" = yesterday and today, "days:N", "all"
+	LabEventsKeepDays    int                          `json:"labEventsKeepDays,omitempty"`     // days of Events kept on disk (0 = 30)
+	LabDupMode           string                       `json:"labDupMode,omitempty"`            // Duplicate Several's choice: "image", "" = the software it runs, "config"
 	SmartCardLibraries   []string                     `json:"smartCardLibraries"`              // PKCS#11 libraries; empty = the usual places
 	SmartCardPinEachTime bool                         `json:"smartCardPinEachTime"`            // ask the PIN for every login
 	KeywordSets          []KeywordSet                 `json:"keywordSets"`

@@ -2,11 +2,13 @@ package app
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/termwright/termwright/internal/emu"
 	"github.com/termwright/termwright/internal/sim"
@@ -18,6 +20,76 @@ type EmuDupRequest struct {
 	Count  int      `json:"count"`  // copies of each (1 when 0)
 	Cables bool     `json:"cables"` // also cable each copy to the original's other neighbours (their next free ports)
 	Start  bool     `json:"start"`  // start the copies
+	// What a copy gets: "image" - a fresh switch from its image; "" or "software" - a fresh switch with the
+	// software the original runs now (an image of that version, else its disk with the configuration set back
+	// to factory default); "config" - its disk: its software and its configuration.
+	Mode string `json:"mode,omitempty"`
+}
+
+// emuSameVersion: the version a switch reports is the image's (33.4.1.15 and "33.4.1.15 patch1-2" are the same).
+func emuSameVersion(a, b string) bool {
+	a, b = strings.TrimSpace(a), strings.TrimSpace(b)
+	return a == "" || b == "" || strings.HasPrefix(a, b) || strings.HasPrefix(b, a)
+}
+
+// emuDupFree: no switch is at (x, y) or close enough for the two to overlap on the canvas.
+func emuDupFree(all []emu.VM, x, y int) bool {
+	for _, v := range all {
+		if v.X == 0 && v.Y == 0 {
+			continue // not placed yet: drawn where the canvas puts it
+		}
+		if abs(v.X-x) < 150 && abs(v.Y-y) < 110 {
+			return false
+		}
+	}
+	return true
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+// emuDupSpot is where a copy of src goes, as the topology is laid out: one switch in the free places to the
+// right of it in its row, then the rows below, as wide as the topology; a group as a block of the same shape
+// beside it, then below it. dx, dy move every switch of src.
+func emuDupSpot(all, src []emu.VM) (dx, dy int) {
+	const cw, rh = 170, 160
+	minX, minY, maxX, maxY := src[0].X, src[0].Y, src[0].X, src[0].Y
+	for _, v := range src {
+		minX, minY, maxX, maxY = min(minX, v.X), min(minY, v.Y), max(maxX, v.X), max(maxY, v.Y)
+	}
+	labMin, labMax := minX, maxX
+	for _, v := range all {
+		if v.X != 0 || v.Y != 0 {
+			labMin, labMax = min(labMin, v.X), max(labMax, v.X)
+		}
+	}
+	bw, bh := maxX-minX+cw, maxY-minY+rh
+	width := max(labMax, labMin+6*cw, maxX) // a row as wide as the topology (at least seven switches)
+	fits := func(ox, oy int) bool {
+		for _, v := range src {
+			if !emuDupFree(all, v.X+ox, v.Y+oy) {
+				return false
+			}
+		}
+		return true
+	}
+	for ox := bw; maxX+ox <= width; ox += cw { // beside it, in its row
+		if fits(ox, 0) {
+			return ox, 0
+		}
+	}
+	for row := 1; row < 2000; row++ { // the rows below, from the left of the topology
+		for x := labMin; x+(maxX-minX) <= width; x += cw {
+			if fits(x-minX, row*bh) {
+				return x - minX, row * bh
+			}
+		}
+	}
+	return bw, 0
 }
 
 var dupNumRe = regexp.MustCompile(`^(.*?)(\d+)$`)
@@ -189,12 +261,12 @@ func (a *App) EmuDuplicate(r EmuDupRequest) (EmuView, error) {
 			next = v.Index + 1
 		}
 	}
-	// the selection's box: each round of copies goes below it
-	minX, minY, maxY := src[0].X, src[0].Y, src[0].Y
-	for _, v := range src {
-		minX, minY, maxY = min(minX, v.X), min(minY, v.Y), max(maxY, v.Y)
+	type dupJob struct {
+		src  emu.VM
+		dst  string
+		wipe bool
 	}
-	dy := maxY - minY + 160
+	var jobs []dupJob
 	inSrc := map[string]bool{}
 	for _, v := range src {
 		inSrc[v.ID] = true
@@ -213,16 +285,29 @@ func (a *App) EmuDuplicate(r EmuDupRequest) (EmuView, error) {
 			names[name] = true
 			c := emuDupVM(v, name, next, im, serials, &macs)
 			next++
+			switch {
+			case r.Mode == "config":
+				jobs = append(jobs, dupJob{src: v, dst: c.ID})
+			case r.Mode != "image" && v.FW != "" && !emuSameVersion(v.FW, im.Version): // upgraded on the switch
+				if x := emuImageOfVersion(imgs, im, v.FW); x != "" {
+					c.Image = x
+				} else {
+					c.Wipe = true
+					jobs = append(jobs, dupJob{src: v, dst: c.ID, wipe: true})
+				}
+			}
 			host := emuHostOf(v)
 			lv := l.For(host, emuLab.f.Host)
 			lv.VMs = append(lv.VMs, add...)
 			c.MgmtIP, c.Gateway = lv.FreeAddress(c)
-			c.X, c.Y = v.X, v.Y+dy*round
-			if len(src) == 1 { // one switch: the copies in a row beside it
-				c.X, c.Y = v.X+170*round, v.Y+70
-			}
 			of[v.ID] = c.ID
 			add = append(add, c)
+		}
+		// this round's copies: placed as a block of the originals' shape where nothing is (as the topology is laid out)
+		ox, oy := emuDupSpot(append(slices.Clone(l.VMs), add[:len(add)-len(src)]...), src)
+		for i := len(add) - len(src); i < len(add); i++ {
+			o := src[i-(len(add)-len(src))]
+			add[i].X, add[i].Y = o.X+ox, o.Y+oy
 		}
 		for _, k := range l.Cables {
 			switch {
@@ -253,7 +338,81 @@ func (a *App) EmuDuplicate(r EmuDupRequest) (EmuView, error) {
 		emuLab.mu.Unlock()
 		return EmuView{}, err
 	}
+	// copies of disks: each original's disk once for all its copies (a running one pauses for it)
+	type diskCopy struct {
+		host, src, mon string
+		run            bool
+		port           int
+		dsts           []string
+		slots          []string
+		wipe           bool
+	}
+	var dcs []*diskCopy
+	if len(jobs) > 0 {
+		st := emuLab.status
+		for _, j := range jobs {
+			var d *diskCopy
+			for _, x := range dcs {
+				if x.src == j.src.ID {
+					d = x
+				}
+			}
+			if d == nil {
+				host := emuHostOf(j.src)
+				lv := a.emuFor(host)
+				_, up := st.Up[j.src.ID]
+				d = &diskCopy{host: host, src: j.src.ID, run: up, port: lv.MonitorPort(j.src), mon: lv.VMDir()}
+				if im := imgs[j.src.Image]; im != nil {
+					for _, x := range im.Disks {
+						if strings.HasPrefix(x.Slot, "hd") {
+							d.slots = append(d.slots, x.Slot)
+						}
+					}
+				}
+				dcs = append(dcs, d)
+			}
+			d.dsts = append(d.dsts, j.dst)
+		}
+	}
 	emuLab.mu.Unlock()
+	for _, d := range dcs {
+		var b strings.Builder
+		for _, dst := range d.dsts {
+			fmt.Fprintf(&b, "cp --reflink=auto -f %s/%s.qcow2 %s/%s.qcow2 || echo 'fail %s';\n", emu.Q(d.mon), d.src, emu.Q(d.mon), dst, dst)
+			for _, sl := range d.slots {
+				fmt.Fprintf(&b, "cp --reflink=auto -f %s/%s-%s.qcow2 %s/%s-%s.qcow2 2>/dev/null;\n", emu.Q(d.mon), d.src, sl, emu.Q(d.mon), dst, sl)
+			}
+		}
+		var h *emuHMP
+		if d.run { // a consistent copy: the switch pauses for it (what it saved is what the copies get)
+			if m, err := a.emuMonitor(d.host, d.port); err == nil {
+				h = m
+				_, _ = h.do("stop", 5*time.Second)
+			}
+		}
+		out, err := a.emuRun(d.host, b.String(), 10*time.Minute)
+		if h != nil {
+			_, _ = h.do("cont", 5*time.Second)
+			h.close()
+		}
+		emuLab.mu.Lock()
+		for _, dst := range d.dsts {
+			if err != nil || strings.Contains(out, "fail "+dst) {
+				emuEv(dst, "error", "its disk could not be copied from "+emuNameOf(d.src)+" - it starts from its image instead: "+strings.TrimSpace(out+" "+errText(err)))
+				if c := l.VMByID(dst); c != nil {
+					c.Wipe = false
+				}
+				continue
+			}
+			what := "with its configuration and software"
+			if c := l.VMByID(dst); c != nil && c.Wipe {
+				what = "for its software (its configuration is set back to factory default on its first boot)"
+			}
+			emuEv(dst, "info", "copied the disk of "+emuNameOf(d.src)+" "+what)
+		}
+		_ = a.emuSave()
+		emuLab.mu.Unlock()
+	}
 	for _, v := range add {
 		a.emuSessions(v)
 	}
@@ -268,4 +427,66 @@ func (a *App) EmuDuplicate(r EmuDupRequest) (EmuView, error) {
 		return a.EmuStart(ids)
 	}
 	return a.EmuState()
+}
+
+// emuImageOfVersion is an image of the same device type as im in the given software version ("" = none).
+func emuImageOfVersion(imgs map[string]*emu.Image, im *emu.Image, ver string) string {
+	for id, x := range imgs {
+		if x != im && x.Version != "" && strings.EqualFold(x.DeviceType, im.DeviceType) && emuSameVersion(ver, x.Version) && (x.Persona != nil) == (im.Persona != nil) {
+			return id
+		}
+	}
+	return ""
+}
+
+// emuNameOf is a switch's name (mu held).
+func emuNameOf(id string) string {
+	if v := emuLab.f.Lab.VMByID(id); v != nil {
+		return v.Name
+	}
+	return id
+}
+
+// emuWipe sets a copied disk's configuration back to factory default (the device type's commands, e.g.
+// "unconfigure switch all") on its first boot, then boots it again for its own day 0.
+func (a *App) emuWipe(host, id string) {
+	emuLab.mu.Lock()
+	v := emuLab.f.Lab.VMByID(id)
+	if v == nil {
+		emuLab.mu.Unlock()
+		return
+	}
+	v.Wipe = false
+	vv, im := *v, emuImage(v.Image)
+	_ = a.emuSave()
+	emuLab.mu.Unlock()
+	if im == nil {
+		return
+	}
+	dt, _ := a.deviceTypeNamed(im.DeviceType)
+	cmds := dt.Factory()
+	if len(cmds) == 0 {
+		emuLab.mu.Lock()
+		emuEv(id, "warn", "the device type "+orStr(im.DeviceType, "of its image")+" has no factory-default commands (Global Options → Device Types): the copy keeps the configuration of the switch it was copied from")
+		emuLab.mu.Unlock()
+		return
+	}
+	emuLab.mu.Lock()
+	emuLab.state[id] = "factory default"
+	emuEv(id, "info", "setting the copied configuration back to factory default: "+strings.Join(cmds, " · "))
+	emuLab.mu.Unlock()
+	_, err := a.emuOnConsole(host, vv, *im, true, cmds...)
+	time.Sleep(45 * time.Second) // it erases and restarts by itself; then a clean start for its day 0
+	a.emuPowerOff(host, id, 90*time.Second)
+	emuLab.mu.Lock()
+	if c := emuLab.f.Lab.VMByID(id); c != nil {
+		c.Day0Done = false
+	}
+	delete(emuLab.state, id)
+	if err != nil {
+		emuEv(id, "info", "the console went quiet after the factory-default commands (it restarts): "+err.Error())
+	}
+	_ = a.emuSave()
+	emuLab.mu.Unlock()
+	a.emuStart(host, []string{id})
 }

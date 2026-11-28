@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Emulated lab: Duplicate copies the software the switch runs now.** A plain Duplicate (Ctrl+D, Ctrl+C / Ctrl+V) gives a fresh switch, without configuration, on the software the original runs - when it was upgraded on the switch, from an image of that version in Appliances, or else from a copy of its disk whose configuration is set back to factory default on its first boot (one more restart). **Duplicate Several…** offers three choices with their software versions: a fresh switch from its image, a fresh switch with the software it runs now (the default), or its software and configuration (its disk is copied; a running switch pauses a moment) with a warning that addresses, router-ids, VRRP/MLAG peers and LAGs come along. The choice is kept.
+- **Copies no longer land on top of each other.** They go into free places as the topology is laid out: beside the original in its row, then the rows below; a selection is copied as a block of the same shape.
+- **Events by date.** The Events tab shows Today, Yesterday and today (the default), the last N days or all kept - from its bar or Settings → Files & Folders, kept across restarts. Events are kept on disk for 30 days (adjustable).
+
 - **Emulated lab: the Events tab lists the whole kept log** (2,500 lines; 10,000 on disk), searched on the backend, not only the newest 200 lines.
 
 - **Emulated lab: persona after a kernel update.** Persona files are written with libguestfs, which reads the host's kernel; a kernel update installs a `/boot/vmlinuz-*` only root can read, and new switches then booted as the plain image with *libguestfs cannot start*. The host check now names that kernel, **Set Up QEMU/KVM** makes it readable and installs a kernel hook so later kernels stay readable (Remove Host takes the hook back), hosts with password-less sudo are fixed by Termwright itself before writing, and the error says which kernel and what to do.

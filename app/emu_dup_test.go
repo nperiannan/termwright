@@ -118,3 +118,29 @@ func TestEmuPersonaSeen(t *testing.T) {
 		t.Fatalf("not cleared: %q %+v", emuLab.perr["v1"], p)
 	}
 }
+
+func TestEmuDupSpot(t *testing.T) {
+	all := []emu.VM{{ID: "a", X: 100, Y: 60}, {ID: "b", X: 270, Y: 60}, {ID: "c", X: 440, Y: 60}}
+	// one switch: the next free place in its row
+	if dx, dy := emuDupSpot(all, all[:1]); dx != 510 || dy != 0 {
+		t.Fatalf("one: %d %d", dx, dy)
+	}
+	// a group of two keeps its shape, beside it where both are free
+	if dx, dy := emuDupSpot(all, all[:2]); !(dy == 0 && dx >= 340) {
+		t.Fatalf("group: %d %d", dx, dy)
+	}
+	// a full row: the next row, from the left of the topology
+	var row []emu.VM
+	for i := range 7 {
+		row = append(row, emu.VM{ID: string(rune('a' + i)), X: 100 + 170*i, Y: 60})
+	}
+	if dx, dy := emuDupSpot(row, row[3:4]); dy != 160 || 100+170*3+dx != 100 {
+		t.Fatalf("wrap: %d %d", dx, dy)
+	}
+}
+
+func TestEmuSameVersion(t *testing.T) {
+	if !emuSameVersion("33.4.1.15", "33.4.1.15") || !emuSameVersion("33.4.1.15 patch1-2", "33.4.1.15") || emuSameVersion("33.6.1.14", "33.4.1.15") {
+		t.Fatal("versions")
+	}
+}

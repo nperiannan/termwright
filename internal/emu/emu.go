@@ -249,6 +249,7 @@ type VM struct {
 	Routing     *Routing       `json:"routing,omitempty"`     // a Linux computer as a route generator (OSPF or BGP with FRR)
 	Desktop     bool           `json:"desktop,omitempty"`     // a Linux computer with a desktop and a web browser on its screen (a USB tablet for the mouse)
 	Server      *Server        `json:"server,omitempty"`      // a Linux computer as a server: HTTP, FTP, TFTP and DHCP for the lab (server.go)
+	Wipe        bool           `json:"wipe,omitempty"`        // a copy of another switch's disk: on its first boot its configuration is set back to factory default (its software stays)
 	X           int            `json:"x"`
 	Y           int            `json:"y"`
 }
