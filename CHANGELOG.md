@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Emulated lab: the Events tab lists the whole kept log** (2,500 lines; 10,000 on disk), searched on the backend, not only the newest 200 lines.
+
 - **Emulated lab: persona after a kernel update.** Persona files are written with libguestfs, which reads the host's kernel; a kernel update installs a `/boot/vmlinuz-*` only root can read, and new switches then booted as the plain image with *libguestfs cannot start*. The host check now names that kernel, **Set Up QEMU/KVM** makes it readable and installs a kernel hook so later kernels stay readable (Remove Host takes the hook back), hosts with password-less sudo are fixed by Termwright itself before writing, and the error says which kernel and what to do.
 - **Emulated lab: Events keep the errors.** The Events log kept only its last 300 lines, so with dozens of switches booting a switch's persona or day-0 error scrolled away while its card still said *Details in Events*. It now keeps 2,500 lines (10,000 on disk), its search goes through all of them, and *Details in Events* opens the log filtered to that switch.
 

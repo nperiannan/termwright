@@ -2466,7 +2466,7 @@ export class LabWorkspace implements OnDestroy {
     effect(() => { const t = this.tgt(); untracked(() => this.lab.target.set(this.emu() ? t : '')); });
     effect(() => { if (this.visible() && this.emu()) untracked(() => void this.loadHs()); });
     effect(() => { const q = this.evView.q(); untracked(() => this.findEvents(q)); });
-    effect(() => { this.st()?.events?.length; untracked(() => { if (this.evFindQ && this.dock() === 'events') this.findEvents(this.evFindQ); }); }); // new events while searching
+    effect(() => { const ev = this.st()?.events; const last = ev?.[ev.length - 1]?.at; const open = this.dock() === 'events'; untracked(() => { if (open && last !== this.evLast) { this.evLast = last; this.findEvents(this.evView.q()); } }); }); // new events: the whole log again
     this.timer = setInterval(() => { if (this.visible() && this.emu() && ++this.hsTick % 2 === 0) void this.loadHs(); if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); if (this.visible() && this.emu() && this.dock() === 'log') void this.loadLog(); if (this.visible() && this.emu() && (this.dock() === 'changes' || ++this.chTick % 10 === 1)) void this.loadChanges(); if (this.visible() && this.emu() && this.dock() === 'cap' && this.capCur()?.running) void this.loadCaps(); if (this.visible() && this.emu() && this.dock() !== 'cap' && ++this.capTick % 5 === 1) void this.backend.emuCaptures().then(c => this.caps.set(c ?? []), () => undefined); if (this.visible() && this.emu() && !this.trafTimer && (this.dock() === 'traffic' || this.page() === 'traffic' || !this.traf() || ++this.trafTick % 5 === 0)) void this.loadTraf(); }, 3000);
   }
   @HostListener('document:keydown', ['$event']) onDelKey(e: KeyboardEvent) {
@@ -2532,11 +2532,13 @@ export class LabWorkspace implements OnDestroy {
   private evFound = signal<LabEvent[] | null>(null);
   private evFindT?: ReturnType<typeof setTimeout>;
   private evFindQ = '';
-  protected events: Signal<LabEvent[]> = computed<LabEvent[]>(() => [...(this.evView?.q().trim() && this.evFound() ? this.evFound()! : this.st()?.events ?? [])].reverse());
+  private evLast: string | undefined;
+  protected events: Signal<LabEvent[]> = computed<LabEvent[]>(() => [...(this.evFound() ?? this.st()?.events ?? [])].reverse());
+  /** The Events tab shows the whole kept log (2,500 lines), searched on the backend; the view itself carries only the newest 200. */
   private findEvents(q: string) {
     clearTimeout(this.evFindT);
-    if (!q.trim() || !this.emu()) { this.evFindQ = ''; this.evFound.set(null); return; }
-    this.evFindT = setTimeout(async () => { this.evFindQ = q; try { const r = await this.backend.emuEventsFind(q); if (this.evFindQ === q) this.evFound.set(r ?? []); } catch { this.evFound.set(null); } }, 300);
+    if (!this.emu()) { this.evFound.set(null); return; }
+    this.evFindT = setTimeout(async () => { this.evFindQ = q; try { const r = await this.backend.emuEventsFind(q); if (this.evFindQ === q) this.evFound.set(r ?? []); } catch { this.evFound.set(null); } }, q ? 300 : 0);
   }
   /** The emulator's log, line by line (time, level, host, switch, message; continued lines joined). */
   protected logRows = computed(() => {

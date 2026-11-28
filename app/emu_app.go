@@ -407,7 +407,7 @@ func emuEventsLoad(path string) []EmuEvent {
 }
 
 // EmuEventsFind searches the whole kept Events log (not only the newest lines the view shows): the
-// events whose switch, host or message has every word of q, newest last (at most 1000).
+// events whose switch, host or message has every word of q (all with an empty q), newest last (at most 2500).
 func (a *App) EmuEventsFind(q string) []EmuEvent {
 	words := strings.Fields(strings.ToLower(q))
 	emuLab.mu.Lock()
@@ -436,7 +436,7 @@ func (a *App) EmuEventsFind(q string) []EmuEvent {
 			out = append(out, e)
 		}
 	}
-	return out[max(0, len(out)-1000):]
+	return out[max(0, len(out)-2500):]
 }
 
 // emuBootAnswer types a boot menu's answer on a switch's console (its boot stopped there).
