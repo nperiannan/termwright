@@ -137,6 +137,8 @@ export class LabService {
   setDNS(servers: string[]) { return this.run(() => this.backend.emuSetDNS(servers), 'Name servers set - devices get them when they start'); }
   setMgmt(mgmt: string, mgmtNet = '') { return this.run(() => this.backend.emuSetMgmt(mgmt, mgmtNet), 'Management changed - it applies when the switches start'); }
   reset(ids: string[]) { return this.run(() => this.backend.emuReset(ids), 'Back to day 0: the switches boot as new'); }
+  /** Copies emulated switches (the next names, serials and MACs); true when done. */
+  duplicate(ids: string[], count = 1, cables = false, start = false) { return this.run(() => this.backend.emuDuplicate({ ids, count, cables, start })); }
   async remove(ids: string[], sessions: boolean) {
     const ok = await this.run(() => (this.e ? this.backend.emuRemove(ids, sessions) : this.backend.labRemove(ids, sessions)));
     if (ok) await this.ui.refreshTree();

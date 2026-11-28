@@ -5644,6 +5644,19 @@ const ru: Record<string, string> = {
   '✦ Ask AI': '✦ Спросить ИИ',
   'Debug in Browser…': 'Отладка в браузере…',
   'Run to here': 'Выполнить до сюда',
+  // ---- лаборатория: дублирование ----
+  'A copy next to it: the next name, serial number and MAC; not cabled, stopped': 'Копия рядом с ним: следующее имя, серийный номер и MAC; без кабелей, остановлена',
+  'Duplicate Several…': 'Дублировать несколько…',
+  'Duplicate {0} switches': 'Дублировать коммутаторы: {0}',
+  'Cable each copy like the original': 'Соединить каждую копию как оригинал',
+  '(to the same neighbours, next free ports)': '(с теми же соседями, следующие свободные порты)',
+  'Start them': 'Запустить их',
+  'The cables between the chosen switches are copied too.': 'Кабели между выбранными коммутаторами тоже копируются.',
+  'Added {0} (like {1})': 'Добавлен {0} (как {1})',
+  'Added {0} switches': 'Добавлено коммутаторов: {0}',
+  'not started': 'не запущен',
+  '{0} copied - Ctrl+V adds a copy': '{0} скопирован - Ctrl+V добавляет копию',
+  '{0} switches copied - Ctrl+V adds copies': 'Скопировано коммутаторов: {0} - Ctrl+V добавляет копии',
 };
 
 export default ru;

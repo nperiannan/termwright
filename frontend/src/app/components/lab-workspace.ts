@@ -38,6 +38,14 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
 /** The lab as a workspace tab: device palette, canvas with cables, the
  *  selected switch, the topology summary and the Events log. */
 import { LabServer } from './lab-server';
+/** The next free name like name: 5520-24t-1 → 5520-24t-2 (the highest number in use + 1), core → core-2 (as the backend's emuNextName). */
+export function nextDevName(name: string, used: Set<string>) {
+  const m = /^(.*?)(\d+)$/.exec(name), base = m ? m[1] : name + '-', width = m ? m[2].length : 0;
+  let hi = 1;
+  for (const n of used) if (n.startsWith(base)) { const r = n.slice(base.length); if (/^\d+$/.test(r)) hi = Math.max(hi, +r); }
+  for (let k = hi + 1; ; k++) { let s = String(k); if (width > 1 && s.length < width) s = '0'.repeat(width - s.length) + s; if (!used.has(base + s)) return base + s; }
+}
+
 @Component({
   selector: 'app-lab-workspace',
   imports: [FormsModule, DecimalPipe, NgTemplateOutlet, Icon, TrafficQuick, ReportMenu, TrafficEngines, LabServer, LabConfigure, LabHosts, LabAppliances, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage, TrafficStats, TrafficLibrary, RadiusDialog, VmScreen, LabOverview, CmdPalette],
@@ -325,6 +333,9 @@ import { LabServer } from './lab-server';
               @if (emu()) { <a (click)="mdo('screen', d)" [class.off]="!d.running" [title]="tr('What its display shows, and its keyboard')">{{ tr('Screen…') }}</a> }
               <a (click)="mdo('ssh', d)" [class.off]="!d.running">{{ emu() ? 'SSH' : tr('Open Session') }} <kbd>{{ emu() ? d.ssh : '127.0.0.1:' + d.port }}</kbd></a>
               <hr />
+              @if (emu()) { <a (click)="menu.set(null); void dup(dupIds(d))" [title]="tr('A copy next to it: the next name, serial number and MAC; not cabled, stopped')">⧉ {{ dupIds(d).length > 1 ? tr('Duplicate {0}', dupIds(d).length) : tr('Duplicate') }} <kbd>Ctrl+D</kbd></a>
+                <a (click)="menu.set(null); dupAsk(dupIds(d))">⧉ {{ tr('Duplicate Several…') }}</a>
+                <a (click)="menu.set(null); copyDevs(dupIds(d))">{{ tr('Copy') }} <kbd>Ctrl+C</kbd></a><hr /> }
               @if (emu()) { <a (click)="mdo('lags', d)" [class.off]="!d.running">{{ tr('Read Its LAGs') }}</a> }
               <a (click)="mdo('link', d)">{{ tr('Add Link from Here') }}</a>
               @if (emu()) { <a (click)="uplink(d)" [title]="tr('Like a cloud node on a data port: the port joins the host’s network (applies when the switch starts)')">{{ tr('Port on the Host’s Network…') }}</a>
@@ -745,6 +756,19 @@ import { LabServer } from './lab-server';
         <span class="sp"></span><span class="si">{{ tr('{0} running', counts().on) }} · {{ tr('{0} stopped', counts().off) }}</span>
       }
     </div>
+    @if (dupDlg(); as dd) {
+      <div class="dabg" (click)="dupDlg.set(null)">
+        <div class="dupdlg" (click)="$event.stopPropagation()" role="dialog" [attr.aria-label]="tr('Duplicate')" (keydown.enter)="dupGo()">
+          <h3>{{ dd.ids.length === 1 ? tr('Duplicate {0}', nameOf(dd.ids[0])) : tr('Duplicate {0} switches', dd.ids.length) }}</h3>
+          <label class="f"><span>{{ tr('How many') }}</span><input type="number" min="1" max="500" [(ngModel)]="dd.count" autofocus /></label>
+          <div class="f"><span>{{ tr('Names') }}</span><code class="muted">{{ dupNames(dd) }}</code></div>
+          <label class="ck"><input type="checkbox" [(ngModel)]="dd.cables" /> {{ tr('Cable each copy like the original') }} <span class="muted">{{ tr('(to the same neighbours, next free ports)') }}</span></label>
+          <label class="ck"><input type="checkbox" [(ngModel)]="dd.start" /> {{ tr('Start them') }}</label>
+          @if (dd.ids.length > 1) { <div class="muted small">{{ tr('The cables between the chosen switches are copied too.') }}</div> }
+          <div class="btns"><button type="button" (click)="dupDlg.set(null)">{{ tr('Cancel') }}</button><button type="button" class="primary" (click)="dupGo()" [disabled]="lab.busy() || !(dd.count >= 1 && dd.count <= 500)">{{ tr('Duplicate') }}</button></div>
+        </div>
+      </div>
+    }
     @if (drawDev(); as d) {
       <div class="dabg" (click)="drawAs.set(null)">
         <div class="dadlg" (click)="$event.stopPropagation()" role="dialog" [attr.aria-label]="tr('Draw As')">
@@ -951,6 +975,10 @@ import { LabServer } from './lab-server';
       a.on { border-color: var(--accent); } a.off { opacity: .5; } a.hlh { border: 0; background: none; padding: 2px 4px; color: var(--muted); font-size: 11.5px; } i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; } }
     .mini { position: absolute; right: 312px; bottom: 14px; z-index: 6; padding: 6px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border, var(--line)); box-shadow: 0 6px 18px rgba(0,0,0,.25); cursor: pointer; line-height: 0;
       svg { background: var(--bg); border-radius: 6px; } .vp { fill: color-mix(in srgb, var(--accent) 12%, transparent); stroke: var(--accent); stroke-width: 1.2; } }
+    .dupdlg { width: min(440px, calc(100vw - 40px)); background: var(--surface); border: 1px solid var(--border, var(--line)); border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,.45); padding: 14px 16px; }
+    .dupdlg h3 { margin: 0 0 10px; font-size: 14px; } .dupdlg .f { display: flex; align-items: center; gap: 10px; margin: 8px 0; } .dupdlg .f > span { width: 90px; flex: none; color: var(--muted); }
+    .dupdlg .f input { width: 90px; } .dupdlg .f code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .dupdlg .ck { display: flex; gap: 8px; align-items: center; margin: 7px 0; flex-wrap: wrap; }
+    .dupdlg .btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
     .dabg { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; }
     .dadlg { width: min(860px, calc(100vw - 40px)); max-height: calc(100vh - 60px); overflow: auto; background: var(--surface); border: 1px solid var(--border, var(--line)); border-radius: 14px; box-shadow: 0 20px 50px rgba(0,0,0,.45); display: flex; flex-direction: column; }
     .dah { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); b { font-size: 15px; } }
@@ -2376,6 +2404,12 @@ export class LabWorkspace implements OnDestroy {
     if (this.visible() && (e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey) && !(e.target as HTMLElement)?.closest?.('.xterm')) { e.preventDefault(); this.palOpen.set(!this.palOpen()); return; }
     if (!this.visible() || (e.target as HTMLElement)?.closest?.('input, textarea, select, [contenteditable], .xterm')) return;
     if ((e.key === 'a' || e.key === 'A') && (e.metaKey || e.ctrlKey) && this.devs().length > 1) { e.preventDefault(); this.sel.set(''); this.ms.set(new Set(this.devs().map(d => d.id))); return; }
+    if (this.emu() && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && ['d', 'c', 'v'].includes(e.key.toLowerCase()) && !window.getSelection()?.toString()) {
+      const k = e.key.toLowerCase(), sel = this.selDevIds();
+      if (k === 'd' && sel.length) { e.preventDefault(); void this.dup(sel); return; }
+      if (k === 'c' && sel.length) { e.preventDefault(); this.copyDevs(sel); return; }
+      if (k === 'v' && this.copied.length) { const ids = this.copied.filter(id => this.devs().some(x => x.id === id)); if (ids.length) { e.preventDefault(); void this.dup(ids); } return; }
+    }
     if (e.key !== 'Delete' && e.key !== 'Backspace') return;
     const ids = this.msCount() > 1 ? [...this.ms()] : this.sel() ? [this.sel()] : [];
     if (ids.length || this.msCount() > 1) { e.preventDefault(); void this.removeMany(ids); return; }
@@ -2929,6 +2963,33 @@ export class LabWorkspace implements OnDestroy {
     const msg = (this.emu() ? tr('Remove {0} emulated switches? They stop, their disks on the host and their sessions are deleted.', ds.length) : tr('Remove {0} simulated switches and their sessions? Their configuration is lost.', ds.length)) + '\n\n' + names;
     if (await this.ui.confirm(ds.length === 1 ? tr('Remove {0}?', ds[0].hostname) : tr('Remove {0} switches?', ds.length), msg, tr('Remove'), true) && await this.lab.remove(ds.map(d => d.id), true)) { this.ms.set(new Set()); if (ids.includes(this.sel())) this.sel.set(''); }
   }
+  // ---- Duplicate (right-click, Ctrl+D, Ctrl+C / Ctrl+V) ----
+  protected dupDlg = signal<{ ids: string[]; count: number; cables: boolean; start: boolean } | null>(null);
+  private copied: string[] = [];
+  /** What Duplicate copies: the selection when the switch is in it, else the switch. */
+  dupIds(d: LabDevice) { return this.msCount() > 1 && this.ms().has(d.id) ? [...this.ms()].filter(id => this.devs().some(x => x.id === id)) : [d.id]; }
+  dupAsk(ids: string[]) { this.dupDlg.set({ ids, count: 2, cables: false, start: false }); }
+  /** The names the copies get, as the backend gives them: the highest number in use + 1. */
+  dupNames(dd: { ids: string[]; count: number }) {
+    const used = new Set(this.devs().map(d => d.hostname)), out: string[] = [];
+    for (let r = 0; r < Math.min(dd.count || 0, 500); r++) for (const id of dd.ids) { const n = nextDevName(this.nameOf(id), used); used.add(n); out.push(n); }
+    return out.length > 3 ? out[0] + ' … ' + out[out.length - 1] + ' (' + out.length + ')' : out.join(', ');
+  }
+  async dupGo() { const dd = this.dupDlg(); if (!dd || !(dd.count >= 1 && dd.count <= 500)) return; this.dupDlg.set(null); await this.dup(dd.ids, dd.count, dd.cables, dd.start); }
+  async dup(ids: string[], count = 1, cables = false, start = false) {
+    if (!this.emu() || !ids.length) return;
+    const before = new Set(this.devs().map(d => d.id));
+    if (!(await this.lab.duplicate(ids, count, cables, start))) return;
+    const fresh = this.devs().filter(d => !before.has(d.id));
+    if (!fresh.length) return;
+    this.clearMs(); if (fresh.length === 1) this.sel.set(fresh[0].id); else { this.sel.set(''); this.ms.set(new Set(fresh.map(d => d.id))); }
+    const what = fresh.length === 1 ? tr('Added {0} (like {1})', fresh[0].hostname, this.nameOf(ids[0])) : tr('Added {0} switches', fresh.length);
+    this.ui.toast(what + (start ? '' : ' · ' + tr('not started')), 'success', 6000, start ? undefined : [{ label: '▶ ' + tr('Start'), run: () => void this.lab.start(fresh.map(d => d.id)) }]);
+    await this.ui.refreshTree();
+  }
+  copyDevs(ids: string[]) { this.copied = ids; this.ui.toast(ids.length === 1 ? tr('{0} copied - Ctrl+V adds a copy', this.nameOf(ids[0])) : tr('{0} switches copied - Ctrl+V adds copies', ids.length), 'info'); }
+  /** The selected switches (for Ctrl+D and Ctrl+C). */
+  private selDevIds() { return this.msCount() > 1 ? [...this.ms()].filter(id => this.devs().some(x => x.id === id)) : this.sel() && this.devs().some(x => x.id === this.sel()) ? [this.sel()] : []; }
   open(d: LabDevice) { if (this.linkMode()) return; if (this.emu() && d.computer) this.pcWin.set(d.id); else if (this.emu()) this.console(d); else this.ssh(d); }
   nodeMenu(d: LabDevice, ev: MouseEvent) { ev.preventDefault(); ev.stopPropagation(); this.select(d); this.menu.set({ ...this.menuAt(ev), dev: d }); }
   linkMenu(k: LabLink, ev: MouseEvent) { ev.preventDefault(); ev.stopPropagation(); this.selLink.set(k.a + '/' + k.aPort); this.menu.set({ ...this.menuAt(ev), link: k }); }
