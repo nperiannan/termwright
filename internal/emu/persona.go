@@ -184,7 +184,10 @@ func (l *Lab) WriteFileScript(v VM, file, content string, has ...string) string 
 	return fmt.Sprintf(`command -v guestfish >/dev/null 2>&1 || { echo "fail libguestfs-tools (guestfish) is not installed on the host: use Set Up QEMU/KVM"; exit 0; }
 export LIBGUESTFS_BACKEND=direct
 for k in /boot/vmlinuz-*; do [ -e "$k" ] && [ ! -r "$k" ] && { sudo -n chmod 0644 /boot/vmlinuz-* 2>/dev/null; break; }; done # a kernel update: readable again where sudo allows it
-kv=$(uname -r); kst="not needed"; if [ ! -r "/boot/vmlinuz-$kv" ]; then # still root only: the same kernel from the distribution's package, in the lab folder (no root needed)
+kv=$(uname -r); kst="not needed"; kro=""; for k in /boot/vmlinuz-*; do [ -e "$k" ] && [ ! -r "$k" ] && kro=1; done
+# libguestfs takes the newest kernel in /boot: one installed by an update, not booted yet and root only, stops it - so the running one is named
+if [ -n "$kro" ] && [ -r "/boot/vmlinuz-$kv" ] && [ -d "/lib/modules/$kv" ]; then export SUPERMIN_KERNEL="/boot/vmlinuz-$kv" SUPERMIN_MODULES="/lib/modules/$kv" SUPERMIN_KERNEL_VERSION="$kv"; kst="used the running kernel /boot/vmlinuz-$kv"; fi
+if [ -n "$kro" ] && [ ! -r "/boot/vmlinuz-$kv" ]; then # the running one is root only too: the same kernel from the distribution's package, in the lab folder (no root needed)
  kd="$HOME/%[8]s/kernel"; kf="$kd/vmlinuz-$kv"; mkdir -p "$kd"
  if [ ! -s "$kf" ]; then
   if command -v apt-get >/dev/null 2>&1 && command -v dpkg-deb >/dev/null 2>&1; then

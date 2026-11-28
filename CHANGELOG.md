@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Emulated lab: persona with a kernel update waiting for a reboot.** libguestfs takes the newest kernel in /boot; one installed by an update but not booted yet (root only) stopped every persona. Termwright now points it at the running kernel (or its own downloaded copy), and a persona that could not be written stays shown after a restart.
+
 - **Emulated lab: persona without root after a kernel update.** When the host's kernel is readable by root only and Termwright has no sudo for it, it now downloads the same kernel package from the host's distribution (apt, no root needed), keeps it in the lab folder and lets libguestfs use it - persona files are written again without Set Up. Switches already flagged: Configure → Persona → Apply (or restart them).
 - **Lab bottom panel: the search bar and column headers stay** in every tab (Events, Inventory, Changes, CPU, Traffic, Log) while the rows scroll.
 
